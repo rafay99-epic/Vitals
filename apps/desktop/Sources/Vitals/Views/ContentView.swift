@@ -34,27 +34,34 @@ struct ContentView: View {
         NavigationSplitView {
             List(Section.allCases, selection: $section) { item in
                 Label(item.title, systemImage: item.symbol)
+                    .padding(.vertical, 3)
                     .tag(item)
             }
+            .listStyle(.sidebar)
+            .contentMargins(.top, 12, for: .scrollContent)
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
             .safeAreaInset(edge: .bottom) {
                 // Settings lives in the sidebar, not the toolbar: toolbar
                 // items sit in AppKit segments that snap (not animate) when
                 // the sidebar toggles — the sidebar's own content slides
                 // with it.
-                HStack {
-                    Button {
-                        openWindow(id: "settings")
-                    } label: {
-                        Label("Settings", systemImage: "gear")
+                VStack(spacing: 10) {
+                    Divider()
+                        .opacity(0.6)
+                    HStack {
+                        Button {
+                            openWindow(id: "settings")
+                        } label: {
+                            Label("Settings", systemImage: "gear")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help("Vitals settings")
+                        Spacer()
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Vitals settings")
-                    Spacer()
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.bottom, 14)
             }
         } detail: {
             switch section ?? .dashboard {
