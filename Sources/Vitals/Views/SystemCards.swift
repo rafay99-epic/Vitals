@@ -9,7 +9,7 @@ struct CPUUsageCard: View {
     var body: some View {
         SectionCard(title: "CPU usage · last \(settings.historyMinutes) minutes", symbol: "gauge.with.dots.needle.50percent") {
             Chart {
-                ForEach(model.history) { sample in
+                ForEach(model.chartHistory) { sample in
                     AreaMark(
                         x: .value("Time", sample.time),
                         y: .value("%", sample.usage)
@@ -245,10 +245,10 @@ struct MemoryCard: View {
     @EnvironmentObject private var model: VitalsModel
 
     private struct Segment: Identifiable {
-        let id = UUID()
         let label: String
         let bytes: UInt64
         let color: Color
+        var id: String { label }
     }
 
     var body: some View {
@@ -364,7 +364,7 @@ struct MemoryHistoryCard: View {
     var body: some View {
         SectionCard(title: "Memory & swap · last \(settings.historyMinutes) minutes", symbol: "chart.line.uptrend.xyaxis") {
             Chart {
-                ForEach(model.history) { sample in
+                ForEach(model.chartHistory) { sample in
                     AreaMark(
                         x: .value("Time", sample.time),
                         y: .value("GB", gigabytes(sample.memoryUsed)),

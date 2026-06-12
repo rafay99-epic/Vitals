@@ -9,7 +9,7 @@ struct TemperatureHistoryCard: View {
     var body: some View {
         SectionCard(title: "Temperature · last \(settings.historyMinutes) minutes", symbol: "thermometer.medium") {
             Chart {
-                ForEach(model.history) { sample in
+                ForEach(model.chartHistory) { sample in
                     LineMark(
                         x: .value("Time", sample.time),
                         y: .value("Temp", settings.display(sample.hottestCPU)),
