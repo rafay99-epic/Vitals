@@ -3,153 +3,315 @@ import AppKit
 import UserNotifications
 import UniformTypeIdentifiers
 
-/// Settings, organized into tabs now that one long form outgrew itself:
-/// General · Alerts · Data · Updates · About.
+/// Settings in the same design language as the main window: capsule tabs,
+/// card sections with tinted icon tiles, switch toggles.
 struct SettingsView: View {
-    var body: some View {
-        TabView {
-            GeneralSettingsTab()
-                .tabItem { Label("General", systemImage: "gearshape") }
-            AlertsSettingsTab()
-                .tabItem { Label("Alerts", systemImage: "bell.badge") }
-            DataSettingsTab()
-                .tabItem { Label("Data", systemImage: "doc.text") }
-            UpdatesSettingsTab()
-                .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
-            AboutSettingsTab()
-                .tabItem { Label("About", systemImage: "info.circle") }
+    enum Tab: String, CaseIterable, Identifiable {
+        case general, alerts, data, updates, about
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .general: return "General"
+            case .alerts: return "Alerts"
+            case .data: return "Data"
+            case .updates: return "Updates"
+            case .about: return "About"
+            }
         }
-        .frame(width: 480, height: 560)
+
+        var symbol: String {
+            switch self {
+            case .general: return "gearshape"
+            case .alerts: return "bell.badge"
+            case .data: return "doc.text"
+            case .updates: return "arrow.down.circle"
+            case .about: return "info.circle"
+            }
+        }
+    }
+
+    @State private var tab: Tab = .general
+    @Namespace private var tabIndicator
+
+    var body: some View {
+        VStack(spacing: 0) {
+            tabBar
+                .padding(.vertical, 10)
+            Divider()
+                .opacity(0.5)
+            ScrollView {
+                Group {
+                    switch tab {
+                    case .general: GeneralPane()
+                    case .alerts: AlertsPane()
+                    case .data: DataPane()
+                    case .updates: UpdatesPane()
+                    case .about: AboutPane()
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(width: 520, height: 600)
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(Tab.allCases) { item in
+                tabButton(item)
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(.quaternary.opacity(0.45)))
+    }
+
+    private func tabButton(_ item: Tab) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                tab = item
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: item.symbol)
+                    .font(.system(size: 11, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                Text(item.title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(tab == item ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+        .background {
+            if tab == item {
+                Capsule()
+                    .fill(.quaternary)
+                    .matchedGeometryEffect(id: "settings-tab", in: tabIndicator)
+            }
+        }
+    }
+}
+
+// MARK: - Card building blocks
+
+private struct SettingsCard<Content: View>: View {
+    let title: String
+    let symbol: String
+    let tint: Color
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(tint)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(tint.opacity(0.14))
+                    )
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.quaternary.opacity(0.35))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.separator.opacity(0.5), lineWidth: 1)
+        )
+    }
+}
+
+private struct SwitchRow: View {
+    let label: String
+    var caption: String?
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 12.5))
+                if let caption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+    }
+}
+
+private func settingsRow(_ label: String, @ViewBuilder control: () -> some View) -> some View {
+    HStack {
+        Text(label)
+            .font(.system(size: 12.5))
+        Spacer()
+        control()
     }
 }
 
 // MARK: - General
 
-private struct GeneralSettingsTab: View {
+private struct GeneralPane: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        Form {
-            Section("Readings") {
-                Picker("Temperature unit", selection: $settings.unit) {
-                    ForEach(TemperatureUnit.allCases) { unit in
-                        Text(unit.symbol).tag(unit)
+        VStack(spacing: 12) {
+            SettingsCard(title: "Readings", symbol: "thermometer.medium", tint: .orange) {
+                settingsRow("Temperature unit") {
+                    Picker("", selection: $settings.unit) {
+                        ForEach(TemperatureUnit.allCases) { unit in
+                            Text(unit.symbol).tag(unit)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .pickerStyle(.segmented)
-
-                Picker("Refresh every", selection: $settings.refreshInterval) {
-                    Text("1 second").tag(1.0)
-                    Text("2 seconds").tag(2.0)
-                    Text("5 seconds").tag(5.0)
+                settingsRow("Refresh every") {
+                    Picker("", selection: $settings.refreshInterval) {
+                        Text("1 second").tag(1.0)
+                        Text("2 seconds").tag(2.0)
+                        Text("5 seconds").tag(5.0)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
-
-                Picker("Chart history", selection: $settings.historyMinutes) {
-                    Text("5 minutes").tag(5)
-                    Text("10 minutes").tag(10)
-                    Text("30 minutes").tag(30)
+                settingsRow("Chart history") {
+                    Picker("", selection: $settings.historyMinutes) {
+                        Text("5 minutes").tag(5)
+                        Text("10 minutes").tag(10)
+                        Text("30 minutes").tag(30)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
             }
 
-            Section("Appearance") {
-                Picker("Theme", selection: $settings.theme) {
-                    ForEach(AppTheme.allCases) { theme in
-                        Text(theme.label).tag(theme)
+            SettingsCard(title: "Appearance", symbol: "paintbrush", tint: .purple) {
+                settingsRow("Theme") {
+                    Picker("", selection: $settings.theme) {
+                        ForEach(AppTheme.allCases) { theme in
+                            Text(theme.label).tag(theme)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .pickerStyle(.segmented)
-
+                SwitchRow(
+                    label: "Liquid Glass",
+                    caption: "Translucent window with glass cards. Requires macOS 26.",
+                    isOn: $settings.liquidGlass
+                )
                 VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Liquid Glass", isOn: $settings.liquidGlass)
-                    Text("Translucent window with glass cards. Requires macOS 26.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    LabeledContent("Frosting") {
+                    settingsRow("Frosting") {
                         Slider(value: $settings.glassIntensity, in: 0...1)
-                            .frame(width: 180)
+                            .frame(width: 170)
                     }
                     HStack {
-                        Text("Clear")
                         Spacer()
-                        Text("Frosted")
+                        HStack {
+                            Text("Clear")
+                            Spacer()
+                            Text("Frosted")
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 170)
                     }
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 180)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    Text("How much the desktop blurs through the window.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 .disabled(!settings.liquidGlass)
+                .opacity(settings.liquidGlass ? 1 : 0.5)
             }
 
-            Section("Menu bar") {
-                Toggle("Show in menu bar", isOn: $settings.showMenuBar)
-
-                Picker("Display", selection: $settings.menuBarMode) {
-                    ForEach(MenuBarMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
+            SettingsCard(title: "Menu bar", symbol: "menubar.rectangle", tint: .blue) {
+                SwitchRow(label: "Show in menu bar", isOn: $settings.showMenuBar)
+                settingsRow("Display") {
+                    Picker("", selection: $settings.menuBarMode) {
+                        ForEach(MenuBarMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
                     }
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(!settings.showMenuBar)
                 }
-                .disabled(!settings.showMenuBar)
             }
 
-            Section("Application") {
-                Toggle("Launch at login", isOn: $settings.launchAtLogin)
+            SettingsCard(title: "Application", symbol: "macwindow", tint: .teal) {
+                SwitchRow(label: "Launch at login", isOn: $settings.launchAtLogin)
                 if let error = settings.loginItemError {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Hide Dock icon", isOn: $settings.hideDockIcon)
-                        .disabled(!settings.showMenuBar)
-                    Text("Runs Vitals as a menu-bar-only app. Available while the menu bar item is shown.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                SwitchRow(
+                    label: "Hide Dock icon",
+                    caption: "Runs Vitals as a menu-bar-only app while the menu bar item is shown.",
+                    isOn: $settings.hideDockIcon
+                )
+                .disabled(!settings.showMenuBar)
             }
         }
-        .formStyle(.grouped)
     }
 }
 
 // MARK: - Alerts
 
-private struct AlertsSettingsTab: View {
+private struct AlertsPane: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var notificationsDenied = false
 
     var body: some View {
-        Form {
-            Section("Overheating") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Slider(value: $settings.warnThreshold, in: 60...100, step: 1) {
+        VStack(spacing: 12) {
+            SettingsCard(title: "Overheating", symbol: "flame", tint: .orange) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
                         Text("Hot threshold")
+                            .font(.system(size: 12.5))
+                        Spacer()
+                        Text(settings.formatWithUnit(settings.warnThreshold, decimals: 0))
+                            .font(.system(.callout, design: .rounded, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(.orange)
                     }
-                    Text("Above \(settings.format(settings.warnThreshold, decimals: 0)) average CPU, the menu bar icon becomes a flame and the overheat alert can fire.")
+                    Slider(value: $settings.warnThreshold, in: 60...100, step: 1)
+                    Text("Above this average CPU temperature, the menu bar icon becomes a flame and the overheat alert can fire.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Notifications") {
-                Toggle("Notify when the CPU stays hot", isOn: $settings.notifyOverheat)
-                Toggle("Notify on high thermal pressure", isOn: $settings.notifyThermal)
-
+            SettingsCard(title: "Notifications", symbol: "bell.badge", tint: .red) {
+                SwitchRow(label: "Notify when the CPU stays hot", isOn: $settings.notifyOverheat)
+                SwitchRow(label: "Notify on high thermal pressure", isOn: $settings.notifyThermal)
                 if notificationsDenied && (settings.notifyOverheat || settings.notifyThermal) {
-                    Text("Notifications are turned off for Vitals. Enable them in System Settings → Notifications → Vitals.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    Label(
+                        "Notifications are turned off for Vitals. Enable them in System Settings → Notifications → Vitals.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
                 }
             }
         }
-        .formStyle(.grouped)
         .task { await refreshNotificationStatus() }
     }
 
@@ -162,30 +324,28 @@ private struct AlertsSettingsTab: View {
 
 // MARK: - Data
 
-private struct DataSettingsTab: View {
+private struct DataPane: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        Form {
-            Section("Logging") {
-                Toggle("Log readings to disk", isOn: $settings.loggingEnabled)
-
-                LabeledContent("History file") {
-                    HStack {
+        VStack(spacing: 12) {
+            SettingsCard(title: "Logging", symbol: "doc.text", tint: .indigo) {
+                SwitchRow(label: "Log readings to disk", isOn: $settings.loggingEnabled)
+                settingsRow("History file") {
+                    HStack(spacing: 8) {
                         Button("Export…") { exportCSV() }
                         Button("Show in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([HistoryLogger.fileURL])
                         }
                     }
+                    .controlSize(.small)
                     .disabled(!logFileExists)
                 }
-
                 Text("One line every 10 seconds while Vitals runs (\(logSizeText)). Open the CSV in Numbers or Excel to study long-term trends.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
     }
 
     private var logFileExists: Bool {
@@ -213,23 +373,26 @@ private struct DataSettingsTab: View {
 
 // MARK: - Updates
 
-private struct UpdatesSettingsTab: View {
+private struct UpdatesPane: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var updater: Updater
 
     var body: some View {
-        Form {
-            Section("Software updates") {
-                LabeledContent("Installed version", value: Updater.currentVersion)
-                Toggle("Check for updates automatically", isOn: $settings.autoUpdateCheck)
-
+        VStack(spacing: 12) {
+            SettingsCard(title: "Software updates", symbol: "arrow.down.circle", tint: .green) {
+                settingsRow("Installed version") {
+                    Text(Updater.currentVersion)
+                        .font(.system(.callout, design: .rounded, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Button("Check for Updates") {
                             Task { await updater.check(userInitiated: true) }
                         }
                         .disabled(updater.isBusy)
-
                         if case .available(let release) = updater.status {
                             Button("Install Vitals \(release.version)") {
                                 Task { await updater.downloadAndInstall() }
@@ -237,13 +400,13 @@ private struct UpdatesSettingsTab: View {
                             .buttonStyle(.borderedProminent)
                         }
                     }
+                    .controlSize(.small)
                     Text(updateStatusLine)
                         .font(.caption)
                         .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     private var updateStatusLine: String {
@@ -274,65 +437,75 @@ private struct UpdatesSettingsTab: View {
 
 // MARK: - About
 
-private struct AboutSettingsTab: View {
-    private static let repoURL = "https://github.com/\(Updater.repository)"
-    private static let licenseURL = "\(repoURL)/blob/main/LICENSE"
-    private static let moleURL = "https://github.com/tw93/mole"
-    private static let developerURL = "https://rafay99.com"
+private struct AboutPane: View {
+    private static let company = "Syntax Lab Technology"
+    private static let developer = "Abdul Rafay"
+    private static let developerURL = URL(string: "https://rafay99.com")!
+    private static let repoURL = URL(string: "https://github.com/\(Updater.repository)")!
+    private static let licenseURL = URL(string: "https://github.com/\(Updater.repository)/blob/main/LICENSE")!
+    private static let moleURL = URL(string: "https://github.com/tw93/mole")!
+
+    private var versionLine: String {
+        let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? Updater.currentVersion
+        if build == Updater.currentVersion {
+            return "Version \(Updater.currentVersion)"
+        }
+        return "Version \(Updater.currentVersion) (build \(build))"
+    }
 
     var body: some View {
-        Form {
-            Section {
-                HStack(spacing: 14) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .frame(width: 56, height: 56)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Vitals")
-                            .font(.title3.weight(.semibold))
-                        Text("Version \(Updater.currentVersion)")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                        Text("Take care of your Mac.")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .padding(.vertical, 4)
+        VStack(spacing: 12) {
+            VStack(spacing: 6) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 64, height: 64)
+                Text("Vitals")
+                    .font(.system(size: 18, weight: .semibold))
+                Text(versionLine)
+                    .font(.system(.callout, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Text("Take care of your Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
 
-            Section("Company") {
-                LabeledContent("Made by", value: "Syntax Lab Technology")
-                LabeledContent("Developer") {
-                    Link("Abdul Rafay — rafay99.com", destination: URL(string: Self.developerURL)!)
+            SettingsCard(title: "Company", symbol: "building.2", tint: .blue) {
+                settingsRow("Made by") {
+                    Text(Self.company)
+                        .font(.system(size: 12.5, weight: .medium))
                 }
-                LabeledContent("Source code") {
-                    Link("github.com/\(Updater.repository)", destination: URL(string: Self.repoURL)!)
+                settingsRow("Developer") {
+                    Link("\(Self.developer) — rafay99.com", destination: Self.developerURL)
+                        .font(.system(size: 12.5))
                 }
-            }
-
-            Section("License") {
-                VStack(alignment: .leading, spacing: 4) {
-                    LabeledContent("License") {
-                        Link("GNU GPL v3.0", destination: URL(string: Self.licenseURL)!)
-                    }
-                    Text("Vitals is free software: you may use, study, modify, and redistribute it under the same terms.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                settingsRow("Source code") {
+                    Link("github.com/\(Updater.repository)", destination: Self.repoURL)
+                        .font(.system(size: 12.5))
                 }
             }
 
-            Section("Acknowledgements") {
-                VStack(alignment: .leading, spacing: 4) {
-                    LabeledContent("Mole") {
-                        Link("github.com/tw93/mole", destination: URL(string: Self.moleURL)!)
-                    }
-                    Text("The Applications & Cleanup feature is informed by Mole (GPL-3.0) — its catalog of app-leftover locations and safety-first uninstall design shaped Vitals' implementation. Full credit and thanks to its authors.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            SettingsCard(title: "License", symbol: "checkmark.seal", tint: .green) {
+                settingsRow("License") {
+                    Link("GNU GPL v3.0", destination: Self.licenseURL)
+                        .font(.system(size: 12.5))
                 }
+                Text("Vitals is free software: you may use, study, modify, and redistribute it under the same terms.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsCard(title: "Acknowledgements", symbol: "heart", tint: .pink) {
+                settingsRow("Mole") {
+                    Link("github.com/tw93/mole", destination: Self.moleURL)
+                        .font(.system(size: 12.5))
+                }
+                Text("The Applications & Cleanup feature is informed by Mole (GPL-3.0) — its catalog of app-leftover locations and safety-first uninstall design shaped Vitals' implementation. Full credit and thanks to its authors.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
     }
 }
