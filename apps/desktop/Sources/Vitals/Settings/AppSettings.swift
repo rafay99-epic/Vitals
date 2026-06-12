@@ -57,6 +57,8 @@ final class AppSettings: ObservableObject {
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     @Published var liquidGlass: Bool { didSet { defaults.set(liquidGlass, forKey: "liquidGlass") } }
+    /// 0 = clearest window backdrop, 1 = most frosted.
+    @Published var glassIntensity: Double { didSet { defaults.set(glassIntensity, forKey: "glassIntensity") } }
 
     @Published var theme: AppTheme {
         didSet {
@@ -106,6 +108,7 @@ final class AppSettings: ObservableObject {
             "loggingEnabled": true,
             "autoUpdateCheck": true,
             "liquidGlass": true,
+            "glassIntensity": 0.15,
             "theme": AppTheme.system.rawValue,
             "hideDockIcon": false,
         ])
@@ -121,6 +124,7 @@ final class AppSettings: ObservableObject {
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
         liquidGlass = defaults.bool(forKey: "liquidGlass")
+        glassIntensity = defaults.double(forKey: "glassIntensity")
         theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
 

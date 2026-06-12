@@ -65,6 +65,26 @@ private struct GeneralSettingsTab: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    LabeledContent("Frosting") {
+                        Slider(value: $settings.glassIntensity, in: 0...1)
+                            .frame(width: 180)
+                    }
+                    HStack {
+                        Text("Clear")
+                        Spacer()
+                        Text("Frosted")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 180)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    Text("How much the desktop blurs through the window.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .disabled(!settings.liquidGlass)
             }
 
             Section("Menu bar") {

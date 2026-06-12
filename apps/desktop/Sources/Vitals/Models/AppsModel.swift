@@ -17,10 +17,17 @@ final class AppsModel: ObservableObject {
         }
     }
 
+    enum SortOrder: String, CaseIterable, Identifiable {
+        case name, size
+        var id: String { rawValue }
+        var label: String { self == .name ? "Name" : "Size" }
+    }
+
     @Published private(set) var apps: [InstalledApp] = []
     @Published private(set) var isScanning = false
     @Published var selection: Set<URL> = []
     @Published var searchText = ""
+    @Published var sortOrder: SortOrder = .name
     @Published var staged: StagedUninstall?
     @Published private(set) var isPreparingUninstall = false
     @Published private(set) var lastOutcome: AppUninstaller.Outcome?
@@ -29,15 +36,33 @@ final class AppsModel: ObservableObject {
     private var sizeTask: Task<Void, Never>?
 
     var filteredApps: [InstalledApp] {
-        guard !searchText.isEmpty else { return apps }
-        return apps.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
-                || ($0.bundleID?.localizedCaseInsensitiveContains(searchText) ?? false)
+        var result = apps
+        if !searchText.isEmpty {
+            result = result.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText)
+                    || ($0.bundleID?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
         }
+        if sortOrder == .size {
+            result = result.sorted { ($0.sizeBytes ?? 0) > ($1.sizeBytes ?? 0) }
+        }
+        return result
     }
 
     var selectedApps: [InstalledApp] {
         apps.filter { selection.contains($0.id) }
+    }
+
+    var selectedBytes: UInt64 {
+        selectedApps.reduce(0) { $0 + ($1.sizeBytes ?? 0) }
+    }
+
+    var totalBytes: UInt64 {
+        apps.reduce(0) { $0 + ($1.sizeBytes ?? 0) }
+    }
+
+    var runningCount: Int {
+        apps.filter(\.isRunning).count
     }
 
     func refresh() {
