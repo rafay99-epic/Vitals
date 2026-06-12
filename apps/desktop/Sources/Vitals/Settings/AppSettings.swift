@@ -123,7 +123,17 @@ final class AppSettings: ObservableObject {
         liquidGlass = defaults.bool(forKey: "liquidGlass")
         theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+
+        // SMAppService.status is an XPC round-trip; in init it sat directly
+        // on the launch path and delayed the first frame. Load it async.
+        launchAtLogin = false
+        syncingLoginItem = true
+        Task { [weak self] in
+            let enabled = await Task.detached { SMAppService.mainApp.status == .enabled }.value
+            guard let self else { return }
+            self.launchAtLogin = enabled
+            self.syncingLoginItem = false
+        }
     }
 
     // MARK: Temperature formatting

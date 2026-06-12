@@ -25,6 +25,10 @@ struct ContentView: View {
 
     @State private var section: Section? = .dashboard
     @Environment(\.openWindow) private var openWindow
+    // Owned here so the scans survive section switches — recreating these per
+    // visit meant a full rescan (and a "Scanning…" flash) every time.
+    @StateObject private var appsModel = AppsModel()
+    @StateObject private var cleanupModel = CleanupModel()
 
     var body: some View {
         NavigationSplitView {
@@ -36,8 +40,8 @@ struct ContentView: View {
         } detail: {
             switch section ?? .dashboard {
             case .dashboard: DashboardView()
-            case .applications: AppsView()
-            case .cleanup: CleanupView()
+            case .applications: AppsView(model: appsModel)
+            case .cleanup: CleanupView(model: cleanupModel)
             }
         }
         .modifier(WindowBackdrop())

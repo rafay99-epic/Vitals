@@ -71,14 +71,16 @@ actor AppInventory {
     }
 
     /// Streams (url, size) pairs as sizes finish computing, a few at a time so
-    /// a folder full of multi-gigabyte apps doesn't saturate the disk.
+    /// a folder full of multi-gigabyte apps doesn't saturate the disk. The
+    /// worker stops promptly when the consumer goes away — no orphaned disk
+    /// churn after a rescan or window close.
     nonisolated func sizes(for urls: [URL], concurrency: Int = 6) -> AsyncStream<(URL, UInt64)> {
         AsyncStream { continuation in
-            Task.detached(priority: .utility) {
+            let worker = Task.detached(priority: .utility) {
                 await withTaskGroup(of: (URL, UInt64).self) { group in
                     var pending = urls[...]
                     func addNext() {
-                        guard let url = pending.popFirst() else { return }
+                        guard !Task.isCancelled, let url = pending.popFirst() else { return }
                         group.addTask { (url, Self.directorySize(url)) }
                     }
                     for _ in 0..<concurrency { addNext() }
@@ -89,6 +91,7 @@ actor AppInventory {
                 }
                 continuation.finish()
             }
+            continuation.onTermination = { _ in worker.cancel() }
         }
     }
 
@@ -106,6 +109,7 @@ actor AppInventory {
         }
         var total: UInt64 = 0
         for case let file as URL in enumerator {
+            if Task.isCancelled { return total }
             guard let values = try? file.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
             total += UInt64(values.totalFileAllocatedSize ?? 0)
         }

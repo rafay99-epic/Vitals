@@ -4,7 +4,7 @@ import SwiftUI
 /// explicit confirmation. Caches and logs are deleted (trashing them would
 /// free nothing); the Trash category empties permanently and says so.
 struct CleanupView: View {
-    @StateObject private var model = CleanupModel()
+    @ObservedObject var model: CleanupModel
     @State private var confirming = false
 
     var body: some View {

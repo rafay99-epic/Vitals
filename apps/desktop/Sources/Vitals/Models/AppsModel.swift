@@ -59,16 +59,38 @@ final class AppsModel: ObservableObject {
         }
     }
 
+    deinit {
+        sizeTask?.cancel()
+    }
+
+    /// Sizes stream in as they're computed, but publishing each one would
+    /// re-render the whole list per app — batch them instead.
     private func computeSizes() {
         let urls = apps.map(\.id)
-        sizeTask = Task {
+        sizeTask = Task { [weak self] in
+            guard let self else { return }
+            var buffer: [URL: UInt64] = [:]
             for await (url, size) in inventory.sizes(for: urls) {
-                guard !Task.isCancelled else { return }
-                if let index = apps.firstIndex(where: { $0.id == url }) {
-                    apps[index].sizeBytes = size
+                if Task.isCancelled { return }
+                buffer[url] = size
+                if buffer.count >= 10 {
+                    applySizes(buffer)
+                    buffer.removeAll(keepingCapacity: true)
                 }
             }
+            applySizes(buffer)
         }
+    }
+
+    private func applySizes(_ sizes: [URL: UInt64]) {
+        guard !sizes.isEmpty else { return }
+        var updated = apps
+        for index in updated.indices {
+            if let size = sizes[updated[index].id] {
+                updated[index].sizeBytes = size
+            }
+        }
+        apps = updated
     }
 
     /// Scans leftovers for the selected apps and stages the confirmation

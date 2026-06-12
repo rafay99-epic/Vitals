@@ -5,10 +5,26 @@ func formatBytes(_ bytes: UInt64) -> String {
     ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
 }
 
+/// Process-wide icon cache: NSWorkspace lookups are not cheap, and list rows
+/// re-render on every size update — without this, each render refetched every
+/// visible icon.
+@MainActor
+enum AppIconCache {
+    private static let cache = NSCache<NSURL, NSImage>()
+
+    static func icon(for url: URL) -> NSImage {
+        if let cached = cache.object(forKey: url as NSURL) { return cached }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: 32, height: 32)
+        cache.setObject(icon, forKey: url as NSURL)
+        return icon
+    }
+}
+
 /// The Applications tab: every uninstallable app, multi-selectable, with a
 /// leftover-aware uninstall that moves everything to the Trash.
 struct AppsView: View {
-    @StateObject private var model = AppsModel()
+    @ObservedObject var model: AppsModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -138,7 +154,7 @@ private struct AppRow: View {
             Toggle("", isOn: $isSelected)
                 .labelsHidden()
                 .toggleStyle(.checkbox)
-            Image(nsImage: NSWorkspace.shared.icon(forFile: app.id.path))
+            Image(nsImage: AppIconCache.icon(for: app.id))
                 .resizable()
                 .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 1) {
@@ -229,14 +245,14 @@ private struct UninstallConfirmationSheet: View {
     }
 
     private var currentTotal: UInt64 {
-        guard let staged = model.staged else { return staged.totalBytes }
-        return staged.totalBytes
+        // Read live from the model so unchecking items updates the total.
+        model.staged?.totalBytes ?? staged.totalBytes
     }
 
     private func appSection(_ app: InstalledApp) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: app.id.path))
+                Image(nsImage: AppIconCache.icon(for: app.id))
                     .resizable()
                     .frame(width: 20, height: 20)
                 Text(app.name).fontWeight(.semibold)

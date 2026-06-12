@@ -48,14 +48,22 @@ struct MenuBarPanel: View {
 
     // MARK: Sparklines
 
+    /// The dropdown's charts are 36 px tall — 100 points is already more
+    /// than one per pixel, and a third of the marks makes the panel open
+    /// noticeably snappier.
+    private var sparkData: [VitalsModel.Sample] {
+        VitalsModel.downsample(model.chartHistory, to: 100)
+    }
+
     private var sparklines: some View {
-        HStack(spacing: 8) {
+        let data = sparkData
+        return HStack(spacing: 8) {
             sparkline(
                 title: "Temp",
                 value: model.hottestCPUSensor.map { settings.format($0.celsius, decimals: 0) } ?? "—",
                 color: .orange
             ) {
-                ForEach(model.chartHistory) { sample in
+                ForEach(data) { sample in
                     LineMark(x: .value("t", sample.time), y: .value("v", sample.hottestCPU))
                         .foregroundStyle(.orange)
                         .interpolationMethod(.catmullRom)
@@ -66,7 +74,7 @@ struct MenuBarPanel: View {
                 value: String(format: "%.0f%%", model.cpuUsage),
                 color: .blue
             ) {
-                ForEach(model.chartHistory) { sample in
+                ForEach(data) { sample in
                     AreaMark(x: .value("t", sample.time), y: .value("v", sample.usage))
                         .foregroundStyle(.blue.opacity(0.18))
                         .interpolationMethod(.catmullRom)
@@ -80,7 +88,7 @@ struct MenuBarPanel: View {
                 value: String(format: "%.1fG", gigabytes(model.memory?.used ?? 0)),
                 color: .indigo
             ) {
-                ForEach(model.chartHistory) { sample in
+                ForEach(data) { sample in
                     AreaMark(x: .value("t", sample.time), y: .value("v", gigabytes(sample.memoryUsed)))
                         .foregroundStyle(.indigo.opacity(0.18))
                         .interpolationMethod(.catmullRom)
