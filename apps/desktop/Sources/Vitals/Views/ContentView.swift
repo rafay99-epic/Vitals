@@ -35,6 +35,7 @@ struct ContentView: View {
     }
 
     @State private var section: Section = .dashboard
+    @State private var gearHovered = false
     @Environment(\.openWindow) private var openWindow
     @Namespace private var tabIndicator
     // Owned here so the scans survive section switches — recreating these per
@@ -56,40 +57,50 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // The hidden title bar still reserves a safe-area strip; claim it so
+        // the header shares the row with the traffic lights instead of
+        // leaving a dead band above itself.
+        .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
         .frame(minWidth: 980, minHeight: 680)
     }
 
     // MARK: Header
 
-    /// The title bar replacement: branding, centered tabs, settings. It also
-    /// drags the window, since the system title bar is hidden.
+    /// The title bar replacement: branding, centered tabs, settings — one
+    /// row shared with the traffic lights. It also drags the window, since
+    /// the system title bar is hidden.
     private var header: some View {
         ZStack {
-            HStack(spacing: 8) {
+            HStack(spacing: 9) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
-                    .frame(width: 24, height: 24)
+                    .frame(width: 26, height: 26)
                 Text("Vitals")
                     .font(.system(size: 14, weight: .semibold))
                 Spacer()
                 Button {
                     openWindow(id: "settings")
                 } label: {
-                    Image(systemName: "gear")
-                        .font(.system(size: 14))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14, weight: .medium))
+                        .symbolRenderingMode(.hierarchical)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(.quaternary.opacity(gearHovered ? 0.7 : 0)))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+                .onHover { hovering in
+                    withAnimation(.easeOut(duration: 0.12)) { gearHovered = hovering }
+                }
                 .help("Vitals settings")
             }
             tabBar
         }
         .padding(.leading, 84)  // clear the traffic lights
-        .padding(.trailing, 16)
-        .frame(height: 52)
+        .padding(.trailing, 12)
+        .frame(height: 46)
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
     }
@@ -110,9 +121,10 @@ struct ContentView: View {
                 section = item
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 11))
+                    .font(.system(size: 12, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
                 Text(item.title)
                     .font(.system(size: 12, weight: .medium))
             }
