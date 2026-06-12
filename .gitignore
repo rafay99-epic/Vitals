@@ -2,3 +2,7 @@
 build/
 .swiftpm/
 .DS_Store
+node_modules/
+.turbo/
+dist/
+.vite/

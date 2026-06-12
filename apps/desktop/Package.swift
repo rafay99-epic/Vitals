@@ -12,5 +12,10 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [.linkedFramework("IOKit")]
         ),
+        .testTarget(
+            name: "VitalsTests",
+            dependencies: ["Vitals"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )

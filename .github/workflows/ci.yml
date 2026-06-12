@@ -1,18 +1,52 @@
 name: CI
 
+# Desktop-app CI. The website has its own workflow (website.yml); each app
+# triggers only on its own paths.
+#
+# Gating: tests and lint run first; the release build only happens after
+# both pass, and the PR's DMG package only after the build.
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/ci.yml"
+
+defaults:
+  run:
+    working-directory: apps/desktop
 
 jobs:
-  build:
-    name: Build (macOS)
+  test:
+    name: Test (swift test)
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
       - name: Swift version
         run: swift --version
+      - name: Run tests
+        run: swift test
+
+  lint:
+    name: Quality (SwiftLint)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --reporter github-actions-logging
+
+  build:
+    name: Build (macOS)
+    runs-on: macos-26
+    needs: [test, lint]
+    steps:
+      - uses: actions/checkout@v6
       - name: Build release
         run: swift build -c release
 
@@ -32,17 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Vitals-dmg
-          path: build/Vitals.dmg
-
-  lint:
-    name: Quality (SwiftLint)
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install SwiftLint
-        run: brew install swiftlint
-      - name: Lint
-        run: swiftlint --reporter github-actions-logging
+          path: apps/desktop/build/Vitals.dmg
 # Dependency checking is handled by Dependabot (.github/dependabot.yml) and
 # Dependabot security alerts — dependency-review-action needs GitHub Advanced
 # Security, which isn't available on private personal repos.

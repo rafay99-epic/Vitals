@@ -1,0 +1,36 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [
+        "dist/**",
+        "build/**",
+        ".build/release/**"
+      ]
+    },
+    "dmg": {
+      "dependsOn": [
+        "build"
+      ],
+      "outputs": [
+        "build/Vitals.dmg"
+      ]
+    },
+    "lint": {},
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "preview": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {},
+    "test:e2e": {
+      "dependsOn": [
+        "build"
+      ],
+      "cache": false
+    }
+  }
+}
