@@ -35,7 +35,7 @@ export default function Nav() {
         <div className="hidden md:flex" style={{ flex: 1, alignItems: 'center', gap: 4, justifyContent: 'center' }}>
           <a href="#philosophy" style={link}>Philosophy</a>
           <a href="#sensors" style={link}>Sensors</a>
-          <a href="#honesty" style={link}>Honesty</a>
+          <a href="#manage" style={link}>Manage</a>
           <a href="#download" style={link}>Download</a>
         </div>
         <div className="flex-1 md:hidden" />

@@ -6,6 +6,7 @@ import Sensors from './components/Sensors'
 import Philosophy from './components/Philosophy'
 import Honesty from './components/Honesty'
 import FanControl from './components/FanControl'
+import Manage from './components/Manage'
 import DownloadSection from './components/DownloadSection'
 import Footer from './components/Footer'
 import { useLiveVitals } from './lib/useLiveVitals'
@@ -33,6 +34,7 @@ export default function App() {
       <Philosophy />
       <Honesty />
       <FanControl />
+      <Manage />
       <DownloadSection release={release} />
       <Footer />
       <Analytics />
