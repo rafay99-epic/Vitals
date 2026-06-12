@@ -22,7 +22,10 @@ struct VitalsApp: App {
     }
 
     var body: some Scene {
-        WindowGroup(id: "main") {
+        // Window (not WindowGroup): exactly one main window, like Activity
+        // Monitor — no ⌘N duplicates, dock clicks and openWindow always
+        // return the existing one.
+        Window("Vitals", id: "main") {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(settings)
@@ -36,6 +39,7 @@ struct VitalsApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             SettingsCommands()
+            HelpCommands()
         }
 
         // A plain window instead of the Settings scene: SettingsLink/openSettings
@@ -44,6 +48,12 @@ struct VitalsApp: App {
             SettingsView()
                 .environmentObject(settings)
                 .environmentObject(updater)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        Window("Vitals Help", id: "help") {
+            HelpView()
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -105,6 +115,20 @@ struct SettingsCommands: Commands {
                 openWindow(id: "settings")
             }
             .keyboardShortcut(",", modifiers: .command)
+        }
+    }
+}
+
+/// Points the Help menu at the in-app help window.
+struct HelpCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .help) {
+            Button("Vitals Help") {
+                openWindow(id: "help")
+            }
+            .keyboardShortcut("?", modifiers: .command)
         }
     }
 }

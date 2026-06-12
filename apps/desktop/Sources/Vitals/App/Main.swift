@@ -23,6 +23,17 @@ enum Main {
         } else if let index = arguments.firstIndex(of: "--fan-auto") {
             runFanCommand(arguments: Array(arguments.dropFirst(index + 1)), auto: true)
         } else {
+            // Single instance, like Activity Monitor: a second launch hands
+            // off to the running app instead of starting a duplicate. The
+            // fan daemon (activationPolicy .prohibited) doesn't count — it's
+            // a background helper, not an app instance.
+            let myPID = NSRunningApplication.current.processIdentifier
+            if let bundleID = Bundle.main.bundleIdentifier,
+               let other = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+                   .first(where: { $0.processIdentifier != myPID && $0.activationPolicy != .prohibited }) {
+                other.activate(options: [.activateAllWindows])
+                exit(0)
+            }
             VitalsApp.main()
         }
     }

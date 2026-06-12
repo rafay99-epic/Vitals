@@ -284,6 +284,15 @@ struct MenuBarPanel: View {
             .controlSize(.small)
             Spacer()
             Button {
+                openWindow(id: "help")
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 12))
+            }
+            .controlSize(.small)
+            .help("Vitals Help")
+            Button {
                 openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
