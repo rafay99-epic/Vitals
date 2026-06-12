@@ -67,26 +67,52 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                UpdateBanner()
-                statCards
-                TemperatureHistoryCard()
-                HStack(alignment: .top, spacing: 16) {
-                    PerCoreCard()
-                    FanCard()
-                        .frame(width: 280)
-                }
-                HStack(alignment: .top, spacing: 16) {
-                    CPUUsageCard()
-                    TopProcessesCard()
-                        .frame(width: 280)
-                }
-                MemoryCard()
-                MemoryHistoryCard()
-                BatteryCard()
-                footer
+            glassBatched
+                .padding(20)
+        }
+    }
+
+    /// On macOS 26 with Liquid Glass on, every card is its own glass surface
+    /// — a dozen independent backdrop captures re-rendered each frame of the
+    /// sidebar/window animation. GlassEffectContainer batches them into one
+    /// render pass, which is most of the "freeze before it moves" fix.
+    @ViewBuilder
+    private var glassBatched: some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *), settings.liquidGlass {
+            GlassEffectContainer {
+                cards
             }
-            .padding(20)
+        } else {
+            cards
+        }
+        #else
+        cards
+        #endif
+    }
+
+    /// Lazy so the window's first frame (and every frame of a resize
+    /// animation) only builds and lays out the cards actually on screen —
+    /// the heavy below-the-fold charts no longer tax open/close/toggle.
+    private var cards: some View {
+        LazyVStack(alignment: .leading, spacing: 16) {
+            UpdateBanner()
+            statCards
+            TemperatureHistoryCard()
+            HStack(alignment: .top, spacing: 16) {
+                PerCoreCard()
+                FanCard()
+                    .frame(width: 280)
+            }
+            HStack(alignment: .top, spacing: 16) {
+                CPUUsageCard()
+                TopProcessesCard()
+                    .frame(width: 280)
+            }
+            MemoryCard()
+            MemoryHistoryCard()
+            BatteryCard()
+            footer
         }
     }
 
