@@ -26,6 +26,7 @@ struct VitalsApp: App {
         model.start()
         updater.startAutomaticChecks(settings: settings)
         settings.applyActivationPolicy()
+        settings.applyTheme()
         _settings = StateObject(wrappedValue: settings)
         _model = StateObject(wrappedValue: model)
         _updater = StateObject(wrappedValue: updater)

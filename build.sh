@@ -12,9 +12,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Vitals "$APP/Contents/MacOS/Vitals"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
-# Stamp the version: CI sets VITALS_VERSION (base.run_number); local builds
-# get base.0 so any published release counts as newer.
-VERSION="${VITALS_VERSION:-$(cat VERSION).0}"
+# Version is 0.<total commit count> — 10 commits → 0.10. CI passes
+# VITALS_VERSION; local builds compute it from the repo.
+COMMIT_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo 0)
+VERSION="${VITALS_VERSION:-0.$COMMIT_COUNT}"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 echo "Version $VERSION"

@@ -21,8 +21,9 @@ and as a temperature readout in the menu bar.
 ## Releases and updates
 
 Every push to `main` triggers the Release workflow: it builds the app,
-stamps the version (`VERSION` file + build number, e.g. `1.1.42`), packages
-the DMG, and publishes a GitHub release with the DMG attached.
+stamps the version, packages the DMG, and publishes a GitHub release with
+the DMG attached. The version is `0.<total commit count>` — 10 commits on
+`main` means `0.10`.
 
 The app keeps itself current:
 
@@ -35,14 +36,16 @@ The app keeps itself current:
 Either way, **Install Update** downloads the release DMG, installs it to
 `/Applications/Vitals.app`, and relaunches the new version.
 
-Because the repository is private, update checks authenticate using your
-GitHub CLI login (`gh auth login`) — no tokens are stored in the app. To
-bump the marketing version, edit the `VERSION` file.
+The repository is public, so update checks need no authentication. (If it
+is ever made private again, the app falls back to the local GitHub CLI
+login — `gh auth login` — and no tokens are stored in the app.)
 
 ## Settings (⌘, or the gear in the toolbar)
 
 - **Readings** — temperature unit (°C/°F), refresh rate (1/2/5 s), chart
   history window (5/10/30 min)
+- **Appearance** — theme (System/Light/Dark) and Liquid Glass (translucent
+  window and glass cards on macOS 26)
 - **Menu bar** — show/hide the menu bar item, choose what it displays
   (average temp, hottest core, fan rpm, icon only), and set the warning
   threshold at which the icon turns into a flame

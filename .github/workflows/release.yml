@@ -14,12 +14,14 @@ concurrency:
 jobs:
   release:
     name: Build and publish
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history — the version is the commit count
 
       - name: Compute version
-        run: echo "VERSION=$(cat VERSION).${{ github.run_number }}" >> "$GITHUB_ENV"
+        run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
 
       - name: Build app and installer
         run: |

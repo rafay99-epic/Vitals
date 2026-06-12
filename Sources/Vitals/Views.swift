@@ -27,7 +27,7 @@ struct ContentView: View {
             }
             .padding(20)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .modifier(WindowBackdrop())
         .frame(minWidth: 800, minHeight: 680)
         .navigationTitle("Vitals")
         .toolbar {
@@ -49,14 +49,14 @@ struct ContentView: View {
                 value: model.averageCPUTemp.map { settings.format($0) } ?? "—",
                 subtitle: "\(model.cpuSensors.count) die sensors",
                 symbol: "cpu",
-                tint: model.averageCPUTemp.map(tempColor) ?? .secondary
+                tint: model.averageCPUTemp.map(tempGradientColor) ?? .secondary
             )
             StatCard(
                 title: "Hottest Core",
                 value: model.hottestCPUSensor.map { settings.format($0.celsius) } ?? "—",
                 subtitle: model.hottestCPUSensor.map { "Sensor \($0.label)" } ?? "",
                 symbol: "flame",
-                tint: model.hottestCPUSensor.map { tempColor($0.celsius) } ?? .secondary
+                tint: model.hottestCPUSensor.map { tempGradientColor($0.celsius) } ?? .secondary
             )
             StatCard(
                 title: "Fan",
@@ -218,7 +218,30 @@ struct SectionCard<Content: View>: View {
 
 extension View {
     func cardBackground() -> some View {
-        background(
+        modifier(CardBackground())
+    }
+}
+
+/// Card chrome: Liquid Glass on macOS 26 when enabled, classic bordered
+/// fill otherwise.
+struct CardBackground: ViewModifier {
+    @EnvironmentObject private var settings: AppSettings
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *), settings.liquidGlass {
+            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } else {
+            classic(content)
+        }
+        #else
+        classic(content)
+        #endif
+    }
+
+    private func classic(_ content: Content) -> some View {
+        content.background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
@@ -226,6 +249,21 @@ extension View {
                         .strokeBorder(.separator, lineWidth: 1)
                 )
         )
+    }
+}
+
+/// Window backdrop: a translucent material when Liquid Glass is on, the
+/// standard opaque window color otherwise.
+struct WindowBackdrop: ViewModifier {
+    @EnvironmentObject private var settings: AppSettings
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if settings.liquidGlass {
+            content.containerBackground(.ultraThinMaterial, for: .window)
+        } else {
+            content.background(Color(nsColor: .windowBackgroundColor))
+        }
     }
 }
 
@@ -307,28 +345,73 @@ struct PerCoreCard: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
-                Chart(model.cpuSensors) { sensor in
-                    BarMark(
-                        x: .value("Core", sensor.label),
-                        y: .value("Temp", settings.display(sensor.celsius))
-                    )
-                    .foregroundStyle(tempColor(sensor.celsius).gradient)
-                    .cornerRadius(4)
-                    .annotation(position: .top) {
-                        Text("\(Int(settings.display(sensor.celsius)))°")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 58), spacing: 6)], spacing: 6) {
+                        ForEach(model.cpuSensors) { sensor in
+                            DieCell(sensor: sensor)
+                        }
                     }
+                    summary
                 }
-                .chartYScale(domain: 0...settings.display(maxScaleCelsius))
-                .chartYAxisLabel(settings.unit.symbol)
-                .frame(height: 180)
             }
         }
     }
 
-    private var maxScaleCelsius: Double {
-        max(100, (model.cpuSensors.map(\.celsius).max() ?? 0) + 10)
+    @ViewBuilder
+    private var summary: some View {
+        let temps = model.cpuSensors.map(\.celsius)
+        if let coolest = temps.min(), let hottest = temps.max() {
+            let average = temps.reduce(0, +) / Double(temps.count)
+            HStack(spacing: 12) {
+                Text("Coolest \(settings.format(coolest, decimals: 0))")
+                Text("Average \(settings.format(average, decimals: 0))")
+                Text("Hottest \(settings.format(hottest, decimals: 0))")
+                Spacer()
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [tempGradientColor(40), tempGradientColor(60), tempGradientColor(75), tempGradientColor(90)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 96, height: 5)
+                Text("\(settings.format(40, decimals: 0))–\(settings.format(90, decimals: 0))")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+    }
+}
+
+/// One sensor in the die map — tinted by temperature.
+struct DieCell: View {
+    let sensor: VitalsModel.Sensor
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        let tint = tempGradientColor(sensor.celsius)
+        VStack(spacing: 2) {
+            Text(sensor.label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text("\(Int(settings.display(sensor.celsius).rounded()))°")
+                .font(.system(.callout, design: .rounded, weight: .semibold))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(tint.opacity(0.16))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(tint.opacity(0.45), lineWidth: 1)
+        )
+        .help("\(sensor.label): \(settings.formatWithUnit(sensor.celsius))")
     }
 }
 
@@ -632,13 +715,11 @@ extension Array where Element == VitalsModel.Sample {
 
 // MARK: - Helpers
 
-/// Severity color; thresholds are always in °C regardless of display unit.
-func tempColor(_ celsius: Double) -> Color {
-    switch celsius {
-    case ..<60: return .green
-    case ..<80: return .orange
-    default: return .red
-    }
+/// Continuous severity color: green at ≤40 °C sliding to red at ≥90 °C.
+/// Input is always °C regardless of the display unit.
+func tempGradientColor(_ celsius: Double) -> Color {
+    let t = min(max((celsius - 40) / 50, 0), 1)
+    return Color(hue: 0.33 * (1 - t), saturation: 0.85, brightness: 0.88)
 }
 
 func gigabytes(_ bytes: UInt64) -> Double {

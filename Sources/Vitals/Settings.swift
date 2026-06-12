@@ -11,6 +11,27 @@ enum TemperatureUnit: String, CaseIterable, Identifiable {
     var symbol: String { self == .celsius ? "°C" : "°F" }
 }
 
+enum AppTheme: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 enum MenuBarMode: String, CaseIterable, Identifiable {
     case average, hottest, fan, iconOnly
     var id: String { rawValue }
@@ -37,6 +58,14 @@ final class AppSettings: ObservableObject {
     @Published var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
+    @Published var liquidGlass: Bool { didSet { defaults.set(liquidGlass, forKey: "liquidGlass") } }
+
+    @Published var theme: AppTheme {
+        didSet {
+            defaults.set(theme.rawValue, forKey: "theme")
+            applyTheme()
+        }
+    }
 
     @Published var showMenuBar: Bool {
         didSet {
@@ -78,6 +107,8 @@ final class AppSettings: ObservableObject {
             "notifyThermal": true,
             "loggingEnabled": true,
             "autoUpdateCheck": true,
+            "liquidGlass": true,
+            "theme": AppTheme.system.rawValue,
             "hideDockIcon": false,
         ])
 
@@ -91,6 +122,8 @@ final class AppSettings: ObservableObject {
         notifyThermal = defaults.bool(forKey: "notifyThermal")
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
+        liquidGlass = defaults.bool(forKey: "liquidGlass")
+        theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -116,6 +149,10 @@ final class AppSettings: ObservableObject {
 
     func applyActivationPolicy() {
         NSApplication.shared.setActivationPolicy(hideDockIcon ? .accessory : .regular)
+    }
+
+    func applyTheme() {
+        NSApplication.shared.appearance = theme.nsAppearance
     }
 
     private func updateLoginItem() {
@@ -162,6 +199,22 @@ struct SettingsView: View {
                     Text("5 minutes").tag(5)
                     Text("10 minutes").tag(10)
                     Text("30 minutes").tag(30)
+                }
+            }
+
+            Section("Appearance") {
+                Picker("Theme", selection: $settings.theme) {
+                    ForEach(AppTheme.allCases) { theme in
+                        Text(theme.label).tag(theme)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Liquid Glass", isOn: $settings.liquidGlass)
+                    Text("Translucent window with glass cards. Requires macOS 26.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -256,7 +309,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 600)
+        .frame(width: 460, height: 660)
         .task { await refreshNotificationStatus() }
     }
 
