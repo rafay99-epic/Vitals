@@ -42,17 +42,25 @@ cd Vitals
 ```
 
 The script compiles with SwiftPM, assembles `build/Vitals.app`, renders the
-icon, and ad-hoc signs the bundle. Then either run it in place:
+icon, and ad-hoc signs the bundle.
+
+### Option A — DMG installer (recommended)
 
 ```sh
-open build/Vitals.app
+./make-dmg.sh
+open build/Vitals.dmg
 ```
 
-or install it properly:
+A disk image mounts with the familiar installer window — drag **Vitals** onto
+the **Applications** folder, eject the disk, and launch Vitals from
+Applications or Spotlight. (CI also builds this DMG on every push; grab it
+from the workflow run's artifacts.)
+
+### Option B — run straight from the build folder
 
 ```sh
-cp -R build/Vitals.app /Applications/
-open /Applications/Vitals.app
+open build/Vitals.app                  # run in place, or
+cp -R build/Vitals.app /Applications/  # install manually
 ```
 
 Two prompts to expect on first launch: macOS asks to allow notifications

@@ -16,6 +16,22 @@ jobs:
       - name: Build release
         run: swift build -c release
 
+  package:
+    name: Package DMG
+    runs-on: macos-15
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build app and installer
+        run: |
+          ./build.sh
+          ./make-dmg.sh
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vitals-dmg
+          path: build/Vitals.dmg
+
   lint:
     name: Quality (SwiftLint)
     runs-on: macos-15
