@@ -37,6 +37,25 @@ struct ContentView: View {
                     .tag(item)
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
+            .safeAreaInset(edge: .bottom) {
+                // Settings lives in the sidebar, not the toolbar: toolbar
+                // items sit in AppKit segments that snap (not animate) when
+                // the sidebar toggles — the sidebar's own content slides
+                // with it.
+                HStack {
+                    Button {
+                        openWindow(id: "settings")
+                    } label: {
+                        Label("Settings", systemImage: "gear")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Vitals settings")
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
         } detail: {
             switch section ?? .dashboard {
             case .dashboard: DashboardView()
@@ -47,22 +66,11 @@ struct ContentView: View {
         .modifier(WindowBackdrop())
         .frame(minWidth: 980, minHeight: 680)
         .navigationTitle("Vitals")
-        // AppKit snaps (not animates) the detail toolbar segment when the
-        // sidebar expands in a non-fullscreen window — the glass capsule and
-        // leading title visibly jerked. With the toolbar background hidden
-        // and the title not displayed (see windowToolbarStyle in VitalsApp),
-        // only the trailing gear remains, and the trailing edge never moves.
+        // AppKit snaps (not animates) the window-toolbar segments when the
+        // sidebar expands in a non-fullscreen window. The toolbar is now
+        // completely empty — background hidden, no title (windowToolbarStyle
+        // in VitalsApp), no items — so there is nothing left to snap.
         .toolbarBackground(.hidden, for: .windowToolbar)
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    openWindow(id: "settings")
-                } label: {
-                    Label("Settings", systemImage: "gear")
-                }
-                .help("Vitals settings")
-            }
-        }
     }
 }
 
