@@ -1,0 +1,13 @@
+excluded:
+  - .build
+  - build
+  - Scripts
+
+disabled_rules:
+  - line_length
+  - identifier_name
+  - file_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity
+  - todo
