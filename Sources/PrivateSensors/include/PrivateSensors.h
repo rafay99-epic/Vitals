@@ -70,6 +70,7 @@ typedef struct {
 
 #define VITALS_SMC_SELECTOR_YPC_EVENT 2
 #define VITALS_SMC_CMD_READ_KEY 5
+#define VITALS_SMC_CMD_WRITE_KEY 6
 #define VITALS_SMC_CMD_GET_KEY_INFO 9
 
 #endif

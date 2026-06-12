@@ -1,0 +1,348 @@
+import SwiftUI
+import Charts
+
+struct CPUUsageCard: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
+    @State private var hoverTime: Date?
+
+    var body: some View {
+        SectionCard(title: "CPU usage · last \(settings.historyMinutes) minutes", symbol: "gauge.with.dots.needle.50percent") {
+            Chart {
+                ForEach(model.history) { sample in
+                    AreaMark(
+                        x: .value("Time", sample.time),
+                        y: .value("%", sample.usage)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue.opacity(0.35), .blue.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .interpolationMethod(.catmullRom)
+
+                    LineMark(
+                        x: .value("Time", sample.time),
+                        y: .value("%", sample.usage)
+                    )
+                    .foregroundStyle(.blue)
+                    .interpolationMethod(.catmullRom)
+                }
+
+                if let sample = model.history.nearest(to: hoverTime) {
+                    RuleMark(x: .value("Time", sample.time))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1))
+                        .annotation(
+                            position: .top,
+                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        ) {
+                            HoverTooltip(time: sample.time) {
+                                Text(String(format: "CPU %.0f%%", sample.usage))
+                            }
+                        }
+                }
+            }
+            .chartYScale(domain: 0...100)
+            .chartYAxisLabel("%")
+            .chartHover($hoverTime)
+            .frame(height: 160)
+        }
+    }
+}
+
+struct TopProcessesCard: View {
+    @EnvironmentObject private var model: VitalsModel
+
+    var body: some View {
+        SectionCard(title: "Top processes", symbol: "list.bullet.rectangle") {
+            if model.topProcesses.isEmpty {
+                Text("Gathering…")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 140)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(model.topProcesses) { process in
+                        HStack {
+                            Text(process.name)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Text(String(format: "%.1f%%", process.cpuPercent))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.callout)
+                    }
+                    Spacer(minLength: 0)
+                    Text("CPU per process · 100% = one core")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
+            }
+        }
+    }
+}
+
+struct FanCard: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var fanControl: FanController
+    @State private var pendingRPM: [Int: Double] = [:]
+
+    var body: some View {
+        SectionCard(title: "Fans", symbol: "fan") {
+            if model.fans.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: model.hasSMC ? "fan.slash" : "questionmark.circle")
+                        .font(.largeTitle)
+                        .foregroundStyle(.tertiary)
+                    Text(model.hasSMC ? "This Mac is fanless — it cools passively." : "Fan data unavailable.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, minHeight: 160)
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(model.fans) { fan in
+                        fanRow(fan)
+                        if fanControl.isInstalled {
+                            fanControls(fan)
+                        }
+                        if fan.id != model.fans.last?.id {
+                            Divider()
+                        }
+                    }
+                    controlFooter
+                }
+                .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+            }
+        }
+    }
+
+    private func fanRow(_ fan: SMC.Fan) -> some View {
+        HStack(spacing: 16) {
+            Gauge(value: gaugeValue(fan), in: 0...1) {
+                EmptyView()
+            } currentValueLabel: {
+                Image(systemName: "fan")
+                    .font(.caption)
+            }
+            .gaugeStyle(.accessoryCircularCapacity)
+            .tint(.cyan)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(Int(fan.rpm)) rpm")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .contentTransition(.numericText())
+                Text(modeLine(fan))
+                    .font(.caption)
+                    .foregroundStyle(isManual(fan) ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                Text("Range \(Int(fan.minRPM))–\(Int(fan.maxRPM)) rpm")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func fanControls(_ fan: SMC.Fan) -> some View {
+        if fan.maxRPM > fan.minRPM {
+            HStack(spacing: 8) {
+                Slider(value: sliderBinding(fan), in: fan.minRPM...fan.maxRPM) { editing in
+                    if !editing {
+                        fanControl.setTarget(fan: fan.id, rpm: Int(sliderValue(fan)))
+                    }
+                }
+                .controlSize(.small)
+                .disabled(fanControl.isWorking)
+
+                Text("\(Int(sliderValue(fan)))")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+
+                Button("Auto") {
+                    pendingRPM[fan.id] = nil
+                    fanControl.setAuto(fan: fan.id)
+                }
+                .controlSize(.small)
+                .disabled(fanControl.isWorking || !isManual(fan))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var controlFooter: some View {
+        if let error = fanControl.lastError {
+            Text(error)
+                .font(.caption2)
+                .foregroundStyle(.orange)
+        } else if fanControl.isInstalled {
+            HStack {
+                Text("Manual speed overrides macOS cooling, within the rated range.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Button("Disable…") {
+                    Task { await fanControl.remove(fanCount: model.fans.count) }
+                }
+                .controlSize(.mini)
+                .disabled(fanControl.isWorking)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    Task { await fanControl.install() }
+                } label: {
+                    Label(fanControl.isWorking ? "Installing…" : "Enable Fan Control", systemImage: "fan")
+                }
+                .disabled(fanControl.isWorking)
+                Text("Installs a small helper (one password) so you can set fan speed without a prompt each time. macOS thermal safety stays active.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func isManual(_ fan: SMC.Fan) -> Bool {
+        fanControl.target(for: fan.id)?.mode == .manual
+    }
+
+    private func modeLine(_ fan: SMC.Fan) -> String {
+        if isManual(fan) {
+            let target = fanControl.target(for: fan.id).map { Int($0.rpm) } ?? Int(fan.targetRPM)
+            return "Manual · target \(target) rpm"
+        }
+        return "Automatic"
+    }
+
+    private func sliderValue(_ fan: SMC.Fan) -> Double {
+        if let pending = pendingRPM[fan.id] { return pending }
+        if let command = fanControl.target(for: fan.id), command.mode == .manual { return command.rpm }
+        return min(max(fan.targetRPM, fan.minRPM), fan.maxRPM)
+    }
+
+    private func sliderBinding(_ fan: SMC.Fan) -> Binding<Double> {
+        Binding(
+            get: { sliderValue(fan) },
+            set: { pendingRPM[fan.id] = $0 }
+        )
+    }
+
+    private func gaugeValue(_ fan: SMC.Fan) -> Double {
+        guard fan.maxRPM > 0 else { return 0 }
+        return min(max(fan.rpm / fan.maxRPM, 0), 1)
+    }
+}
+
+struct BatteryCard: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        SectionCard(title: "Battery", symbol: batterySymbol) {
+            if let battery = model.battery {
+                HStack(alignment: .center, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(Int(battery.percent))%")
+                            .font(.system(size: 28, weight: .semibold, design: .rounded))
+                            .contentTransition(.numericText())
+                        Text(stateLine(for: battery))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Gauge(value: battery.percent / 100) { EmptyView() }
+                            .gaugeStyle(.accessoryLinearCapacity)
+                            .tint(chargeTint(battery))
+                            .frame(width: 200)
+                    }
+
+                    Divider()
+                        .frame(height: 64)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let health = battery.healthPercent {
+                            detailRow(symbol: "heart", text: healthLine(health: health, cycles: battery.cycleCount))
+                        }
+                        if let watts = battery.watts, abs(watts) > 0.1 {
+                            detailRow(
+                                symbol: "bolt",
+                                text: watts > 0
+                                    ? String(format: "Charging at %.1f W", watts)
+                                    : String(format: "Drawing %.1f W from battery", -watts)
+                            )
+                        }
+                        if let temp = model.batteryTemp {
+                            detailRow(symbol: "thermometer.low", text: "Battery temperature \(settings.formatWithUnit(temp))")
+                        }
+                        if let minutes = battery.timeRemainingMinutes {
+                            detailRow(
+                                symbol: "clock",
+                                text: battery.externalPower
+                                    ? "About \(timeText(minutes)) until full"
+                                    : "About \(timeText(minutes)) remaining"
+                            )
+                        }
+                    }
+                    Spacer()
+                }
+            } else {
+                Text("No battery found.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            }
+        }
+    }
+
+    private var batterySymbol: String {
+        guard let battery = model.battery else { return "battery.100percent" }
+        if battery.isCharging { return "battery.100percent.bolt" }
+        switch battery.percent {
+        case ..<13: return "battery.0percent"
+        case ..<38: return "battery.25percent"
+        case ..<63: return "battery.50percent"
+        case ..<88: return "battery.75percent"
+        default: return "battery.100percent"
+        }
+    }
+
+    private func stateLine(for battery: BatterySnapshot) -> String {
+        if battery.isCharging { return "Charging" }
+        if battery.externalPower { return battery.fullyCharged ? "Fully charged, on power adapter" : "On power adapter" }
+        return "On battery"
+    }
+
+    private func healthLine(health: Double, cycles: Int?) -> String {
+        var line = String(format: "Health %.0f%%", health)
+        if let cycles { line += " · \(cycles) cycles" }
+        return line
+    }
+
+    private func detailRow(symbol: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            Text(text)
+        }
+        .font(.callout)
+    }
+
+    private func chargeTint(_ battery: BatterySnapshot) -> Color {
+        if battery.isCharging { return .green }
+        switch battery.percent {
+        case ..<20: return .red
+        case ..<50: return .orange
+        default: return .green
+        }
+    }
+
+    private func timeText(_ minutes: Int) -> String {
+        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
+    }
+}

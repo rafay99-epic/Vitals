@@ -110,6 +110,55 @@ Delete `Resources/AppIcon.icns` first if you want the icon re-rendered.
 
 Prints every temperature sensor, fan, and memory reading once and exits.
 
+## Project layout
+
+```
+Sources/
+  PrivateSensors/        C shim exposing the private IOKit/SMC symbols
+  Vitals/
+    App/                 entry point, CLI tools, App scene, menu bar
+    Models/              VitalsModel — the polling view-model
+    Services/            one file per data source:
+                           SMC, HIDSensors, SystemStats, ProcessSampler,
+                           Battery, HistoryLogger, Notifications, FanController
+    Settings/            AppSettings (persistence) + SettingsView
+    Updates/             Updater — GitHub release checks, download, install
+    Views/               ContentView, Components, and the dashboard cards
+Scripts/                 icon and DMG-background renderers
+Resources/               Info.plist, app icon
+.github/workflows/       ci.yml (build/lint), release.yml (build + publish)
+build.sh / make-dmg.sh   build the app and the installer
+```
+
+The rule of thumb: a **Service** talks to the hardware/OS and knows nothing
+about SwiftUI; the **Model** polls services on a timer and publishes state;
+**Views** only read the model and settings. New data sources slot into
+`Services/` and surface through `VitalsModel`.
+
+## Fan control
+
+Click **Enable Fan Control** in the Fans card (one administrator prompt).
+After that, the slider and presets — in the window *and* the menu-bar panel —
+change fan speed with no further prompts; **Disable…** removes the helper.
+
+How it works:
+
+- A small **LaunchDaemon** (`com.tudotechlab.vitals.fand`) runs the app's own
+  binary as root (`Vitals --fan-daemon`). The GUI writes the desired state to
+  `/Library/Application Support/Vitals/fan-state.json`; the daemon applies it.
+  This is why there's only one password — installing the helper — instead of
+  one per change.
+- **Apple Silicon SMC unlock**: M3/M4 firmware holds fans in "system mode"
+  (`F0Md` reads `3`) and rejects a direct manual-mode write. The daemon sets
+  the diagnostic key `Ftst = 1`, waits for the mode write to take, then sets
+  the target rpm `F0Tg` (a float on Apple Silicon, not the Intel `fpe2`
+  format). The unlock is re-applied on a loop so manual speed survives
+  sleep/wake. Mechanism documented by
+  [agoodkind/macos-smc-fan](https://github.com/agoodkind/macos-smc-fan).
+- macOS thermal management still runs underneath as a safety net, and speeds
+  are clamped to each fan's rated range. Fanless Macs show a passive-cooling
+  message instead.
+
 ## How it works
 
 - **Temperatures** — Apple Silicon exposes named temperature sensors through
