@@ -30,6 +30,9 @@ final class VitalsModel: ObservableObject {
     @Published private(set) var fans: [SMC.Fan] = []
     @Published private(set) var hasSMC = false
     @Published private(set) var history: [Sample] = []
+    /// `history` thinned for drawing — charts can't show more points than
+    /// pixels, and Swift Charts rebuild cost scales with mark count.
+    @Published private(set) var chartHistory: [Sample] = []
     @Published private(set) var cpuUsage: Double = 0
     @Published private(set) var memory: MemorySnapshot?
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
@@ -48,14 +51,13 @@ final class VitalsModel: ObservableObject {
     }
 
     private let settings: AppSettings
-    private let smc = SMC()
-    private let hid = HIDSensors()
-    private let cpuSampler = CPUUsageSampler()
-    private let processSampler = ProcessSampler()
+    private let sampler = SensorSampler()
     private let notifications = NotificationManager()
     private let logger = HistoryLogger()
     private var timer: Timer?
+    private var isSampling = false
     private var cancellables: Set<AnyCancellable> = []
+    private static let maxChartPoints = 400
 
     // Overheat alerting state.
     private var hotSince: Date?
@@ -89,7 +91,6 @@ final class VitalsModel: ObservableObject {
 
     func start() {
         guard timer == nil else { return }
-        hasSMC = smc != nil
         tick()
         let timer = Timer(timeInterval: settings.refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -109,23 +110,37 @@ final class VitalsModel: ObservableObject {
         if history.count > maxHistory {
             history.removeFirst(history.count - maxHistory)
         }
+        chartHistory = Self.downsample(history, to: Self.maxChartPoints)
     }
 
+    /// Kicks off one sample on the sampler's executor and publishes the
+    /// result back here. `isSampling` drops a tick rather than letting a
+    /// slow sample (heavily loaded machine) queue up behind itself.
     private func tick() {
-        let readings = hid.readAll()
-        let classified = Self.classify(readings)
+        guard !isSampling else { return }
+        isSampling = true
+        Task {
+            let snapshot = await sampler.sample()
+            apply(snapshot)
+            isSampling = false
+        }
+    }
+
+    private func apply(_ snapshot: SensorSampler.Snapshot) {
+        let classified = Self.classify(snapshot.readings)
 
         cpuSensors = classified.filter { $0.kind == .cpu }
             .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
         gpuTemp = Self.average(of: classified, kind: .gpu)
         ssdTemp = Self.average(of: classified, kind: .storage)
         batteryTemp = Self.average(of: classified, kind: .battery)
-        fans = smc?.fans() ?? []
+        fans = snapshot.fans
+        hasSMC = snapshot.hasSMC
         thermalState = ProcessInfo.processInfo.thermalState
-        if let usage = cpuSampler.sample() { cpuUsage = usage }
-        memory = MemoryStats.read()
-        topProcesses = processSampler.sample(top: 5)
-        battery = Battery.read()
+        if let usage = snapshot.cpuUsage { cpuUsage = usage }
+        memory = snapshot.memory
+        topProcesses = snapshot.topProcesses
+        battery = snapshot.battery
 
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
             history.append(Sample(
@@ -189,6 +204,15 @@ final class VitalsModel: ObservableObject {
             )
         }
         previousThermalState = thermalState
+    }
+
+    /// Evenly thins `samples` to at most `maxCount` points, always keeping
+    /// the first and the newest. Indices step by more than one whenever
+    /// thinning happens, so no sample (or id) repeats.
+    static func downsample(_ samples: [Sample], to maxCount: Int) -> [Sample] {
+        guard samples.count > maxCount, maxCount > 1 else { return samples }
+        let stride = Double(samples.count - 1) / Double(maxCount - 1)
+        return (0..<maxCount).map { samples[Int((Double($0) * stride).rounded())] }
     }
 
     private static func average(of sensors: [Sensor], kind: Sensor.Kind) -> Double? {

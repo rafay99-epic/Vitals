@@ -15,6 +15,10 @@ final class HistoryLogger {
 
     private var handle: FileHandle?
     private var lastWrite: Date = .distantPast
+    private var writesSinceSizeCheck = 0
+    /// Rotation happens when the handle is opened; re-check hourly (one
+    /// write per 10 s) so a months-long run can't grow past the cap.
+    private static let writesPerSizeCheck = 360
 
     private static let timestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -50,6 +54,14 @@ final class HistoryLogger {
         if let data = (fields.joined(separator: ",") + "\n").data(using: .utf8) {
             try? handle.write(contentsOf: data)
             lastWrite = now
+            writesSinceSizeCheck += 1
+            if writesSinceSizeCheck >= Self.writesPerSizeCheck {
+                writesSinceSizeCheck = 0
+                if let size = fileSizeBytes, size > Self.maximumBytes {
+                    try? handle.close()
+                    self.handle = nil  // next append reopens and rotates
+                }
+            }
         }
     }
 

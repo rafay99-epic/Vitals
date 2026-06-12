@@ -1,6 +1,11 @@
 import Foundation
 import Darwin
 
+/// `mach_host_self()` allocates a new send right on every call and we never
+/// deallocate them — sampled once a second, that leaks kernel port references
+/// for the lifetime of the process. Acquire the port once instead.
+private let machHost: host_t = mach_host_self()
+
 /// Overall CPU utilisation, computed from the delta of per-core tick counters
 /// between consecutive samples.
 final class CPUUsageSampler {
@@ -11,7 +16,7 @@ final class CPUUsageSampler {
         var coreCount: natural_t = 0
         var info: processor_info_array_t?
         var infoCount: mach_msg_type_number_t = 0
-        guard host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &coreCount, &info, &infoCount) == KERN_SUCCESS,
+        guard host_processor_info(machHost, PROCESSOR_CPU_LOAD_INFO, &coreCount, &info, &infoCount) == KERN_SUCCESS,
               let info
         else { return nil }
         defer {
@@ -77,7 +82,7 @@ enum MemoryStats {
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &stats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(machHost, HOST_VM_INFO64, $0, &count)
             }
         }
         guard result == KERN_SUCCESS else { return nil }

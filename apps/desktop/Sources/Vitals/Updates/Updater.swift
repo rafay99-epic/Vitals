@@ -158,13 +158,16 @@ final class Updater: ObservableObject {
         }
         // GitHub redirects asset downloads to S3, which rejects requests that
         // still carry the Authorization header — strip it on redirect.
-        let (data, response) = try await URLSession.shared.data(for: request, delegate: RedirectSanitizer())
+        // download(for:) streams to disk, so the DMG never sits in memory.
+        let (tempFile, response) = try await URLSession.shared.download(for: request, delegate: RedirectSanitizer())
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            try? FileManager.default.removeItem(at: tempFile)
             throw UpdateError(message: "Download failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)).")
         }
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("Vitals-\(release.version).dmg")
-        try data.write(to: destination, options: .atomic)
+        try? FileManager.default.removeItem(at: destination)
+        try FileManager.default.moveItem(at: tempFile, to: destination)
         return destination
     }
 

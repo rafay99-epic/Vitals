@@ -55,7 +55,7 @@ struct MenuBarPanel: View {
                 value: model.hottestCPUSensor.map { settings.format($0.celsius, decimals: 0) } ?? "—",
                 color: .orange
             ) {
-                ForEach(model.history) { sample in
+                ForEach(model.chartHistory) { sample in
                     LineMark(x: .value("t", sample.time), y: .value("v", sample.hottestCPU))
                         .foregroundStyle(.orange)
                         .interpolationMethod(.catmullRom)
@@ -66,7 +66,7 @@ struct MenuBarPanel: View {
                 value: String(format: "%.0f%%", model.cpuUsage),
                 color: .blue
             ) {
-                ForEach(model.history) { sample in
+                ForEach(model.chartHistory) { sample in
                     AreaMark(x: .value("t", sample.time), y: .value("v", sample.usage))
                         .foregroundStyle(.blue.opacity(0.18))
                         .interpolationMethod(.catmullRom)
@@ -80,7 +80,7 @@ struct MenuBarPanel: View {
                 value: String(format: "%.1fG", gigabytes(model.memory?.used ?? 0)),
                 color: .indigo
             ) {
-                ForEach(model.history) { sample in
+                ForEach(model.chartHistory) { sample in
                     AreaMark(x: .value("t", sample.time), y: .value("v", gigabytes(sample.memoryUsed)))
                         .foregroundStyle(.indigo.opacity(0.18))
                         .interpolationMethod(.catmullRom)

@@ -23,6 +23,13 @@ final class SMC {
 
     private let connection: io_connect_t
 
+    /// A key's type and size never change, but fetching them costs a kernel
+    /// round-trip — half the SMC traffic before this cache existed. Missing
+    /// keys are remembered too, so absent keys (no F0Md on some machines)
+    /// aren't re-queried every tick.
+    private var keyInfoCache: [UInt32: SMCKeyInfoData] = [:]
+    private var missingKeys: Set<UInt32> = []
+
     init?() {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         guard service != 0 else { return nil }
@@ -98,21 +105,31 @@ final class SMC {
     /// Reads a key and decodes it to a Double, or nil if the key is missing
     /// or has a type we don't understand.
     func read(_ key: String) -> Double? {
-        guard let keyCode = Self.fourCC(key) else { return nil }
+        guard let keyCode = Self.fourCC(key), let info = keyInfo(for: keyCode) else { return nil }
+
+        var readInput = SMCParamStruct()
+        readInput.key = keyCode
+        readInput.keyInfo.dataSize = info.dataSize
+        readInput.data8 = UInt8(VITALS_SMC_CMD_READ_KEY)
+        guard let output = call(&readInput).output, output.result == 0 else { return nil }
+
+        let bytes = withUnsafeBytes(of: output.bytes) { Array($0.prefix(Int(info.dataSize))) }
+        return Self.decode(bytes, type: info.dataType)
+    }
+
+    private func keyInfo(for keyCode: UInt32) -> SMCKeyInfoData? {
+        if let cached = keyInfoCache[keyCode] { return cached }
+        guard !missingKeys.contains(keyCode) else { return nil }
 
         var input = SMCParamStruct()
         input.key = keyCode
         input.data8 = UInt8(VITALS_SMC_CMD_GET_KEY_INFO)
-        guard let info = call(&input).output, info.result == 0, info.keyInfo.dataSize > 0 else { return nil }
-
-        var readInput = SMCParamStruct()
-        readInput.key = keyCode
-        readInput.keyInfo.dataSize = info.keyInfo.dataSize
-        readInput.data8 = UInt8(VITALS_SMC_CMD_READ_KEY)
-        guard let output = call(&readInput).output, output.result == 0 else { return nil }
-
-        let bytes = withUnsafeBytes(of: output.bytes) { Array($0.prefix(Int(info.keyInfo.dataSize))) }
-        return Self.decode(bytes, type: info.keyInfo.dataType)
+        guard let info = call(&input).output, info.result == 0, info.keyInfo.dataSize > 0 else {
+            missingKeys.insert(keyCode)
+            return nil
+        }
+        keyInfoCache[keyCode] = info.keyInfo
+        return info.keyInfo
     }
 
     /// Encodes `value` for the key's native type and writes it. Requires root.
@@ -120,18 +137,14 @@ final class SMC {
         guard let keyCode = Self.fourCC(key) else {
             throw SMCError(message: "invalid SMC key \(key)")
         }
-
-        var infoInput = SMCParamStruct()
-        infoInput.key = keyCode
-        infoInput.data8 = UInt8(VITALS_SMC_CMD_GET_KEY_INFO)
-        guard let info = call(&infoInput).output, info.result == 0, info.keyInfo.dataSize > 0 else {
+        guard let info = keyInfo(for: keyCode) else {
             throw SMCError(message: "SMC key \(key) not available on this Mac")
         }
 
-        let bytes = try Self.encode(value, type: info.keyInfo.dataType, size: Int(info.keyInfo.dataSize), key: key)
+        let bytes = try Self.encode(value, type: info.dataType, size: Int(info.dataSize), key: key)
         var input = SMCParamStruct()
         input.key = keyCode
-        input.keyInfo = info.keyInfo
+        input.keyInfo = info
         input.data8 = UInt8(VITALS_SMC_CMD_WRITE_KEY)
         withUnsafeMutableBytes(of: &input.bytes) { buffer in
             for (index, byte) in bytes.enumerated() { buffer[index] = byte }
