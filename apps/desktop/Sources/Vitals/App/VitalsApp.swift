@@ -29,7 +29,7 @@ struct VitalsApp: App {
                 .environmentObject(updater)
                 .environmentObject(fanControl)
         }
-        .defaultSize(width: 880, height: 760)
+        .defaultSize(width: 1100, height: 760)
         .commands {
             SettingsCommands()
         }

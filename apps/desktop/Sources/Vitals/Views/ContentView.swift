@@ -1,9 +1,65 @@
 import SwiftUI
 
+/// Top-level navigation: the live dashboard plus the app-management tools.
 struct ContentView: View {
+    enum Section: String, CaseIterable, Identifiable {
+        case dashboard, applications, cleanup
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .dashboard: return "Dashboard"
+            case .applications: return "Applications"
+            case .cleanup: return "Cleanup"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .dashboard: return "gauge.with.dots.needle.50percent"
+            case .applications: return "square.grid.2x2"
+            case .cleanup: return "sparkles"
+            }
+        }
+    }
+
+    @State private var section: Section? = .dashboard
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        NavigationSplitView {
+            List(Section.allCases, selection: $section) { item in
+                Label(item.title, systemImage: item.symbol)
+                    .tag(item)
+            }
+            .navigationSplitViewColumnWidth(min: 170, ideal: 190)
+        } detail: {
+            switch section ?? .dashboard {
+            case .dashboard: DashboardView()
+            case .applications: AppsView()
+            case .cleanup: CleanupView()
+            }
+        }
+        .modifier(WindowBackdrop())
+        .frame(minWidth: 980, minHeight: 680)
+        .navigationTitle("Vitals")
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    openWindow(id: "settings")
+                } label: {
+                    Label("Settings", systemImage: "gear")
+                }
+                .help("Vitals settings")
+            }
+        }
+    }
+}
+
+/// The original live dashboard, unchanged — now one section of the window.
+struct DashboardView: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ScrollView {
@@ -27,19 +83,6 @@ struct ContentView: View {
                 footer
             }
             .padding(20)
-        }
-        .modifier(WindowBackdrop())
-        .frame(minWidth: 800, minHeight: 680)
-        .navigationTitle("Vitals")
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    openWindow(id: "settings")
-                } label: {
-                    Label("Settings", systemImage: "gear")
-                }
-                .help("Vitals settings")
-            }
         }
     }
 
