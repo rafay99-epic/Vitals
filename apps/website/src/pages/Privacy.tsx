@@ -3,13 +3,14 @@ import { COMPANY, DEVELOPER, DEVELOPER_URL, REPO_URL } from '../lib/links'
 
 export default function Privacy() {
   return (
-    <LegalLayout title="Privacy Policy" updated="June 12, 2026">
+    <LegalLayout title="Privacy Policy" updated="June 13, 2026">
       <Section title="The short version">
         <P>
-          <Strong>Vitals does not collect, store, transmit, or sell any of your personal data. We run no servers, no analytics, no
-          telemetry, no crash reporting, and no accounts.</Strong> Everything the App measures stays on your Mac. The only network
-          requests the App or this website ever make are to GitHub, to check for and download releases — and those requests carry
-          no personal information beyond what any web request inherently includes.
+          <Strong>The Vitals app does not collect, store, transmit, or sell any of your personal data. It has no analytics, no
+          telemetry, no crash reporting, and no accounts.</Strong> Everything the App measures stays on your Mac; its only network
+          requests go to GitHub, to check for and download releases. This website is almost as quiet: it sets no cookies and does
+          no cross-site tracking — its one measurement tool is Vercel Web Analytics, an anonymized, cookieless page counter
+          described in section 5.
         </P>
         <P>
           The rest of this policy spells that out in detail. It is issued by <Strong>{COMPANY}</Strong>, developer of Vitals
@@ -76,12 +77,19 @@ export default function Privacy() {
       </Section>
 
       <Section title="5. This website">
-        <P>The website you are reading is a static page. It sets <Strong>no cookies</Strong>, runs <Strong>no analytics or tracking
-        scripts</Strong>, embeds no advertising, and uses no fingerprinting.</P>
+        <P>The website you are reading is a static page. It sets <Strong>no cookies</Strong>, embeds no advertising, and uses no
+        fingerprinting. It uses exactly one measurement tool, disclosed here:</P>
         <List>
           <Item>
-            Your browser requests the page from our hosting provider, which (like all web hosts) may keep standard server logs —
-            IP address, user agent, requested URL, timestamp — for security and operational purposes under its own policy.
+            <Strong>Vercel Web Analytics</Strong> counts page views with basic, aggregated context (page visited, referrer,
+            country, browser, and device type). It is cookieless, stores no identifiers on your device, and does not follow you
+            across other sites. The data is anonymized and processed by Vercel, our hosting provider, under the{' '}
+            <ExtLink href="https://vercel.com/legal/privacy-policy">Vercel Privacy Policy</ExtLink>. We see only aggregate counts —
+            never individual visitors.
+          </Item>
+          <Item>
+            Your browser requests the page from our hosting provider (Vercel), which (like all web hosts) may keep standard server
+            logs — IP address, user agent, requested URL, timestamp — for security and operational purposes under its own policy.
           </Item>
           <Item>
             The page queries the GitHub API from your browser to display the latest release version and download size, and the
@@ -94,7 +102,8 @@ export default function Privacy() {
       <Section title="6. What we never do">
         <List>
           <Item>We do not collect, buy, sell, rent, share, or trade personal data — we have none to begin with.</Item>
-          <Item>We do not profile you, advertise to you, or track you across apps or websites.</Item>
+          <Item>We do not profile you, advertise to you, or track you across apps or websites — the website's analytics are
+          aggregate page counts, not profiles of people.</Item>
           <Item>We do not use your hardware readings for any purpose; they never reach us.</Item>
           <Item>We hold no user database, so there is nothing to breach, subpoena, or leak on our side.</Item>
         </List>
@@ -102,9 +111,11 @@ export default function Privacy() {
 
       <Section title="7. Data retention">
         <P>
-          We retain nothing, because nothing is transmitted to us. The only persistent data the App creates — the optional CSV log
-          and your settings — lives on your Mac and is yours to delete. Uninstalling the App and removing the helper deletes the
-          App's presence from your system; the CSV log remains until you delete it, since it is your data.
+          The App transmits nothing to us, so there is nothing of yours for us to retain. The only persistent data the App creates
+          — the optional CSV log and your settings — lives on your Mac and is yours to delete. Uninstalling the App and removing
+          the helper deletes the App's presence from your system; the CSV log remains until you delete it, since it is your data.
+          The website's aggregated, anonymous visit counts are retained in our Vercel dashboard and contain no personal
+          identifiers.
         </P>
       </Section>
 
