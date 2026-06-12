@@ -5,6 +5,13 @@ import AppKit
 enum Main {
     static func main() {
         let arguments = CommandLine.arguments
+
+        // Intel Macs lack the M-series sensors and fan keys Vitals depends on.
+        // The universal binary still launches there only to apologize.
+        guard Hardware.isAppleSilicon else {
+            MainActor.assumeIsolated { Hardware.showUnsupportedAndQuit() }
+        }
+
         if arguments.contains("--probe") {
             runProbe()
         } else if arguments.contains("--check-update") {

@@ -3,13 +3,16 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "Compiling…"
-swift build -c release
+echo "Compiling universal (arm64 + x86_64)…"
+# Universal so the app can launch on an Intel Mac far enough to show its
+# "Apple Silicon only" apology; the real features run on the arm64 slice.
+swift build -c release --arch arm64 --arch x86_64
+BINARY=".build/apple/Products/Release/Vitals"
 
 APP="build/Vitals.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/Vitals "$APP/Contents/MacOS/Vitals"
+cp "$BINARY" "$APP/Contents/MacOS/Vitals"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 # Version is 0.<total commit count> — 10 commits → 0.10. CI passes
