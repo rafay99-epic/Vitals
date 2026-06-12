@@ -61,7 +61,13 @@ function check(name, ok, detail = '') {
 
 try {
   await waitForServer()
-  const browser = await chromium.launch({ executablePath, headless: true })
+  console.log(`e2e: using browser at ${executablePath}`)
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    // CI runners (and containers) often need these for Chrome to start.
+    args: process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : [],
+  })
   const page = await browser.newPage()
 
   // --- Landing page, mobile (iPhone width) ---

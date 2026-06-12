@@ -1,5 +1,8 @@
 name: Website
 
+# Steps run strictly in order and fail fast: lint -> unit tests -> build ->
+# end-to-end browser checks. The site artifact is only uploaded after every
+# check has passed — a broken site never produces a deployable artifact.
 on:
   push:
     branches: [main]
@@ -19,7 +22,7 @@ on:
 
 jobs:
   build:
-    name: Build (bun + turbo)
+    name: Lint, test, build, e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -28,9 +31,13 @@ jobs:
           bun-version: latest
       - name: Install
         run: bun install --frozen-lockfile
-      - name: Lint, test, and build
-        run: bunx turbo lint test build --filter=website
-      - name: End-to-end checks
+      - name: Lint
+        run: bunx turbo lint --filter=website
+      - name: Unit tests
+        run: bunx turbo test --filter=website
+      - name: Build
+        run: bunx turbo build --filter=website
+      - name: End-to-end checks (system Chrome)
         run: bunx turbo test:e2e --filter=website
       - name: Upload site
         uses: actions/upload-artifact@v4

@@ -2,6 +2,9 @@ name: Release
 
 # Publishes a release for every app change on main (version = commit count).
 # Website-only and root-tooling commits do not cut releases.
+#
+# Tests and lint gate the release: if either fails, nothing is built or
+# published — users must never auto-update onto a broken build.
 on:
   push:
     branches: [main]
@@ -16,13 +19,27 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+defaults:
+  run:
+    working-directory: apps/desktop
+
 jobs:
+  test:
+    name: Test before release
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run tests
+        run: swift test
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --reporter github-actions-logging
+
   release:
     name: Build and publish
     runs-on: macos-26
-    defaults:
-      run:
-        working-directory: apps/desktop
+    needs: test
     steps:
       - uses: actions/checkout@v6
         with:
