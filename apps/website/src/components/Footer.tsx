@@ -49,6 +49,14 @@ export default function Footer() {
             © {new Date().getFullYear()} {COMPANY} · Developed by{' '}
             <a href={DEVELOPER_URL} target="_blank" rel="noreferrer" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>
               {DEVELOPER} — rafay99.com
+            </a>{' '}
+            · Free software under{' '}
+            <a href={`${REPO_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>
+              GPL-3.0
+            </a>{' '}
+            · Cleanup informed by{' '}
+            <a href="https://github.com/tw93/mole" target="_blank" rel="noreferrer" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>
+              Mole
             </a>
           </span>
           <span style={{ display: 'flex', gap: 18 }}>

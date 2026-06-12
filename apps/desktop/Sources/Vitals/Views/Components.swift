@@ -11,20 +11,29 @@ struct StatCard: View {
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(tint)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(tint.opacity(0.14))
+                    )
                 Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.secondary)
             }
-            .font(.callout)
-            Text(value)
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
-                .contentTransition(.numericText())
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
@@ -87,16 +96,55 @@ struct CardBackground: ViewModifier {
 }
 
 /// Window backdrop: a translucent material when Liquid Glass is on, the
-/// standard opaque window color otherwise.
+/// standard opaque window color otherwise. The frosting slider in Settings
+/// picks how much of the desktop blurs through.
 struct WindowBackdrop: ViewModifier {
     @EnvironmentObject private var settings: AppSettings
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if settings.liquidGlass {
-            content.containerBackground(.ultraThinMaterial, for: .window)
+            content.containerBackground(backdropMaterial, for: .window)
         } else {
             content.background(Color(nsColor: .windowBackgroundColor))
+        }
+    }
+
+    private var backdropMaterial: Material {
+        switch settings.glassIntensity {
+        case ..<0.2: return .ultraThinMaterial
+        case ..<0.4: return .thinMaterial
+        case ..<0.6: return .regularMaterial
+        case ..<0.8: return .thickMaterial
+        default: return .ultraThickMaterial
+        }
+    }
+}
+
+// MARK: - Deferred mounting
+
+/// Mounts expensive content (Swift Charts cost 50–150 ms on first layout)
+/// just after the view appears, so window-open and sidebar animations run
+/// against an empty placeholder of the same size instead of paying chart
+/// setup mid-animation. The placeholder is Color.clear — a real view, so
+/// `.task` reliably fires.
+struct Deferred<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var ready = false
+
+    var body: some View {
+        ZStack {
+            if ready {
+                content()
+            } else {
+                Color.clear
+            }
+        }
+        .task {
+            guard !ready else { return }
+            // Let the open animation get going before mounting.
+            try? await Task.sleep(for: .milliseconds(90))
+            withAnimation(.easeIn(duration: 0.18)) { ready = true }
         }
     }
 }
