@@ -1,15 +1,21 @@
 name: CI
 
-# Website-only changes are covered by the Website workflow; skip the
-# expensive macOS runners for them.
+# Desktop-app CI. The website has its own workflow (website.yml); each app
+# triggers only on its own paths.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "website/**"
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/ci.yml"
   pull_request:
-    paths-ignore:
-      - "website/**"
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/ci.yml"
+
+defaults:
+  run:
+    working-directory: apps/desktop
 
 jobs:
   build:
@@ -38,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Vitals-dmg
-          path: build/Vitals.dmg
+          path: apps/desktop/build/Vitals.dmg
 
   lint:
     name: Quality (SwiftLint)

@@ -1,0 +1,10 @@
+{
+  "name": "desktop",
+  "private": true,
+  "description": "Vitals macOS app — Swift package wrapped for turbo task orchestration",
+  "scripts": {
+    "build": "./build.sh",
+    "dmg": "./make-dmg.sh",
+    "lint": "swiftlint --reporter github-actions-logging"
+  }
+}

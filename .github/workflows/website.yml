@@ -4,35 +4,34 @@ on:
   push:
     branches: [main]
     paths:
-      - "website/**"
+      - "apps/website/**"
+      - "package.json"
+      - "bun.lock"
+      - "turbo.json"
       - ".github/workflows/website.yml"
   pull_request:
     paths:
-      - "website/**"
+      - "apps/website/**"
+      - "package.json"
+      - "bun.lock"
+      - "turbo.json"
       - ".github/workflows/website.yml"
 
 jobs:
   build:
-    name: Build (Vite)
+    name: Build (bun + turbo)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: website
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: website/package-lock.json
+          bun-version: latest
       - name: Install
-        run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Build
-        run: npm run build
+        run: bun install --frozen-lockfile
+      - name: Lint and build
+        run: bunx turbo lint build --filter=website
       - name: Upload site
         uses: actions/upload-artifact@v4
         with:
           name: website-dist
-          path: website/dist
+          path: apps/website/dist

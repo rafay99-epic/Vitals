@@ -1,12 +1,13 @@
 name: Release
 
-# Every app change on main publishes a release (version = commit count),
-# so website-only commits must not trigger a new DMG.
+# Publishes a release for every app change on main (version = commit count).
+# Website-only and root-tooling commits do not cut releases.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "website/**"
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/release.yml"
 
 permissions:
   contents: write
@@ -19,6 +20,9 @@ jobs:
   release:
     name: Build and publish
     runs-on: macos-26
+    defaults:
+      run:
+        working-directory: apps/desktop
     steps:
       - uses: actions/checkout@v6
         with:
