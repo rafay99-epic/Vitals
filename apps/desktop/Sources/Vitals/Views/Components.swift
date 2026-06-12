@@ -101,6 +101,34 @@ struct WindowBackdrop: ViewModifier {
     }
 }
 
+// MARK: - Deferred mounting
+
+/// Mounts expensive content (Swift Charts cost 50–150 ms on first layout)
+/// just after the view appears, so window-open and sidebar animations run
+/// against an empty placeholder of the same size instead of paying chart
+/// setup mid-animation. The placeholder is Color.clear — a real view, so
+/// `.task` reliably fires.
+struct Deferred<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var ready = false
+
+    var body: some View {
+        ZStack {
+            if ready {
+                content()
+            } else {
+                Color.clear
+            }
+        }
+        .task {
+            guard !ready else { return }
+            // Let the open animation get going before mounting.
+            try? await Task.sleep(for: .milliseconds(90))
+            withAnimation(.easeIn(duration: 0.18)) { ready = true }
+        }
+    }
+}
+
 // MARK: - Chart hover support
 
 /// Tracks the cursor over a chart's plot area and reports the date under it.

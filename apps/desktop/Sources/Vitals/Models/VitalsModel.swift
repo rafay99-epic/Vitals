@@ -57,7 +57,7 @@ final class VitalsModel: ObservableObject {
     private var timer: Timer?
     private var isSampling = false
     private var cancellables: Set<AnyCancellable> = []
-    private static let maxChartPoints = 400
+    private static let maxChartPoints = 300
 
     // Overheat alerting state.
     private var hotSince: Date?

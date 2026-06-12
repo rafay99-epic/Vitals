@@ -8,7 +8,8 @@ struct CPUUsageCard: View {
 
     var body: some View {
         SectionCard(title: "CPU usage · last \(settings.historyMinutes) minutes", symbol: "gauge.with.dots.needle.50percent") {
-            Chart {
+            Deferred {
+                Chart {
                 ForEach(model.chartHistory) { sample in
                     AreaMark(
                         x: .value("Time", sample.time),
@@ -48,6 +49,7 @@ struct CPUUsageCard: View {
             .chartYScale(domain: 0...100)
             .chartYAxisLabel("%")
             .chartHover($hoverTime)
+            }
             .frame(height: 160)
         }
     }
@@ -363,7 +365,8 @@ struct MemoryHistoryCard: View {
 
     var body: some View {
         SectionCard(title: "Memory & swap · last \(settings.historyMinutes) minutes", symbol: "chart.line.uptrend.xyaxis") {
-            Chart {
+            Deferred {
+                Chart {
                 ForEach(model.chartHistory) { sample in
                     AreaMark(
                         x: .value("Time", sample.time),
@@ -409,6 +412,7 @@ struct MemoryHistoryCard: View {
             .chartYAxisLabel("GB")
             .chartLegend(position: .top, alignment: .trailing)
             .chartHover($hoverTime)
+            }
             .frame(height: 150)
         }
     }

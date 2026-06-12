@@ -8,7 +8,8 @@ struct TemperatureHistoryCard: View {
 
     var body: some View {
         SectionCard(title: "Temperature · last \(settings.historyMinutes) minutes", symbol: "thermometer.medium") {
-            Chart {
+            Deferred {
+                Chart {
                 ForEach(model.chartHistory) { sample in
                     LineMark(
                         x: .value("Time", sample.time),
@@ -61,6 +62,7 @@ struct TemperatureHistoryCard: View {
             .chartYAxisLabel(settings.unit.symbol)
             .chartLegend(position: .top, alignment: .trailing)
             .chartHover($hoverTime)
+            }
             .frame(height: 190)
         }
     }
