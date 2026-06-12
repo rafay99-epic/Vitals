@@ -164,3 +164,17 @@ func tempGradientColor(_ celsius: Double) -> Color {
 func gigabytes(_ bytes: UInt64) -> Double {
     Double(bytes) / 1_073_741_824
 }
+
+func gigabytes(_ bytes: Double) -> Double {
+    bytes / 1_073_741_824
+}
+
+/// Color for the macOS memory-pressure level — green/yellow/red like
+/// Activity Monitor's pressure graph.
+func pressureColor(_ pressure: MemoryPressure) -> Color {
+    switch pressure {
+    case .normal: return .green
+    case .warning: return .yellow
+    case .critical: return .red
+    }
+}

@@ -21,6 +21,8 @@ struct ContentView: View {
                     TopProcessesCard()
                         .frame(width: 280)
                 }
+                MemoryCard()
+                MemoryHistoryCard()
                 BatteryCard()
                 footer
             }
@@ -73,10 +75,10 @@ struct ContentView: View {
             )
             StatCard(
                 title: "Memory",
-                value: String(format: "%.1f GB", gigabytes(model.memoryUsed)),
-                subtitle: String(format: "of %.0f GB used", gigabytes(model.memoryTotal)),
+                value: String(format: "%.1f GB", gigabytes(model.memory?.used ?? 0)),
+                subtitle: memorySubtitle,
                 symbol: "memorychip",
-                tint: .indigo
+                tint: model.memory.map { pressureColor($0.pressure) } ?? .indigo
             )
             StatCard(
                 title: "Thermal Pressure",
@@ -86,6 +88,11 @@ struct ContentView: View {
                 tint: model.thermalState.tint
             )
         }
+    }
+
+    private var memorySubtitle: String {
+        guard let memory = model.memory else { return "—" }
+        return String(format: "of %.0f GB · %@ pressure", gigabytes(memory.total), memory.pressure.label)
     }
 
     private var fanValue: String {

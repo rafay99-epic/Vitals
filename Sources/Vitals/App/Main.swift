@@ -112,8 +112,13 @@ private func runProbe() {
         print("\nSMC: connection failed")
     }
 
-    if let used = MemoryStats.usedBytes() {
-        print(String(format: "\nMemory: %.1f / %.0f GB", gigabytes(used), gigabytes(ProcessInfo.processInfo.physicalMemory)))
+    if let memory = MemoryStats.read() {
+        print(String(format: "\nMemory: %.1f / %.0f GB used (app %.1f, wired %.1f, compressed %.1f, cached %.1f)",
+                     gigabytes(memory.used), gigabytes(memory.total),
+                     gigabytes(memory.app), gigabytes(memory.wired),
+                     gigabytes(memory.compressed), gigabytes(memory.cached)))
+        print(String(format: "Swap: %.2f / %.1f GB · pressure %@",
+                     gigabytes(memory.swapUsed), gigabytes(memory.swapTotal), memory.pressure.label))
     }
 
     if let battery = Battery.read() {

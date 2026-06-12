@@ -241,6 +241,179 @@ struct FanCard: View {
     }
 }
 
+struct MemoryCard: View {
+    @EnvironmentObject private var model: VitalsModel
+
+    private struct Segment: Identifiable {
+        let id = UUID()
+        let label: String
+        let bytes: UInt64
+        let color: Color
+    }
+
+    var body: some View {
+        SectionCard(title: "Memory", symbol: "memorychip") {
+            if let memory = model.memory {
+                VStack(alignment: .leading, spacing: 12) {
+                    header(memory)
+                    breakdownBar(memory)
+                    legend(memory)
+                    Divider()
+                    swapAndPressure(memory)
+                }
+            } else {
+                Text("Memory statistics unavailable.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            }
+        }
+    }
+
+    private func header(_ memory: MemorySnapshot) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(String(format: "%.2f GB", gigabytes(memory.used)))
+                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .contentTransition(.numericText())
+            Text("used of \(String(format: "%.0f GB", gigabytes(memory.total)))")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+            pressureBadge(memory.pressure)
+        }
+    }
+
+    private func segments(_ memory: MemorySnapshot) -> [Segment] {
+        [
+            Segment(label: "App", bytes: memory.app, color: .blue),
+            Segment(label: "Wired", bytes: memory.wired, color: .orange),
+            Segment(label: "Compressed", bytes: memory.compressed, color: .purple),
+            Segment(label: "Cached", bytes: memory.cached, color: .green.opacity(0.7)),
+        ]
+    }
+
+    private func breakdownBar(_ memory: MemorySnapshot) -> some View {
+        GeometryReader { geometry in
+            let total = max(Double(memory.total), 1)
+            HStack(spacing: 1) {
+                ForEach(segments(memory)) { segment in
+                    segment.color
+                        .frame(width: geometry.size.width * Double(segment.bytes) / total)
+                }
+                Color.secondary.opacity(0.15)  // free
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        }
+        .frame(height: 14)
+    }
+
+    private func legend(_ memory: MemorySnapshot) -> some View {
+        let items = segments(memory) + [Segment(label: "Free", bytes: memory.free, color: .secondary.opacity(0.3))]
+        return LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], spacing: 4) {
+            ForEach(items) { item in
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 9, height: 9)
+                    Text(item.label).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(String(format: "%.2f GB", gigabytes(item.bytes))).monospacedDigit()
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private func swapAndPressure(_ memory: MemorySnapshot) -> some View {
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Swap used").font(.caption).foregroundStyle(.secondary)
+                Text(swapText(memory))
+                    .font(.system(.body, design: .rounded, weight: .medium))
+                    .foregroundStyle(memory.swapUsed > 0 ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Memory pressure").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Circle().fill(pressureColor(memory.pressure)).frame(width: 9, height: 9)
+                    Text(memory.pressure.label)
+                        .font(.system(.body, design: .rounded, weight: .medium))
+                }
+            }
+            Spacer()
+        }
+    }
+
+    private func swapText(_ memory: MemorySnapshot) -> String {
+        guard memory.swapTotal > 0 else { return "None" }
+        return String(format: "%.2f GB of %.1f GB", gigabytes(memory.swapUsed), gigabytes(memory.swapTotal))
+    }
+
+    private func pressureBadge(_ pressure: MemoryPressure) -> some View {
+        Text(pressure.label)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(pressureColor(pressure).opacity(0.18)))
+            .foregroundStyle(pressureColor(pressure))
+    }
+}
+
+struct MemoryHistoryCard: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
+    @State private var hoverTime: Date?
+
+    var body: some View {
+        SectionCard(title: "Memory & swap · last \(settings.historyMinutes) minutes", symbol: "chart.line.uptrend.xyaxis") {
+            Chart {
+                ForEach(model.history) { sample in
+                    AreaMark(
+                        x: .value("Time", sample.time),
+                        y: .value("GB", gigabytes(sample.memoryUsed)),
+                        series: .value("Series", "Memory")
+                    )
+                    .foregroundStyle(
+                        LinearGradient(colors: [.indigo.opacity(0.30), .indigo.opacity(0.02)], startPoint: .top, endPoint: .bottom)
+                    )
+                    .interpolationMethod(.catmullRom)
+
+                    LineMark(
+                        x: .value("Time", sample.time),
+                        y: .value("GB", gigabytes(sample.memoryUsed)),
+                        series: .value("Series", "Memory")
+                    )
+                    .foregroundStyle(.indigo)
+                    .interpolationMethod(.catmullRom)
+
+                    LineMark(
+                        x: .value("Time", sample.time),
+                        y: .value("GB", gigabytes(sample.swapUsed)),
+                        series: .value("Series", "Swap")
+                    )
+                    .foregroundStyle(.orange)
+                    .interpolationMethod(.catmullRom)
+                }
+
+                if let sample = model.history.nearest(to: hoverTime) {
+                    RuleMark(x: .value("Time", sample.time))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1))
+                        .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                            HoverTooltip(time: sample.time) {
+                                Text(String(format: "Memory %.2f GB", gigabytes(sample.memoryUsed)))
+                                Text(String(format: "Swap %.2f GB", gigabytes(sample.swapUsed)))
+                            }
+                        }
+                }
+            }
+            .chartForegroundStyleScale(["Memory": Color.indigo, "Swap": Color.orange])
+            .chartYScale(domain: 0...gigabytes(model.memory?.total ?? 1))
+            .chartYAxisLabel("GB")
+            .chartLegend(position: .top, alignment: .trailing)
+            .chartHover($hoverTime)
+            .frame(height: 150)
+        }
+    }
+}
+
 struct BatteryCard: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings

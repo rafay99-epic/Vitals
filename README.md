@@ -12,6 +12,9 @@ and as a temperature readout in the menu bar.
   for 2 minutes (10-minute cooldown), and when macOS escalates thermal
   pressure to Serious/Critical
 - **Top processes** — the 5 biggest CPU consumers right now (100% = one core)
+- **Memory** — Activity Monitor's full breakdown (app / wired / compressed /
+  cached / free) as a stacked bar, swap usage, the kernel memory-pressure
+  level (green/yellow/red), and a memory + swap history chart
 - **Battery health** — charge, Maximum Capacity, cycle count, charge/discharge
   wattage, time remaining
 - **History log** — readings appended to

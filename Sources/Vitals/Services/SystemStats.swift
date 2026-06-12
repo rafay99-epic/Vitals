@@ -39,10 +39,40 @@ final class CPUUsageSampler {
     }
 }
 
+/// The macOS memory-pressure level, straight from the kernel — the same
+/// green/yellow/red signal Activity Monitor shows.
+enum MemoryPressure: Int {
+    case normal = 1
+    case warning = 2
+    case critical = 4
+
+    var label: String {
+        switch self {
+        case .normal: return "Normal"
+        case .warning: return "Warning"
+        case .critical: return "Critical"
+        }
+    }
+}
+
+/// A full memory picture matching Activity Monitor's Memory tab.
+struct MemorySnapshot {
+    let total: UInt64
+    let used: UInt64        // "Memory Used" = app + wired + compressed
+    let app: UInt64         // "App Memory"
+    let wired: UInt64       // "Wired Memory"
+    let compressed: UInt64  // "Compressed"
+    let cached: UInt64      // "Cached Files"
+    let free: UInt64
+    let swapUsed: UInt64
+    let swapTotal: UInt64
+    let pressure: MemoryPressure
+
+    var usedFraction: Double { total > 0 ? Double(used) / Double(total) : 0 }
+}
+
 enum MemoryStats {
-    /// Bytes of memory in use, the way Activity Monitor counts it
-    /// (app memory + wired + compressed).
-    static func usedBytes() -> UInt64? {
+    static func read() -> MemorySnapshot? {
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &stats) {
@@ -53,8 +83,35 @@ enum MemoryStats {
         guard result == KERN_SUCCESS else { return nil }
 
         let pageSize = UInt64(vm_kernel_page_size)
-        let appPages = UInt64(stats.internal_page_count) - min(UInt64(stats.internal_page_count), UInt64(stats.purgeable_count))
-        return (appPages + UInt64(stats.wire_count) + UInt64(stats.compressor_page_count)) * pageSize
+        let wired = UInt64(stats.wire_count) * pageSize
+        let compressed = UInt64(stats.compressor_page_count) * pageSize
+        let purgeable = UInt64(stats.purgeable_count) * pageSize
+        let external = UInt64(stats.external_page_count) * pageSize
+        let internalBytes = UInt64(stats.internal_page_count) * pageSize
+        let app = internalBytes - min(internalBytes, purgeable)
+        let cached = external + purgeable
+        let free = UInt64(stats.free_count) * pageSize
+        let used = app + wired + compressed
+        let total = ProcessInfo.processInfo.physicalMemory
+
+        var swap = xsw_usage()
+        var swapSize = MemoryLayout<xsw_usage>.size
+        var swapUsed: UInt64 = 0
+        var swapTotal: UInt64 = 0
+        if sysctlbyname("vm.swapusage", &swap, &swapSize, nil, 0) == 0 {
+            swapUsed = swap.xsu_used
+            swapTotal = swap.xsu_total
+        }
+
+        var level: Int32 = 1
+        var levelSize = MemoryLayout<Int32>.size
+        _ = sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &levelSize, nil, 0)
+        let pressure = MemoryPressure(rawValue: Int(level)) ?? .normal
+
+        return MemorySnapshot(
+            total: total, used: used, app: app, wired: wired, compressed: compressed,
+            cached: cached, free: free, swapUsed: swapUsed, swapTotal: swapTotal, pressure: pressure
+        )
     }
 }
 

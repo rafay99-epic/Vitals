@@ -13,13 +13,14 @@ struct MenuBarPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             sparklines
+            memoryRow
             Divider()
             fanSection
             Divider()
             actions
         }
         .padding(14)
-        .frame(width: 300)
+        .frame(width: 330)
     }
 
     // MARK: Header
@@ -48,7 +49,7 @@ struct MenuBarPanel: View {
     // MARK: Sparklines
 
     private var sparklines: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             sparkline(
                 title: "Temp",
                 value: model.hottestCPUSensor.map { settings.format($0.celsius, decimals: 0) } ?? "—",
@@ -74,6 +75,38 @@ struct MenuBarPanel: View {
                         .interpolationMethod(.catmullRom)
                 }
             }
+            sparkline(
+                title: "Memory",
+                value: String(format: "%.1fG", gigabytes(model.memory?.used ?? 0)),
+                color: .indigo
+            ) {
+                ForEach(model.history) { sample in
+                    AreaMark(x: .value("t", sample.time), y: .value("v", gigabytes(sample.memoryUsed)))
+                        .foregroundStyle(.indigo.opacity(0.18))
+                        .interpolationMethod(.catmullRom)
+                    LineMark(x: .value("t", sample.time), y: .value("v", gigabytes(sample.memoryUsed)))
+                        .foregroundStyle(.indigo)
+                        .interpolationMethod(.catmullRom)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var memoryRow: some View {
+        if let memory = model.memory {
+            HStack(spacing: 6) {
+                Image(systemName: "memorychip").foregroundStyle(.secondary)
+                Text(String(format: "%.1f / %.0f GB", gigabytes(memory.used), gigabytes(memory.total)))
+                if memory.swapUsed > 0 {
+                    Text("· swap \(String(format: "%.1f GB", gigabytes(memory.swapUsed)))")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Circle().fill(pressureColor(memory.pressure)).frame(width: 8, height: 8)
+                Text(memory.pressure.label).foregroundStyle(.secondary)
+            }
+            .font(.caption)
         }
     }
 

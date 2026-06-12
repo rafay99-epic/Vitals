@@ -19,6 +19,8 @@ final class VitalsModel: ObservableObject {
         let hottestCPU: Double
         let gpu: Double?
         let usage: Double
+        let memoryUsed: Double  // bytes
+        let swapUsed: Double    // bytes
     }
 
     @Published private(set) var cpuSensors: [Sensor] = []
@@ -29,7 +31,7 @@ final class VitalsModel: ObservableObject {
     @Published private(set) var hasSMC = false
     @Published private(set) var history: [Sample] = []
     @Published private(set) var cpuUsage: Double = 0
-    @Published private(set) var memoryUsed: UInt64 = 0
+    @Published private(set) var memory: MemorySnapshot?
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
     @Published private(set) var battery: BatterySnapshot?
@@ -121,7 +123,7 @@ final class VitalsModel: ObservableObject {
         fans = smc?.fans() ?? []
         thermalState = ProcessInfo.processInfo.thermalState
         if let usage = cpuSampler.sample() { cpuUsage = usage }
-        if let used = MemoryStats.usedBytes() { memoryUsed = used }
+        memory = MemoryStats.read()
         topProcesses = processSampler.sample(top: 5)
         battery = Battery.read()
 
@@ -132,7 +134,9 @@ final class VitalsModel: ObservableObject {
                 averageCPU: average,
                 hottestCPU: hottest.celsius,
                 gpu: gpuTemp,
-                usage: cpuUsage
+                usage: cpuUsage,
+                memoryUsed: Double(memory?.used ?? 0),
+                swapUsed: Double(memory?.swapUsed ?? 0)
             ))
             trimHistory()
 
@@ -145,7 +149,7 @@ final class VitalsModel: ObservableObject {
                     gpuTemp: gpuTemp,
                     fanRPM: fans.first?.rpm,
                     cpuUsage: cpuUsage,
-                    memoryUsedGB: gigabytes(memoryUsed),
+                    memoryUsedGB: gigabytes(memory?.used ?? 0),
                     thermalState: thermalState.label,
                     batteryPercent: battery?.percent
                 )
