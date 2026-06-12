@@ -47,6 +47,12 @@ struct ContentView: View {
         .modifier(WindowBackdrop())
         .frame(minWidth: 980, minHeight: 680)
         .navigationTitle("Vitals")
+        // AppKit snaps (not animates) the detail toolbar segment when the
+        // sidebar expands in a non-fullscreen window — the glass capsule and
+        // leading title visibly jerked. With the toolbar background hidden
+        // and the title not displayed (see windowToolbarStyle in VitalsApp),
+        // only the trailing gear remains, and the trailing edge never moves.
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .toolbar {
             ToolbarItem {
                 Button {
