@@ -30,9 +30,10 @@ struct VitalsApp: App {
                 .environmentObject(fanControl)
         }
         .defaultSize(width: 1100, height: 760)
-        // Compact toolbar without a displayed title: the title text was the
-        // other element that jerked when the sidebar expanded.
-        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
+        // No system title bar: ContentView's header carries branding, tabs,
+        // and window dragging. Traffic lights overlay the header's leading
+        // edge (it pads around them).
+        .windowStyle(.hiddenTitleBar)
         .commands {
             SettingsCommands()
         }

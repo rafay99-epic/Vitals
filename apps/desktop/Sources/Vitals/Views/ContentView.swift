@@ -1,6 +1,9 @@
 import SwiftUI
 
-/// Top-level navigation: the live dashboard plus the app-management tools.
+/// Top-level navigation: a stationary header with segmented tabs over one
+/// fixed content canvas — Activity Monitor style. There is no sidebar and no
+/// window toolbar, so nothing can resize or snap the content, ever: tab
+/// switches change what's drawn, never the geometry it's drawn in.
 struct ContentView: View {
     enum Section: String, CaseIterable, Identifiable {
         case dashboard, applications, cleanup
@@ -21,63 +24,113 @@ struct ContentView: View {
             case .cleanup: return "sparkles"
             }
         }
+
+        var shortcut: KeyEquivalent {
+            switch self {
+            case .dashboard: return "1"
+            case .applications: return "2"
+            case .cleanup: return "3"
+            }
+        }
     }
 
-    @State private var section: Section? = .dashboard
+    @State private var section: Section = .dashboard
     @Environment(\.openWindow) private var openWindow
+    @Namespace private var tabIndicator
     // Owned here so the scans survive section switches — recreating these per
     // visit meant a full rescan (and a "Scanning…" flash) every time.
     @StateObject private var appsModel = AppsModel()
     @StateObject private var cleanupModel = CleanupModel()
 
     var body: some View {
-        NavigationSplitView {
-            List(Section.allCases, selection: $section) { item in
-                Label(item.title, systemImage: item.symbol)
-                    .padding(.vertical, 3)
-                    .tag(item)
-            }
-            .listStyle(.sidebar)
-            .contentMargins(.top, 12, for: .scrollContent)
-            .navigationSplitViewColumnWidth(min: 170, ideal: 190)
-            .safeAreaInset(edge: .bottom) {
-                // Settings lives in the sidebar, not the toolbar: toolbar
-                // items sit in AppKit segments that snap (not animate) when
-                // the sidebar toggles — the sidebar's own content slides
-                // with it.
-                VStack(spacing: 10) {
-                    Divider()
-                        .opacity(0.6)
-                    HStack {
-                        Button {
-                            openWindow(id: "settings")
-                        } label: {
-                            Label("Settings", systemImage: "gear")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Vitals settings")
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
+        VStack(spacing: 0) {
+            header
+            Divider()
+                .opacity(0.5)
+            Group {
+                switch section {
+                case .dashboard: DashboardView()
+                case .applications: AppsView(model: appsModel)
+                case .cleanup: CleanupView(model: cleanupModel)
                 }
-                .padding(.bottom, 14)
             }
-        } detail: {
-            switch section ?? .dashboard {
-            case .dashboard: DashboardView()
-            case .applications: AppsView(model: appsModel)
-            case .cleanup: CleanupView(model: cleanupModel)
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .modifier(WindowBackdrop())
         .frame(minWidth: 980, minHeight: 680)
-        .navigationTitle("Vitals")
-        // AppKit snaps (not animates) the window-toolbar segments when the
-        // sidebar expands in a non-fullscreen window. The toolbar is now
-        // completely empty — background hidden, no title (windowToolbarStyle
-        // in VitalsApp), no items — so there is nothing left to snap.
-        .toolbarBackground(.hidden, for: .windowToolbar)
+    }
+
+    // MARK: Header
+
+    /// The title bar replacement: branding, centered tabs, settings. It also
+    /// drags the window, since the system title bar is hidden.
+    private var header: some View {
+        ZStack {
+            HStack(spacing: 8) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                Text("Vitals")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Button {
+                    openWindow(id: "settings")
+                } label: {
+                    Image(systemName: "gear")
+                        .font(.system(size: 14))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Vitals settings")
+            }
+            tabBar
+        }
+        .padding(.leading, 84)  // clear the traffic lights
+        .padding(.trailing, 16)
+        .frame(height: 52)
+        .contentShape(Rectangle())
+        .gesture(WindowDragGesture())
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(Section.allCases) { item in
+                tabButton(item)
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(.quaternary.opacity(0.45)))
+    }
+
+    private func tabButton(_ item: Section) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                section = item
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: item.symbol)
+                    .font(.system(size: 11))
+                Text(item.title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 6)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(section == item ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+        .background {
+            if section == item {
+                Capsule()
+                    .fill(.quaternary)
+                    .matchedGeometryEffect(id: "selected-tab", in: tabIndicator)
+            }
+        }
+        .keyboardShortcut(item.shortcut, modifiers: .command)
+        .help("\(item.title) (⌘\(item.shortcut.character))")
     }
 }
 
