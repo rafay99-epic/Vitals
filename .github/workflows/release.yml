@@ -1,8 +1,12 @@
 name: Release
 
+# Every app change on main publishes a release (version = commit count),
+# so website-only commits must not trigger a new DMG.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "website/**"
 
 permissions:
   contents: write

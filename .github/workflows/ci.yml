@@ -1,9 +1,15 @@
 name: CI
 
+# Website-only changes are covered by the Website workflow; skip the
+# expensive macOS runners for them.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "website/**"
   pull_request:
+    paths-ignore:
+      - "website/**"
 
 jobs:
   build:
