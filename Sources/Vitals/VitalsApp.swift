@@ -6,6 +6,8 @@ enum Main {
     static func main() {
         if CommandLine.arguments.contains("--probe") {
             runProbe()
+        } else if CommandLine.arguments.contains("--check-update") {
+            runUpdateCheck()
         } else {
             VitalsApp.main()
         }
@@ -15,14 +17,18 @@ enum Main {
 struct VitalsApp: App {
     @StateObject private var settings: AppSettings
     @StateObject private var model: VitalsModel
+    @StateObject private var updater: Updater
 
     init() {
         let settings = AppSettings()
         let model = VitalsModel(settings: settings)
+        let updater = Updater()
         model.start()
+        updater.startAutomaticChecks(settings: settings)
         settings.applyActivationPolicy()
         _settings = StateObject(wrappedValue: settings)
         _model = StateObject(wrappedValue: model)
+        _updater = StateObject(wrappedValue: updater)
     }
 
     var body: some Scene {
@@ -30,6 +36,7 @@ struct VitalsApp: App {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(settings)
+                .environmentObject(updater)
         }
         .defaultSize(width: 880, height: 760)
         .commands {
@@ -41,6 +48,7 @@ struct VitalsApp: App {
         Window("Vitals Settings", id: "settings") {
             SettingsView()
                 .environmentObject(settings)
+                .environmentObject(updater)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -136,6 +144,29 @@ struct MenuBarContent: View {
             NSApp.terminate(nil)
         }
     }
+}
+
+/// `Vitals --check-update` queries GitHub Releases once and prints the
+/// verdict — handy for testing the update pipeline without the GUI.
+private func runUpdateCheck() {
+    let semaphore = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            if let release = try await Updater.fetchLatestRelease() {
+                print("Latest release: \(release.version) (\(release.assetName))")
+                print("This build:     \(Updater.currentVersion)")
+                print(Updater.isVersion(release.version, newerThan: Updater.currentVersion)
+                    ? "→ update available"
+                    : "→ up to date")
+            } else {
+                print("No releases published yet.")
+            }
+        } catch {
+            print("Check failed: \(error.localizedDescription)")
+        }
+        semaphore.signal()
+    }
+    semaphore.wait()
 }
 
 /// `Vitals --probe` prints one round of raw readings to stdout and exits.

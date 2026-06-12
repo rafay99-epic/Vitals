@@ -18,6 +18,27 @@ and as a temperature readout in the menu bar.
   `~/Library/Application Support/Vitals/history.csv` every 10 s (rotates at
   50 MB); export or reveal it from Settings → Logging
 
+## Releases and updates
+
+Every push to `main` triggers the Release workflow: it builds the app,
+stamps the version (`VERSION` file + build number, e.g. `1.1.42`), packages
+the DMG, and publishes a GitHub release with the DMG attached.
+
+The app keeps itself current:
+
+- **Automatic** — with "Check for updates automatically" on (Settings →
+  Updates, default), Vitals checks at launch and every 6 hours. When a newer
+  release exists you get a notification and a banner in the dashboard.
+- **Manual** — turn the toggle off and use **Check for Updates** in Settings
+  whenever you like.
+
+Either way, **Install Update** downloads the release DMG, installs it to
+`/Applications/Vitals.app`, and relaunches the new version.
+
+Because the repository is private, update checks authenticate using your
+GitHub CLI login (`gh auth login`) — no tokens are stored in the app. To
+bump the marketing version, edit the `VERSION` file.
+
 ## Settings (⌘, or the gear in the toolbar)
 
 - **Readings** — temperature unit (°C/°F), refresh rate (1/2/5 s), chart

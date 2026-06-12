@@ -9,6 +9,7 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                UpdateBanner()
                 statCards
                 TemperatureHistoryCard()
                 HStack(alignment: .top, spacing: 16) {
@@ -120,6 +121,49 @@ struct ContentView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 4)
+    }
+}
+
+/// Shown at the top of the dashboard while an update is available or installing.
+struct UpdateBanner: View {
+    @EnvironmentObject private var updater: Updater
+
+    var body: some View {
+        switch updater.status {
+        case .available(let release):
+            banner {
+                Label("Vitals \(release.version) is available", systemImage: "arrow.down.circle.fill")
+                    .foregroundStyle(.blue)
+                Text("You're on \(Updater.currentVersion)")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Install Update") {
+                    Task { await updater.downloadAndInstall() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        case .downloading:
+            banner {
+                Label("Downloading update…", systemImage: "arrow.down.circle")
+                Spacer()
+                ProgressView().controlSize(.small)
+            }
+        case .installing:
+            banner {
+                Label("Installing — Vitals will relaunch in a moment", systemImage: "gearshape.arrow.triangle.2.circlepath")
+                Spacer()
+                ProgressView().controlSize(.small)
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private func banner<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 10, content: content)
+            .font(.callout)
+            .padding(12)
+            .cardBackground()
     }
 }
 

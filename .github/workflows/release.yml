@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compute version
+        run: echo "VERSION=$(cat VERSION).${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Build app and installer
+        run: |
+          export VITALS_VERSION="$VERSION"
+          ./build.sh
+          ./make-dmg.sh
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" build/Vitals.dmg \
+            --title "Vitals $VERSION" \
+            --generate-notes

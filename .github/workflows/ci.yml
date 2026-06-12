@@ -18,6 +18,8 @@ jobs:
 
   package:
     name: Package DMG
+    # On main, the Release workflow builds and publishes the DMG instead.
+    if: github.event_name == 'pull_request'
     runs-on: macos-15
     needs: build
     steps:

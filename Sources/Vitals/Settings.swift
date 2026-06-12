@@ -36,6 +36,7 @@ final class AppSettings: ObservableObject {
     @Published var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     @Published var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
+    @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
 
     @Published var showMenuBar: Bool {
         didSet {
@@ -76,6 +77,7 @@ final class AppSettings: ObservableObject {
             "notifyOverheat": true,
             "notifyThermal": true,
             "loggingEnabled": true,
+            "autoUpdateCheck": true,
             "hideDockIcon": false,
         ])
 
@@ -88,6 +90,7 @@ final class AppSettings: ObservableObject {
         notifyOverheat = defaults.bool(forKey: "notifyOverheat")
         notifyThermal = defaults.bool(forKey: "notifyThermal")
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
+        autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -136,6 +139,7 @@ final class AppSettings: ObservableObject {
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var updater: Updater
     @State private var notificationsDenied = false
 
     var body: some View {
@@ -210,6 +214,30 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Updates") {
+                LabeledContent("Installed version", value: Updater.currentVersion)
+                Toggle("Check for updates automatically", isOn: $settings.autoUpdateCheck)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Button("Check for Updates") {
+                            Task { await updater.check(userInitiated: true) }
+                        }
+                        .disabled(updater.isBusy)
+
+                        if case .available(let release) = updater.status {
+                            Button("Install Vitals \(release.version)") {
+                                Task { await updater.downloadAndInstall() }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                    Text(updateStatusLine)
+                        .font(.caption)
+                        .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                }
+            }
+
             Section("Application") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
                 if let error = settings.loginItemError {
@@ -230,6 +258,31 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460, height: 600)
         .task { await refreshNotificationStatus() }
+    }
+
+    private var updateStatusLine: String {
+        switch updater.status {
+        case .idle:
+            return "Updates install from this project's GitHub releases."
+        case .checking:
+            return "Checking for updates…"
+        case .upToDate:
+            let when = updater.lastChecked.map { $0.formatted(date: .omitted, time: .shortened) } ?? ""
+            return "You're up to date. Last checked \(when)."
+        case .available(let release):
+            return "Vitals \(release.version) is ready to install."
+        case .downloading:
+            return "Downloading update…"
+        case .installing:
+            return "Installing — Vitals will relaunch in a moment."
+        case .failed(let message):
+            return message
+        }
+    }
+
+    private var updateStatusIsError: Bool {
+        if case .failed = updater.status { return true }
+        return false
     }
 
     private var logFileExists: Bool {

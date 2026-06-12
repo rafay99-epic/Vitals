@@ -12,6 +12,13 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Vitals "$APP/Contents/MacOS/Vitals"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
+# Stamp the version: CI sets VITALS_VERSION (base.run_number); local builds
+# get base.0 so any published release counts as newer.
+VERSION="${VITALS_VERSION:-$(cat VERSION).0}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+echo "Version $VERSION"
+
 # Generate the icon once; delete Resources/AppIcon.icns to force a re-render.
 if [ ! -f Resources/AppIcon.icns ]; then
   echo "Rendering icon…"
