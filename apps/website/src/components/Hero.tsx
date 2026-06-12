@@ -71,7 +71,7 @@ const actionBtn: React.CSSProperties = {
 
 export default function Hero({ vitals }: { vitals: LiveVitals }) {
   return (
-    <section style={{ position: 'relative', padding: '168px 24px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <section className="pt-[120px] md:pt-[168px]" style={{ position: 'relative', paddingLeft: 24, paddingRight: 24, paddingBottom: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <div
         style={{
           display: 'inline-flex',
@@ -90,8 +90,8 @@ export default function Hero({ vitals }: { vitals: LiveVitals }) {
         Native menu-bar app · Apple Silicon
       </div>
       <h1
+        className="text-[40px] sm:text-[56px] md:text-[72px]"
         style={{
-          fontSize: 72,
           lineHeight: 1.02,
           fontWeight: 680,
           letterSpacing: '-0.035em',
@@ -105,11 +105,11 @@ export default function Hero({ vitals }: { vitals: LiveVitals }) {
       >
         Your Mac has a dashboard. Apple just hid it.
       </h1>
-      <p style={{ fontSize: 19, lineHeight: 1.5, color: 'rgba(235,235,245,0.6)', margin: '0 0 34px', maxWidth: '52ch' }}>
+      <p className="text-[17px] md:text-[19px]" style={{ lineHeight: 1.5, color: 'rgba(235,235,245,0.6)', margin: '0 0 34px', maxWidth: '52ch' }}>
         Vitals reads the temperature of your chip, the speed of your fans, and the health of your battery — straight from the hardware — and shows it
         in a window that looks like Apple built it.
       </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 12 }}>
         <a
           href="#download"
           style={{
@@ -198,6 +198,7 @@ export default function Hero({ vitals }: { vitals: LiveVitals }) {
             position: 'relative',
             zIndex: 2,
             width: 428,
+            maxWidth: 'calc(100vw - 48px)',
             padding: 0,
             overflow: 'hidden',
             background: 'linear-gradient(180deg, rgba(38,40,46,0.82), rgba(22,24,29,0.88))',

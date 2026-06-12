@@ -10,12 +10,12 @@ export default function DownloadSection({ release }: { release: LatestRelease | 
   return (
     <section id="download" style={{ position: 'relative', padding: '70px 24px 60px', display: 'flex', justifyContent: 'center' }}>
       <div
+        className="px-6 py-12 md:px-10 md:py-[70px]"
         style={{
           position: 'relative',
           width: '100%',
           maxWidth: 1080,
           textAlign: 'center',
-          padding: '70px 40px',
           borderRadius: 30,
           overflow: 'hidden',
           background: 'radial-gradient(700px 360px at 50% -20%, rgba(10,132,255,0.22), transparent 65%), linear-gradient(180deg, rgba(22,22,25,0.7), rgba(14,14,16,0.7))',
@@ -25,7 +25,7 @@ export default function DownloadSection({ release }: { release: LatestRelease | 
         <div style={{ display: 'inline-flex', marginBottom: 24 }}>
           <LogoMark box={56} radius={15} icon={34} />
         </div>
-        <h2 style={{ fontSize: 46, fontWeight: 680, letterSpacing: '-0.035em', margin: '0 auto 16px', lineHeight: 1.05, maxWidth: '16ch' }}>
+        <h2 className="text-[32px] md:text-[46px]" style={{ fontWeight: 680, letterSpacing: '-0.035em', margin: '0 auto 16px', lineHeight: 1.05, maxWidth: '16ch' }}>
           Give your Mac a dashboard.
         </h2>
         <p style={{ fontSize: 17, lineHeight: 1.5, color: 'rgba(235,235,245,0.6)', margin: '0 auto 32px', maxWidth: '46ch' }}>

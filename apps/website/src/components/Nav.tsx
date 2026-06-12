@@ -32,12 +32,13 @@ export default function Nav() {
           <LogoMark box={26} radius={7} icon={17} />
           <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Vitals</span>
         </div>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+        <div className="hidden md:flex" style={{ flex: 1, alignItems: 'center', gap: 4, justifyContent: 'center' }}>
           <a href="#philosophy" style={link}>Philosophy</a>
           <a href="#sensors" style={link}>Sensors</a>
           <a href="#honesty" style={link}>Honesty</a>
           <a href="#download" style={link}>Download</a>
         </div>
+        <div className="flex-1 md:hidden" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <a
             href={REPO_URL}

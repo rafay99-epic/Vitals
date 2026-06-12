@@ -4,22 +4,19 @@ export default function Honesty() {
   return (
     <section id="honesty" style={{ position: 'relative', padding: '70px 24px', display: 'flex', justifyContent: 'center' }}>
       <div
+        className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-8 lg:gap-12 p-7 md:p-[52px]"
         style={{
           width: '100%',
           maxWidth: 1080,
           background: 'linear-gradient(180deg, rgba(20,20,23,0.6), rgba(14,14,16,0.6))',
           border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: 26,
-          padding: 52,
-          display: 'grid',
-          gridTemplateColumns: '1.05fr 1fr',
-          gap: 48,
           alignItems: 'center',
         }}
       >
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: '#FF9F0A', marginBottom: 14 }}>WHEN THE FAN READS ZERO</div>
-          <h2 style={{ fontSize: 38, fontWeight: 660, letterSpacing: '-0.03em', margin: '0 0 18px', lineHeight: 1.1 }}>Most apps would invent a number.</h2>
+          <h2 className="text-[30px] md:text-[38px]" style={{ fontWeight: 660, letterSpacing: '-0.03em', margin: '0 0 18px', lineHeight: 1.1 }}>Most apps would invent a number.</h2>
           <p style={{ fontSize: 16, lineHeight: 1.55, color: 'rgba(235,235,245,0.6)', margin: '0 0 14px' }}>
             On a fanless Mac, or one sitting cool and idle, the fan genuinely isn't spinning. A dashboard that shows a comforting "1,980 rpm" anyway is
             lying to you.

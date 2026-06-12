@@ -41,7 +41,7 @@ export default function Philosophy() {
       <div style={{ width: '100%', maxWidth: 1080 }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: '#0A84FF', marginBottom: 14 }}>THE PHILOSOPHY</div>
-          <h2 style={{ fontSize: 44, fontWeight: 670, letterSpacing: '-0.035em', margin: '0 auto 16px', lineHeight: 1.06, maxWidth: '18ch' }}>
+          <h2 className="text-[32px] md:text-[44px]" style={{ fontWeight: 670, letterSpacing: '-0.035em', margin: '0 auto 16px', lineHeight: 1.06, maxWidth: '18ch' }}>
             A monitoring tool that fudges its numbers is worse than useless.
           </h2>
           <p style={{ fontSize: 16, lineHeight: 1.5, color: 'rgba(235,235,245,0.55)', margin: '0 auto', maxWidth: '56ch' }}>
@@ -49,7 +49,7 @@ export default function Philosophy() {
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 14 }}>
           {PRINCIPLES.map((p) => (
             <div key={p.number} style={{ position: 'relative', background: p.background, border: p.border, borderRadius: 18, padding: '28px 28px 30px', overflow: 'hidden' }}>
               <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: p.numberColor, marginBottom: 16 }}>{p.number}</div>

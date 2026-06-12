@@ -11,7 +11,7 @@ const GUARANTEES = [
 export default function FanControl() {
   return (
     <section style={{ position: 'relative', padding: '60px 24px 80px', display: 'flex', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 1080, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-12" style={{ width: '100%', maxWidth: 1080, alignItems: 'center' }}>
         <div
           style={{
             position: 'relative',
@@ -56,7 +56,7 @@ export default function FanControl() {
         </div>
         <div style={{ position: 'relative', zIndex: 2 }}>
           <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: '#0A84FF', marginBottom: 14 }}>READ FREELY, WRITE CAREFULLY</div>
-          <h2 style={{ fontSize: 38, fontWeight: 660, letterSpacing: '-0.03em', margin: '0 0 18px', lineHeight: 1.1 }}>
+          <h2 className="text-[30px] md:text-[38px]" style={{ fontWeight: 660, letterSpacing: '-0.03em', margin: '0 0 18px', lineHeight: 1.1 }}>
             The one thing that changes hardware gets the most caution.
           </h2>
           <p style={{ fontSize: 16, lineHeight: 1.55, color: 'rgba(235,235,245,0.6)', margin: '0 0 24px' }}>

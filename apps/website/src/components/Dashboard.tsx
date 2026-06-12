@@ -11,7 +11,7 @@ function StatCard({ icon, label, value, sub }: { icon: ReactNode; label: string;
         {icon}
         <span style={{ fontSize: 13.5, color: 'rgba(235,235,245,0.62)' }}>{label}</span>
       </div>
-      <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>{value}</div>
+      <div className="text-[24px] md:text-[30px]" style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>{value}</div>
       <div style={{ fontSize: 12.5, color: 'rgba(235,235,245,0.4)', marginTop: 5 }}>{sub}</div>
     </div>
   )
@@ -39,7 +39,7 @@ export default function Dashboard({ vitals }: { vitals: LiveVitals }) {
     <section style={{ position: 'relative', padding: '30px 24px 80px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div style={{ textAlign: 'center', maxWidth: 1080, marginBottom: 36 }}>
         <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: '#34D85F', marginBottom: 14 }}>LOOKS LIKE APPLE MADE IT</div>
-        <h2 style={{ fontSize: 44, fontWeight: 670, letterSpacing: '-0.035em', margin: '0 auto 16px', lineHeight: 1.06, maxWidth: '16ch' }}>
+        <h2 className="text-[32px] md:text-[44px]" style={{ fontWeight: 670, letterSpacing: '-0.035em', margin: '0 auto 16px', lineHeight: 1.06, maxWidth: '16ch' }}>
           The whole picture, in one window.
         </h2>
         <p style={{ fontSize: 16, lineHeight: 1.5, color: 'rgba(235,235,245,0.55)', margin: '0 auto', maxWidth: '56ch' }}>
@@ -89,7 +89,7 @@ export default function Dashboard({ vitals }: { vitals: LiveVitals }) {
         {/* window body */}
         <div style={{ padding: 20 }}>
           {/* stat cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
+          <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: 12, marginBottom: 14 }}>
             <StatCard icon={<ChipIcon size={17} color="#34D85F" />} label="Average CPU" value="37.3°" sub="24 die sensors" />
             <StatCard
               icon={
@@ -119,12 +119,12 @@ export default function Dashboard({ vitals }: { vitals: LiveVitals }) {
 
           {/* temperature chart */}
           <div style={{ background: '#131922', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '18px 20px', marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <ThermoIcon size={16} color="rgba(235,235,245,0.7)" />
                 <span style={{ fontSize: 15, fontWeight: 600 }}>Temperature · last 5 minutes</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12.5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16, fontSize: 12.5 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(235,235,245,0.6)' }}>{legendDot('#FFA318')}CPU average</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(235,235,245,0.6)' }}>{legendDot('#E0494B')}Hottest core</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(235,235,245,0.6)' }}>{legendDot('#F83EFF')}GPU</span>
@@ -152,14 +152,14 @@ export default function Dashboard({ vitals }: { vitals: LiveVitals }) {
           </div>
 
           {/* die grid + fans */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 14 }}>
+          <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr]" style={{ gap: 14 }}>
             {/* die grid */}
             <div style={{ background: '#131922', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '18px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 16 }}>
                 <ChipIcon size={16} color="rgba(235,235,245,0.7)" />
                 <span style={{ fontSize: 15, fontWeight: 600 }}>CPU die temperatures</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8 }}>
+              <div className="grid grid-cols-4 sm:grid-cols-6" style={{ gap: 8 }}>
                 {DIE_CELLS.map((cell) => (
                   <div key={cell.label} style={{ ...TINTS[cell.tint], borderRadius: 9, padding: '9px 0', textAlign: 'center' }}>
                     <div style={{ fontSize: 11, color: 'rgba(235,235,245,0.55)' }}>{cell.label}</div>
@@ -167,7 +167,7 @@ export default function Dashboard({ vitals }: { vitals: LiveVitals }) {
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, fontSize: 12.5, color: 'rgba(235,235,245,0.5)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginTop: 16, fontSize: 12.5, color: 'rgba(235,235,245,0.5)' }}>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <span>Coolest 37°</span><span>Average 38°</span><span>Hottest 40°</span>
                 </div>

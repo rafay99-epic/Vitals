@@ -46,8 +46,8 @@ export function LegalLayout({ title, updated, children }: { title: string; updat
         </nav>
       </header>
 
-      <main style={{ maxWidth: 760, margin: '0 auto', padding: '150px 24px 60px' }}>
-        <h1 style={{ fontSize: 40, fontWeight: 670, letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0 0 10px' }}>{title}</h1>
+      <main className="pt-[120px] md:pt-[150px]" style={{ maxWidth: 760, margin: '0 auto', paddingLeft: 24, paddingRight: 24, paddingBottom: 60 }}>
+        <h1 className="text-[32px] md:text-[40px]" style={{ fontWeight: 670, letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0 0 10px' }}>{title}</h1>
         <p style={{ fontSize: 13, color: 'rgba(235,235,245,0.45)', margin: '0 0 42px' }}>Last updated: {updated}</p>
         {children}
       </main>

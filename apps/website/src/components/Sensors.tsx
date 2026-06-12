@@ -26,7 +26,7 @@ export default function Sensors({ vitals }: { vitals: LiveVitals }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 36 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: '#FF9F0A', marginBottom: 12 }}>EVERY READING IS REAL</div>
-            <h2 style={{ fontSize: 40, fontWeight: 660, letterSpacing: '-0.03em', margin: 0, lineHeight: 1.08 }}>Straight from the silicon.</h2>
+            <h2 className="text-[30px] md:text-[40px]" style={{ fontWeight: 660, letterSpacing: '-0.03em', margin: 0, lineHeight: 1.08 }}>Straight from the silicon.</h2>
           </div>
           <p style={{ fontSize: 15, lineHeight: 1.5, color: 'rgba(235,235,245,0.55)', margin: 0, maxWidth: '38ch' }}>
             No estimates, no smoothing that lies. Vitals taps the same private sensors macOS uses internally — the IOKit HID thermal interface and the
@@ -34,7 +34,7 @@ export default function Sensors({ vitals }: { vitals: LiveVitals }) {
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: 12 }}>
           <SensorCard
             iconBg="rgba(255,159,74,0.14)"
             icon={<ThermoIcon size={20} color="#FF9F4A" strokeWidth={1.8} />}
