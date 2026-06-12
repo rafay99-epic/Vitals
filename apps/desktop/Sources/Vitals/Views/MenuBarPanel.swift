@@ -1,13 +1,14 @@
 import SwiftUI
 import Charts
 
-/// The window-style menu bar dropdown: live readings, a temperature
-/// sparkline, and quick fan control.
+/// The window-style menu bar dropdown: live readings, sparklines, and quick
+/// fan control — in the same design language as the main window.
 struct MenuBarPanel: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var fanControl: FanController
     @Environment(\.openWindow) private var openWindow
+    @Namespace private var presetIndicator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -15,8 +16,10 @@ struct MenuBarPanel: View {
             sparklines
             memoryRow
             Divider()
+                .opacity(0.5)
             fanSection
             Divider()
+                .opacity(0.5)
             actions
         }
         .padding(14)
@@ -27,17 +30,27 @@ struct MenuBarPanel: View {
 
     private var header: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(HardwareInfo.chipName)
-                    .font(.headline)
-                Text(model.thermalState.label + " thermal pressure")
-                    .font(.caption)
-                    .foregroundStyle(model.thermalState.tint)
+                    .font(.system(size: 15, weight: .semibold))
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(model.thermalState.tint)
+                        .frame(width: 6, height: 6)
+                    Text(model.thermalState.label)
+                        .font(.caption.weight(.medium))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(model.thermalState.tint.opacity(0.14)))
+                .foregroundStyle(model.thermalState.tint)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 1) {
                 Text(model.averageCPUTemp.map { settings.formatWithUnit($0, decimals: 0) } ?? "—")
-                    .font(.system(.title2, design: .rounded, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
                     .foregroundStyle(model.averageCPUTemp.map(tempGradientColor) ?? .primary)
                 Text("avg CPU")
                     .font(.caption2)
@@ -100,24 +113,6 @@ struct MenuBarPanel: View {
         }
     }
 
-    @ViewBuilder
-    private var memoryRow: some View {
-        if let memory = model.memory {
-            HStack(spacing: 6) {
-                Image(systemName: "memorychip").foregroundStyle(.secondary)
-                Text(String(format: "%.1f / %.0f GB", gigabytes(memory.used), gigabytes(memory.total)))
-                if memory.swapUsed > 0 {
-                    Text("· swap \(String(format: "%.1f GB", gigabytes(memory.swapUsed)))")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Circle().fill(pressureColor(memory.pressure)).frame(width: 8, height: 8)
-                Text(memory.pressure.label).foregroundStyle(.secondary)
-            }
-            .font(.caption)
-        }
-    }
-
     private func sparkline<Content: ChartContent>(
         title: String,
         value: String,
@@ -126,9 +121,15 @@ struct MenuBarPanel: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title).font(.caption2).foregroundStyle(.secondary)
+                Text(title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
                 Spacer()
-                Text(value).font(.caption).monospacedDigit().foregroundStyle(color)
+                Text(value)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(color)
             }
             Chart(content: content)
                 .chartXAxis(.hidden)
@@ -136,39 +137,72 @@ struct MenuBarPanel: View {
                 .frame(height: 36)
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.4)))
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(.quaternary.opacity(0.4))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(.separator.opacity(0.4), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var memoryRow: some View {
+        if let memory = model.memory {
+            HStack(spacing: 6) {
+                Image(systemName: "memorychip")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(String(format: "%.1f / %.0f GB", gigabytes(memory.used), gigabytes(memory.total)))
+                    .monospacedDigit()
+                if memory.swapUsed > 0 {
+                    Text("· swap \(String(format: "%.1f GB", gigabytes(memory.swapUsed)))")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Circle()
+                    .fill(pressureColor(memory.pressure))
+                    .frame(width: 7, height: 7)
+                Text(memory.pressure.label)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+        }
     }
 
     // MARK: Fans
 
+    private enum FanPreset: String, CaseIterable, Identifiable {
+        case auto = "Auto", quiet = "Quiet", med = "Med", max = "Max"
+        var id: String { rawValue }
+    }
+
     @ViewBuilder
     private var fanSection: some View {
         if let fan = model.fans.first {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 9) {
                 HStack {
-                    Label("\(Int(fan.rpm)) rpm", systemImage: "fan")
-                        .font(.callout.weight(.medium))
+                    Image(systemName: "fan")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.cyan)
+                        .frame(width: 24, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(.cyan.opacity(0.14))
+                        )
+                    Text("\(Int(fan.rpm)) rpm")
+                        .font(.system(.callout, design: .rounded, weight: .semibold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
                     Spacer()
-                    Text(fanModeLabel(fan))
-                        .font(.caption2)
+                    Text(isManual(fan) ? "Manual" : "Automatic")
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(isManual(fan) ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
 
                 if fanControl.isInstalled, fan.maxRPM > fan.minRPM {
-                    HStack(spacing: 6) {
-                        presetButton("Auto", isOn: !isManual(fan)) {
-                            fanControl.setAuto(fan: fan.id)
-                        }
-                        presetButton("Quiet", isOn: false) {
-                            fanControl.setTarget(fan: fan.id, rpm: Int(fan.minRPM))
-                        }
-                        presetButton("Med", isOn: false) {
-                            fanControl.setTarget(fan: fan.id, rpm: Int((fan.minRPM + fan.maxRPM) / 2))
-                        }
-                        presetButton("Max", isOn: false) {
-                            fanControl.setTarget(fan: fan.id, rpm: Int(fan.maxRPM))
-                        }
-                    }
+                    presetBar(fan)
                 } else if !fanControl.isInstalled {
                     Text("Enable fan control in the Vitals window to set speed here.")
                         .font(.caption2)
@@ -178,48 +212,100 @@ struct MenuBarPanel: View {
         }
     }
 
-    private func presetButton(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
+    private func presetBar(_ fan: SMC.Fan) -> some View {
+        HStack(spacing: 2) {
+            ForEach(FanPreset.allCases) { preset in
+                presetButton(preset, fan: fan)
+            }
         }
-        .buttonStyle(.borderless)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isOn ? AnyShapeStyle(Color.accentColor.opacity(0.25)) : AnyShapeStyle(.quaternary.opacity(0.5)))
-        )
+        .padding(3)
+        .frame(maxWidth: .infinity)
+        .background(Capsule().fill(.quaternary.opacity(0.45)))
+    }
+
+    private func presetButton(_ preset: FanPreset, fan: SMC.Fan) -> some View {
+        let selected = isSelected(preset, fan: fan)
+        return Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                apply(preset, fan: fan)
+            }
+        } label: {
+            Text(preset.rawValue)
+                .font(.system(size: 11.5, weight: .medium))
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+        .background {
+            if selected {
+                Capsule()
+                    .fill(.quaternary)
+                    .matchedGeometryEffect(id: "fan-preset", in: presetIndicator)
+            }
+        }
         .disabled(fanControl.isWorking)
+    }
+
+    private func isSelected(_ preset: FanPreset, fan: SMC.Fan) -> Bool {
+        guard let command = fanControl.target(for: fan.id), command.mode == .manual else {
+            return preset == .auto
+        }
+        let target = Int(command.rpm)
+        switch preset {
+        case .auto: return false
+        case .quiet: return target == Int(fan.minRPM)
+        case .med: return target == Int((fan.minRPM + fan.maxRPM) / 2)
+        case .max: return target == Int(fan.maxRPM)
+        }
+    }
+
+    private func apply(_ preset: FanPreset, fan: SMC.Fan) {
+        switch preset {
+        case .auto: fanControl.setAuto(fan: fan.id)
+        case .quiet: fanControl.setTarget(fan: fan.id, rpm: Int(fan.minRPM))
+        case .med: fanControl.setTarget(fan: fan.id, rpm: Int((fan.minRPM + fan.maxRPM) / 2))
+        case .max: fanControl.setTarget(fan: fan.id, rpm: Int(fan.maxRPM))
+        }
     }
 
     // MARK: Actions
 
     private var actions: some View {
-        HStack {
-            Button("Open Vitals") {
+        HStack(spacing: 8) {
+            Button {
                 openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                Label("Open Vitals", systemImage: "arrow.up.forward.app")
+                    .font(.system(size: 12, weight: .medium))
             }
+            .controlSize(.small)
             Spacer()
-            Button("Settings") {
+            Button {
                 openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 12))
             }
-            Button("Quit") {
+            .controlSize(.small)
+            .help("Settings")
+            Button {
                 NSApp.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 12))
             }
+            .controlSize(.small)
+            .help("Quit Vitals")
         }
-        .controlSize(.small)
     }
 
     // MARK: Helpers
 
     private func isManual(_ fan: SMC.Fan) -> Bool {
         fanControl.target(for: fan.id)?.mode == .manual
-    }
-
-    private func fanModeLabel(_ fan: SMC.Fan) -> String {
-        isManual(fan) ? "Manual" : "Automatic"
     }
 }
