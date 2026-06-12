@@ -80,7 +80,10 @@ struct PerCoreCard: View {
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 58), spacing: 6)], spacing: 6) {
+                    // Fixed six-wide (like the product mock): the adaptive
+                    // grid re-flowed 6↔9 columns during sidebar animations,
+                    // making all the die cells jump — cells now just scale.
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
                         ForEach(model.cpuSensors) { sensor in
                             DieCell(sensor: sensor)
                         }

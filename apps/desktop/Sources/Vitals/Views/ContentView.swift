@@ -117,7 +117,11 @@ struct DashboardView: View {
     }
 
     private var statCards: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
+        // Fixed columns, not adaptive: adaptive grids re-flow their column
+        // count at every width, which made the cards snap around (and stall
+        // the frame) on each step of the sidebar animation. Three flexible
+        // columns scale smoothly at any width.
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
             StatCard(
                 title: "Average CPU",
                 value: model.averageCPUTemp.map { settings.format($0) } ?? "—",
