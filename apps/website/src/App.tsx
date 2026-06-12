@@ -1,3 +1,4 @@
+import { Analytics } from '@vercel/analytics/react'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
 import Dashboard from './components/Dashboard'
@@ -34,6 +35,7 @@ export default function App() {
       <FanControl />
       <DownloadSection release={release} />
       <Footer />
+      <Analytics />
     </div>
   )
 }
