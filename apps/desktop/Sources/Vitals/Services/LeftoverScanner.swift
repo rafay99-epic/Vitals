@@ -21,9 +21,11 @@ struct Leftover: Identifiable, Hashable {
 
 /// Locates the per-user files an app leaves behind, by probing the standard
 /// macOS locations under ~/Library (plus dotfile conventions) for the app's
-/// bundle identifier and name variants. The set of locations follows
-/// long-established uninstaller practice (see e.g. the Mole project for a
-/// battle-tested catalog of where apps hide data).
+/// bundle identifier and name variants.
+///
+/// The catalog of locations and the safety-first design are informed by the
+/// Mole project (https://github.com/tw93/mole, GPL-3.0) — full credit to its
+/// authors. Vitals is likewise licensed GPL-3.0; see LICENSE at the repo root.
 ///
 /// Deliberately user-domain only: nothing under /Library or /System is ever
 /// returned, so nothing this scanner finds needs elevated rights to remove.

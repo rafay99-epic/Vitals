@@ -26,9 +26,16 @@ export default function Terms() {
           within manufacturer-rated ranges.
         </P>
         <P>
-          The App is provided <Strong>free of charge</Strong> and its source code is publicly available at{' '}
-          <ExtLink href={REPO_URL}>github.com/rafay99-epic/Vitals</ExtLink>. Use of the source code is governed by the license terms
-          stated in the repository; these Terms govern your use of the distributed application and this website.
+          The App is provided <Strong>free of charge</Strong> and is <Strong>free software</Strong>: its source code is publicly
+          available at <ExtLink href={REPO_URL}>github.com/rafay99-epic/Vitals</ExtLink> under the{' '}
+          <ExtLink href={`${REPO_URL}/blob/main/LICENSE`}>GNU General Public License v3.0</ExtLink>, which grants you the right to
+          use, study, modify, and redistribute it under the same terms. These Terms govern your use of the distributed application
+          and this website, alongside — never in place of — the rights the GPL gives you.
+        </P>
+        <P>
+          The Applications &amp; Cleanup feature is informed by the{' '}
+          <ExtLink href="https://github.com/tw93/mole">Mole</ExtLink> project (GPL-3.0), whose catalog of app-leftover locations
+          and safety-first uninstall design shaped Vitals' implementation — full credit to its authors.
         </P>
       </Section>
 

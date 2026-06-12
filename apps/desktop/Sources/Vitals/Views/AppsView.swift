@@ -64,17 +64,48 @@ struct AppsView: View {
     }
 
     private var appList: some View {
-        List(selection: $model.selection) {
+        List {
             ForEach(model.filteredApps) { app in
-                AppRow(app: app)
-                    .tag(app.id)
+                AppRow(app: app, isSelected: selectionBinding(for: app))
+                    .contentShape(Rectangle())
+                    .onTapGesture { selectionBinding(for: app).wrappedValue.toggle() }
             }
         }
         .listStyle(.inset)
     }
 
+    private func selectionBinding(for app: InstalledApp) -> Binding<Bool> {
+        Binding(
+            get: { model.selection.contains(app.id) },
+            set: { selected in
+                if selected {
+                    model.selection.insert(app.id)
+                } else {
+                    model.selection.remove(app.id)
+                }
+            }
+        )
+    }
+
+    private var allVisibleSelected: Bool {
+        let visible = model.filteredApps.map(\.id)
+        return !visible.isEmpty && visible.allSatisfy(model.selection.contains)
+    }
+
     private var footer: some View {
         HStack {
+            Toggle("Select all", isOn: Binding(
+                get: { allVisibleSelected },
+                set: { selectAll in
+                    let visible = model.filteredApps.map(\.id)
+                    if selectAll {
+                        model.selection.formUnion(visible)
+                    } else {
+                        model.selection.subtract(visible)
+                    }
+                }
+            ))
+            .toggleStyle(.checkbox)
             Text("\(model.apps.count) applications")
                 .foregroundStyle(.secondary)
             Spacer()
@@ -100,9 +131,13 @@ struct AppsView: View {
 
 private struct AppRow: View {
     let app: InstalledApp
+    @Binding var isSelected: Bool
 
     var body: some View {
         HStack(spacing: 10) {
+            Toggle("", isOn: $isSelected)
+                .labelsHidden()
+                .toggleStyle(.checkbox)
             Image(nsImage: NSWorkspace.shared.icon(forFile: app.id.path))
                 .resizable()
                 .frame(width: 28, height: 28)

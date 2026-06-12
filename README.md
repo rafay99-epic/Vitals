@@ -39,6 +39,18 @@ Desktop-app docs (architecture, sensors, fan control, release pipeline) live in 
 - `Website` workflow runs on `apps/website/**` changes (bun + turbo on Ubuntu).
 - The website's download button always serves the newest DMG via `releases/latest/download/Vitals.dmg`.
 
+## License
+
+Vitals is free software, licensed under the [GNU General Public License v3.0](LICENSE).
+You may use, study, modify, and redistribute it under the same terms.
+
+## Acknowledgements
+
+The Applications & Cleanup feature is informed by **[Mole](https://github.com/tw93/mole)**
+(GPL-3.0) — its battle-tested catalog of where macOS apps leave files behind, and its
+safety-first uninstall design, shaped Vitals' native Swift implementation. Full credit
+and thanks to the Mole project and its contributors.
+
 ---
 
-© Syntax Lab Technology · Developed by [Abdul Rafay — rafay99.com](https://rafay99.com)
+© Syntax Lab Technology · Developed by [Abdul Rafay — rafay99.com](https://rafay99.com) · GPL-3.0
