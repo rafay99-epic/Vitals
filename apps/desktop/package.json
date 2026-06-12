@@ -5,6 +5,7 @@
   "scripts": {
     "build": "./build.sh",
     "dmg": "./make-dmg.sh",
-    "lint": "swiftlint --reporter github-actions-logging"
+    "lint": "swiftlint --reporter github-actions-logging",
+    "test": "swift test"
   }
 }

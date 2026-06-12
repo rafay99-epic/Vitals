@@ -28,8 +28,10 @@ jobs:
           bun-version: latest
       - name: Install
         run: bun install --frozen-lockfile
-      - name: Lint and build
-        run: bunx turbo lint build --filter=website
+      - name: Lint, test, and build
+        run: bunx turbo lint test build --filter=website
+      - name: End-to-end checks
+        run: bunx turbo test:e2e --filter=website
       - name: Upload site
         uses: actions/upload-artifact@v4
         with:

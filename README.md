@@ -25,6 +25,8 @@ bun run build:website    # just the site        (turbo build --filter=website)
 bun run build:desktop    # just the app         (turbo build --filter=desktop, macOS only)
 bun run dmg              # app + DMG installer  (turbo dmg --filter=desktop)
 bun run lint             # lint everything
+bun run test             # unit tests for both apps (swift test + bun test)
+bun run test:e2e         # browser checks against the built site
 ```
 
 The website dev server: `cd apps/website && bun run dev`.

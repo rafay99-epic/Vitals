@@ -11,7 +11,9 @@
     "lint": "turbo lint",
     "build:website": "turbo build --filter=website",
     "build:desktop": "turbo build --filter=desktop",
-    "dmg": "turbo dmg --filter=desktop"
+    "dmg": "turbo dmg --filter=desktop",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e --filter=website"
   },
   "devDependencies": {
     "turbo": "^2.5.8"

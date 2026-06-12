@@ -27,6 +27,8 @@ jobs:
         run: swift --version
       - name: Build release
         run: swift build -c release
+      - name: Test
+        run: swift test
 
   package:
     name: Package DMG
