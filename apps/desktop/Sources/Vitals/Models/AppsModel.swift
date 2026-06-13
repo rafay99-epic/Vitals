@@ -8,12 +8,20 @@ final class AppsModel: ObservableObject {
     struct StagedUninstall: Identifiable {
         let id = UUID()
         var apps: [InstalledApp]
-        var leftovers: [URL: [Leftover]]  // keyed by app bundle URL
-        var excluded: Set<URL> = []       // leftovers the user unchecked
+        var leftovers: [URL: [Leftover]]   // keyed by app bundle URL
+        var casks: [URL: String] = [:]     // app URL → Homebrew cask token
+        var systemExtensions: [URL: [URL]] = [:]  // app URL → orphaned .systemextension
+        var excluded: Set<URL> = []        // leftovers the user unchecked
 
         var totalBytes: UInt64 {
             apps.reduce(0) { $0 + ($1.sizeBytes ?? 0) }
                 + leftovers.values.joined().filter { !excluded.contains($0.id) }.reduce(0) { $0 + $1.sizeBytes }
+        }
+
+        /// True when the (still-checked) selection includes system-domain files
+        /// — those need the admin prompt and are removed permanently.
+        var hasSystemLeftovers: Bool {
+            leftovers.values.joined().contains { $0.requiresAdmin && !excluded.contains($0.id) }
         }
     }
 
@@ -134,43 +142,100 @@ final class AppsModel: ObservableObject {
         guard !targets.isEmpty, !isPreparingUninstall else { return }
         isPreparingUninstall = true
         Task {
+            let casksList = await Task.detached(priority: .userInitiated) {
+                LeftoverScanner.installedCaskTokens()
+            }.value
             var leftovers: [URL: [Leftover]] = [:]
+            var casks: [URL: String] = [:]
+            var systemExtensions: [URL: [URL]] = [:]
             for app in targets {
                 let bundleID = app.bundleID
                 let name = app.name
-                leftovers[app.id] = await Task.detached(priority: .userInitiated) {
-                    LeftoverScanner.scan(bundleID: bundleID, appName: name)
+                let url = app.id
+                leftovers[url] = await Task.detached(priority: .userInitiated) {
+                    LeftoverScanner.scan(bundleID: bundleID, appName: name, appURL: url)
                 }.value
+                if let cask = LeftoverScanner.homebrewCask(appName: name, installedCasks: casksList) {
+                    casks[url] = cask
+                }
+                let extensions = await Task.detached(priority: .utility) {
+                    LeftoverScanner.systemExtensions(bundleID: bundleID)
+                }.value
+                if !extensions.isEmpty { systemExtensions[url] = extensions }
             }
-            staged = StagedUninstall(apps: targets, leftovers: leftovers)
+            staged = StagedUninstall(apps: targets, leftovers: leftovers, casks: casks, systemExtensions: systemExtensions)
             isPreparingUninstall = false
         }
     }
 
     /// Runs the staged uninstall. Running apps are terminated first (the
-    /// confirmation sheet warned about them).
+    /// confirmation sheet warned about them). Homebrew casks are handed to
+    /// brew, user-domain files go to the Trash, the prefs domain is cleared,
+    /// and all system-domain leftovers across every app are removed in a single
+    /// administrator prompt at the end.
     func executeStagedUninstall() {
         guard let staged else { return }
         self.staged = nil
         Task {
             var combined = AppUninstaller.Outcome()
+            var systemPaths: [URL] = []
+            var systemBytes: UInt64 = 0
+
             for app in staged.apps {
                 if let running = AppUninstaller.runningApplication(bundleID: app.bundleID) {
                     running.terminate()
-                    // Give it a moment; escalate politely if it ignores us.
                     try? await Task.sleep(for: .milliseconds(800))
                     if !running.isTerminated { running.forceTerminate() }
                     try? await Task.sleep(for: .milliseconds(400))
                 }
+
                 let keep = staged.excluded
                 let leftovers = (staged.leftovers[app.id] ?? []).filter { !keep.contains($0.id) }
+
+                var bundleHandledByBrew = false
+                if let cask = staged.casks[app.id] {
+                    let removed = await Task.detached(priority: .userInitiated) {
+                        AppUninstaller.homebrewUninstall(cask: cask)
+                    }.value
+                    if removed { bundleHandledByBrew = true; combined.caskUninstalled += 1 }
+                }
+
                 let outcome = await Task.detached(priority: .userInitiated) {
-                    AppUninstaller.uninstall(app: app, leftovers: leftovers)
+                    AppUninstaller.uninstall(app: app, leftovers: leftovers, skipBundle: bundleHandledByBrew)
                 }.value
                 combined.trashed += outcome.trashed
                 combined.failures += outcome.failures
                 combined.freedBytes += outcome.freedBytes
+
+                let bundleID = app.bundleID
+                await Task.detached(priority: .utility) {
+                    AppUninstaller.clearDefaults(bundleID: bundleID)
+                }.value
+
+                for leftover in leftovers where leftover.requiresAdmin {
+                    systemPaths.append(leftover.id)
+                    systemBytes += leftover.sizeBytes
+                }
             }
+
+            // One admin prompt for every system-domain leftover across the batch.
+            if !systemPaths.isEmpty,
+               let script = AppUninstaller.systemRemovalScript(for: systemPaths) {
+                do {
+                    try await PrivilegedShell.runAsAdmin(
+                        script,
+                        prompt: "Vitals needs administrator access to remove system-level leftover files."
+                    )
+                    combined.usedAdmin = true
+                    combined.systemRemoved = systemPaths.count
+                    combined.freedBytes += systemBytes
+                } catch let error as PrivilegedShell.AdminError {
+                    if !error.cancelled { combined.errorMessage = error.message }
+                } catch {
+                    combined.errorMessage = error.localizedDescription
+                }
+            }
+
             lastOutcome = combined
             refresh()
         }

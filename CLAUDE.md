@@ -105,8 +105,19 @@ bun run dmg                  # desktop app + DMG (macOS only)
 
 ## Safety rules (test-locked — keep the tests passing)
 
-- Uninstall moves to **Trash only**, never hard-deletes. Cleanup deletes only
-  regenerable data (caches/logs/trash).
+- Uninstall removes an app and **everything it leaves behind**. User-domain
+  leftovers (under `~/Library`, dotfiles) move to the **Trash** (recoverable);
+  system-domain leftovers (`/Library/*`, `/Users/Shared`, pkg receipts) are
+  removed **permanently as root** via `PrivilegedShell` after explicit
+  confirmation. Homebrew-cask apps go through `brew uninstall --cask`; the prefs
+  domain is cleared with `defaults delete`. System extensions are **detected and
+  surfaced for manual removal**, never force-deleted. The privileged removal
+  runs `AppUninstaller.systemRemovalScript`, which re-validates every path
+  (allowlisted root, no `..`, never `/System`, basename not `com.apple.*`) — the
+  test locks this. Leftover identity is gated: bundle ids validate as
+  reverse-DNS, and system name-matches require a distinctive (≥5-char,
+  non-generic) name (`LeftoverScanner`).
+- Cleanup deletes only regenerable data (caches/logs/trash).
 - Cleanup has two depths. **Quick** is user-domain only and stays strict: Apple
   system caches and crash reports are never offered (`shouldOfferCache`/`shouldOfferLog`,
   test-locked). **Deep** adds system categories that need one admin prompt and may remove

@@ -50,12 +50,25 @@ struct AppsView: View {
         ) { _ in
             Button("OK") { model.dismissOutcome() }
         } message: { outcome in
-            if outcome.failures.isEmpty {
-                Text("Moved \(outcome.trashed.count) items (\(formatBytes(outcome.freedBytes))) to the Trash.")
-            } else {
-                Text("Moved \(outcome.trashed.count) items to the Trash. \(outcome.failures.count) couldn't be removed: \(outcome.failures.map(\.url.lastPathComponent).joined(separator: ", "))")
-            }
+            Text(outcomeMessage(outcome))
         }
+    }
+
+    private func outcomeMessage(_ outcome: AppUninstaller.Outcome) -> String {
+        var parts: [String] = ["Moved \(outcome.trashed.count) items (\(formatBytes(outcome.freedBytes))) to the Trash."]
+        if outcome.systemRemoved > 0 {
+            parts.append("Removed \(outcome.systemRemoved) system files permanently.")
+        }
+        if outcome.caskUninstalled > 0 {
+            parts.append("\(outcome.caskUninstalled) uninstalled via Homebrew.")
+        }
+        if !outcome.failures.isEmpty {
+            parts.append("\(outcome.failures.count) couldn't be removed (in use or protected).")
+        }
+        if let error = outcome.errorMessage {
+            parts.append("System removal didn't finish: \(error)")
+        }
+        return parts.joined(separator: " ")
     }
 
     // MARK: Hero
@@ -330,21 +343,26 @@ private struct UninstallConfirmationSheet: View {
     @ObservedObject var model: AppsModel
     let staged: AppsModel.StagedUninstall
 
+    private var hasSystem: Bool {
+        model.staged?.hasSystemLeftovers ?? staged.hasSystemLeftovers
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("Move to Trash?", systemImage: "trash")
+            Label(hasSystem ? "Uninstall completely?" : "Move to Trash?", systemImage: "trash")
                 .font(.title3.weight(.semibold))
-            Text("The app and the leftover files below go to the Trash — nothing is deleted permanently. Uncheck anything you want to keep.")
+            Text(introText)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if staged.apps.contains(where: \.isRunning) {
-                Label(
+                noteLabel(
                     "Running apps will be quit first: \(staged.apps.filter(\.isRunning).map(\.name).joined(separator: ", "))",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .font(.callout)
-                .foregroundStyle(.orange)
+                    "exclamationmark.triangle", .orange)
+            }
+            if !staged.casks.isEmpty {
+                noteLabel("Homebrew apps are removed with brew uninstall --cask.", "mug", .secondary)
             }
 
             ScrollView {
@@ -360,16 +378,36 @@ private struct UninstallConfirmationSheet: View {
                 Text("Total \(formatBytes(currentTotal))")
                     .font(.callout.weight(.medium))
                     .monospacedDigit()
+                if hasSystem {
+                    Label("admin", systemImage: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button("Cancel") { model.staged = nil }
                     .keyboardShortcut(.cancelAction)
-                Button("Move to Trash") { model.executeStagedUninstall() }
+                Button(hasSystem ? "Uninstall" : "Move to Trash") { model.executeStagedUninstall() }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
             }
         }
         .padding(20)
         .frame(width: 560)
+    }
+
+    private var introText: String {
+        var text = "The app and the checked items below are removed — user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
+        if hasSystem {
+            text += " Items marked 🔒 are system files: they're deleted permanently and need your administrator password."
+        }
+        return text
+    }
+
+    private func noteLabel(_ text: String, _ symbol: String, _ color: Color) -> some View {
+        Label(text, systemImage: symbol)
+            .font(.callout)
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var currentTotal: UInt64 {
@@ -384,6 +422,13 @@ private struct UninstallConfirmationSheet: View {
                     .resizable()
                     .frame(width: 20, height: 20)
                 Text(app.name).fontWeight(.semibold)
+                if staged.casks[app.id] != nil {
+                    Text("Homebrew")
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(.yellow.opacity(0.18)))
+                        .foregroundStyle(.yellow)
+                }
                 Spacer()
                 Text(app.sizeBytes.map(formatBytes) ?? "")
                     .font(.caption)
@@ -397,6 +442,16 @@ private struct UninstallConfirmationSheet: View {
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.leading, 28)
+            }
+            if let extensions = staged.systemExtensions[app.id], !extensions.isEmpty {
+                Label(
+                    "Has a system extension — remove it manually in System Settings ▸ General ▸ Login Items & Extensions; a restart may be needed.",
+                    systemImage: "puzzlepiece.extension"
+                )
+                .font(.caption2)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 28)
             }
         }
     }
@@ -416,11 +471,19 @@ private struct UninstallConfirmationSheet: View {
             .labelsHidden()
             .toggleStyle(.checkbox)
             VStack(alignment: .leading, spacing: 0) {
-                Text(leftover.id.lastPathComponent)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text("\(leftover.category.rawValue) · \(abbreviatedPath(leftover.id))")
+                HStack(spacing: 4) {
+                    if leftover.requiresAdmin {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.orange)
+                            .help("System file — removed permanently with admin rights")
+                    }
+                    Text(leftover.id.lastPathComponent)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Text("\(leftover.category.rawValue)\(leftover.requiresAdmin ? " · permanent" : "") · \(abbreviatedPath(leftover.id))")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
