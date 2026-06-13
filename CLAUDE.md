@@ -2,7 +2,8 @@
 
 Vitals is a monorepo: a native macOS hardware monitor + app manager (`apps/desktop`,
 Swift/SwiftUI), its marketing site (`apps/website`, React + Vite + Tailwind v4), and a
-local Convex backend (`apps/backend`). Tooling: bun workspaces + turbo. License: **GPL-3.0**.
+shared Convex backend at the repo root (`convex/`). Tooling: bun workspaces + turbo.
+License: **GPL-3.0**.
 
 ## Product philosophy (drives every decision)
 
@@ -165,21 +166,31 @@ Settings → Desktop Widgets.
   works (CI builds have no URL). `ConvexProvider` is mounted only when the URL is present.
   The hook binds to one source at module load — never switch sources per render.
 
-## Backend (`apps/backend`, `@vitals/backend`)
+## Backend (Convex, at the repo root `convex/`)
 
-- **Local Convex project** (no cloud account): run `CONVEX_AGENT_MODE=anonymous bunx convex
-  dev` from `apps/backend`. The env var stops the CLI prompting for an account in
-  non-interactive shells. `.env.local` (gitignored) holds `CONVEX_URL`.
-- Functions live in `convex/` (object-form syntax, `args`+`returns` validators, public vs
-  `internal*`, indexed reads). Today: `releases.ts` (`get` query, `upsert` internal
-  mutation, `refresh` internal action that fetches GitHub) + `crons.ts` (6-hourly refresh)
-  + a singleton `releases` table. External IO (the GitHub fetch) lives in the **action**,
-  never a mutation; on failure the cached value is kept, never blanked.
-- `convex/_generated/` is **committed** so the website's `@vitals/backend/api` import and
-  `tsc -b` resolve without a codegen step. After changing a schema/function, re-run
-  `convex dev` (or `convex codegen`) to regenerate it.
-- For any code under `convex/`, use the **convex-expert** subagent — it has the
-  non-negotiable Convex rules loaded.
+- **The repo root is the Convex project root** — deliberately *not* inside `apps/website`,
+  so the desktop app can use it later. Functions in `convex/`, the `convex` dependency +
+  scripts in the **root** `package.json` (`convex:dev` / `convex:codegen` / `convex:deploy`),
+  deployment read from the **root** `.env.local` (gitignored). Run all convex commands from
+  the repo root.
+- Headless/non-interactive: `CONVEX_AGENT_MODE=anonymous bunx convex dev` forces an
+  anonymous **local** deployment (no account). Logged in, `bunx convex dev` targets the
+  cloud dev deployment in `.env.local`. Either way the app code is identical — only the URL
+  differs.
+- Functions: object-form syntax, `args`+`returns` validators, public vs `internal*`,
+  indexed reads. Today: `releases.ts` (`get` query, `upsert` internal mutation, `refresh`
+  internal action that fetches GitHub) + `crons.ts` (6-hourly refresh) + a singleton
+  `releases` table. External IO (the GitHub fetch) lives in the **action**, never a
+  mutation; on failure the cached value is kept, never blanked.
+- The website imports the typed API through the **`@convex` alias** (`apps/website`
+  `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
+  '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the
+  website's `tsc -b` resolve without a codegen step; turbo's `globalDependencies` lists
+  `convex/_generated/**` so a backend change busts the website cache. After changing a
+  schema/function, re-run `bun run convex:codegen` (or `convex:dev`) to regenerate it.
+- `bun run lint` runs `turbo lint` **and** typechecks `convex/` (`tsc -p convex/tsconfig.json`).
+  The Convex CLI's opt-in "AI files" (`AGENTS.md`, `.agents/`, `skills-lock.json`) are
+  gitignored. For any code under `convex/`, use the **convex-expert** subagent.
 
 ## License & credit (legal requirements)
 

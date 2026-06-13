@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
@@ -15,4 +16,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    // The Convex backend lives at the repo root (../../convex), shared across
+    // apps. `@convex/...` resolves its generated API for the typed client.
+    alias: {
+      '@convex': resolve(__dirname, '../../convex'),
+    },
+  },
 })

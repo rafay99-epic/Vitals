@@ -1,5 +1,8 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": [
+    "convex/_generated/**"
+  ],
   "tasks": {
     "build": {
       "outputs": [

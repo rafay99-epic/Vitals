@@ -10,3 +10,8 @@ dist/
 # Convex / env — local deployment URLs and secrets, never committed
 .env.local
 .env.*.local
+
+# Convex CLI "AI files" scaffolding (opt-in via `convex ai-files install`)
+AGENTS.md
+.agents/
+skills-lock.json

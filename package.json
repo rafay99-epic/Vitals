@@ -8,14 +8,21 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "lint": "turbo lint",
+    "lint": "turbo lint && tsc -p convex/tsconfig.json --noEmit",
     "build:website": "turbo build --filter=website",
     "build:desktop": "turbo build --filter=desktop",
     "dmg": "turbo dmg --filter=desktop",
     "test": "turbo test",
-    "test:e2e": "turbo test:e2e --filter=website"
+    "test:e2e": "turbo test:e2e --filter=website",
+    "convex:dev": "convex dev",
+    "convex:codegen": "convex codegen",
+    "convex:deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.40.0"
   },
   "devDependencies": {
-    "turbo": "^2.5.8"
+    "turbo": "^2.5.8",
+    "typescript": "~6.0.2"
   }
 }

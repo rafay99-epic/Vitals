@@ -15,6 +15,12 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* The shared Convex backend at the repo root (see vite.config alias).
+       Paths resolve relative to this tsconfig (no baseUrl — deprecated in TS 6). */
+    "paths": {
+      "@convex/*": ["../../convex/*"]
+    },
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
