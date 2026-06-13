@@ -37,8 +37,14 @@ enum WidgetPanel {
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.animationBehavior = .utilityWindow
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        panel.isExcludedFromWindowsMenu = true
+        // No appearance animation: the utility-window fade re-fires during a
+        // Space switch and reads as a flicker / the widget "reappearing".
+        panel.animationBehavior = .none
+        // Pinned to every Space and stationary, so a Space switch never moves,
+        // hides, or re-shows it. (No .fullScreenAuxiliary — a desktop widget
+        // shouldn't ride over full-screen apps.)
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
         let host = NSHostingView(
             rootView: WidgetHost(kind: kind, onClose: onClose)
