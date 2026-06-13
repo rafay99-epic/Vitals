@@ -100,10 +100,10 @@ try {
     await page.evaluate(() => document.body.textContent.includes('Syntax Lab Technology')),
   )
 
-  // --- Legal pages ---
+  // --- Legal pages (client routes; deep-linking relies on the SPA fallback) ---
   for (const [path, expected] of [
-    ['/terms/', 'Terms & Conditions'],
-    ['/privacy/', 'Privacy Policy'],
+    ['/terms', 'Terms & Conditions'],
+    ['/privacy', 'Privacy Policy'],
   ]) {
     await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
     console.log(`${path}:`)
@@ -113,6 +113,38 @@ try {
       await page.evaluate(() => document.body.textContent.includes('Syntax Lab Technology')),
     )
   }
+
+  // The old multi-page URLs must still resolve (router redirects /terms/ → /terms).
+  await page.goto(`${BASE}/terms/`, { waitUntil: 'networkidle' })
+  console.log('/terms/ (legacy):')
+  check('trailing-slash URL still renders Terms', await page.evaluate(() => document.body.textContent.includes('Terms & Conditions')))
+
+  // --- Releases page (backend-fed list, with a direct-GitHub fallback) ---
+  await page.goto(`${BASE}/releases`, { waitUntil: 'networkidle' })
+  // The list arrives over the Convex socket or a GitHub fetch — wait for a row.
+  await page.waitForFunction(() => /v?\d+\.\d+/.test(document.body.textContent), { timeout: 15000 }).catch(() => {})
+  console.log('/releases:')
+  check('renders the Releases heading', await page.evaluate(() => document.body.textContent.includes('Releases')))
+  check(
+    'lists at least one version with a download',
+    await page.evaluate(() => /\d+\.\d+/.test(document.body.textContent) && [...document.querySelectorAll('a')].some((a) => a.textContent.includes('Download'))),
+  )
+
+  // --- Client-side navigation (the point of the router) ---
+  await page.goto(BASE, { waitUntil: 'networkidle' })
+  await page.click('a[href="/privacy"]')
+  await page.waitForFunction(() => document.body.textContent.includes('Privacy Policy'))
+  console.log('client nav:')
+  check('footer link routes to /privacy without a reload', page.url().endsWith('/privacy'))
+
+  // --- 404 page (SPA soft 404: server serves index.html, router renders it) ---
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`${BASE}/no-such-page-xyz`, { waitUntil: 'networkidle' })
+  console.log('/no-such-page-xyz:')
+  check('renders the not-found message', await page.evaluate(() => document.body.textContent.includes('This page isn’t here')))
+  check('offers a way back to Vitals', await page.evaluate(() => [...document.querySelectorAll('a')].some((a) => a.textContent.includes('Back to Vitals'))))
+  const notFoundScroll = await page.evaluate(() => document.documentElement.scrollWidth)
+  check('no horizontal overflow', notFoundScroll === 390, `scrollWidth ${notFoundScroll}`)
 
   await browser.close()
 } catch (error) {

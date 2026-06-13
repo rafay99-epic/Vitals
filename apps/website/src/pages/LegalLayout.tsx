@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
+import { Link } from '@tanstack/react-router'
 import { LogoMark } from '../components/icons'
 import { COMPANY, DEVELOPER, DEVELOPER_URL, REPO_URL } from '../lib/links'
 
-/// Shared shell for the Terms and Privacy pages — same materials and type
-/// treatment as the landing page, single reading column.
-export function LegalLayout({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
+/// Shared shell for sub-pages (Terms, Privacy, Releases) — same materials and
+/// type treatment as the landing page, single column. `updated` is optional;
+/// pages that aren't dated (Releases) omit it.
+export function LegalLayout({ title, updated, children }: { title: string; updated?: string; children: ReactNode }) {
   return (
     <div
       style={{
@@ -33,22 +35,22 @@ export function LegalLayout({ title, updated, children }: { title: string; updat
             boxShadow: '0 10px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
           }}
         >
-          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', color: '#f5f5f7' }}>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', color: '#f5f5f7' }}>
             <LogoMark box={26} radius={7} icon={17} />
             <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Vitals</span>
-          </a>
-          <a
-            href="/"
+          </Link>
+          <Link
+            to="/"
             style={{ fontSize: 13, color: 'rgba(235,235,245,0.62)', textDecoration: 'none', padding: '7px 12px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.1)' }}
           >
             ← Back to Vitals
-          </a>
+          </Link>
         </nav>
       </header>
 
       <main className="pt-[120px] md:pt-[150px]" style={{ maxWidth: 760, margin: '0 auto', paddingLeft: 24, paddingRight: 24, paddingBottom: 60 }}>
-        <h1 className="text-[32px] md:text-[40px]" style={{ fontWeight: 670, letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0 0 10px' }}>{title}</h1>
-        <p style={{ fontSize: 13, color: 'rgba(235,235,245,0.45)', margin: '0 0 42px' }}>Last updated: {updated}</p>
+        <h1 className="text-[32px] md:text-[40px]" style={{ fontWeight: 670, letterSpacing: '-0.03em', lineHeight: 1.1, margin: `0 0 ${updated ? 10 : 24}px` }}>{title}</h1>
+        {updated ? <p style={{ fontSize: 13, color: 'rgba(235,235,245,0.45)', margin: '0 0 42px' }}>Last updated: {updated}</p> : null}
         {children}
       </main>
 
@@ -61,8 +63,8 @@ export function LegalLayout({ title, updated, children }: { title: string; updat
             </a>
           </span>
           <span style={{ display: 'flex', gap: 18 }}>
-            <a href="/terms/" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>Terms</a>
-            <a href="/privacy/" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>Privacy</a>
+            <Link to="/terms" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>Terms</Link>
+            <Link to="/privacy" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>Privacy</Link>
             <a href={REPO_URL} target="_blank" rel="noreferrer" style={{ color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}>GitHub</a>
           </span>
         </div>

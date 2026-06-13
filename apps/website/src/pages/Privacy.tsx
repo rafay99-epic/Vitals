@@ -1,7 +1,9 @@
 import { LegalLayout, Section, P, List, Item, Strong, ExtLink } from './LegalLayout'
 import { COMPANY, DEVELOPER, DEVELOPER_URL, REPO_URL } from '../lib/links'
+import { useTitle } from '../lib/useTitle'
 
 export default function Privacy() {
+  useTitle('Privacy Policy — Vitals')
   return (
     <LegalLayout title="Privacy Policy" updated="June 13, 2026">
       <Section title="The short version">

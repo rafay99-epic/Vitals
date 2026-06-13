@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { HeartbeatIcon } from './icons'
 import { COMPANY, DEVELOPER, DEVELOPER_URL, REPO_URL } from '../lib/links'
 
@@ -29,7 +30,7 @@ export default function Footer() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 22, fontSize: 12.5 }}>
             <a href="/#philosophy" style={footLink}>Philosophy</a>
             <a href="/#sensors" style={footLink}>Sensors</a>
-            <a href="/#download" style={footLink}>Download</a>
+            <Link to="/releases" style={footLink}>Releases</Link>
             <a href={REPO_URL} target="_blank" rel="noreferrer" style={footLink}>GitHub</a>
           </div>
         </div>
@@ -60,8 +61,8 @@ export default function Footer() {
             </a>
           </span>
           <span style={{ display: 'flex', gap: 18 }}>
-            <a href="/terms/" style={footLink}>Terms &amp; Conditions</a>
-            <a href="/privacy/" style={footLink}>Privacy Policy</a>
+            <Link to="/terms" style={footLink}>Terms &amp; Conditions</Link>
+            <Link to="/privacy" style={footLink}>Privacy Policy</Link>
           </span>
         </div>
       </div>

@@ -1,0 +1,88 @@
+name: Convex
+
+# The backend lives at the repo root (convex/). This workflow:
+#   • typechecks the functions on every PR/push that touches them,
+#   • deploys to the production Convex deployment on push to main — but ONLY
+#     when convex code actually changed (the path filter skips the run
+#     otherwise), and `convex deploy` is itself a no-op when nothing differs,
+#   • refreshes the cached "latest release" the moment a GitHub release is
+#     published, so the website's download badge updates within seconds.
+#
+# Requires a repo secret CONVEX_DEPLOY_KEY — a *production* deploy key from the
+# Convex dashboard (Project → Settings → Deploy keys). Without it the deploy and
+# refresh jobs fail; the typecheck job needs nothing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "convex/**"
+      - "!convex/README.md"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/convex.yml"
+  pull_request:
+    paths:
+      - "convex/**"
+      - "!convex/README.md"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/convex.yml"
+  release:
+    types: [published]
+
+jobs:
+  typecheck:
+    name: Typecheck functions
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Typecheck convex/
+        run: bunx tsc -p convex/tsconfig.json --noEmit
+
+  deploy:
+    name: Deploy to Convex
+    # Only on push to main, and only after the functions typecheck.
+    if: github.event_name == 'push'
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Deploy functions (no-op if nothing changed)
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: bunx convex deploy --yes
+      - name: Seed/heal the release cache
+        # No cron — instead we refresh on deploy and on release (below), since
+        # the cached value only changes when a release is published.
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: bunx convex run releases:refresh '{}'
+
+  refresh:
+    name: Refresh release cache
+    # When a release is published, pull the new version into the cache now
+    # instead of waiting for the hourly cron.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Refresh cached release
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: bunx convex run releases:refresh '{}'

@@ -1,8 +1,9 @@
 # CLAUDE.md — Vitals
 
 Vitals is a monorepo: a native macOS hardware monitor + app manager (`apps/desktop`,
-Swift/SwiftUI) and its marketing site (`apps/website`, React + Vite + Tailwind v4).
-Tooling: bun workspaces + turbo. License: **GPL-3.0**.
+Swift/SwiftUI), its marketing site (`apps/website`, React + Vite + Tailwind v4), and a
+shared Convex backend at the repo root (`convex/`). Tooling: bun workspaces + turbo.
+License: **GPL-3.0**.
 
 ## Product philosophy (drives every decision)
 
@@ -143,11 +144,67 @@ Settings → Desktop Widgets.
 - Implements a Claude Design handoff pixel-faithfully; breakpoint-dependent styles live
   in Tailwind classes (inline styles defeat media queries) — mobile-first responsive.
 - `lib/links.ts` is the single source for repo/download/company URLs.
-- Legal pages (`/terms/`, `/privacy/`) are separate Vite entries. **The privacy policy
-  must match reality** — it discloses Vercel Web Analytics; any new data flow must be
-  added there before it ships.
+- **SPA on TanStack Router** (file-based). One HTML entry (`index.html` → `main.tsx` →
+  `RouterProvider`). Routes are files in `src/routes/` (`__root.tsx`, `index.tsx`,
+  `terms.tsx`, `privacy.tsx`, `releases.tsx`); the `@tanstack/router-plugin` generates
+  `src/routeTree.gen.ts` — **committed** (the `tsc -b` in `build` runs before `vite build`,
+  so it must exist). The root route wires the 404 (`notFoundComponent` → `NotFound`) and
+  error page (`errorComponent` → `ErrorScreen`); a top-level `ErrorBoundary` is the outer
+  net. Cross-route links use `<Link>`; status pages keep plain `<a href="/">` so they work
+  outside the router context too. `router` uses `trailingSlash: 'never'` (old `/terms/`
+  redirects to `/terms`). Deep links rely on the SPA fallback — `vercel.json` rewrites all
+  paths to `/index.html`, so an unknown path is a **soft 404** (200 + client-rendered
+  NotFound), not an HTTP 404.
+- Legal pages are the `/terms` and `/privacy` routes. **The privacy policy must match
+  reality** — it discloses Vercel Web Analytics (mounted once in `RootLayout`); any new
+  data flow must be added there before it ships.
 - e2e (`e2e/check.mjs`) drives the system Chrome/Brave (no browser downloads), starts
-  its own preview server, and asserts no horizontal overflow at 390/1440 px.
+  its own preview server, and asserts no horizontal overflow at 390/1440 px, plus client
+  navigation and the 404/legal routes.
+- The download badge's version/size comes from the backend (`useLatestRelease`): Convex
+  when `VITE_CONVEX_URL` is set, else a **direct GitHub fetch fallback** so the site always
+  works (CI builds have no URL). `ConvexProvider` is mounted only when the URL is present.
+  The hook binds to one source at module load — never switch sources per render.
+
+## Backend (Convex, at the repo root `convex/`)
+
+- **The repo root is the Convex project root** — deliberately *not* inside `apps/website`,
+  so the desktop app can use it later. Functions in `convex/`, the `convex` dependency +
+  scripts in the **root** `package.json` (`convex:dev` / `convex:codegen` / `convex:deploy`),
+  deployment read from the **root** `.env.local` (gitignored). Run all convex commands from
+  the repo root.
+- Headless/non-interactive: `CONVEX_AGENT_MODE=anonymous bunx convex dev` forces an
+  anonymous **local** deployment (no account). Logged in, `bunx convex dev` targets the
+  cloud dev deployment in `.env.local`. Either way the app code is identical — only the URL
+  differs.
+- Functions: object-form syntax, `args`+`returns` validators, public vs `internal*`,
+  indexed reads. Today, `releases.ts`: `get` (latest, from the singleton `releases` table —
+  the hot path for the landing badge) + `list` (all releases, from the `releaseList` table,
+  newest-first via `by_published`) public queries; `upsert` + `syncList` internal mutations;
+  `refresh` internal action. **`refresh` makes ONE GitHub call** (`fetchReleases`) and
+  updates both the list (`syncList` reconciles by tag — insert/patch-if-changed/delete) and
+  the latest singleton (from index 0). The reusable GitHub fetch/parse lives in
+  **`convex/lib/github.ts`** (Convex-free, so the website's GitHub-fallback hooks import the
+  *same* parser via `@convex/lib/github` — one parser, not two). External IO runs only in
+  the action; on failure the cache is kept, never blanked; mutations skip the write when
+  nothing changed (no spurious reactive re-renders). Put shared helpers in `convex/lib/`.
+- **Refresh is event-driven, not polled — there is no cron** (the cached release only
+  changes when a release is published, so polling would waste free-tier calls). CI
+  (`.github/workflows/convex.yml`) typechecks `convex/` on every PR/push that touches it,
+  **deploys to production on push to main** (path-filtered → no-op when convex didn't
+  change) and then seeds the cache, and **refreshes on `release: published`** so the badge
+  updates within seconds of a new app release. Needs a repo secret **`CONVEX_DEPLOY_KEY`**
+  (production deploy key). If you ever want a backstop, a *daily* cron is plenty — never an
+  hourly one.
+- The website imports the typed API through the **`@convex` alias** (`apps/website`
+  `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
+  '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the
+  website's `tsc -b` resolve without a codegen step; turbo's `globalDependencies` lists
+  `convex/_generated/**` so a backend change busts the website cache. After changing a
+  schema/function, re-run `bun run convex:codegen` (or `convex:dev`) to regenerate it.
+- `bun run lint` runs `turbo lint` **and** typechecks `convex/` (`tsc -p convex/tsconfig.json`).
+  The Convex CLI's opt-in "AI files" (`AGENTS.md`, `.agents/`, `skills-lock.json`) are
+  gitignored. For any code under `convex/`, use the **convex-expert** subagent.
 
 ## License & credit (legal requirements)
 
@@ -165,3 +222,17 @@ copied.
 - This ffmpeg has no libwebp; use `sips` for image conversion.
 - `screencapture` captures whatever is frontmost at the coordinates — activate the
   target window first and re-read its bounds in the same osascript.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->
