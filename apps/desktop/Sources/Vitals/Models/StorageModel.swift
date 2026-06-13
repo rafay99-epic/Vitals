@@ -21,6 +21,9 @@ final class StorageModel: ObservableObject {
     static let displayLimit = 200
 
     @Published private(set) var volume: StorageAnalyzer.VolumeUsage?
+    /// True once a capacity read has been attempted (so a nil result reads as
+    /// an error rather than "not loaded yet").
+    @Published private(set) var volumeLoaded = false
     @Published private(set) var categories: [StorageCategory] = []
     @Published private(set) var insights: [StorageAnalyzer.StorageInsight] = []
     @Published private(set) var isScanning = false
@@ -63,8 +66,14 @@ final class StorageModel: ObservableObject {
     /// Cheap one-shot capacity read for tab open — no disk walk, no background
     /// task. Safe to call on every appearance; it only reads once.
     func loadVolume() {
-        if volume == nil { volume = StorageAnalyzer.volumeUsage() }
+        guard volume == nil else { return }
+        volume = StorageAnalyzer.volumeUsage()
+        volumeLoaded = true
     }
+
+    /// A capacity read was attempted and failed — the boot volume is somehow
+    /// unreadable. Vanishingly rare, but handled gracefully.
+    var volumeUnavailable: Bool { volumeLoaded && volume == nil }
 
     /// Re-probe Full Disk Access. Cheap; call on appear and after the user
     /// returns from System Settings so the banner reflects reality.

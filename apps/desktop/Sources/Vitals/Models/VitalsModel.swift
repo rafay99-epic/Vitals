@@ -38,8 +38,17 @@ final class VitalsModel: ObservableObject {
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
     @Published private(set) var battery: BatterySnapshot?
+    /// False until the first sample lands — drives the dashboard loading state.
+    @Published private(set) var hasLoaded = false
 
     let memoryTotal = ProcessInfo.processInfo.physicalMemory
+
+    /// True only when a sample arrived but carried no usable readings at all
+    /// (no temps, no fans, no memory) — e.g. a VM or restricted hardware.
+    /// On real Macs memory always reads, so this stays false.
+    var sensorsUnavailable: Bool {
+        hasLoaded && cpuSensors.isEmpty && gpuTemp == nil && !hasSMC && memory == nil
+    }
 
     var averageCPUTemp: Double? {
         guard !cpuSensors.isEmpty else { return nil }
@@ -141,6 +150,7 @@ final class VitalsModel: ObservableObject {
         memory = snapshot.memory
         topProcesses = snapshot.topProcesses
         battery = snapshot.battery
+        hasLoaded = true
 
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
             history.append(Sample(

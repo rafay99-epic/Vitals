@@ -106,9 +106,17 @@ bun run dmg                  # desktop app + DMG (macOS only)
 ## Safety rules (test-locked — keep the tests passing)
 
 - Uninstall moves to **Trash only**, never hard-deletes. Cleanup deletes only
-  regenerable data (caches/logs/trash); Apple system caches and crash reports are
-  never offered.
-- Never list or touch: anything under `/System`, `com.apple.*` bundles, Vitals itself.
+  regenerable data (caches/logs/trash).
+- Cleanup has two depths. **Quick** is user-domain only and stays strict: Apple
+  system caches and crash reports are never offered (`shouldOfferCache`/`shouldOfferLog`,
+  test-locked). **Deep** adds system categories that need one admin prompt and may remove
+  age-gated system caches, system logs, crash reports, system temp, and stale GPU caches —
+  but only via `DiskCleaner.systemCleanScript`, which is built from **fixed allowlisted
+  roots + `-mtime` age gates** (never UI paths). The script-safety test locks this: every
+  delete is age-gated and rooted, never `/System`, never a bare path.
+- Privileged work goes through `PrivilegedShell.runAsAdmin` (`do shell script … with
+  administrator privileges`) — the one place the app escalates (fan helper + deep clean).
+- Never list or touch: anything under `/System`, `com.apple.*` app bundles, Vitals itself.
 - Leftover scanning is user-domain only; bundle ids must validate as reverse-DNS before
   touching any path (`LeftoverScanner.isValidBundleID`).
 - Fan control: clamp to rated RPM range, admin auth, macOS thermal safety stays under.

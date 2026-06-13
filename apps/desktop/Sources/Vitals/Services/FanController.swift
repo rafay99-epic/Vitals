@@ -81,7 +81,7 @@ final class FanController: ObservableObject {
             launchctl bootout system/\(FanControl.label) 2>/dev/null || true
             launchctl bootstrap system '\(FanControl.daemonPlistPath)'
             """
-            try await Self.runAsAdmin(script, prompt: "Vitals needs to install its fan-control helper.")
+            try await PrivilegedShell.runAsAdmin(script, prompt: "Vitals needs to install its fan-control helper.")
             // Seed an empty state file the user can write to from now on.
             if !FileManager.default.fileExists(atPath: FanControl.stateURL.path) {
                 try? FanControl.writeCommands([])
@@ -100,7 +100,7 @@ final class FanController: ObservableObject {
             rm -f '\(FanControl.daemonPlistPath)'
             rm -f '\(FanControl.stateURL.path)'
             """
-            try await Self.runAsAdmin(script, prompt: "Vitals needs to remove its fan-control helper.")
+            try await PrivilegedShell.runAsAdmin(script, prompt: "Vitals needs to remove its fan-control helper.")
         }
         commands = []
         refreshInstalled()
@@ -113,7 +113,7 @@ final class FanController: ObservableObject {
         defer { isWorking = false }
         do {
             try await body()
-        } catch let error as AdminError {
+        } catch let error as PrivilegedShell.AdminError {
             if !error.cancelled { lastError = error.message }
         } catch {
             lastError = error.localizedDescription
@@ -146,49 +146,4 @@ final class FanController: ObservableObject {
         """
     }
 
-    // MARK: - Privileged execution
-
-    private struct AdminError: Error {
-        let message: String
-        let cancelled: Bool
-    }
-
-    nonisolated private static func runAsAdmin(_ shellScript: String, prompt: String) async throws {
-        // Stage the shell script to a temp file so the AppleScript string
-        // stays a single, safely-escaped command.
-        let scriptPath = NSTemporaryDirectory() + "vitals-fan-\(UUID().uuidString).sh"
-        try shellScript.write(toFile: scriptPath, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(atPath: scriptPath) }
-
-        let appleScript = "do shell script \"/bin/sh '\(scriptPath)'\" with administrator privileges with prompt \"\(prompt)\""
-
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-                process.arguments = ["-e", appleScript]
-                let stderr = Pipe()
-                process.standardOutput = Pipe()
-                process.standardError = stderr
-                do {
-                    try process.run()
-                } catch {
-                    continuation.resume(throwing: AdminError(message: error.localizedDescription, cancelled: false))
-                    return
-                }
-                process.waitUntilExit()
-                if process.terminationStatus == 0 {
-                    continuation.resume()
-                    return
-                }
-                let output = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let cancelled = output.contains("-128")
-                let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                continuation.resume(throwing: AdminError(
-                    message: trimmed.isEmpty ? "Helper command failed." : trimmed,
-                    cancelled: cancelled
-                ))
-            }
-        }
-    }
 }

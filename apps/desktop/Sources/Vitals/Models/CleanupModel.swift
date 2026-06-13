@@ -2,51 +2,125 @@ import Foundation
 import SwiftUI
 
 /// State for the Cleanup tab: category sizes and the clean operation.
+///
+/// Scanning is manual (like the Storage tab) — nothing walks the disk until
+/// `scan(depth:)` is called. Sizes stream in off the main actor; `cancelScan()`
+/// stops a scan in flight. Cleaning splits the selection: user-domain
+/// categories are removed in-process, system categories run through one
+/// administrator prompt via `PrivilegedShell` and a vetted, age-gated script.
 @MainActor
 final class CleanupModel: ObservableObject {
     @Published private(set) var categories: [CleanupCategory] = []
+    @Published private(set) var depth: CleanDepth = .quick
     @Published private(set) var isScanning = false
     @Published private(set) var isCleaning = false
+    @Published private(set) var hasRun = false
     @Published var selected: Set<CleanupCategory.Kind> = []
     @Published private(set) var lastResult: DiskCleaner.CleanResult?
+    @Published private(set) var lastError: String?
+
+    private var scanTask: Task<Void, Never>?
+
+    var selectedCategories: [CleanupCategory] {
+        categories.filter { selected.contains($0.kind) }
+    }
 
     var selectedBytes: UInt64 {
-        categories.filter { selected.contains($0.kind) }.reduce(0) { $0 + $1.sizeBytes }
+        selectedCategories.reduce(0) { $0 + $1.sizeBytes }
     }
 
     var totalBytes: UInt64 {
         categories.reduce(0) { $0 + $1.sizeBytes }
     }
 
-    func refresh() {
-        guard !isScanning else { return }
+    /// Whether the current selection includes any system (admin) category.
+    var selectionNeedsAdmin: Bool {
+        selectedCategories.contains { $0.kind.requiresAdmin }
+    }
+
+    /// The manual trigger. Measures the categories for `depth`; opening the tab
+    /// never starts this on its own (unless the auto-scan setting is on).
+    func scan(depth: CleanDepth) {
+        guard !isCleaning else { return }
+        self.depth = depth
+        hasRun = true
+        scanTask?.cancel()
         isScanning = true
-        Task {
-            var scanned = await Task.detached(priority: .userInitiated) { DiskCleaner.scan() }.value
+        // Drop any selection that no longer exists at this depth.
+        let kindsAtDepth = Set(DiskCleaner.scan(depth: depth).map(\.kind))
+        selected.formIntersection(kindsAtDepth)
+
+        scanTask = Task { [weak self] in
+            guard let self else { return }
+            var scanned = await Task.detached(priority: .userInitiated) { DiskCleaner.scan(depth: depth) }.value
+            if Task.isCancelled { isScanning = false; return }
             categories = scanned  // show structure immediately, sizes follow
             for index in scanned.indices {
+                if Task.isCancelled { isScanning = false; return }
                 let category = scanned[index]
-                let size = await Task.detached(priority: .utility) { DiskCleaner.size(of: category) }.value
-                scanned[index].sizeBytes = size
+                let measured = await Task.detached(priority: .utility) { DiskCleaner.measured(category) }.value
+                if Task.isCancelled { isScanning = false; return }
+                scanned[index] = measured
                 categories = scanned
             }
             isScanning = false
         }
     }
 
+    func cancelScan() {
+        scanTask?.cancel()
+        isScanning = false
+    }
+
     func clean() {
-        let targets = categories.filter { selected.contains($0.kind) && $0.sizeBytes > 0 }
+        let targets = selectedCategories.filter { $0.sizeBytes > 0 }
         guard !targets.isEmpty, !isCleaning else { return }
+        let userTargets = targets.filter { !$0.kind.requiresAdmin }
+        let systemTargets = targets.filter { $0.kind.requiresAdmin }
+        let currentDepth = depth
         isCleaning = true
+        lastError = nil
+
         Task {
-            lastResult = await Task.detached(priority: .userInitiated) { DiskCleaner.clean(targets) }.value
+            var result = await Task.detached(priority: .userInitiated) { DiskCleaner.clean(userTargets) }.value
+
+            if !systemTargets.isEmpty {
+                let script = DiskCleaner.systemCleanScript(for: Set(systemTargets.map(\.kind)))
+                do {
+                    try await PrivilegedShell.runAsAdmin(
+                        script,
+                        prompt: "Vitals needs administrator access to clean system files."
+                    )
+                    result.usedAdmin = true
+                    // The script frees the age-eligible files we measured; credit
+                    // that as the freed amount (best available estimate).
+                    for target in systemTargets {
+                        result.freedBytes += target.sizeBytes
+                        result.removedItems += target.items.count
+                    }
+                } catch let error as PrivilegedShell.AdminError {
+                    if !error.cancelled { lastError = error.message }
+                } catch {
+                    lastError = error.localizedDescription
+                }
+            }
+
+            lastResult = result
             isCleaning = false
             selected.removeAll()
-            refresh()
+            scan(depth: currentDepth)
         }
     }
 
     func dismissResult() {
         lastResult = nil
+    }
+
+    func dismissError() {
+        lastError = nil
+    }
+
+    deinit {
+        scanTask?.cancel()
     }
 }

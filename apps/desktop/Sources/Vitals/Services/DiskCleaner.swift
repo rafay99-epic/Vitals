@@ -1,18 +1,55 @@
 import Foundation
 
+/// How far a cleanup reaches.
+enum CleanDepth: String, CaseIterable, Identifiable {
+    /// User-domain caches, logs, and Trash — no admin, today's behavior.
+    case quick
+    /// Adds system-level junk that needs administrator rights.
+    case deep
+
+    var id: String { rawValue }
+    var title: String { self == .quick ? "Quick" : "Deep" }
+}
+
 /// A category of reclaimable disk space, with the concrete items that would
 /// be removed. Every category is regenerable data (caches, logs, trash) —
-/// never documents, projects, or settings.
+/// never documents, projects, or settings. System categories are age-gated:
+/// only files older than a retention window are touched.
 struct CleanupCategory: Identifiable {
     enum Kind: String, CaseIterable, Identifiable {
+        // Quick (user domain, no admin)
         case xcode
         case devCaches
         case homebrew
         case appCaches
         case logs
         case trash
+        // Deep, user domain (no admin)
+        case recentItems
+        // Deep, system (admin, age-gated)
+        case systemCaches
+        case systemLogs
+        case crashReports
+        case systemTemp
+        case gpuCaches
 
         var id: String { rawValue }
+
+        /// System categories need root to delete; the rest run in-process.
+        var requiresAdmin: Bool {
+            switch self {
+            case .systemCaches, .systemLogs, .crashReports, .systemTemp, .gpuCaches: return true
+            default: return false
+            }
+        }
+
+        /// The shallowest depth at which this category is offered.
+        var minimumDepth: CleanDepth {
+            switch self {
+            case .xcode, .devCaches, .homebrew, .appCaches, .logs, .trash: return .quick
+            default: return .deep
+            }
+        }
 
         var title: String {
             switch self {
@@ -22,17 +59,29 @@ struct CleanupCategory: Identifiable {
             case .appCaches: return "App caches"
             case .logs: return "Logs"
             case .trash: return "Trash"
+            case .recentItems: return "Recent items"
+            case .systemCaches: return "System caches"
+            case .systemLogs: return "System logs"
+            case .crashReports: return "Crash reports"
+            case .systemTemp: return "System temp files"
+            case .gpuCaches: return "GPU shader caches"
             }
         }
 
         var detail: String {
             switch self {
             case .xcode: return "Build products Xcode recreates on the next build"
-            case .devCaches: return "npm, bun, yarn, pip, cargo, Gradle, CocoaPods, Go package caches"
+            case .devCaches: return "npm, bun, yarn, pip, cargo, Gradle, CocoaPods, uv, pnpm, Deno caches"
             case .homebrew: return "Downloaded bottles and old formula versions"
             case .appCaches: return "Per-app caches in ~/Library/Caches (Apple system caches are kept)"
-            case .logs: return "App logs in ~/Library/Logs (crash reports are kept)"
+            case .logs: return "App logs in ~/Library/Logs"
             case .trash: return "Files already in the Trash, removed permanently"
+            case .recentItems: return "Recently-opened file and server lists (the files stay)"
+            case .systemCaches: return "Old .cache/.tmp/.log files in /Library/Caches (7+ days)"
+            case .systemLogs: return "Old system logs in /private/var/log (7+ days)"
+            case .crashReports: return "Crash and diagnostic reports older than 7 days"
+            case .systemTemp: return "Stale files in /private/tmp and /var/tmp (3+ days)"
+            case .gpuCaches: return "Stale Metal/GPU shader caches the system rebuilds"
             }
         }
 
@@ -44,6 +93,12 @@ struct CleanupCategory: Identifiable {
             case .appCaches: return "internaldrive"
             case .logs: return "doc.text"
             case .trash: return "trash"
+            case .recentItems: return "clock.arrow.circlepath"
+            case .systemCaches: return "gearshape"
+            case .systemLogs: return "doc.badge.gearshape"
+            case .crashReports: return "exclamationmark.triangle"
+            case .systemTemp: return "clock.badge.xmark"
+            case .gpuCaches: return "cpu"
             }
         }
     }
@@ -55,10 +110,20 @@ struct CleanupCategory: Identifiable {
     var id: Kind { kind }
 }
 
-/// Scans and clears well-understood, regenerable data. Cleaning deletes
-/// directly (moving caches to the Trash would free nothing); the categories
-/// are chosen so deletion is always safe.
+/// Scans and clears well-understood, regenerable data. User-domain cleaning
+/// deletes directly (moving caches to the Trash would free nothing); system
+/// cleaning runs a vetted, age-gated script as root through `PrivilegedShell`.
 enum DiskCleaner {
+    // MARK: Retention windows (mirrors Mole's MOLE_*_AGE_DAYS)
+
+    static let systemCacheAgeDays = 7
+    static let logAgeDays = 7
+    static let crashReportAgeDays = 7
+    static let tempAgeDays = 3
+    static let gpuCacheAgeDays = 1
+
+    // MARK: Quick-mode protection rules (kept strict)
+
     /// ~/Library/Caches entries that are never offered for cleaning: Apple's
     /// system caches and anything covered by its own category.
     static let protectedCacheNames: [String] = [
@@ -75,85 +140,196 @@ enum DiskCleaner {
         return !protectedCachePrefixes.contains { name.hasPrefix($0) }
     }
 
-    /// Logs entries that are kept: diagnostic/crash reports are small and
-    /// can matter for debugging hardware problems — Vitals' own audience.
+    /// Logs entries kept out of the user-domain Logs category: diagnostic and
+    /// crash reports. (Deep mode offers them separately, age-gated, as their
+    /// own admin category.)
     static func shouldOfferLog(named name: String) -> Bool {
         name != "DiagnosticReports" && name != "CrashReporter"
     }
 
-    static func scan() -> [CleanupCategory] {
+    // MARK: Scanning
+
+    static func scan(depth: CleanDepth) -> [CleanupCategory] {
+        var categories = quickCategories()
+        if depth == .deep {
+            categories.append(contentsOf: deepUserCategories())
+            categories.append(contentsOf: deepSystemCategories())
+        }
+        return categories
+    }
+
+    private static func quickCategories() -> [CleanupCategory] {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
         let library = home.appendingPathComponent("Library", isDirectory: true)
 
-        func existing(_ urls: [URL]) -> [URL] {
-            urls.filter { fm.fileExists(atPath: $0.path) }
-        }
-
+        func existing(_ urls: [URL]) -> [URL] { urls.filter { fm.fileExists(atPath: $0.path) } }
         func children(of url: URL, where include: (String) -> Bool = { _ in true }) -> [URL] {
             ((try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [])) ?? [])
                 .filter { include($0.lastPathComponent) }
         }
 
-        var categories: [CleanupCategory] = []
-
-        categories.append(.init(kind: .xcode, items: existing([
-            library.appendingPathComponent("Developer/Xcode/DerivedData"),
-        ]), sizeBytes: 0))
-
-        categories.append(.init(kind: .devCaches, items: existing([
-            home.appendingPathComponent(".npm/_cacache"),
-            home.appendingPathComponent(".bun/install/cache"),
-            library.appendingPathComponent("Caches/Yarn"),
-            library.appendingPathComponent("Caches/pip"),
-            library.appendingPathComponent("Caches/CocoaPods"),
-            library.appendingPathComponent("Caches/go-build"),
-            home.appendingPathComponent(".cargo/registry/cache"),
-            home.appendingPathComponent(".gradle/caches"),
-        ]), sizeBytes: 0))
-
-        categories.append(.init(kind: .homebrew, items: existing([
-            library.appendingPathComponent("Caches/Homebrew"),
-        ]), sizeBytes: 0))
-
-        categories.append(.init(
-            kind: .appCaches,
-            items: children(of: library.appendingPathComponent("Caches"), where: shouldOfferCache),
-            sizeBytes: 0
-        ))
-
-        categories.append(.init(
-            kind: .logs,
-            items: children(of: library.appendingPathComponent("Logs"), where: shouldOfferLog),
-            sizeBytes: 0
-        ))
-
-        categories.append(.init(
-            kind: .trash,
-            items: children(of: home.appendingPathComponent(".Trash")),
-            sizeBytes: 0
-        ))
-
-        return categories
+        return [
+            .init(kind: .xcode, items: existing([
+                library.appendingPathComponent("Developer/Xcode/DerivedData"),
+            ]), sizeBytes: 0),
+            .init(kind: .devCaches, items: existing([
+                home.appendingPathComponent(".npm/_cacache"),
+                home.appendingPathComponent(".bun/install/cache"),
+                library.appendingPathComponent("Caches/Yarn"),
+                library.appendingPathComponent("Caches/pip"),
+                library.appendingPathComponent("Caches/CocoaPods"),
+                library.appendingPathComponent("Caches/go-build"),
+                home.appendingPathComponent(".cargo/registry/cache"),
+                home.appendingPathComponent(".gradle/caches"),
+                home.appendingPathComponent(".cache/uv"),
+                home.appendingPathComponent(".cache/node/corepack"),
+                home.appendingPathComponent(".pnpm-store"),
+                home.appendingPathComponent(".deno"),
+            ]), sizeBytes: 0),
+            .init(kind: .homebrew, items: existing([
+                library.appendingPathComponent("Caches/Homebrew"),
+            ]), sizeBytes: 0),
+            .init(kind: .appCaches,
+                  items: children(of: library.appendingPathComponent("Caches"), where: shouldOfferCache),
+                  sizeBytes: 0),
+            .init(kind: .logs,
+                  items: children(of: library.appendingPathComponent("Logs"), where: shouldOfferLog),
+                  sizeBytes: 0),
+            .init(kind: .trash,
+                  items: children(of: home.appendingPathComponent(".Trash")),
+                  sizeBytes: 0),
+        ]
     }
 
-    static func size(of category: CleanupCategory) -> UInt64 {
-        category.items.reduce(0) { $0 + AppInventory.directorySize($1) }
+    private static func deepUserCategories() -> [CleanupCategory] {
+        let fm = FileManager.default
+        let shared = fm.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/com.apple.sharedfilelist")
+        let recentLists = ["RecentApplications", "RecentDocuments", "RecentServers", "RecentHosts"]
+            .flatMap { ["com.apple.LSSharedFileList.\($0).sfl2", "com.apple.LSSharedFileList.\($0).sfl"] }
+            .map { shared.appendingPathComponent($0) }
+            .filter { fm.fileExists(atPath: $0.path) }
+        return [.init(kind: .recentItems, items: recentLists, sizeBytes: 0)]
     }
+
+    private static func deepSystemCategories() -> [CleanupCategory] {
+        // Items filled in lazily by `measured(_:)` — the age-eligible walk is
+        // the expensive part and runs during the streamed sizing phase.
+        [CleanupCategory.Kind.systemCaches, .systemLogs, .crashReports, .systemTemp, .gpuCaches]
+            .map { CleanupCategory(kind: $0, items: [], sizeBytes: 0) }
+    }
+
+    // MARK: Measuring
+
+    /// Returns the category with `items` and `sizeBytes` filled. User
+    /// categories sum their listed items; system categories walk their fixed
+    /// roots for the age-eligible files that the clean script would remove.
+    static func measured(_ category: CleanupCategory) -> CleanupCategory {
+        var category = category
+        if category.kind.requiresAdmin {
+            let eligible = systemEligibleFiles(for: category.kind)
+            category.items = eligible.map(\.url)
+            category.sizeBytes = eligible.reduce(0) { $0 + $1.size }
+        } else {
+            category.sizeBytes = category.items.reduce(0) { $0 + AppInventory.directorySize($1) }
+        }
+        return category
+    }
+
+    private struct EligibleFile { let url: URL; let size: UInt64 }
+
+    private static func systemEligibleFiles(for kind: CleanupCategory.Kind) -> [EligibleFile] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        switch kind {
+        case .systemCaches:
+            return eligibleFiles([URL(fileURLWithPath: "/Library/Caches")],
+                                 extensions: ["cache", "tmp", "log"], olderThan: systemCacheAgeDays, recursive: true)
+        case .systemLogs:
+            return eligibleFiles([URL(fileURLWithPath: "/private/var/log")],
+                                 extensions: ["log", "gz", "asl"], olderThan: logAgeDays, recursive: true)
+        case .crashReports:
+            return eligibleFiles([
+                URL(fileURLWithPath: "/Library/Logs/DiagnosticReports"),
+                home.appendingPathComponent("Library/Logs/DiagnosticReports"),
+            ], extensions: nil, olderThan: crashReportAgeDays, recursive: true)
+        case .systemTemp:
+            return eligibleFiles([URL(fileURLWithPath: "/private/tmp"), URL(fileURLWithPath: "/private/var/tmp")],
+                                 extensions: nil, olderThan: tempAgeDays, recursive: false)
+        case .gpuCaches:
+            return eligibleFiles(gpuCacheDirs(), extensions: nil, olderThan: gpuCacheAgeDays, recursive: true)
+        default:
+            return []
+        }
+    }
+
+    private static func eligibleFiles(_ roots: [URL], extensions: Set<String>?, olderThan days: Int, recursive: Bool) -> [EligibleFile] {
+        let fm = FileManager.default
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .totalFileAllocatedSizeKey, .isRegularFileKey]
+        var result: [EligibleFile] = []
+        for root in roots {
+            guard fm.fileExists(atPath: root.path) else { continue }
+            let urls: [URL]
+            if recursive {
+                guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: Array(keys),
+                                                     options: [], errorHandler: { _, _ in true }) else { continue }
+                urls = enumerator.compactMap { $0 as? URL }
+            } else {
+                urls = (try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: Array(keys), options: [])) ?? []
+            }
+            for url in urls {
+                if Task.isCancelled { return result }
+                guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
+                if let extensions, !extensions.contains(url.pathExtension.lowercased()) { continue }
+                guard let modified = values.contentModificationDate, modified < cutoff else { continue }
+                result.append(.init(url: url, size: UInt64(values.totalFileAllocatedSize ?? 0)))
+            }
+        }
+        return result
+    }
+
+    /// Known per-user Metal/GPU shader cache directories under /var/folders.
+    /// Fixed shape `…/C/<id>/com.apple.{metal,metalfe,gpuarchiver}` — never a
+    /// broader match.
+    private static func gpuCacheDirs() -> [URL] {
+        let fm = FileManager.default
+        let names = ["com.apple.metal", "com.apple.metalfe", "com.apple.gpuarchiver"]
+        var dirs: [URL] = []
+        let base = URL(fileURLWithPath: "/private/var/folders")
+        guard let level1 = try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) else { return [] }
+        for a in level1 {
+            guard let level2 = try? fm.contentsOfDirectory(at: a, includingPropertiesForKeys: nil) else { continue }
+            for b in level2 {
+                let cDir = b.appendingPathComponent("C")
+                guard let level3 = try? fm.contentsOfDirectory(at: cDir, includingPropertiesForKeys: nil) else { continue }
+                for d in level3 {
+                    for name in names {
+                        let dir = d.appendingPathComponent(name)
+                        if fm.fileExists(atPath: dir.path) { dirs.append(dir) }
+                    }
+                }
+            }
+        }
+        return dirs
+    }
+
+    // MARK: Cleaning
 
     struct CleanResult {
         var freedBytes: UInt64 = 0
         var removedItems = 0
         var failures: [(url: URL, reason: String)] = []
+        var usedAdmin = false
     }
 
-    /// Removes the contents of the given categories. Items are deleted, not
-    /// trashed — these are caches and logs whose entire point is that the
-    /// system can regenerate them.
+    /// Removes the contents of user-domain categories in-process. Items are
+    /// deleted, not trashed — these are caches and logs the system regenerates.
+    /// System categories are NOT handled here; they go through `systemCleanScript`.
     static func clean(_ categories: [CleanupCategory]) -> CleanResult {
         let fm = FileManager.default
         var result = CleanResult()
-        for category in categories {
+        for category in categories where !category.kind.requiresAdmin {
             for url in category.items {
                 let size = AppInventory.directorySize(url)
                 do {
@@ -166,5 +342,48 @@ enum DiskCleaner {
             }
         }
         return result
+    }
+
+    /// A root shell script that deletes only age-gated files under a fixed set
+    /// of allowlisted system roots. Built entirely from constants — never from
+    /// UI-supplied paths — so the privileged side is auditable and bounded.
+    /// Never references /System, never a bare path, always `-mtime` gated.
+    static func systemCleanScript(for kinds: Set<CleanupCategory.Kind>) -> String {
+        var lines = ["#!/bin/sh", "# Vitals deep clean — age-gated, fixed roots only."]
+
+        func findDelete(_ root: String, extensions: [String], age: Int, recursive: Bool) {
+            let depth = recursive ? "" : "-maxdepth 1 "
+            if extensions.isEmpty {
+                lines.append("find '\(root)' \(depth)-type f -mtime +\(age) -delete 2>/dev/null || true")
+            } else {
+                let nameExpr = extensions.map { "-name '*.\($0)'" }.joined(separator: " -o ")
+                lines.append("find '\(root)' \(depth)-type f \\( \(nameExpr) \\) -mtime +\(age) -delete 2>/dev/null || true")
+            }
+        }
+
+        let userDiagnostics = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/DiagnosticReports").path
+
+        for kind in kinds.sorted(by: { $0.rawValue < $1.rawValue }) where kind.requiresAdmin {
+            switch kind {
+            case .systemCaches:
+                findDelete("/Library/Caches", extensions: ["cache", "tmp", "log"], age: systemCacheAgeDays, recursive: true)
+            case .systemLogs:
+                findDelete("/private/var/log", extensions: ["log", "gz", "asl"], age: logAgeDays, recursive: true)
+            case .crashReports:
+                findDelete("/Library/Logs/DiagnosticReports", extensions: [], age: crashReportAgeDays, recursive: true)
+                findDelete(userDiagnostics, extensions: [], age: crashReportAgeDays, recursive: true)
+            case .systemTemp:
+                findDelete("/private/tmp", extensions: [], age: tempAgeDays, recursive: false)
+                findDelete("/private/var/tmp", extensions: [], age: tempAgeDays, recursive: false)
+            case .gpuCaches:
+                for dir in gpuCacheDirs() {
+                    findDelete(dir.path, extensions: [], age: gpuCacheAgeDays, recursive: true)
+                }
+            default:
+                break
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 }

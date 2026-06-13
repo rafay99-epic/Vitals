@@ -120,11 +120,51 @@ struct AppsView: View {
     @ViewBuilder
     private var listCard: some View {
         if model.apps.isEmpty && model.isScanning {
-            ProgressView("Scanning applications…")
-                .frame(maxWidth: .infinity, minHeight: 240)
+            LoadingStateView(
+                title: "Scanning applications",
+                message: "Reading /Applications and your user apps, then measuring sizes."
+            )
+        } else if let error = model.loadError {
+            EmptyStateView(
+                symbol: "exclamationmark.triangle.fill",
+                tint: .orange,
+                title: "Couldn't read your apps",
+                message: error
+            ) {
+                Button { model.refresh() } label: {
+                    Label("Try Again", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        } else if model.apps.isEmpty {
+            EmptyStateView(
+                symbol: "square.grid.2x2",
+                tint: .purple,
+                title: "Nothing to manage",
+                message: "Vitals didn't find any user-removable apps. System software and Apple apps are never listed here.",
+                hints: [
+                    .init(symbol: "folder", label: "/Applications"),
+                    .init(symbol: "person.crop.square", label: "~/Applications"),
+                ]
+            ) {
+                Button { model.refresh() } label: {
+                    Label("Rescan", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.large)
+            }
         } else if model.filteredApps.isEmpty {
-            ContentUnavailableView.search(text: model.searchText)
-                .frame(maxWidth: .infinity, minHeight: 240)
+            EmptyStateView(
+                symbol: "magnifyingglass",
+                tint: .blue,
+                title: "No matches",
+                message: "No apps match “\(model.searchText)”. Try a different name or bundle id."
+            ) {
+                Button { model.searchText = "" } label: {
+                    Label("Clear Search", systemImage: "xmark.circle")
+                }
+                .controlSize(.large)
+            }
         } else {
             LazyVStack(spacing: 0) {
                 ForEach(Array(model.filteredApps.enumerated()), id: \.element.id) { index, app in
