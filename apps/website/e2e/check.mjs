@@ -114,6 +114,24 @@ try {
     )
   }
 
+  // --- 404 page ---
+  // The page itself lives at /404.html; Vercel serves it (with a 404 status)
+  // for any unmatched path. Preview can't reproduce Vercel's body-for-404, so
+  // we check the page content at /404.html and the 404 *status* separately.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`${BASE}/404.html`, { waitUntil: 'networkidle' })
+  console.log('/404.html:')
+  check('renders the not-found message', await page.evaluate(() => document.body.textContent.includes('This page isn’t here')))
+  check('offers a way back to Vitals', await page.evaluate(() => [...document.querySelectorAll('a')].some((a) => a.textContent.includes('Back to Vitals'))))
+  check('names the company', await page.evaluate(() => document.body.textContent.includes('Syntax Lab Technology')))
+  const notFoundScroll = await page.evaluate(() => document.documentElement.scrollWidth)
+  check('no horizontal overflow', notFoundScroll === 390, `scrollWidth ${notFoundScroll}`)
+
+  // A real request (not a navigation — page.goto throws on a bodyless 404).
+  const unmatched = await page.request.get(`${BASE}/no-such-page-xyz`)
+  console.log('/no-such-page-xyz:')
+  check('unmatched path returns a 404 status', unmatched.status() === 404, `status ${unmatched.status()}`)
+
   await browser.close()
 } catch (error) {
   failures++
