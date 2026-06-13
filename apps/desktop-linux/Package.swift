@@ -44,11 +44,19 @@ targets.append(.systemLibrary(
     pkgConfig: "cairo",
     providers: [.apt(["libcairo2-dev"])]
 ))
+// GIO/GLib for the StatusNotifierItem tray over D-Bus. Ships with GTK.
+targets.append(.systemLibrary(
+    name: "CGio",
+    path: "Sources/CGio",
+    pkgConfig: "gio-2.0",
+    providers: [.apt(["libglib2.0-dev"])]
+))
 targets.append(.executableTarget(
     name: "Vitals",
     dependencies: [
         "VitalsCore",
         "CCairo",
+        "CGio",
         .product(name: "Adwaita", package: "Adwaita")
     ],
     swiftSettings: [.swiftLanguageMode(.v5)]

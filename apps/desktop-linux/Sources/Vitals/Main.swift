@@ -13,7 +13,7 @@ struct VitalsApp: App {
 
     var scene: Scene {
         Window(id: "main") { _ in
-            DashboardView()
+            DashboardView(app: app)
         }
         .title(BuildInfo.displayName)
         .defaultSize(width: 820, height: 640)

@@ -12,8 +12,10 @@ import VitalsCore
 /// if profiling on real hardware ever shows otherwise.)
 struct DashboardView: View {
 
-    @State private var ui = DashboardState()
-    @State private var started = false
+    @State var ui = DashboardState()
+    @State var started = false
+    /// The running app, used to reopen the window from the tray.
+    var app: GTUIApp!
 
     var view: Body {
         ScrollView {
@@ -47,9 +49,14 @@ struct DashboardView: View {
         .onAppear {
             guard !started else { return }
             started = true
-            ui = VitalsModel.shared.next()
+            TrayIcon.shared.start { app?.addWindow("main") }
+            let first = VitalsModel.shared.next()
+            ui = first
+            TrayIcon.shared.update(first)
             Idle(delay: .seconds(2)) {
-                ui = VitalsModel.shared.next()
+                let latest = VitalsModel.shared.next()
+                ui = latest
+                TrayIcon.shared.update(latest)
                 return true
             }
         }

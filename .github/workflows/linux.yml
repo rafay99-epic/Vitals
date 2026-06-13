@@ -32,8 +32,8 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            pkg-config libgtk-4-dev libadwaita-1-dev libcairo2-dev \
-            curl file patchelf desktop-file-utils zsync \
+            pkg-config libgtk-4-dev libadwaita-1-dev libcairo2-dev libglib2.0-dev \
+            curl file patchelf desktop-file-utils zsync dpkg-dev \
             librsvg2-bin librsvg2-common libglib2.0-bin libgdk-pixbuf2.0-bin
 
       - name: Swift version
