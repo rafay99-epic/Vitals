@@ -146,7 +146,7 @@ Settings → Desktop Widgets.
 - `lib/links.ts` is the single source for repo/download/company URLs.
 - **SPA on TanStack Router** (file-based). One HTML entry (`index.html` → `main.tsx` →
   `RouterProvider`). Routes are files in `src/routes/` (`__root.tsx`, `index.tsx`,
-  `terms.tsx`, `privacy.tsx`); the `@tanstack/router-plugin` generates
+  `terms.tsx`, `privacy.tsx`, `releases.tsx`); the `@tanstack/router-plugin` generates
   `src/routeTree.gen.ts` — **committed** (the `tsc -b` in `build` runs before `vite build`,
   so it must exist). The root route wires the 404 (`notFoundComponent` → `NotFound`) and
   error page (`errorComponent` → `ErrorScreen`); a top-level `ErrorBoundary` is the outer
@@ -178,12 +178,16 @@ Settings → Desktop Widgets.
   cloud dev deployment in `.env.local`. Either way the app code is identical — only the URL
   differs.
 - Functions: object-form syntax, `args`+`returns` validators, public vs `internal*`,
-  indexed reads. Today: `releases.ts` (`get` query, `upsert` internal mutation, `refresh`
-  internal action) + a singleton `releases` table. The reusable GitHub fetch/parse lives in
-  **`convex/lib/github.ts`** (Convex-free, so it's unit-testable) — external IO runs only in
-  the action that calls it, never a mutation; on failure the cached value is kept, never
-  blanked. `upsert` skips the write when the value is unchanged (no spurious reactive
-  re-renders). Put shared helpers in `convex/lib/`.
+  indexed reads. Today, `releases.ts`: `get` (latest, from the singleton `releases` table —
+  the hot path for the landing badge) + `list` (all releases, from the `releaseList` table,
+  newest-first via `by_published`) public queries; `upsert` + `syncList` internal mutations;
+  `refresh` internal action. **`refresh` makes ONE GitHub call** (`fetchReleases`) and
+  updates both the list (`syncList` reconciles by tag — insert/patch-if-changed/delete) and
+  the latest singleton (from index 0). The reusable GitHub fetch/parse lives in
+  **`convex/lib/github.ts`** (Convex-free, so the website's GitHub-fallback hooks import the
+  *same* parser via `@convex/lib/github` — one parser, not two). External IO runs only in
+  the action; on failure the cache is kept, never blanked; mutations skip the write when
+  nothing changed (no spurious reactive re-renders). Put shared helpers in `convex/lib/`.
 - **Refresh is event-driven, not polled — there is no cron** (the cached release only
   changes when a release is published, so polling would waste free-tier calls). CI
   (`.github/workflows/convex.yml`) typechecks `convex/` on every PR/push that touches it,

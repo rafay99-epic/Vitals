@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { LogoMark } from './icons'
 import { DOWNLOAD_URL, REPO_URL } from '../lib/links'
 import type { LatestRelease } from '../lib/useLatestRelease'
@@ -89,6 +90,11 @@ export default function DownloadSection({ release }: { release: LatestRelease | 
           )}
           <Dot />
           <span>{release ? `Latest ${release.version}` : 'Latest release'}</span>
+        </div>
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <Link to="/releases" style={{ fontSize: 13, color: 'rgba(235,235,245,0.55)', textDecoration: 'none' }}>
+            View all releases →
+          </Link>
         </div>
       </div>
     </section>

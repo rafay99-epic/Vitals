@@ -30,7 +30,7 @@ export default function Footer() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 22, fontSize: 12.5 }}>
             <a href="/#philosophy" style={footLink}>Philosophy</a>
             <a href="/#sensors" style={footLink}>Sensors</a>
-            <a href="/#download" style={footLink}>Download</a>
+            <Link to="/releases" style={footLink}>Releases</Link>
             <a href={REPO_URL} target="_blank" rel="noreferrer" style={footLink}>GitHub</a>
           </div>
         </div>

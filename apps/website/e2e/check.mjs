@@ -119,6 +119,17 @@ try {
   console.log('/terms/ (legacy):')
   check('trailing-slash URL still renders Terms', await page.evaluate(() => document.body.textContent.includes('Terms & Conditions')))
 
+  // --- Releases page (backend-fed list, with a direct-GitHub fallback) ---
+  await page.goto(`${BASE}/releases`, { waitUntil: 'networkidle' })
+  // The list arrives over the Convex socket or a GitHub fetch — wait for a row.
+  await page.waitForFunction(() => /v?\d+\.\d+/.test(document.body.textContent), { timeout: 15000 }).catch(() => {})
+  console.log('/releases:')
+  check('renders the Releases heading', await page.evaluate(() => document.body.textContent.includes('Releases')))
+  check(
+    'lists at least one version with a download',
+    await page.evaluate(() => /\d+\.\d+/.test(document.body.textContent) && [...document.querySelectorAll('a')].some((a) => a.textContent.includes('Download'))),
+  )
+
   // --- Client-side navigation (the point of the router) ---
   await page.goto(BASE, { waitUntil: 'networkidle' })
   await page.click('a[href="/privacy"]')

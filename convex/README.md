@@ -17,9 +17,15 @@ hit GitHub's API from every visitor's browser.
   - `refresh` (internal action) — fetches `github.com/rafay99-epic/Vitals`
     `releases/latest`, parses the version + `.dmg` size, upserts one row.
   - `upsert` (internal mutation) — writes the singleton row.
-  - `get` (public query) — what the landing page subscribes to; reactive.
-- `lib/github.ts` — reusable, Convex-free GitHub fetch/parse (shared helpers live in `lib/`).
-- `schema.ts` — a single `releases` row keyed `"latest"`.
+  - `get` (public query) — the latest, from the `releases` singleton; what the landing
+    badge subscribes to.
+  - `list` (public query) — every release, newest-first, from the `releaseList` table; what
+    the website's `/releases` page subscribes to.
+  - `refresh` makes **one** GitHub call and updates both the list (`syncList` reconciles by
+    tag) and the latest singleton.
+- `lib/github.ts` — reusable, Convex-free GitHub fetch/parse (`fetchReleases`, `bytesToMB`).
+  Shared helpers live in `lib/`; the website's fallback hooks import this same module.
+- `schema.ts` — the `releases` singleton (latest) + the `releaseList` table (all releases).
 
 On any GitHub failure the cached value is left untouched — never blanked. `upsert` also
 skips the write when nothing changed.
