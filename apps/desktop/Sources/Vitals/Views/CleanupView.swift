@@ -16,10 +16,12 @@ struct CleanupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     hero
-                    if model.hasRun {
-                        grid
-                    } else {
+                    if !model.hasRun {
                         idlePrompt
+                    } else if !model.isScanning && model.totalBytes == 0 {
+                        allClean
+                    } else {
+                        grid
                     }
                 }
                 .padding(20)
@@ -146,30 +148,37 @@ struct CleanupView: View {
     // MARK: Idle prompt
 
     private var idlePrompt: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 30, weight: .regular))
-                .foregroundStyle(.tertiary)
-            Text("See what's reclaimable")
-                .font(.system(size: 14, weight: .semibold))
-            Text("Scanning walks your caches and logs, so Vitals waits for you to ask. Quick stays in your home folder; Deep also clears age-gated system files (one admin prompt). Auto-scan is in Settings.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 400)
-            Button {
-                model.scan(depth: depth)
-            } label: {
+        EmptyStateView(
+            symbol: "sparkles",
+            tint: .orange,
+            title: "Free up space safely",
+            message: "Vitals only finds regenerable junk — caches, logs, the Trash. Quick stays in your home folder; Deep also clears age-gated system files with one admin prompt. Auto-scan is in Settings.",
+            hints: [
+                .init(symbol: "shippingbox", label: "Caches"),
+                .init(symbol: "doc.text", label: "Logs"),
+                .init(symbol: "lock", label: "System · Deep"),
+            ]
+        ) {
+            Button { model.scan(depth: depth) } label: {
                 Label("Scan", systemImage: "magnifyingglass")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .padding(.top, 2)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .padding(.horizontal, 16)
-        .cardBackground()
+    }
+
+    private var allClean: some View {
+        EmptyStateView(
+            symbol: "checkmark.seal.fill",
+            tint: .green,
+            title: "All clean",
+            message: "Nothing worth reclaiming right now — your caches, logs, and Trash are already tidy."
+        ) {
+            Button { model.scan(depth: depth) } label: {
+                Label("Rescan", systemImage: "arrow.clockwise")
+            }
+            .controlSize(.large)
+        }
     }
 
     // MARK: Category grid

@@ -257,30 +257,23 @@ struct StorageView: View {
     // MARK: Idle prompt
 
     private var idlePrompt: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "internaldrive")
-                .font(.system(size: 30, weight: .regular))
-                .foregroundStyle(.tertiary)
-            Text("See where your storage is used")
-                .font(.system(size: 14, weight: .semibold))
-            Text("Measuring your folders walks the disk, so Vitals waits for you to ask. You can stop a scan any time, or turn on automatic analysis in Settings.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
-            Button {
-                runAnalyze()
-            } label: {
+        EmptyStateView(
+            symbol: "internaldrive",
+            tint: .blue,
+            title: "Find what's using your space",
+            message: "Vitals measures your folders on demand — nothing crawls the disk in the background. Analyze to see the breakdown and drill into the biggest items. Stop any time; auto-analyze is in Settings.",
+            hints: [
+                .init(symbol: "square.grid.2x2", label: "By category"),
+                .init(symbol: "list.bullet", label: "Largest folders"),
+                .init(symbol: "eye.trianglebadge.exclamationmark", label: "Hidden space"),
+            ]
+        ) {
+            Button { runAnalyze() } label: {
                 Label("Analyze Storage", systemImage: "magnifyingglass")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .padding(.top, 2)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .padding(.horizontal, 16)
-        .cardBackground()
     }
 
     // MARK: Category grid
@@ -388,10 +381,18 @@ struct StorageView: View {
     @ViewBuilder
     private var analyzerTable: some View {
         if model.entries.isEmpty {
-            Text(model.isAnalyzing ? "Measuring…" : "Empty")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, minHeight: 120)
+            VStack(spacing: 8) {
+                if model.isAnalyzing {
+                    ProgressView().controlSize(.small)
+                    Text("Measuring…").font(.callout).foregroundStyle(.secondary)
+                } else {
+                    Image(systemName: "folder")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.tertiary)
+                    Text("This folder is empty").font(.callout).foregroundStyle(.tertiary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 120)
         } else {
             // entries is already the largest-first top-N from the model.
             let largest = model.largestEntryBytes
