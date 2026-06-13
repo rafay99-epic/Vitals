@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Charts
 
 /// The Storage tab: occupied space at a glance (a capacity bar over category
 /// cards) and an analyzer table that drills into the largest folders and files
@@ -171,12 +172,22 @@ struct StorageView: View {
             }
 
             if let volume = model.volume {
-                CapacityBar(
-                    total: volume.total,
-                    used: volume.used,
-                    segments: model.categories.map { ($0.kind.tint, $0.sizeBytes ?? 0) }
-                )
-                legend
+                HStack(alignment: .center, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        CapacityBar(
+                            total: volume.total,
+                            used: volume.used,
+                            segments: model.categories.map { ($0.kind.tint, $0.sizeBytes ?? 0) }
+                        )
+                        legend
+                    }
+                    // Charts pay 50–150 ms on first layout, so mount the donut
+                    // through Deferred — the tab opens against a placeholder.
+                    Deferred {
+                        CompositionDonut(volume: volume, categories: model.categories)
+                    }
+                    .frame(width: 128, height: 128)
+                }
             }
         }
         .padding(16)
@@ -296,6 +307,7 @@ struct StorageView: View {
                 }
             }
 
+            analyzerChart
             analyzerTable
         }
         .padding(16)
@@ -331,6 +343,19 @@ struct StorageView: View {
                 .buttonStyle(.plain)
                 .disabled(index == model.path.count - 1)
             }
+        }
+    }
+
+    /// A horizontal bar chart of the current folder's largest items — a quick
+    /// visual comparison above the full, drillable table.
+    @ViewBuilder
+    private var analyzerChart: some View {
+        let top = Array(model.entries.prefix(8))
+        if top.contains(where: { $0.sizeBytes > 0 }) {
+            Deferred {
+                TopItemsChart(entries: top)
+            }
+            .frame(height: CGFloat(top.count) * 26 + 12)
         }
     }
 
@@ -657,5 +682,108 @@ private struct RatioBar: View {
             }
         }
         .frame(height: 4)
+    }
+}
+
+// MARK: - Charts
+
+/// A donut of how the whole volume divides: each measured category, the rest
+/// of used space as "Other", and free space. Every wedge is a real proportion
+/// — the center shows the honest used percentage.
+private struct CompositionDonut: View {
+    let volume: StorageAnalyzer.VolumeUsage
+    let categories: [StorageCategory]
+
+    private struct Slice: Identifiable {
+        let label: String
+        let bytes: UInt64
+        let color: Color
+        var id: String { label }
+    }
+
+    private var slices: [Slice] {
+        var result: [Slice] = []
+        var known: UInt64 = 0
+        for category in categories {
+            if let size = category.sizeBytes, size > 0 {
+                result.append(.init(label: category.kind.title, bytes: size, color: category.kind.tint))
+                known += size
+            }
+        }
+        let other = volume.used > known ? volume.used - known : 0
+        if other > 0 {
+            result.append(.init(label: "Other", bytes: other, color: Color.secondary.opacity(0.5)))
+        }
+        if volume.free > 0 {
+            result.append(.init(label: "Free", bytes: volume.free, color: Color.secondary.opacity(0.18)))
+        }
+        return result
+    }
+
+    var body: some View {
+        Chart(slices) { slice in
+            SectorMark(
+                angle: .value("Size", Double(slice.bytes)),
+                innerRadius: .ratio(0.62),
+                angularInset: 1.5
+            )
+            .foregroundStyle(slice.color)
+            .cornerRadius(2)
+        }
+        .chartLegend(.hidden)
+        .overlay {
+            VStack(spacing: 0) {
+                Text("\(Int((volume.usedFraction * 100).rounded()))%")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text("used")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Horizontal bars for a folder's largest items, ordered largest-first.
+/// Folders take the accent color, files the secondary, so the two read apart.
+private struct TopItemsChart: View {
+    let entries: [StorageEntry]
+
+    var body: some View {
+        Chart(entries) { entry in
+            BarMark(
+                x: .value("Size", Double(entry.sizeBytes)),
+                y: .value("Item", entry.name)
+            )
+            .foregroundStyle(entry.isDirectory ? Color.accentColor : Color.secondary)
+            .cornerRadius(3)
+        }
+        // Keep the table's largest-first order (Charts would otherwise sort the
+        // category axis alphabetically); first domain entry sits at the top, so
+        // pass them largest-first to put the biggest bar on top.
+        .chartYScale(domain: entries.map(\.name))
+        .chartXAxis {
+            AxisMarks { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let bytes = value.as(Double.self) {
+                        Text(formatBytes(UInt64(max(0, bytes))))
+                    }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) { value in
+                AxisValueLabel {
+                    if let name = value.as(String.self) {
+                        Text(name)
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+        }
     }
 }
