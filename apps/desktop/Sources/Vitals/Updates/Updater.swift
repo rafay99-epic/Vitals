@@ -151,7 +151,11 @@ final class Updater: ObservableObject {
     }
 
     nonisolated static func download(_ release: Release) async throws -> URL {
-        var request = URLRequest(url: URL(string: release.assetURL)!)
+        // assetURL comes from the GitHub API payload — never force-unwrap it.
+        guard let assetURL = URL(string: release.assetURL) else {
+            throw UpdateError(message: "The release has an invalid download URL.")
+        }
+        var request = URLRequest(url: assetURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
         if let token = githubToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -217,7 +221,7 @@ final class Updater: ObservableObject {
             process.standardOutput = stdout
             process.standardError = Pipe()
             guard (try? process.run()) != nil else { continue }
-            process.waitUntilExit()
+            guard waitUntilExit(process, timeout: 10) else { continue }  // a wedged `gh` mustn't hang the update check
             guard process.terminationStatus == 0 else { continue }
             let token = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -236,12 +240,33 @@ final class Updater: ObservableObject {
         process.standardOutput = stdout
         process.standardError = stderr
         try process.run()
-        process.waitUntilExit()
+        guard waitUntilExit(process, timeout: 60) else {
+            throw UpdateError(message: "\(path) timed out and was stopped.")
+        }
         guard process.terminationStatus == 0 else {
             let message = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             throw UpdateError(message: message.isEmpty ? "\(path) exited with \(process.terminationStatus)" : message)
         }
         return String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    }
+
+    /// Waits for `process` up to `timeout` seconds. Returns true if it exited
+    /// on its own; on overrun it terminates (then SIGKILLs) the process and
+    /// returns false, so a hung `gh`/`hdiutil`/`ditto` can never block forever.
+    @discardableResult
+    nonisolated private static func waitUntilExit(_ process: Process, timeout: TimeInterval) -> Bool {
+        let done = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in done.signal() }
+        // Close the race where the process exits before the handler is attached.
+        if !process.isRunning { done.signal() }
+        if done.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            if done.wait(timeout: .now() + 2) == .timedOut, process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+            }
+            return false
+        }
+        return true
     }
 
     private final class RedirectSanitizer: NSObject, URLSessionTaskDelegate {

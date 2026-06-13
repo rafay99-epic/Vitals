@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Metal
 
 enum Hardware {
     /// True only on Apple Silicon hardware. Queries the machine, so it is
@@ -10,6 +11,34 @@ enum Hardware {
         let result = sysctlbyname("hw.optional.arm64", &value, &size, nil, 0)
         return result == 0 && value == 1
     }
+
+    /// True when running inside a virtual machine (QEMU/UTM, Parallels, VMware,
+    /// VirtualBuddy, …). The kernel sets `kern.hv_vmm_present` to 1 for any
+    /// guest under a hypervisor. Cached: the answer can't change during a run.
+    static let isVirtualMachine: Bool = {
+        var value: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        let result = sysctlbyname("kern.hv_vmm_present", &value, &size, nil, 0)
+        return result == 0 && value == 1
+    }()
+
+    /// True only when a real, hardware-accelerated GPU is present. In a VM the
+    /// system has either no Metal device or a paravirtual/software one, so
+    /// SwiftUI renders in software. Cached.
+    static let hasHardwareGPU: Bool = {
+        guard let device = MTLCreateSystemDefaultDevice() else { return false }
+        let name = device.name.lowercased()
+        let softwareMarkers = ["paravirtual", "virtio", "software", "llvmpipe", "swiftshader"]
+        return !softwareMarkers.contains { name.contains($0) }
+    }()
+
+    /// Whether Liquid Glass is safe to render. It must NOT render without a
+    /// hardware GPU: macOS would composite its live backdrop blurs in software,
+    /// and those offscreen captures balloon memory into the gigabytes (a VM hit
+    /// 17.5 GB). Belt and suspenders — the VM flag and the GPU check each catch
+    /// cases the other can miss (a paravirtual GPU that doesn't set the flag, a
+    /// headless/no-Metal host that isn't technically a VM).
+    static var supportsLiquidGlass: Bool { !isVirtualMachine && hasHardwareGPU }
 
     /// Shows an apology and exits. Reached only on Intel Macs (the universal
     /// binary's x86_64 slice runs just far enough to display this).

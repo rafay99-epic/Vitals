@@ -221,6 +221,16 @@ private struct GeneralPane: View {
                     caption: "Translucent window with glass cards. Requires macOS 26.",
                     isOn: $settings.liquidGlass
                 )
+                .disabled(!Hardware.supportsLiquidGlass)
+                .opacity(Hardware.supportsLiquidGlass ? 1 : 0.5)
+                if !Hardware.supportsLiquidGlass {
+                    Label(
+                        "Turned off automatically — this Mac has no hardware GPU (it's a virtual machine), so translucency would be software-rendered and use far too much memory.",
+                        systemImage: "cube.transparent"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     settingsRow("Frosting") {
                         Slider(value: $settings.glassIntensity, in: 0...1)
@@ -238,8 +248,8 @@ private struct GeneralPane: View {
                         .frame(width: 170)
                     }
                 }
-                .disabled(!settings.liquidGlass)
-                .opacity(settings.liquidGlass ? 1 : 0.5)
+                .disabled(!settings.glassEnabled)
+                .opacity(settings.glassEnabled ? 1 : 0.5)
             }
 
             SettingsCard(title: "Menu bar", symbol: "menubar.rectangle", tint: .blue) {

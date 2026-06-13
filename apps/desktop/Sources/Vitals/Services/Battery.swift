@@ -30,7 +30,9 @@ enum Battery {
         func bool(_ key: String) -> Bool { props[key] as? Bool ?? false }
 
         // CurrentCapacity is a percentage on Apple Silicon, raw mAh on Intel.
-        var percent = Double(int("CurrentCapacity") ?? 0)
+        // If it's missing entirely, report no battery rather than a fabricated
+        // 0% — an honest "unknown" beats a wrong reading.
+        guard var percent = int("CurrentCapacity").map(Double.init) else { return nil }
         if percent > 100, let raw = int("AppleRawCurrentCapacity"), let max = int("AppleRawMaxCapacity"), max > 0 {
             percent = Double(raw) / Double(max) * 100
         }

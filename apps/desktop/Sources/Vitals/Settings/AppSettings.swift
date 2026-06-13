@@ -57,6 +57,12 @@ final class AppSettings: ObservableObject {
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     @Published var liquidGlass: Bool { didSet { defaults.set(liquidGlass, forKey: "liquidGlass") } }
+    /// Whether Liquid Glass should actually render. Forced off without a
+    /// hardware GPU (VMs, paravirtual/headless hosts): software-rendered
+    /// backdrop blurs grow into the gigabytes (see `Hardware.supportsLiquidGlass`).
+    /// The stored `liquidGlass` preference is left untouched, so it returns
+    /// automatically when the app runs on real hardware.
+    var glassEnabled: Bool { liquidGlass && Hardware.supportsLiquidGlass }
     /// 0 = clearest window backdrop, 1 = most frosted.
     @Published var glassIntensity: Double { didSet { defaults.set(glassIntensity, forKey: "glassIntensity") } }
     /// Whether opening the Storage tab kicks off the disk-walking analysis on

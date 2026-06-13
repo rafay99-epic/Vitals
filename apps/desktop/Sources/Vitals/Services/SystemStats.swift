@@ -23,7 +23,12 @@ final class CPUUsageSampler {
             vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(infoCount) * vm_size_t(MemoryLayout<integer_t>.size))
         }
 
-        let ticks = (0..<Int(coreCount)).map { core -> [UInt32] in
+        // Trust the allocated element count (`infoCount`), not `coreCount`:
+        // a buggy hypervisor can report a core count larger than the array it
+        // actually returned, and indexing past it would read out of bounds.
+        let safeCores = min(Int(coreCount), Int(infoCount) / Int(CPU_STATE_MAX))
+        guard safeCores > 0 else { return nil }
+        let ticks = (0..<safeCores).map { core -> [UInt32] in
             let base = core * Int(CPU_STATE_MAX)
             return (0..<Int(CPU_STATE_MAX)).map { UInt32(bitPattern: info[base + $0]) }
         }
