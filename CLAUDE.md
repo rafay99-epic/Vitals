@@ -179,9 +179,15 @@ Settings → Desktop Widgets.
   differs.
 - Functions: object-form syntax, `args`+`returns` validators, public vs `internal*`,
   indexed reads. Today: `releases.ts` (`get` query, `upsert` internal mutation, `refresh`
-  internal action that fetches GitHub) + `crons.ts` (6-hourly refresh) + a singleton
-  `releases` table. External IO (the GitHub fetch) lives in the **action**, never a
-  mutation; on failure the cached value is kept, never blanked.
+  internal action) + `crons.ts` (hourly refresh) + a singleton `releases` table. The
+  reusable GitHub fetch/parse lives in **`convex/lib/github.ts`** (Convex-free, so it's
+  unit-testable) — external IO runs only in the action that calls it, never a mutation; on
+  failure the cached value is kept, never blanked. Put shared helpers in `convex/lib/`.
+- CI: `.github/workflows/convex.yml` typechecks `convex/` on every PR/push that touches it,
+  **deploys to production on push to main** (path-filtered, so no-op when convex didn't
+  change), and **refreshes the cache on `release: published`** so the website's badge
+  updates within seconds of a new app release (the hourly cron is just a backstop). Needs a
+  repo secret **`CONVEX_DEPLOY_KEY`** (production deploy key from the Convex dashboard).
 - The website imports the typed API through the **`@convex` alias** (`apps/website`
   `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
   '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the

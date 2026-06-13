@@ -1,6 +1,7 @@
 import { v } from 'convex/values'
 import { query, internalAction, internalMutation } from './_generated/server'
 import { internal } from './_generated/api'
+import { fetchLatestRelease } from './lib/github'
 
 /// Shape returned to the client. Mirrors the website's `LatestRelease`.
 const releaseValidator = v.object({
@@ -43,31 +44,18 @@ export const upsert = internalMutation({
   },
 })
 
-interface GitHubRelease {
-  tag_name?: string
-  assets?: { name?: string; size?: number }[]
-}
-
 /// Fetches the latest GitHub release and caches it. Internal action (does IO):
-/// run on a schedule by the cron, and once on demand to seed the table. On any
-/// failure it leaves the last good value untouched — honesty over a blank badge.
+/// run on a schedule by the cron, and once on demand to seed the table. The
+/// fetch/parse lives in the reusable `lib/github` helper; on any failure it
+/// returns null and we leave the last good value untouched — honesty over a
+/// blank badge.
 export const refresh = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    try {
-      const res = await fetch('https://api.github.com/repos/rafay99-epic/Vitals/releases/latest', {
-        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'vitals-website' },
-        signal: AbortSignal.timeout(10_000),
-      })
-      if (!res.ok) return null
-      const json = (await res.json()) as GitHubRelease
-      if (!json.tag_name) return null
-      const dmg = json.assets?.find((a) => a.name?.endsWith('.dmg'))
-      const sizeMB = dmg?.size ? (dmg.size / 1_048_576).toFixed(1) + ' MB' : null
-      await ctx.runMutation(internal.releases.upsert, { version: json.tag_name, sizeMB })
-    } catch {
-      // Network/parse failure: keep the cached value rather than wipe it.
+    const release = await fetchLatestRelease()
+    if (release !== null) {
+      await ctx.runMutation(internal.releases.upsert, release)
     }
     return null
   },

@@ -9,6 +9,7 @@
  */
 
 import type * as crons from "../crons.js";
+import type * as lib_github from "../lib/github.js";
 import type * as releases from "../releases.js";
 
 import type {
@@ -19,6 +20,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
+  "lib/github": typeof lib_github;
   releases: typeof releases;
 }>;
 
