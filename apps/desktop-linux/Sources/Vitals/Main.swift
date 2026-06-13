@@ -9,7 +9,7 @@ import VitalsCore
 struct VitalsApp: App {
 
     let id = BuildInfo.appID
-    var app: AdwaitaApp!
+    var app: GTUIApp!
 
     var scene: Scene {
         Window(id: "main") { _ in

@@ -14,9 +14,20 @@ struct ContentView: View {
     /// Vitals green (#34D85F), matching the macOS app and the website tokens.
     private static let accent = SparklineRenderer.Color(0.204, 0.847, 0.373)
 
-    private static let placeholderSeries: [Double] = (0..<300).map { i in
-        50 + 18 * sin(Double(i) / 13) + 7 * sin(Double(i) / 3)
-    }
+    // Built imperatively with typed sub-expressions — the one-line literal form
+    // trips Swift's expression type-checker (it times out on the mixed Int/Double
+    // arithmetic). Purely a placeholder waveform, replaced by real history later.
+    private static let placeholderSeries: [Double] = {
+        var series: [Double] = []
+        series.reserveCapacity(300)
+        for i in 0..<300 {
+            let x = Double(i)
+            let slow: Double = sin(x / 13)
+            let fast: Double = sin(x / 3)
+            series.append(50 + 18 * slow + 7 * fast)
+        }
+        return series
+    }()
 
     private var sparkline: Data {
         SparklineRenderer.render(
