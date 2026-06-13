@@ -84,6 +84,37 @@ final class CleanupModel: ObservableObject {
         Task {
             var result = await Task.detached(priority: .userInitiated) { DiskCleaner.clean(userTargets) }.value
 
+            // User-domain items the in-process pass couldn't delete (root-owned
+            // cache files, permission-locked Trash) fall back to one admin pass —
+            // the same recovery the uninstaller uses for blocked app bundles.
+            if !result.failures.isEmpty,
+               let script = DiskCleaner.userCleanFallbackScript(for: result.failures.map(\.url)) {
+                do {
+                    try await PrivilegedShell.runAsAdmin(
+                        script,
+                        prompt: "Vitals needs administrator access to remove protected items."
+                    )
+                    result.usedAdmin = true
+                    // Honesty over decoration: credit only what's actually gone
+                    // after the root pass; anything still present stays a failure.
+                    let fm = FileManager.default
+                    var stillFailed: [DiskCleaner.CleanResult.Failure] = []
+                    for failure in result.failures {
+                        if fm.fileExists(atPath: failure.url.path) {
+                            stillFailed.append(failure)
+                        } else {
+                            result.freedBytes += failure.size
+                            result.removedItems += 1
+                        }
+                    }
+                    result.failures = stillFailed
+                } catch let error as PrivilegedShell.AdminError {
+                    if !error.cancelled { lastError = error.message }
+                } catch {
+                    lastError = error.localizedDescription
+                }
+            }
+
             if !systemTargets.isEmpty {
                 let script = DiskCleaner.systemCleanScript(for: Set(systemTargets.map(\.kind)))
                 do {
