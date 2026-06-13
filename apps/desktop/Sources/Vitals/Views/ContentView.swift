@@ -188,7 +188,7 @@ struct DashboardView: View {
     @ViewBuilder
     private var glassBatched: some View {
         #if compiler(>=6.2)
-        if #available(macOS 26.0, *), settings.liquidGlass {
+        if #available(macOS 26.0, *), settings.glassEnabled {
             GlassEffectContainer {
                 cards
             }

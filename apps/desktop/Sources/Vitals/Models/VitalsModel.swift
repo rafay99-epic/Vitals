@@ -40,6 +40,10 @@ final class VitalsModel: ObservableObject {
     @Published private(set) var battery: BatterySnapshot?
     /// False until the first sample lands — drives the dashboard loading state.
     @Published private(set) var hasLoaded = false
+    /// True when a sample overran the watchdog (a sensor syscall wedged). The
+    /// last readings stay on screen, but this lets the UI flag that they're not
+    /// updating rather than silently presenting stale numbers as live.
+    @Published private(set) var sensorsStalled = false
 
     let memoryTotal = ProcessInfo.processInfo.physicalMemory
 
@@ -67,6 +71,10 @@ final class VitalsModel: ObservableObject {
     private var isSampling = false
     private var cancellables: Set<AnyCancellable> = []
     private static let maxChartPoints = 300
+    /// A single sample must finish within this long or the watchdog frees the
+    /// pipeline. Generous — a real sample is milliseconds; this only fires when
+    /// a syscall has genuinely wedged.
+    private static let sampleTimeout: TimeInterval = 5
 
     // Overheat alerting state.
     private var hotSince: Date?
@@ -94,17 +102,21 @@ final class VitalsModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Never below 0.5 s — the Picker only offers 1/2/5, but a corrupted
+    /// UserDefaults value of 0 would otherwise divide-by-zero here and below.
+    private var safeRefreshInterval: Double { max(0.5, settings.refreshInterval) }
+
     private var maxHistory: Int {
-        max(2, Int(Double(settings.historyMinutes) * 60.0 / settings.refreshInterval))
+        max(2, Int(Double(settings.historyMinutes) * 60.0 / safeRefreshInterval))
     }
 
     func start() {
         guard timer == nil else { return }
         tick()
-        let timer = Timer(timeInterval: settings.refreshInterval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: safeRefreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
-        timer.tolerance = settings.refreshInterval / 4
+        timer.tolerance = safeRefreshInterval / 4
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -125,13 +137,32 @@ final class VitalsModel: ObservableObject {
     /// Kicks off one sample on the sampler's executor and publishes the
     /// result back here. `isSampling` drops a tick rather than letting a
     /// slow sample (heavily loaded machine) queue up behind itself.
+    ///
+    /// A watchdog backs this up: a sensor syscall can wedge (a stuck IOKit
+    /// driver, a degraded VM). Without it, `isSampling` would stay true forever
+    /// and the app would freeze on stale numbers with no recovery — the worst
+    /// outcome for a monitor. If the sample overruns `sampleTimeout`, the
+    /// pipeline is freed so the next tick retries, and `sensorsStalled` lets
+    /// the UI stop pretending the frozen readings are live.
     private func tick() {
         guard !isSampling else { return }
         isSampling = true
-        Task {
-            let snapshot = await sampler.sample()
-            apply(snapshot)
-            isSampling = false
+
+        let work = Task { [weak self] in
+            guard let self else { return }
+            let snapshot = await self.sampler.sample()
+            guard !Task.isCancelled else { return }
+            self.apply(snapshot)
+            self.sensorsStalled = false
+            self.isSampling = false
+        }
+
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.sampleTimeout * 1_000_000_000))
+            guard let self, self.isSampling else { return }  // already finished → nothing to do
+            work.cancel()
+            self.sensorsStalled = true
+            self.isSampling = false
         }
     }
 

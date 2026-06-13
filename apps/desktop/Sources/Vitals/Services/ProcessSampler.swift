@@ -24,9 +24,15 @@ final class ProcessSampler {
     func sample(top count: Int) -> [Process] {
         let now = mach_absolute_time()
         let pidCount = proc_listallpids(nil, 0)
-        guard pidCount > 0 else { return [] }
-        var pids = [pid_t](repeating: 0, count: Int(pidCount) + 64)
-        let filled = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        // Sanity-cap the count: it's syscall-controlled, and a garbage-huge
+        // value would otherwise allocate an unbounded array and overflow the
+        // Int32 byte-size argument below. Real systems have a few hundred PIDs.
+        guard pidCount > 0, pidCount < 100_000 else { return [] }
+        let capacity = Int(pidCount) + 64
+        var pids = [pid_t](repeating: 0, count: capacity)
+        let byteSize = capacity * MemoryLayout<pid_t>.size
+        guard byteSize <= Int(Int32.max) else { return [] }
+        let filled = proc_listallpids(&pids, Int32(byteSize))
         guard filled > 0 else { return [] }
 
         var currentCPUTime: [pid_t: UInt64] = [:]

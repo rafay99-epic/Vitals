@@ -192,7 +192,7 @@ struct CardBackground: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         #if compiler(>=6.2)
-        if #available(macOS 26.0, *), settings.liquidGlass {
+        if #available(macOS 26.0, *), settings.glassEnabled {
             content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         } else {
             classic(content)
@@ -222,7 +222,7 @@ struct WindowBackdrop: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if settings.liquidGlass {
+        if settings.glassEnabled {
             content.containerBackground(backdropMaterial, for: .window)
         } else {
             content.background(Color(nsColor: .windowBackgroundColor))
