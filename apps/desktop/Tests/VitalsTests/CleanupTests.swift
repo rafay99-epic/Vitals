@@ -88,6 +88,78 @@ struct LeftoverScannerTests {
     }
 }
 
+/// The complete uninstall reaches system-domain files and removes them as root,
+/// so the system catalog must stay confined and the privileged script must stay
+/// auditable: allowlisted roots only, never /System, never com.apple.*, never a
+/// bare path.
+struct UninstallSystemTests {
+    @Test func systemCandidatesStayInAllowlistedRoots() {
+        let candidates = LeftoverScanner.systemCandidates(bundleID: "com.example.app", appName: "Example App")
+        #expect(!candidates.isEmpty)
+        for (url, _) in candidates {
+            #expect(url.path.hasPrefix("/Library/"), "outside /Library: \(url.path)")
+            #expect(!url.path.hasPrefix("/System"))
+            #expect(!url.lastPathComponent.hasPrefix("com.apple."))
+        }
+    }
+
+    @Test func shortOrGenericNamesGateSystemNameMatches() {
+        #expect(!LeftoverScanner.isSafeSystemName("App"))      // too short
+        #expect(!LeftoverScanner.isSafeSystemName("Updater"))  // generic word
+        #expect(LeftoverScanner.isSafeSystemName("Maestro"))
+        // A short name yields only bundle-id-derived system candidates.
+        let candidates = LeftoverScanner.systemCandidates(bundleID: "com.example.app", appName: "App")
+        #expect(candidates.allSatisfy { $0.0.path.contains("com.example.app") })
+    }
+
+    @Test func removalScriptIsBoundedAndSafe() throws {
+        let script = try #require(AppUninstaller.systemRemovalScript(for: [
+            URL(fileURLWithPath: "/Library/LaunchDaemons/com.example.app.plist"),
+            URL(fileURLWithPath: "/Users/Shared/Example"),
+            URL(fileURLWithPath: "/private/var/db/receipts/com.example.app.bom"),
+            // all of these must be dropped:
+            URL(fileURLWithPath: "/System/Library/LaunchDaemons/com.apple.x.plist"),
+            URL(fileURLWithPath: "/Library/LaunchDaemons/com.apple.something.plist"),
+            URL(fileURLWithPath: "/etc/passwd"),
+            URL(fileURLWithPath: "/"),
+        ]))
+        #expect(!script.contains("/System"))
+        #expect(!script.contains("com.apple."))
+        #expect(!script.contains("/etc/passwd"))
+        #expect(script.contains("/Library/LaunchDaemons/com.example.app.plist"))
+        #expect(script.contains("/Users/Shared/Example"))
+        #expect(script.contains("/private/var/db/receipts/com.example.app.bom"))
+        for line in script.split(separator: "\n") where line.hasPrefix("rm ") {
+            #expect(line.hasPrefix("rm -rf '/"), "unsafe rm line: \(line)")
+        }
+    }
+
+    @Test func removalScriptNilWhenNothingValid() {
+        #expect(AppUninstaller.systemRemovalScript(for: [
+            URL(fileURLWithPath: "/System/x"),
+            URL(fileURLWithPath: "/etc/x"),
+        ]) == nil)
+    }
+
+    @Test func removalScriptAllowsConfirmedAppBundleOnly() throws {
+        let script = try #require(AppUninstaller.systemRemovalScript(for: [
+            URL(fileURLWithPath: "/Applications/AlDente.app"),
+            URL(fileURLWithPath: "/Applications/loose-file.txt"),     // not .app → dropped
+            URL(fileURLWithPath: "/System/Applications/Mail.app"),    // /System → dropped
+        ]))
+        #expect(script.contains("rm -rf '/Applications/AlDente.app'"))
+        #expect(!script.contains("loose-file.txt"))
+        #expect(!script.contains("/System"))
+    }
+
+    @Test func homebrewCaskMatchesNormalizedName() {
+        let casks = ["google-chrome", "visual-studio-code", "slack"]
+        #expect(LeftoverScanner.homebrewCask(appName: "Google Chrome", installedCasks: casks) == "google-chrome")
+        #expect(LeftoverScanner.homebrewCask(appName: "Slack", installedCasks: casks) == "slack")
+        #expect(LeftoverScanner.homebrewCask(appName: "Some Unknown App", installedCasks: casks) == nil)
+    }
+}
+
 /// Cleanup must keep Apple's system caches and crash reports off the menu.
 struct DiskCleanerTests {
     @Test func appleCachesAreProtected() {
