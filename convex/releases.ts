@@ -34,6 +34,11 @@ export const upsert = internalMutation({
       .query('releases')
       .withIndex('by_key', (q) => q.eq('key', 'latest'))
       .unique()
+    // Nothing changed → don't write. Skips a needless mutation and avoids
+    // re-running every subscriber's `get` query for an identical value.
+    if (existing !== null && existing.version === version && existing.sizeMB === sizeMB) {
+      return null
+    }
     const fields = { key: 'latest' as const, version, sizeMB, fetchedAt: Date.now() }
     if (existing === null) {
       await ctx.db.insert('releases', fields)
@@ -44,8 +49,10 @@ export const upsert = internalMutation({
   },
 })
 
-/// Fetches the latest GitHub release and caches it. Internal action (does IO):
-/// run on a schedule by the cron, and once on demand to seed the table. The
+/// Fetches the latest GitHub release and caches it. Internal action (does IO),
+/// invoked event-driven — not polled: the CI `convex.yml` runs it on
+/// `release: published` (so the badge updates within seconds of a new app
+/// release) and once after each backend deploy (to seed/heal the cache). The
 /// fetch/parse lives in the reusable `lib/github` helper; on any failure it
 /// returns null and we leave the last good value untouched — honesty over a
 /// blank badge.

@@ -18,10 +18,17 @@ hit GitHub's API from every visitor's browser.
     `releases/latest`, parses the version + `.dmg` size, upserts one row.
   - `upsert` (internal mutation) — writes the singleton row.
   - `get` (public query) — what the landing page subscribes to; reactive.
-- `crons.ts` — runs `refresh` every 6 hours.
+- `lib/github.ts` — reusable, Convex-free GitHub fetch/parse (shared helpers live in `lib/`).
 - `schema.ts` — a single `releases` row keyed `"latest"`.
 
-On any GitHub failure the cached value is left untouched — never blanked.
+On any GitHub failure the cached value is left untouched — never blanked. `upsert` also
+skips the write when nothing changed.
+
+**No cron.** The cached release only changes when a release is published, so refreshing is
+**event-driven** (it would waste free-tier function calls to poll): the CI workflow
+(`.github/workflows/convex.yml`) refreshes on every backend deploy and on
+`release: published`. A *daily* cron would be a fine optional backstop; an hourly one isn't
+worth it.
 
 ## Commands (run from the repo root)
 
@@ -33,7 +40,7 @@ bun run convex:deploy    # deploy to the production deployment
 # headless / non-interactive shells: force an anonymous local deployment
 CONVEX_AGENT_MODE=anonymous bunx convex dev
 
-# seed the cache once (the cron otherwise fills it on its next tick)
+# seed the cache once (CI also seeds it on every deploy and on each release)
 bunx convex run releases:refresh '{}'
 ```
 
