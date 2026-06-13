@@ -6,12 +6,16 @@ import SwiftUI
 /// gets the shared `VitalsModel` / `AppSettings` injected, so it ticks live.
 @MainActor
 enum WidgetPanel {
-    /// Where a widget sits in the window stack. "Desktop" is just below normal
-    /// windows but above the desktop and its icons, so widgets live on the
-    /// desktop and your app windows cover them (not the other way round).
-    /// "Float" keeps them above everything.
+    /// Where a widget sits in the window stack. "Desktop" pins it to the real
+    /// desktop layer (just above the wallpaper, below icons and every app
+    /// window) so it composites *with* the desktop during a Space switch and
+    /// never pops above your windows. A level just below normal (e.g. -1) is
+    /// treated like an ordinary window mid-transition and flickers to the front
+    /// — the desktop layer doesn't. "Float" keeps it above everything.
     static func windowLevel(onTop: Bool) -> NSWindow.Level {
-        onTop ? .floating : NSWindow.Level(rawValue: -1)
+        onTop
+            ? .floating
+            : NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
     }
 
     static func make(
