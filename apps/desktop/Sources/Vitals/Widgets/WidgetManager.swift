@@ -9,9 +9,14 @@ import SwiftUI
 @MainActor
 final class WidgetManager: ObservableObject {
     @Published private(set) var visible: Set<WidgetKind> = []
+    /// Off by default: widgets sit on the desktop, behind your windows. On:
+    /// they float above everything.
     @Published var onTop: Bool {
         didSet {
-            for panel in panels.values { panel.level = onTop ? .floating : .normal }
+            for panel in panels.values {
+                panel.level = WidgetPanel.windowLevel(onTop: onTop)
+                panel.isFloatingPanel = onTop
+            }
             defaults.set(onTop, forKey: Keys.onTop)
         }
     }
@@ -29,7 +34,7 @@ final class WidgetManager: ObservableObject {
     init(model: VitalsModel, settings: AppSettings) {
         self.model = model
         self.settings = settings
-        self.onTop = defaults.object(forKey: Keys.onTop) as? Bool ?? true
+        self.onTop = defaults.object(forKey: Keys.onTop) as? Bool ?? false
 
         // Reopen last session's widgets once the run loop is up (NSApp must be
         // alive before panels can order front).

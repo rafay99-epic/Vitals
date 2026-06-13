@@ -283,7 +283,7 @@ private struct GeneralPane: View {
             }
 
             SettingsCard(title: "Desktop Widgets", symbol: "square.grid.2x2", tint: .pink) {
-                Text("Floating panels on your desktop, live from the same readings as the app. Drag to place; close from the panel.")
+                Text("Live panels on your desktop, from the same readings as the app. They sit behind your windows; drag to place, close from the panel.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ForEach(WidgetKind.allCases) { kind in
@@ -297,8 +297,8 @@ private struct GeneralPane: View {
                 }
                 Divider().opacity(0.5)
                 SwitchRow(
-                    label: "Keep widgets on top",
-                    caption: "Float above other windows. Turn off to let them sit at normal window level.",
+                    label: "Float on top of windows",
+                    caption: "Off: widgets stay on the desktop, behind your windows (default). On: they float above everything.",
                     isOn: Binding(get: { widgets.onTop }, set: { widgets.onTop = $0 })
                 )
             }
