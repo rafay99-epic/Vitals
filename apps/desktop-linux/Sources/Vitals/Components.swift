@@ -68,20 +68,30 @@ struct ChartCard: View {
     let value: String
     let series: [Double]
     let color: SparklineRenderer.Color
+    /// Shown when there aren't yet two points to draw a line between.
+    var emptyText = "Collecting…"
 
     var view: Body {
         VStack {
             HStack {
-                Text(title).heading().halign(.start).hexpand()
+                Text(title).style("vitals-section").halign(.start).hexpand()
                 Text(value).title3().numeric().halign(.end)
             }
-            Picture()
-                .data(SparklineRenderer.render(values: series, width: 620, height: 60, line: color))
-                .hexpand()
+            if series.count < 2 {
+                Text(emptyText)
+                    .caption()
+                    .dimLabel()
+                    .halign(.start)
+                    .frame(minHeight: 64)
+            } else {
+                Picture()
+                    .data(SparklineRenderer.render(values: series, width: 900, height: 72, line: color))
+                    .hexpand()
+            }
         }
         .padding()
         .card()
-        .padding(5)
+        .padding(6)
     }
 }
 

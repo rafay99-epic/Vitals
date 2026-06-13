@@ -41,10 +41,17 @@ public final class VitalsModel {
 
     public static let shared = VitalsModel()
 
-    struct Point: Equatable { let temp: Double; let cpu: Double; let mem: Double }
+    /// Independent rolling series, one per chart. Keeping them separate means a
+    /// machine with no temperature sensor (e.g. a VM) still gets live CPU and
+    /// memory charts — they never gate each other.
+    struct History: Equatable {
+        var temp: [Double] = []
+        var cpu: [Double] = []
+        var mem: [Double] = []
+    }
 
     private let sampler = LinuxSensorSampler()
-    private var history: [Point] = []
+    private var history = History()
     /// ~20 minutes at a 2 s interval; the chart never draws more than it can show.
     static let maxHistory = 600
     static let chartPoints = 160
@@ -57,7 +64,7 @@ public final class VitalsModel {
     }
 
     /// Pure derivation, split out so it's unit-tested with synthetic snapshots.
-    static func derive(_ snap: Snapshot, history: inout [Point]) -> DashboardState {
+    static func derive(_ snap: Snapshot, history: inout History) -> DashboardState {
         var state = DashboardState()
         state.hasLoaded = true
         state.chipName = snap.chipName ?? "Processor"
@@ -80,20 +87,23 @@ public final class VitalsModel {
         state.battery = snap.battery
         state.sensorsUnavailable = snap.temps.isEmpty && snap.fans.isEmpty && snap.memory == nil
 
-        // Append a history point once there's a temperature reference and a usage
-        // reading (usage is nil on the very first tick — no delta yet).
-        if let usage = snap.cpuUsage, let tempRef = state.hottestTemp ?? state.cpuTempAvg {
-            let point = Point(temp: tempRef, cpu: usage, mem: Double(snap.memory?.used ?? 0))
-            history.append(point)
-            if history.count > maxHistory {
-                history.removeFirst(history.count - maxHistory)
-            }
-        }
-        let points = ChartMath.downsample(history, to: chartPoints)
-        state.tempHistory = points.map(\.temp)
-        state.cpuHistory = points.map(\.cpu)
-        state.memHistory = points.map(\.mem)
+        // Each series accumulates independently from its own signal. CPU usage is
+        // nil on the very first tick (no delta yet), so its series just starts one
+        // tick later; temperature and memory start immediately when present.
+        if let tempRef = state.hottestTemp ?? state.cpuTempAvg { append(&history.temp, tempRef) }
+        if let usage = snap.cpuUsage { append(&history.cpu, usage) }
+        if let mem = snap.memory { append(&history.mem, Double(mem.used)) }
+
+        state.tempHistory = ChartMath.downsample(history.temp, to: chartPoints)
+        state.cpuHistory = ChartMath.downsample(history.cpu, to: chartPoints)
+        state.memHistory = ChartMath.downsample(history.mem, to: chartPoints)
         return state
+    }
+
+    /// Appends to a rolling series, trimming to `maxHistory` from the front.
+    private static func append(_ series: inout [Double], _ value: Double) {
+        series.append(value)
+        if series.count > maxHistory { series.removeFirst(series.count - maxHistory) }
     }
 
     private static func average(_ temps: [TempReading], kind: TempReading.Kind) -> Double? {

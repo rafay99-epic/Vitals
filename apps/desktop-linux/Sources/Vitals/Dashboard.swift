@@ -38,6 +38,9 @@ struct DashboardView: View {
                     Breakdowns(ui: ui)
                 }
                 .padding()
+                // Centre the content at a readable width instead of stretching it
+                // edge-to-edge on a wide window.
+                .frame(maxWidth: 1_040)
             }
         }
         .topToolbar {
@@ -46,9 +49,12 @@ struct DashboardView: View {
                     WindowTitle(subtitle: ui.hasLoaded ? ui.chipName : "", title: "Vitals")
                 }
         }
+        .css { Theme.css }
         .onAppear {
             guard !started else { return }
             started = true
+            // Match the macOS app's dark aesthetic; also makes the cards visible.
+            Theme.applyDark()
             TrayIcon.shared.start { app?.addWindow("main") }
             let first = VitalsModel.shared.next()
             ui = first
@@ -100,10 +106,15 @@ struct ChartsSection: View {
         guard let m = ui.memory else { return "—" }
         return Fmt.gigabytes(m.used)
     }
+    /// A temperature chart can never fill on hardware that exposes no sensor (a
+    /// VM), so say so rather than spinning on "Collecting…" forever.
+    private var tempEmptyText: String {
+        ui.cpuTempAvg == nil && ui.hottestTemp == nil ? "No temperature sensor" : "Collecting…"
+    }
 
     var view: Body {
         VStack {
-            ChartCard(title: "Temperature", value: Fmt.temp(ui.hottestTemp ?? ui.cpuTempAvg), series: ui.tempHistory, color: .temp)
+            ChartCard(title: "Temperature", value: Fmt.temp(ui.hottestTemp ?? ui.cpuTempAvg), series: ui.tempHistory, color: .temp, emptyText: tempEmptyText)
             ChartCard(title: "CPU Usage", value: Fmt.percent(ui.cpuUsage), series: ui.cpuHistory, color: .cpu)
             ChartCard(title: "Memory", value: memoryValue, series: ui.memHistory, color: .memory)
         }

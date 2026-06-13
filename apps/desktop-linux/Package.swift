@@ -57,7 +57,9 @@ targets.append(.executableTarget(
         "VitalsCore",
         "CCairo",
         "CGio",
-        .product(name: "Adwaita", package: "Adwaita")
+        .product(name: "Adwaita", package: "Adwaita"),
+        // libadwaita C API directly, for the color-scheme (force dark) call.
+        .product(name: "CAdw", package: "Adwaita")
     ],
     swiftSettings: [.swiftLanguageMode(.v5)]
 ))
