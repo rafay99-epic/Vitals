@@ -1,8 +1,8 @@
 # CLAUDE.md — Vitals
 
 Vitals is a monorepo: a native macOS hardware monitor + app manager (`apps/desktop`,
-Swift/SwiftUI) and its marketing site (`apps/website`, React + Vite + Tailwind v4).
-Tooling: bun workspaces + turbo. License: **GPL-3.0**.
+Swift/SwiftUI), its marketing site (`apps/website`, React + Vite + Tailwind v4), and a
+local Convex backend (`apps/backend`). Tooling: bun workspaces + turbo. License: **GPL-3.0**.
 
 ## Product philosophy (drives every decision)
 
@@ -160,6 +160,26 @@ Settings → Desktop Widgets.
 - e2e (`e2e/check.mjs`) drives the system Chrome/Brave (no browser downloads), starts
   its own preview server, and asserts no horizontal overflow at 390/1440 px, plus client
   navigation and the 404/legal routes.
+- The download badge's version/size comes from the backend (`useLatestRelease`): Convex
+  when `VITE_CONVEX_URL` is set, else a **direct GitHub fetch fallback** so the site always
+  works (CI builds have no URL). `ConvexProvider` is mounted only when the URL is present.
+  The hook binds to one source at module load — never switch sources per render.
+
+## Backend (`apps/backend`, `@vitals/backend`)
+
+- **Local Convex project** (no cloud account): run `CONVEX_AGENT_MODE=anonymous bunx convex
+  dev` from `apps/backend`. The env var stops the CLI prompting for an account in
+  non-interactive shells. `.env.local` (gitignored) holds `CONVEX_URL`.
+- Functions live in `convex/` (object-form syntax, `args`+`returns` validators, public vs
+  `internal*`, indexed reads). Today: `releases.ts` (`get` query, `upsert` internal
+  mutation, `refresh` internal action that fetches GitHub) + `crons.ts` (6-hourly refresh)
+  + a singleton `releases` table. External IO (the GitHub fetch) lives in the **action**,
+  never a mutation; on failure the cached value is kept, never blanked.
+- `convex/_generated/` is **committed** so the website's `@vitals/backend/api` import and
+  `tsc -b` resolve without a codegen step. After changing a schema/function, re-run
+  `convex dev` (or `convex codegen`) to regenerate it.
+- For any code under `convex/`, use the **convex-expert** subagent — it has the
+  non-negotiable Convex rules loaded.
 
 ## License & credit (legal requirements)
 
@@ -177,3 +197,17 @@ copied.
 - This ffmpeg has no libwebp; use `sips` for image conversion.
 - `screencapture` captures whatever is frontmost at the coordinates — activate the
   target window first and re-read its bounds in the same osascript.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->

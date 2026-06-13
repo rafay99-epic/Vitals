@@ -6,3 +6,7 @@ node_modules/
 .turbo/
 dist/
 .vite/
+
+# Convex / env — local deployment URLs and secrets, never committed
+.env.local
+.env.*.local
