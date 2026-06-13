@@ -7,10 +7,20 @@ import Charts
 /// under any location. This surface only *reads* — it never deletes or moves
 /// anything; reclaiming space lives in Cleanup, where it gets confirmation and
 /// reversibility. "Reveal in Finder" is the most it will ever do to a file.
+/// Which overview graphic the hero shows. Both visualize the same volume
+/// composition, so the user picks one rather than seeing both at once.
+enum OverviewChart: String, CaseIterable, Identifiable {
+    case bar, donut
+    var id: String { rawValue }
+    var symbol: String { self == .bar ? "chart.bar.xaxis" : "chart.pie.fill" }
+}
+
 struct StorageView: View {
     @ObservedObject var model: StorageModel
     @EnvironmentObject private var settings: AppSettings
     @State private var confirmWholeDisk = false
+    /// Persisted so the chosen graphic sticks across launches.
+    @AppStorage("storageOverviewChart") private var overviewChart: OverviewChart = .bar
 
     var body: some View {
         VStack(spacing: 0) {
@@ -149,6 +159,17 @@ struct StorageView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                if model.volume != nil {
+                    Picker("", selection: $overviewChart) {
+                        ForEach(OverviewChart.allCases) { style in
+                            Image(systemName: style.symbol).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .help("Switch between the bar and the donut")
+                }
                 if model.isBusy {
                     ProgressView()
                         .controlSize(.small)
@@ -172,22 +193,27 @@ struct StorageView: View {
             }
 
             if let volume = model.volume {
-                HStack(alignment: .center, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 10) {
+                // One graphic at a time — the bar and the donut show the same
+                // composition, so showing both was redundant and cramped.
+                VStack(spacing: 10) {
+                    switch overviewChart {
+                    case .bar:
                         CapacityBar(
                             total: volume.total,
                             used: volume.used,
                             segments: model.categories.map { ($0.kind.tint, $0.sizeBytes ?? 0) }
                         )
-                        legend
+                    case .donut:
+                        // Charts pay 50–150 ms on first layout, so mount the
+                        // donut through Deferred — opens against a placeholder.
+                        Deferred {
+                            CompositionDonut(volume: volume, categories: model.categories)
+                        }
+                        .frame(width: 132, height: 132)
                     }
-                    // Charts pay 50–150 ms on first layout, so mount the donut
-                    // through Deferred — the tab opens against a placeholder.
-                    Deferred {
-                        CompositionDonut(volume: volume, categories: model.categories)
-                    }
-                    .frame(width: 128, height: 128)
+                    legend
                 }
+                .animation(.easeInOut(duration: 0.2), value: overviewChart)
             }
         }
         .padding(16)
