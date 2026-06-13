@@ -44,6 +44,12 @@ struct HelpView: View {
             body: "Only regenerable data is offered: build products, package caches, app caches, and logs that apps rebuild automatically. Documents and settings are never touched. Emptying the Trash is the one permanent action, and the confirmation says so."
         ),
         Topic(
+            symbol: "internaldrive",
+            tint: .blue,
+            title: "Storage",
+            body: "See how full your disk is and where the space went — Applications, your home folder, and both Libraries, measured as real on-disk bytes. Press Analyze to scan (it walks the disk, so it waits for you), Stop any time, and drill into the largest folders and files. For a complete report, grant Full Disk Access when prompted — without it Vitals still works but skips protected folders. Storage only reads: it never deletes. Reclaiming space lives in Cleanup."
+        ),
+        Topic(
             symbol: "bell.badge",
             tint: .red,
             title: "Alerts",
@@ -53,7 +59,7 @@ struct HelpView: View {
             symbol: "keyboard",
             tint: .teal,
             title: "Shortcuts",
-            body: "⌘1 Dashboard · ⌘2 Applications · ⌘3 Cleanup · ⌘, Settings. The header drags the window."
+            body: "⌘1 Dashboard · ⌘2 Applications · ⌘3 Cleanup · ⌘4 Storage · ⌘, Settings. The header drags the window."
         ),
     ]
 

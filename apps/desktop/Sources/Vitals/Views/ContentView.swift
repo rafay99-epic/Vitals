@@ -6,7 +6,7 @@ import SwiftUI
 /// switches change what's drawn, never the geometry it's drawn in.
 struct ContentView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case dashboard, applications, cleanup
+        case dashboard, applications, cleanup, storage
         var id: String { rawValue }
 
         var title: String {
@@ -14,6 +14,7 @@ struct ContentView: View {
             case .dashboard: return "Dashboard"
             case .applications: return "Applications"
             case .cleanup: return "Cleanup"
+            case .storage: return "Storage"
             }
         }
 
@@ -22,6 +23,7 @@ struct ContentView: View {
             case .dashboard: return "gauge.with.dots.needle.50percent"
             case .applications: return "square.grid.2x2"
             case .cleanup: return "sparkles"
+            case .storage: return "internaldrive"
             }
         }
 
@@ -30,6 +32,7 @@ struct ContentView: View {
             case .dashboard: return "1"
             case .applications: return "2"
             case .cleanup: return "3"
+            case .storage: return "4"
             }
         }
     }
@@ -42,6 +45,7 @@ struct ContentView: View {
     // visit meant a full rescan (and a "Scanning…" flash) every time.
     @StateObject private var appsModel = AppsModel()
     @StateObject private var cleanupModel = CleanupModel()
+    @StateObject private var storageModel = StorageModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,6 +57,7 @@ struct ContentView: View {
                 case .dashboard: DashboardView()
                 case .applications: AppsView(model: appsModel)
                 case .cleanup: CleanupView(model: cleanupModel)
+                case .storage: StorageView(model: storageModel)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
