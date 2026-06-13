@@ -1,0 +1,44 @@
+name: Linux
+
+# Linux-app CI. Separate from the macOS workflows (ci.yml / release.yml) and
+# triggered only on its own paths — a change anywhere else skips this entirely,
+# keeping the pipeline clean. The Linux app has no updater and publishes no
+# release; Phase 5 adds the AppImage artifact upload here.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop-linux/**"
+      - ".github/workflows/linux.yml"
+  pull_request:
+    paths:
+      - "apps/desktop-linux/**"
+      - ".github/workflows/linux.yml"
+
+defaults:
+  run:
+    working-directory: apps/desktop-linux
+
+jobs:
+  build:
+    name: Build (Linux)
+    runs-on: ubuntu-latest
+    # Official Swift image; matches apps/desktop-linux/Dockerfile.
+    container: swift:6.0-noble
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install GTK4 + libadwaita + cairo
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            pkg-config libgtk-4-dev libadwaita-1-dev libcairo2-dev
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Unit tests (VitalsCore parsers)
+        run: swift test
+
+      - name: Build release
+        run: swift build -c release

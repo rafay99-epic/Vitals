@@ -1,0 +1,9 @@
+{
+  "name": "desktop-linux",
+  "private": true,
+  "description": "Vitals Linux app — native Swift + GTK4/libadwaita, monitoring only. Swift package wrapped for turbo task orchestration.",
+  "scripts": {
+    "build": "./build.sh",
+    "test": "swift test"
+  }
+}
