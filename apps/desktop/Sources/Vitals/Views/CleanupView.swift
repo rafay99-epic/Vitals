@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// The Cleanup tab: categories of regenerable data as selectable cards,
-/// cleaned on explicit confirmation. Caches and logs are deleted (trashing
-/// them would free nothing); the Trash category empties permanently and the
-/// confirmation says so.
+/// The Cleanup tab: regenerable data as selectable cards, cleaned on explicit
+/// confirmation. A Quick/Deep switch chooses the reach — Quick stays in the
+/// user domain (no password); Deep adds age-gated system categories that need
+/// one administrator prompt. Scanning is manual; nothing runs until asked.
 struct CleanupView: View {
     @ObservedObject var model: CleanupModel
+    @EnvironmentObject private var settings: AppSettings
+    /// Persisted so the chosen depth sticks across launches.
+    @AppStorage("cleanupDepth") private var depth: CleanDepth = .quick
     @State private var confirming = false
 
     var body: some View {
@@ -13,7 +16,11 @@ struct CleanupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     hero
-                    grid
+                    if model.hasRun {
+                        grid
+                    } else {
+                        idlePrompt
+                    }
                 }
                 .padding(20)
             }
@@ -21,13 +28,21 @@ struct CleanupView: View {
                 .opacity(0.5)
             footer
         }
-        .onAppear { if model.categories.isEmpty { model.refresh() } }
+        .onAppear {
+            if settings.autoScanCleanup && !model.hasRun {
+                model.scan(depth: depth)
+            }
+        }
+        .onChange(of: depth) { _, newDepth in
+            // Switching depth re-measures for the new set of categories.
+            if model.hasRun { model.scan(depth: newDepth) }
+        }
         .confirmationDialog(
             "Clean \(formatBytes(model.selectedBytes))?",
             isPresented: $confirming,
             titleVisibility: .visible
         ) {
-            Button("Clean", role: .destructive) { model.clean() }
+            Button(model.selectionNeedsAdmin ? "Deep Clean" : "Clean", role: .destructive) { model.clean() }
         } message: {
             Text(confirmationMessage)
         }
@@ -39,10 +54,19 @@ struct CleanupView: View {
             Button("OK") { model.dismissResult() }
         } message: { result in
             if result.failures.isEmpty {
-                Text("Freed \(formatBytes(result.freedBytes)) (\(result.removedItems) items).")
+                Text("Freed \(formatBytes(result.freedBytes)) (\(result.removedItems) items)\(result.usedAdmin ? " — system files included." : ".")")
             } else {
                 Text("Freed \(formatBytes(result.freedBytes)). \(result.failures.count) items couldn't be removed (in use or protected).")
             }
+        }
+        .alert(
+            "Couldn't finish deep clean",
+            isPresented: Binding(get: { model.lastError != nil }, set: { if !$0 { model.dismissError() } }),
+            presenting: model.lastError
+        ) { _ in
+            Button("OK") { model.dismissError() }
+        } message: { message in
+            Text(message)
         }
     }
 
@@ -51,13 +75,16 @@ struct CleanupView: View {
         if model.selected.contains(.trash) {
             lines += " Emptying the Trash is permanent."
         }
+        if model.selectionNeedsAdmin {
+            lines += " System files need your administrator password; only files older than the retention window are removed."
+        }
         return lines
     }
 
     // MARK: Hero
 
     private var hero: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(heroValue)
                     .font(.system(size: 32, weight: .semibold, design: .rounded))
@@ -67,32 +94,82 @@ struct CleanupView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            Picker("", selection: $depth) {
+                ForEach(CleanDepth.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .disabled(model.isCleaning)
+            .help("Quick cleans user caches; Deep adds system files (needs admin)")
             if model.isScanning {
                 ProgressView()
                     .controlSize(.small)
+                Button(role: .cancel) {
+                    model.cancelScan()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                .controlSize(.large)
+                .help("Stop scanning")
+            } else {
+                Button {
+                    model.scan(depth: depth)
+                } label: {
+                    Label(model.hasRun ? "Rescan" : "Scan", systemImage: "magnifyingglass")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(model.isCleaning)
+                .help("Measure what's reclaimable")
             }
-            Button {
-                model.refresh()
-            } label: {
-                Label("Rescan", systemImage: "arrow.clockwise")
-            }
-            .controlSize(.large)
-            .disabled(model.isScanning)
-            .help("Scan again")
         }
     }
 
     private var heroValue: String {
         if model.totalBytes > 0 { return formatBytes(model.totalBytes) }
-        return model.isScanning ? "Scanning…" : "All clean"
+        if model.isScanning { return "Scanning…" }
+        return model.hasRun ? "All clean" : "—"
     }
 
     private var heroSubtitle: String {
-        let populated = model.categories.filter { !$0.items.isEmpty }.count
+        if model.isScanning { return "measuring \(depth == .deep ? "user and system" : "user") junk" }
+        let populated = model.categories.filter { $0.sizeBytes > 0 }.count
         if model.totalBytes > 0 {
             return "reclaimable across \(populated) categories — all of it regenerable"
         }
-        return model.isScanning ? "measuring caches, logs, and the Trash" : "nothing worth reclaiming right now"
+        return model.hasRun ? "nothing worth reclaiming right now" : "scan to see what's reclaimable"
+    }
+
+    // MARK: Idle prompt
+
+    private var idlePrompt: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 30, weight: .regular))
+                .foregroundStyle(.tertiary)
+            Text("See what's reclaimable")
+                .font(.system(size: 14, weight: .semibold))
+            Text("Scanning walks your caches and logs, so Vitals waits for you to ask. Quick stays in your home folder; Deep also clears age-gated system files (one admin prompt). Auto-scan is in Settings.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 400)
+            Button {
+                model.scan(depth: depth)
+            } label: {
+                Label("Scan", systemImage: "magnifyingglass")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .padding(.horizontal, 16)
+        .cardBackground()
     }
 
     // MARK: Category grid
@@ -119,9 +196,14 @@ struct CleanupView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Label("Only regenerable data — documents and settings are never touched.", systemImage: "checkmark.shield")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Label(
+                model.selectionNeedsAdmin
+                    ? "System files removed with your permission — only old, regenerable data."
+                    : "Only regenerable data — documents and settings are never touched.",
+                systemImage: model.selectionNeedsAdmin ? "lock.shield" : "checkmark.shield"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
             Spacer()
             if !model.selected.isEmpty {
                 Text("\(model.selected.count) selected")
@@ -134,10 +216,7 @@ struct CleanupView: View {
                 if model.isCleaning {
                     Label("Cleaning…", systemImage: "sparkles")
                 } else {
-                    Label(
-                        model.selectedBytes > 0 ? "Clean \(formatBytes(model.selectedBytes))" : "Clean",
-                        systemImage: "sparkles"
-                    )
+                    Label(cleanButtonTitle, systemImage: model.selectionNeedsAdmin ? "lock.fill" : "sparkles")
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -146,6 +225,12 @@ struct CleanupView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    private var cleanButtonTitle: String {
+        if model.selectedBytes == 0 { return "Clean" }
+        let size = formatBytes(model.selectedBytes)
+        return model.selectionNeedsAdmin ? "Deep Clean \(size)…" : "Clean \(size)"
     }
 }
 
@@ -160,6 +245,12 @@ private extension CleanupCategory.Kind {
         case .appCaches: return .purple
         case .logs: return .teal
         case .trash: return .red
+        case .recentItems: return .indigo
+        case .systemCaches: return .gray
+        case .systemLogs: return .mint
+        case .crashReports: return .red
+        case .systemTemp: return .brown
+        case .gpuCaches: return .pink
         }
     }
 }
@@ -170,7 +261,13 @@ private struct CategoryCard: View {
     let isSelected: Bool
     let toggle: () -> Void
 
-    private var isEmpty: Bool { category.items.isEmpty }
+    /// Disabled only once a scan has settled with nothing to remove.
+    private var hasNothing: Bool { !isScanning && category.sizeBytes == 0 }
+
+    private var emptyLabel: String {
+        if category.kind.requiresAdmin { return "Nothing old enough" }
+        return category.items.isEmpty ? "Nothing found" : "Empty"
+    }
 
     var body: some View {
         Button(action: toggle) {
@@ -186,6 +283,12 @@ private struct CategoryCard: View {
                         )
                     Text(category.kind.title)
                         .font(.system(size: 13, weight: .semibold))
+                    if category.kind.requiresAdmin {
+                        Image(systemName: "lock")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .help("Removing these needs administrator rights")
+                    }
                     Spacer()
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 16))
@@ -199,17 +302,11 @@ private struct CategoryCard: View {
                     .lineLimit(2, reservesSpace: true)
 
                 HStack(alignment: .firstTextBaseline) {
-                    if isEmpty {
-                        Text("Nothing found")
-                            .font(.callout)
-                            .foregroundStyle(.tertiary)
-                    } else if category.sizeBytes == 0 && isScanning {
+                    if isScanning && category.sizeBytes == 0 {
                         ProgressView()
                             .controlSize(.small)
                     } else if category.sizeBytes == 0 {
-                        // Folders exist but hold nothing — nicer than the
-                        // formatter's "Zero KB".
-                        Text("Empty")
+                        Text(emptyLabel)
                             .font(.callout)
                             .foregroundStyle(.tertiary)
                     } else {
@@ -219,7 +316,7 @@ private struct CategoryCard: View {
                             .contentTransition(.numericText())
                     }
                     Spacer()
-                    if !isEmpty {
+                    if category.sizeBytes > 0 {
                         Text("\(category.items.count) item\(category.items.count == 1 ? "" : "s")")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -242,8 +339,8 @@ private struct CategoryCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(isEmpty)
-        .opacity(isEmpty ? 0.55 : 1)
+        .disabled(hasNothing)
+        .opacity(hasNothing ? 0.55 : 1)
         .animation(.easeOut(duration: 0.15), value: isSelected)
     }
 }

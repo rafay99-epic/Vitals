@@ -107,3 +107,50 @@ struct DiskCleanerTests {
         #expect(DiskCleaner.shouldOfferLog(named: "Google"))
     }
 }
+
+/// Deep clean reaches system files as root, so the generated script must stay
+/// auditable: only allowlisted roots, always age-gated, never the sealed system
+/// volume or a bare path. Quick mode must never surface an admin category.
+struct DeepCleanTests {
+    @Test func quickScanHasNoAdminCategories() {
+        let quick = DiskCleaner.scan(depth: .quick)
+        #expect(!quick.isEmpty)
+        #expect(quick.allSatisfy { !$0.kind.requiresAdmin })
+    }
+
+    @Test func deepScanAddsAdminCategories() {
+        let deep = DiskCleaner.scan(depth: .deep)
+        let adminKinds = Set(deep.filter { $0.kind.requiresAdmin }.map(\.kind))
+        #expect(adminKinds.contains(.systemCaches))
+        #expect(adminKinds.contains(.crashReports))
+        #expect(adminKinds.contains(.gpuCaches))
+        #expect(deep.count > DiskCleaner.scan(depth: .quick).count)
+    }
+
+    @Test func systemScriptIsAgeGatedAndBounded() {
+        let allSystem: Set<CleanupCategory.Kind> = [.systemCaches, .systemLogs, .crashReports, .systemTemp, .gpuCaches]
+        let script = DiskCleaner.systemCleanScript(for: allSystem)
+
+        let deleteLines = script.split(separator: "\n").filter { $0.contains("-delete") }
+        #expect(!deleteLines.isEmpty)
+        for line in deleteLines {
+            #expect(line.contains("-mtime +"), "ungated delete: \(line)")
+            #expect(line.contains("-type f"), "non-file delete: \(line)")
+            let allowed = line.contains("/Library/Caches")
+                || line.contains("/private/var/log")
+                || line.contains("/Library/Logs/DiagnosticReports")
+                || line.contains("/private/tmp")
+                || line.contains("/private/var/tmp")
+                || line.contains("/private/var/folders")  // GPU caches
+            #expect(allowed, "unexpected root: \(line)")
+        }
+        #expect(!script.contains("/System"))
+        #expect(!script.contains("rm -rf"))
+        #expect(!script.contains("find '/' "))
+    }
+
+    @Test func nonAdminKindsProduceNoDeletes() {
+        #expect(!DiskCleaner.systemCleanScript(for: []).contains("-delete"))
+        #expect(!DiskCleaner.systemCleanScript(for: [.appCaches, .logs, .trash]).contains("-delete"))
+    }
+}

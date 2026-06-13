@@ -273,6 +273,14 @@ private struct GeneralPane: View {
                 )
             }
 
+            SettingsCard(title: "Cleanup", symbol: "sparkles", tint: .orange) {
+                SwitchRow(
+                    label: "Scan automatically on open",
+                    caption: "Off by default — Cleanup waits for you to press Scan. Cleaning always needs selection and confirmation.",
+                    isOn: $settings.autoScanCleanup
+                )
+            }
+
             SettingsCard(title: "Application", symbol: "macwindow", tint: .teal) {
                 SwitchRow(label: "Launch at login", isOn: $settings.launchAtLogin)
                 if let error = settings.loginItemError {
