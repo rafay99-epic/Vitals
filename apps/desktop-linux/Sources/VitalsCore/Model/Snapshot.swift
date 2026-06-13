@@ -7,7 +7,7 @@ import Foundation
 /// A single temperature sensor reading, classified by what it measures so the
 /// dashboard can group dies, GPU, storage, and battery the way the macOS app does.
 public struct TempReading: Equatable, Sendable {
-    public enum Kind: Sendable { case cpu, gpu, storage, battery, other }
+    public enum Kind: Equatable, Sendable { case cpu, gpu, storage, battery, other }
     public let label: String
     public let celsius: Double
     public let kind: Kind
@@ -34,7 +34,7 @@ public struct FanReading: Equatable, Sendable {
 /// Memory pressure, derived from the kernel's PSI signal (`/proc/pressure/memory`).
 /// PSI is the closest real analogue to the macOS pressure level; the thresholds
 /// are documented in `Meminfo.pressure(some:full:)`, not invented per reading.
-public enum MemoryPressure: Sendable {
+public enum MemoryPressure: Equatable, Sendable {
     case normal, warning, critical
 
     public var label: String {
