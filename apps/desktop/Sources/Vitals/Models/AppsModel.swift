@@ -11,6 +11,7 @@ final class AppsModel: ObservableObject {
         var leftovers: [URL: [Leftover]]   // keyed by app bundle URL
         var casks: [URL: String] = [:]     // app URL → Homebrew cask token
         var systemExtensions: [URL: [URL]] = [:]  // app URL → orphaned .systemextension
+        var bundlesNeedingAdmin: Set<URL> = []  // app bundles that can't be trashed (root-owned)
         var excluded: Set<URL> = []        // leftovers the user unchecked
 
         var totalBytes: UInt64 {
@@ -18,10 +19,11 @@ final class AppsModel: ObservableObject {
                 + leftovers.values.joined().filter { !excluded.contains($0.id) }.reduce(0) { $0 + $1.sizeBytes }
         }
 
-        /// True when the (still-checked) selection includes system-domain files
-        /// — those need the admin prompt and are removed permanently.
-        var hasSystemLeftovers: Bool {
-            leftovers.values.joined().contains { $0.requiresAdmin && !excluded.contains($0.id) }
+        /// True when removal needs the admin prompt and is permanent — either a
+        /// system-domain leftover or a protected (root-owned) app bundle.
+        var needsAdmin: Bool {
+            !bundlesNeedingAdmin.isEmpty
+                || leftovers.values.joined().contains { $0.requiresAdmin && !excluded.contains($0.id) }
         }
     }
 
@@ -163,7 +165,14 @@ final class AppsModel: ObservableObject {
                 }.value
                 if !extensions.isEmpty { systemExtensions[url] = extensions }
             }
-            staged = StagedUninstall(apps: targets, leftovers: leftovers, casks: casks, systemExtensions: systemExtensions)
+            // A root-owned bundle (installed by a pkg) can't be trashed — flag it
+            // so the sheet shows it's admin/permanent, and the cask-handled ones
+            // are excluded (brew removes those).
+            let needAdmin = Set(targets.map(\.id).filter { casks[$0] == nil && AppUninstaller.bundleNeedsAdmin($0) })
+            staged = StagedUninstall(
+                apps: targets, leftovers: leftovers, casks: casks,
+                systemExtensions: systemExtensions, bundlesNeedingAdmin: needAdmin
+            )
             isPreparingUninstall = false
         }
     }
@@ -200,12 +209,26 @@ final class AppsModel: ObservableObject {
                     if removed { bundleHandledByBrew = true; combined.caskUninstalled += 1 }
                 }
 
+                // A protected/root-owned bundle skips the (doomed) Trash attempt
+                // and goes straight to the admin pass.
+                let bundleViaAdmin = !bundleHandledByBrew && staged.bundlesNeedingAdmin.contains(app.id)
+                if bundleViaAdmin {
+                    systemPaths.append(app.id)
+                    systemBytes += app.sizeBytes ?? 0
+                }
+
                 let outcome = await Task.detached(priority: .userInitiated) {
-                    AppUninstaller.uninstall(app: app, leftovers: leftovers, skipBundle: bundleHandledByBrew)
+                    AppUninstaller.uninstall(app: app, leftovers: leftovers, skipBundle: bundleHandledByBrew || bundleViaAdmin)
                 }.value
                 combined.trashed += outcome.trashed
                 combined.failures += outcome.failures
                 combined.freedBytes += outcome.freedBytes
+
+                // Trash that failed (App-Management-blocked) falls back to admin.
+                for bundle in outcome.failedBundles {
+                    systemPaths.append(bundle)
+                    systemBytes += app.sizeBytes ?? 0
+                }
 
                 let bundleID = app.bundleID
                 await Task.detached(priority: .utility) {

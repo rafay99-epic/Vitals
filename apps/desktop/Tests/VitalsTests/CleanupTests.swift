@@ -141,6 +141,17 @@ struct UninstallSystemTests {
         ]) == nil)
     }
 
+    @Test func removalScriptAllowsConfirmedAppBundleOnly() throws {
+        let script = try #require(AppUninstaller.systemRemovalScript(for: [
+            URL(fileURLWithPath: "/Applications/AlDente.app"),
+            URL(fileURLWithPath: "/Applications/loose-file.txt"),     // not .app → dropped
+            URL(fileURLWithPath: "/System/Applications/Mail.app"),    // /System → dropped
+        ]))
+        #expect(script.contains("rm -rf '/Applications/AlDente.app'"))
+        #expect(!script.contains("loose-file.txt"))
+        #expect(!script.contains("/System"))
+    }
+
     @Test func homebrewCaskMatchesNormalizedName() {
         let casks = ["google-chrome", "visual-studio-code", "slack"]
         #expect(LeftoverScanner.homebrewCask(appName: "Google Chrome", installedCasks: casks) == "google-chrome")

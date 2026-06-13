@@ -344,7 +344,7 @@ private struct UninstallConfirmationSheet: View {
     let staged: AppsModel.StagedUninstall
 
     private var hasSystem: Bool {
-        model.staged?.hasSystemLeftovers ?? staged.hasSystemLeftovers
+        model.staged?.needsAdmin ?? staged.needsAdmin
     }
 
     var body: some View {
@@ -398,7 +398,7 @@ private struct UninstallConfirmationSheet: View {
     private var introText: String {
         var text = "The app and the checked items below are removed — user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
         if hasSystem {
-            text += " Items marked 🔒 are system files: they're deleted permanently and need your administrator password."
+            text += " Items marked 🔒 — system files and pkg-installed apps — are removed permanently and need your administrator password."
         }
         return text
     }
@@ -428,6 +428,14 @@ private struct UninstallConfirmationSheet: View {
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Capsule().fill(.yellow.opacity(0.18)))
                         .foregroundStyle(.yellow)
+                }
+                if staged.bundlesNeedingAdmin.contains(app.id) {
+                    Label("admin · permanent", systemImage: "lock.fill")
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(.orange.opacity(0.16)))
+                        .foregroundStyle(.orange)
+                        .help("Installed by a pkg (root-owned) — removed permanently with your password")
                 }
                 Spacer()
                 Text(app.sizeBytes.map(formatBytes) ?? "")

@@ -14,12 +14,28 @@ enum AppUninstaller {
         var usedAdmin = false
         var caskUninstalled = 0
         var errorMessage: String?
+        /// Bundles the user couldn't trash (root-owned / App-Management-blocked)
+        /// — the caller retries these through the admin removal path.
+        var failedBundles: [URL] = []
     }
 
     static func runningApplication(bundleID: String?) -> NSRunningApplication? {
         guard let bundleID else { return nil }
         return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
             .first { !$0.isTerminated }
+    }
+
+    /// Whether an app bundle can't be moved to the Trash by the user — because
+    /// it's root-owned (installed by a pkg) or its parent isn't writable. macOS
+    /// "App Management" can also block a trash that this misses; the runtime
+    /// fallback in `uninstall` catches those. Such bundles are removed via the
+    /// admin path instead.
+    static func bundleNeedsAdmin(_ url: URL) -> Bool {
+        let fm = FileManager.default
+        if let owner = try? fm.attributesOfItem(atPath: url.path)[.ownerAccountID] as? Int, owner == 0 {
+            return true
+        }
+        return !fm.isWritableFile(atPath: url.deletingLastPathComponent().path)
     }
 
     /// Trashes the app bundle (unless Homebrew already removed it) and the
@@ -37,8 +53,19 @@ enum AppUninstaller {
         var sizes: [URL: UInt64] = [app.id: app.sizeBytes ?? 0]
         for leftover in userLeftovers { sizes[leftover.id] = leftover.sizeBytes }
 
-        let targets = (skipBundle ? [] : [app.id]) + userLeftovers.map(\.id)
-        for url in targets {
+        // The bundle trash can fail on macOS's App Management protection even
+        // when ownership looks fine — fall back to the admin path rather than
+        // reporting a hard failure.
+        if !skipBundle {
+            do {
+                try FileManager.default.trashItem(at: app.id, resultingItemURL: nil)
+                outcome.trashed.append(app.id)
+                outcome.freedBytes += sizes[app.id] ?? 0
+            } catch {
+                outcome.failedBundles.append(app.id)
+            }
+        }
+        for url in userLeftovers.map(\.id) {
             do {
                 try FileManager.default.trashItem(at: url, resultingItemURL: nil)
                 outcome.trashed.append(url)
@@ -92,8 +119,12 @@ enum AppUninstaller {
             let path = url.standardizedFileURL.path
             guard path.hasPrefix("/"), path != "/", !path.contains(".."), !path.contains("'") else { continue }
             guard !path.hasPrefix("/System") else { continue }
-            guard allowedRoots.contains(where: { path.hasPrefix($0) }) else { continue }
             guard !url.lastPathComponent.hasPrefix("com.apple.") else { continue }
+            // Allowlisted system roots, plus the app bundle itself under
+            // /Applications (a protected/root-owned .app that couldn't be
+            // trashed) — only ever an explicit ".app" the user confirmed.
+            let underApplications = path.hasPrefix("/Applications/") && url.pathExtension == "app"
+            guard underApplications || allowedRoots.contains(where: { path.hasPrefix($0) }) else { continue }
             lines.append("rm -rf '\(path)' 2>/dev/null || true")
             any = true
         }
