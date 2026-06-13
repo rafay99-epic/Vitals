@@ -3,7 +3,7 @@ name: Linux
 # Linux-app CI. Separate from the macOS workflows (ci.yml / release.yml) and
 # triggered only on its own paths — a change anywhere else skips this entirely,
 # keeping the pipeline clean. The Linux app has no updater and publishes no
-# release; Phase 5 adds the AppImage artifact upload here.
+# GitHub Release; it uploads the AppImage as a workflow artifact for download.
 on:
   push:
     branches: [main]
@@ -28,11 +28,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install GTK4 + libadwaita + cairo
+      - name: Install GTK4 + libadwaita + cairo (build) and packaging tools
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            pkg-config libgtk-4-dev libadwaita-1-dev libcairo2-dev
+            pkg-config libgtk-4-dev libadwaita-1-dev libcairo2-dev \
+            curl file patchelf desktop-file-utils zsync \
+            librsvg2-bin librsvg2-common libglib2.0-bin libgdk-pixbuf2.0-bin
 
       - name: Swift version
         run: swift --version
@@ -42,3 +44,14 @@ jobs:
 
       - name: Build release
         run: swift build -c release
+
+      - name: Build AppImage
+        run: ./make-appimage.sh
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: Vitals-linux-AppImage
+          path: apps/desktop-linux/build/Vitals-x86_64.AppImage
+          retention-days: 90
+          if-no-files-found: error

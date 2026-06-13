@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Vitals
+GenericName=Hardware Monitor
+Comment=Live CPU, memory, temperature, fan, and battery readings
+Exec=Vitals
+Icon=com.rafay99.Vitals
+Categories=System;Monitor;Utility;
+Keywords=system;monitor;cpu;temperature;sensors;hardware;
+Terminal=false
+StartupNotify=true
