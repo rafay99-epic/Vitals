@@ -158,8 +158,26 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            glassBatched
-                .padding(20)
+            Group {
+                if !model.hasLoaded {
+                    LoadingStateView(
+                        title: "Reading sensors",
+                        message: "Vitals is taking its first measurement of this Mac's temperatures, fans, and memory."
+                    )
+                } else if model.sensorsUnavailable {
+                    EmptyStateView(
+                        symbol: "sensor.tag.radiowaves.forward.fill",
+                        tint: .orange,
+                        title: "No sensor data",
+                        message: "Vitals couldn't read this Mac's temperature, fan, or memory sensors. This usually means a virtual machine or restricted hardware access — readings will appear here once they're available."
+                    ) {
+                        EmptyView()
+                    }
+                } else {
+                    glassBatched
+                }
+            }
+            .padding(20)
         }
     }
 

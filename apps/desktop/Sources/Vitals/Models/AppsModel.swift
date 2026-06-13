@@ -31,6 +31,9 @@ final class AppsModel: ObservableObject {
     @Published var staged: StagedUninstall?
     @Published private(set) var isPreparingUninstall = false
     @Published private(set) var lastOutcome: AppUninstaller.Outcome?
+    /// Set when the Applications folder itself couldn't be read — distinguishes
+    /// a genuine failure from simply having nothing removable installed.
+    @Published private(set) var loadError: String?
 
     private let inventory = AppInventory()
     private var sizeTask: Task<Void, Never>?
@@ -68,6 +71,7 @@ final class AppsModel: ObservableObject {
     func refresh() {
         guard !isScanning else { return }
         isScanning = true
+        loadError = nil
         selection.removeAll()
         sizeTask?.cancel()
         Task {
@@ -79,6 +83,11 @@ final class AppsModel: ObservableObject {
                 }
             }
             apps = found
+            // Empty + unreadable /Applications is a real error; empty + readable
+            // just means nothing removable is installed.
+            if found.isEmpty, !FileManager.default.isReadableFile(atPath: "/Applications") {
+                loadError = "Vitals couldn't read your Applications folder."
+            }
             isScanning = false
             computeSizes()
         }

@@ -88,6 +88,38 @@ struct EmptyStateView<Actions: View>: View {
     }
 }
 
+/// The loading sibling of `EmptyStateView`: same card chrome, a spinner where
+/// the icon tile sits. Used for the first-data fetch on tabs that don't have a
+/// card skeleton to show meanwhile.
+struct LoadingStateView: View {
+    let title: String
+    var message: String?
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ProgressView()
+                .controlSize(.large)
+                .frame(height: 64)
+            VStack(spacing: 5) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                if let message {
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 420)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
+        .padding(.horizontal, 20)
+        .cardBackground()
+    }
+}
+
 // MARK: - Cards
 
 struct StatCard: View {
