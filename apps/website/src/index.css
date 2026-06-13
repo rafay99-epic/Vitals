@@ -22,3 +22,33 @@ body {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.45; transform: scale(0.82); }
 }
+
+/* Releases page: data appears, states fade, skeletons shimmer. All motion is
+   gated on prefers-reduced-motion so reduced-motion users get static content. */
+@keyframes vt-release-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vt-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vt-shimmer {
+  0% { background-position: -450px 0; }
+  100% { background-position: 450px 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vt-appear { animation: vt-fade-in 0.35s ease both; }
+  .vt-release-row {
+    animation: vt-release-in 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    animation-delay: calc(var(--vt-i, 0) * 45ms);
+  }
+  .vt-skeleton-sheen {
+    background-image: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.10) 37%, rgba(255,255,255,0.04) 63%);
+    background-size: 900px 100%;
+    animation: vt-shimmer 1.4s linear infinite;
+  }
+}
