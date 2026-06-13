@@ -87,7 +87,13 @@ bun run dmg                  # desktop app + DMG (macOS only)
   its worker; long tasks use `[weak self]` and models cancel in `deinit`.
 - Menu-bar sparklines downsample to 100 points.
 
-## Design language (all six surfaces follow it: Dashboard, Applications, Cleanup, Settings, Help, menu-bar panel)
+## Design language (all surfaces follow it: Dashboard, Applications, Cleanup, Storage, Settings, Help, menu-bar panel, and the desktop widgets)
+
+Desktop widgets live in `Sources/Vitals/Widgets/` — a `WidgetManager` of floating `NSPanel`s
+hosting SwiftUI bound to the **shared** `VitalsModel`/`AppSettings` (no separate polling).
+They're app-owned floating panels, *not* WidgetKit (a SwiftPM widget extension won't load on
+macOS 26, and App Groups need a Team ID this ad-hoc build lacks). Toggle them in
+Settings → Desktop Widgets.
 
 - **Tabs/segments**: capsule container `.quaternary.opacity(0.45)`, selected segment
   `.quaternary` capsule with `matchedGeometryEffect` sliding indicator, spring

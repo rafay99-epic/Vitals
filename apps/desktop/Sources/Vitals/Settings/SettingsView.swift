@@ -170,6 +170,7 @@ private func settingsRow(_ label: String, @ViewBuilder control: () -> some View)
 
 private struct GeneralPane: View {
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var widgets: WidgetManager
 
     var body: some View {
         VStack(spacing: 12) {
@@ -278,6 +279,27 @@ private struct GeneralPane: View {
                     label: "Scan automatically on open",
                     caption: "Off by default — Cleanup waits for you to press Scan. Cleaning always needs selection and confirmation.",
                     isOn: $settings.autoScanCleanup
+                )
+            }
+
+            SettingsCard(title: "Desktop Widgets", symbol: "square.grid.2x2", tint: .pink) {
+                Text("Floating panels on your desktop, live from the same readings as the app. Drag to place; close from the panel.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(WidgetKind.allCases) { kind in
+                    SwitchRow(
+                        label: kind.title,
+                        isOn: Binding(
+                            get: { widgets.isVisible(kind) },
+                            set: { _ in widgets.toggle(kind) }
+                        )
+                    )
+                }
+                Divider().opacity(0.5)
+                SwitchRow(
+                    label: "Keep widgets on top",
+                    caption: "Float above other windows. Turn off to let them sit at normal window level.",
+                    isOn: Binding(get: { widgets.onTop }, set: { widgets.onTop = $0 })
                 )
             }
 
