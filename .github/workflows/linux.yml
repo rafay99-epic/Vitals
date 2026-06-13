@@ -21,9 +21,20 @@ defaults:
 
 jobs:
   build:
-    name: Build (Linux)
-    runs-on: ubuntu-latest
-    # Official Swift image; matches apps/desktop-linux/Dockerfile.
+    name: Build (${{ matrix.arch }})
+    # Build natively on each architecture — a foreign-arch ELF can't execute, so
+    # ARM users need a real aarch64 AppImage, not the x86_64 one. GitHub's ARM
+    # Linux runners are free for public repos. The swift:6.0-noble image is
+    # multi-arch, so the same tag pulls the matching arch on each runner.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     container: swift:6.0-noble
     steps:
       - uses: actions/checkout@v6
@@ -51,7 +62,7 @@ jobs:
       - name: Upload AppImage
         uses: actions/upload-artifact@v7
         with:
-          name: Vitals-linux-AppImage
-          path: apps/desktop-linux/build/Vitals-x86_64.AppImage
+          name: Vitals-linux-${{ matrix.arch }}-AppImage
+          path: apps/desktop-linux/build/Vitals-${{ matrix.arch }}.AppImage
           retention-days: 90
           if-no-files-found: error

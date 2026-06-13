@@ -25,17 +25,23 @@ real desktop session to confirm runtime behaviour.
 
 ## Download & run
 
-Each CI run on this app uploads **`Vitals-linux-AppImage`** as a workflow
-artifact (no install, no GitHub Release). Download it from the run's *Artifacts*
-section, then:
+Each CI run builds **both architectures** and uploads them as separate workflow
+artifacts (no install, no GitHub Release):
+
+- **`Vitals-linux-x86_64-AppImage`** — Intel/AMD desktops and laptops.
+- **`Vitals-linux-aarch64-AppImage`** — ARM (Raspberry Pi, ARM VMs, Asahi, etc.).
+
+Pick the one matching `uname -m` on the target machine — an x86_64 AppImage will
+**not** run on ARM and vice versa (the CPU can't execute a foreign-arch binary).
+Download from the run's *Artifacts* section, then:
 
 ```sh
-chmod +x Vitals-x86_64.AppImage
-./Vitals-x86_64.AppImage
+chmod +x Vitals-*.AppImage
+./Vitals-*.AppImage
 ```
 
-Needs a GitHub account with read access to the repo to download; the file is
-kept for 90 days.
+Needs a GitHub account with read access to the repo to download; files are kept
+for 90 days.
 
 ## Architecture
 
