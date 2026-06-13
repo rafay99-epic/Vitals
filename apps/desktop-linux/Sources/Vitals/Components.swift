@@ -50,10 +50,10 @@ struct StatTile: View {
                 .halign(.start)
                 .padding(2)
             Text(subtitle)
+                .ellipsize()
                 .caption()
                 .dimLabel()
                 .halign(.start)
-                .ellipsize()
         }
         .padding()
         .card()
@@ -101,7 +101,7 @@ struct InfoCard: View {
             } else {
                 ForEach(entries) { row in
                     HStack {
-                        Text(row.label).halign(.start).hexpand().ellipsize()
+                        Text(row.label).ellipsize().halign(.start).hexpand()
                         Text(row.value).numeric().dimLabel().halign(.end)
                     }
                     .padding(3)
