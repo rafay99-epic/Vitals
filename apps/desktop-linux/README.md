@@ -10,14 +10,32 @@ own CI. It ships **no auto-updater**.
 
 ## Status
 
-Built in phases, each landing as its own PR:
+Feature-complete for v1:
 
-- **Phase 0 — scaffold + build loop + charts spike + CI** ← current
-- Phase 1 — sensor services (`/sys`, `/proc`)
-- Phase 2 — model + off-thread sampling
-- Phase 3 — dashboard UI
-- Phase 4 — tray (StatusNotifierItem)
-- Phase 5 — AppImage packaging
+- ✅ Sensor services (`/sys`, `/proc`) — temps, fans, CPU, memory + PSI, battery, processes
+- ✅ Model + rolling history
+- ✅ Dashboard UI (stat tiles, Cairo sparklines, breakdown cards)
+- ✅ Tray (StatusNotifierItem with a live-readings tooltip + click-to-open)
+- ✅ AppImage packaging in CI
+
+The tray's right-click menu (the `com.canonical.dbusmenu` layout protocol) is a
+planned follow-up; for now the tray shows the live readings on hover and opens
+the window on click. The D-Bus tray path is compile-verified in CI and needs a
+real desktop session to confirm runtime behaviour.
+
+## Download & run
+
+Each CI run on this app uploads **`Vitals-linux-AppImage`** as a workflow
+artifact (no install, no GitHub Release). Download it from the run's *Artifacts*
+section, then:
+
+```sh
+chmod +x Vitals-x86_64.AppImage
+./Vitals-x86_64.AppImage
+```
+
+Needs a GitHub account with read access to the repo to download; the file is
+kept for 90 days.
 
 ## Architecture
 

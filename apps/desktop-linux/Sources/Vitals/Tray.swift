@@ -23,7 +23,7 @@ final class TrayIcon {
     static let shared = TrayIcon()
 
     private var connection: OpaquePointer?
-    private var nodeInfo: OpaquePointer?
+    private var nodeInfo: UnsafeMutablePointer<GDBusNodeInfo>?
     private let vtable = UnsafeMutablePointer<GDBusInterfaceVTable>.allocate(capacity: 1)
     private var registered = false
 
