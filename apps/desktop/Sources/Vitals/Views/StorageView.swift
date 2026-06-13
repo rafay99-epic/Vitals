@@ -26,16 +26,20 @@ struct StorageView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    capacityHero
-                    if !model.hasFullDiskAccess {
-                        fdaBanner
-                    }
-                    if model.hasRun {
-                        categoryGrid
-                        insightsCard
-                        analyzerCard
+                    if model.volumeUnavailable {
+                        volumeErrorState
                     } else {
-                        idlePrompt
+                        capacityHero
+                        if !model.hasFullDiskAccess {
+                            fdaBanner
+                        }
+                        if model.hasRun {
+                            categoryGrid
+                            insightsCard
+                            analyzerCard
+                        } else {
+                            idlePrompt
+                        }
                     }
                 }
                 .padding(20)
@@ -255,6 +259,21 @@ struct StorageView: View {
     }
 
     // MARK: Idle prompt
+
+    private var volumeErrorState: some View {
+        EmptyStateView(
+            symbol: "externaldrive.badge.exclamationmark",
+            tint: .orange,
+            title: "Couldn't read your disk",
+            message: "Vitals couldn't read the boot volume's capacity. This is rare — try reopening the tab, or check Disk Utility if it persists."
+        ) {
+            Button { model.loadVolume() } label: {
+                Label("Try Again", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+    }
 
     private var idlePrompt: some View {
         EmptyStateView(
