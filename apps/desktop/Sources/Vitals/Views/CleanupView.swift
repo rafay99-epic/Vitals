@@ -56,7 +56,7 @@ struct CleanupView: View {
             Button("OK") { model.dismissResult() }
         } message: { result in
             if result.failures.isEmpty {
-                Text("Freed \(formatBytes(result.freedBytes)) (\(result.removedItems) items)\(result.usedAdmin ? " — system files included." : ".")")
+                Text("Freed \(formatBytes(result.freedBytes)) (\(result.removedItems) items)\(result.usedAdmin ? " — protected items included." : ".")")
             } else {
                 Text("Freed \(formatBytes(result.freedBytes)). \(result.failures.count) items couldn't be removed (in use or protected).")
             }

@@ -317,9 +317,14 @@ enum DiskCleaner {
     // MARK: Cleaning
 
     struct CleanResult {
+        /// A user-domain item the in-process pass couldn't delete (root-owned
+        /// cache file, permission-locked Trash entry). Carries its measured size
+        /// so a privileged retry can credit it once the file is actually gone.
+        struct Failure { let url: URL; let size: UInt64; let reason: String }
+
         var freedBytes: UInt64 = 0
         var removedItems = 0
-        var failures: [(url: URL, reason: String)] = []
+        var failures: [Failure] = []
         var usedAdmin = false
     }
 
@@ -337,11 +342,50 @@ enum DiskCleaner {
                     result.freedBytes += size
                     result.removedItems += 1
                 } catch {
-                    result.failures.append((url, error.localizedDescription))
+                    result.failures.append(.init(url: url, size: size, reason: error.localizedDescription))
                 }
             }
         }
         return result
+    }
+
+    /// A root `rm -rf` script for user-domain cleanup items the in-process pass
+    /// couldn't delete — root-owned cache files, permission-locked Trash entries.
+    /// This is the cleanup counterpart to the uninstaller's blocked-bundle
+    /// fallback: every path is re-validated against the fixed set of user
+    /// cleanup roots, independently of how it was discovered — absolute, inside
+    /// the home folder, no `..`, never the bare home, never `/System`. Anything
+    /// that fails validation is dropped, never executed. Returns nil if nothing
+    /// survives.
+    static func userCleanFallbackScript(
+        for paths: [URL],
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> String? {
+        let homePath = home.standardizedFileURL.path
+        // Roots mirror the user-domain categories in `quickCategories` /
+        // `deepUserCategories`. Matched as a whole path or a path prefix so
+        // `.npm` never matches `.npmrc`.
+        let allowedRoots = [
+            "Library/Caches",
+            "Library/Logs",
+            "Library/Developer",
+            "Library/Application Support/com.apple.sharedfilelist",
+            ".Trash",
+            ".npm", ".bun", ".cargo", ".gradle", ".cache", ".pnpm-store", ".deno",
+        ].map { homePath + "/" + $0 }
+
+        var lines = ["#!/bin/sh", "# Vitals cleanup retry — validated user-domain paths only."]
+        var any = false
+        for url in paths {
+            let path = url.standardizedFileURL.path
+            guard path.hasPrefix("/"), path != "/", path != homePath,
+                  !path.contains(".."), !path.contains("'") else { continue }
+            guard !path.hasPrefix("/System") else { continue }
+            guard allowedRoots.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) else { continue }
+            lines.append("rm -rf '\(path)' 2>/dev/null || true")
+            any = true
+        }
+        return any ? lines.joined(separator: "\n") : nil
     }
 
     /// A root shell script that deletes only age-gated files under a fixed set

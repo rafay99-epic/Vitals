@@ -226,3 +226,48 @@ struct DeepCleanTests {
         #expect(!DiskCleaner.systemCleanScript(for: [.appCaches, .logs, .trash]).contains("-delete"))
     }
 }
+
+/// When the in-process cleanup can't delete a user item (root-owned cache,
+/// permission-locked Trash), it retries as root — but the privileged script
+/// must stay confined to the same user cleanup roots, never escaping the home
+/// folder or reaching the system volume.
+struct CleanupFallbackTests {
+    @Test func fallbackScriptStaysInUserCleanupRoots() throws {
+        let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let script = try #require(DiskCleaner.userCleanFallbackScript(for: [
+            home.appendingPathComponent(".Trash/Old App.app"),
+            home.appendingPathComponent("Library/Caches/com.example.app"),
+            home.appendingPathComponent("Library/Logs/Example"),
+            home.appendingPathComponent(".deno"),            // whole-dir cache item
+            // all of these must be dropped:
+            home.appendingPathComponent("Documents/thesis.pages"),
+            home.appendingPathComponent("Desktop/photo.jpg"),
+            home.appendingPathComponent("Library/Mobile Documents/iCloud~thing"),
+            URL(fileURLWithPath: "/System/Library/Caches/x"),
+            URL(fileURLWithPath: "/etc/passwd"),
+            home,                                            // bare home
+        ], home: home))
+
+        #expect(script.contains("rm -rf '/Users/test/.Trash/Old App.app'"))
+        #expect(script.contains("rm -rf '/Users/test/Library/Caches/com.example.app'"))
+        #expect(script.contains("rm -rf '/Users/test/Library/Logs/Example'"))
+        #expect(script.contains("rm -rf '/Users/test/.deno'"))
+        #expect(!script.contains("Documents"))
+        #expect(!script.contains("Desktop"))
+        #expect(!script.contains("Mobile Documents"))
+        #expect(!script.contains("/System"))
+        #expect(!script.contains("/etc/passwd"))
+        for line in script.split(separator: "\n") where line.hasPrefix("rm ") {
+            #expect(line.hasPrefix("rm -rf '/Users/test/"), "escaped home: \(line)")
+        }
+    }
+
+    @Test func fallbackScriptNilWhenNothingValid() {
+        let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        #expect(DiskCleaner.userCleanFallbackScript(for: [
+            URL(fileURLWithPath: "/System/x"),
+            URL(fileURLWithPath: "/etc/passwd"),
+            home.appendingPathComponent("Documents/file"),
+        ], home: home) == nil)
+    }
+}
