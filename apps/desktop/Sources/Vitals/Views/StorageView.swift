@@ -8,14 +8,19 @@ import AppKit
 /// reversibility. "Reveal in Finder" is the most it will ever do to a file.
 struct StorageView: View {
     @ObservedObject var model: StorageModel
+    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     capacityHero
-                    categoryGrid
-                    analyzerCard
+                    if model.hasRun {
+                        categoryGrid
+                        analyzerCard
+                    } else {
+                        idlePrompt
+                    }
                 }
                 .padding(20)
             }
@@ -23,7 +28,18 @@ struct StorageView: View {
                 .opacity(0.5)
             footer
         }
-        .onAppear { if model.categories.isEmpty { model.refresh() } }
+        .onAppear {
+            // Capacity is instant; the disk-walking analysis waits for the
+            // button unless the user opted into auto-analyze in Settings.
+            model.loadVolume()
+            if settings.autoAnalyzeStorage && !model.hasRun {
+                model.analyze(includeHidden: settings.analyzerIncludesHidden)
+            }
+        }
+    }
+
+    private func runAnalyze() {
+        model.analyze(includeHidden: settings.analyzerIncludesHidden)
     }
 
     // MARK: Capacity hero
@@ -41,25 +57,33 @@ struct StorageView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if model.isScanning {
+                if model.isBusy {
                     ProgressView()
                         .controlSize(.small)
+                    Button(role: .cancel) {
+                        model.cancelScan()
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .controlSize(.large)
+                    .help("Stop scanning")
+                } else {
+                    Button {
+                        runAnalyze()
+                    } label: {
+                        Label(model.hasRun ? "Re-analyze" : "Analyze", systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .help("Measure where your storage is used")
                 }
-                Button {
-                    model.refresh()
-                } label: {
-                    Label("Rescan", systemImage: "arrow.clockwise")
-                }
-                .controlSize(.large)
-                .disabled(model.isScanning)
-                .help("Measure storage again")
             }
 
             if let volume = model.volume {
                 CapacityBar(
                     total: volume.total,
                     used: volume.used,
-                    segments: model.categories.map { ($0.kind.tint, $0.sizeBytes) }
+                    segments: model.categories.map { ($0.kind.tint, $0.sizeBytes ?? 0) }
                 )
                 legend
             }
@@ -92,12 +116,43 @@ struct StorageView: View {
             }
             HStack(spacing: 5) {
                 Circle().fill(Color.secondary.opacity(0.45)).frame(width: 7, height: 7)
-                Text("Other")
+                // Before a breakdown exists we only know used vs free, so the
+                // whole used portion is honestly just "Used".
+                Text(model.categories.isEmpty ? "Used" : "Other")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
+    }
+
+    // MARK: Idle prompt
+
+    private var idlePrompt: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "internaldrive")
+                .font(.system(size: 30, weight: .regular))
+                .foregroundStyle(.tertiary)
+            Text("See where your storage is used")
+                .font(.system(size: 14, weight: .semibold))
+            Text("Measuring your folders walks the disk, so Vitals waits for you to ask. You can stop a scan any time, or turn on automatic analysis in Settings.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+            Button {
+                runAnalyze()
+            } label: {
+                Label("Analyze Storage", systemImage: "magnifyingglass")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .padding(.horizontal, 16)
+        .cardBackground()
     }
 
     // MARK: Category grid
@@ -317,18 +372,26 @@ private struct StorageCategoryCard: View {
                     .multilineTextAlignment(.leading)
                     .lineLimit(2, reservesSpace: true)
 
-                if category.sizeBytes == 0 && isScanning {
+                if let size = category.sizeBytes {
+                    if size == 0 {
+                        Text("Empty")
+                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        Text(formatBytes(size))
+                            .font(.system(.title3, design: .rounded, weight: .semibold))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+                } else if isScanning {
                     ProgressView()
                         .controlSize(.small)
-                } else if category.sizeBytes == 0 {
-                    Text("Empty")
+                } else {
+                    // Stopped before this card was measured — say so honestly
+                    // rather than implying it holds nothing.
+                    Text("Not measured")
                         .font(.callout)
                         .foregroundStyle(.tertiary)
-                } else {
-                    Text(formatBytes(category.sizeBytes))
-                        .font(.system(.title3, design: .rounded, weight: .semibold))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
                 }
             }
             .padding(14)

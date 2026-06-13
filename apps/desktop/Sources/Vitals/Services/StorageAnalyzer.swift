@@ -61,7 +61,9 @@ struct StorageCategory: Identifiable {
     /// Directories summed to produce the category size. Equal to `[root]`
     /// except for User Files, which sums every home child but Library.
     let scanRoots: [URL]
-    var sizeBytes: UInt64
+    /// `nil` until measured — distinguishes "not scanned yet / scan stopped"
+    /// from a genuine zero, so a cancelled card never falsely reads "Empty".
+    var sizeBytes: UInt64?
 
     var id: Kind { kind }
 }
@@ -108,16 +110,16 @@ enum StorageAnalyzer {
         )) ?? []).filter { $0.lastPathComponent != "Library" }
 
         let candidates: [StorageCategory] = [
-            .init(kind: .userFiles, root: home, scanRoots: homeChildren, sizeBytes: 0),
-            .init(kind: .userLibrary, root: library, scanRoots: [library], sizeBytes: 0),
+            .init(kind: .userFiles, root: home, scanRoots: homeChildren, sizeBytes: nil),
+            .init(kind: .userLibrary, root: library, scanRoots: [library], sizeBytes: nil),
             .init(kind: .applications,
                   root: URL(fileURLWithPath: "/Applications", isDirectory: true),
                   scanRoots: [URL(fileURLWithPath: "/Applications", isDirectory: true)],
-                  sizeBytes: 0),
+                  sizeBytes: nil),
             .init(kind: .systemLibrary,
                   root: URL(fileURLWithPath: "/Library", isDirectory: true),
                   scanRoots: [URL(fileURLWithPath: "/Library", isDirectory: true)],
-                  sizeBytes: 0),
+                  sizeBytes: nil),
         ]
         return candidates.filter { fm.fileExists(atPath: $0.root.path) }
     }
@@ -128,12 +130,14 @@ enum StorageAnalyzer {
 
     /// The immediate children of `url`, sized later by the caller. Symlinks are
     /// skipped so the analyzer never follows a link out of the tree being
-    /// measured (and never double-counts its target). Hidden entries are kept —
-    /// `.Trash`, `.cache`, and friends are exactly where space hides.
-    static func children(of url: URL) -> [StorageEntry] {
+    /// measured (and never double-counts its target). Hidden entries are kept
+    /// by default — `.Trash`, `.cache`, and friends are exactly where space
+    /// hides — but the caller can opt out.
+    static func children(of url: URL, includeHidden: Bool = true) -> [StorageEntry] {
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey]
+        let options: FileManager.DirectoryEnumerationOptions = includeHidden ? [] : [.skipsHiddenFiles]
         guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: url, includingPropertiesForKeys: Array(keys), options: []
+            at: url, includingPropertiesForKeys: Array(keys), options: options
         ) else { return [] }
 
         return urls.compactMap { child in

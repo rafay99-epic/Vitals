@@ -255,6 +255,19 @@ private struct GeneralPane: View {
                 }
             }
 
+            SettingsCard(title: "Storage", symbol: "internaldrive", tint: .blue) {
+                SwitchRow(
+                    label: "Analyze automatically on open",
+                    caption: "Off by default — analysis walks your disk, so the Storage tab waits for you to press Analyze.",
+                    isOn: $settings.autoAnalyzeStorage
+                )
+                SwitchRow(
+                    label: "Include hidden files",
+                    caption: "Count dotfiles and hidden folders (caches, the Trash). Applies on the next analyze.",
+                    isOn: $settings.analyzerIncludesHidden
+                )
+            }
+
             SettingsCard(title: "Application", symbol: "macwindow", tint: .teal) {
                 SwitchRow(label: "Launch at login", isOn: $settings.launchAtLogin)
                 if let error = settings.loginItemError {

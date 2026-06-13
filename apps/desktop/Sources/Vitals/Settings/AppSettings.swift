@@ -59,6 +59,12 @@ final class AppSettings: ObservableObject {
     @Published var liquidGlass: Bool { didSet { defaults.set(liquidGlass, forKey: "liquidGlass") } }
     /// 0 = clearest window backdrop, 1 = most frosted.
     @Published var glassIntensity: Double { didSet { defaults.set(glassIntensity, forKey: "glassIntensity") } }
+    /// Whether opening the Storage tab kicks off the disk-walking analysis on
+    /// its own. Off by default — the scan is the heaviest work in the app, so
+    /// it waits for an explicit Analyze press unless the user opts in.
+    @Published var autoAnalyzeStorage: Bool { didSet { defaults.set(autoAnalyzeStorage, forKey: "autoAnalyzeStorage") } }
+    /// Whether the Storage analyzer counts dotfiles and hidden folders.
+    @Published var analyzerIncludesHidden: Bool { didSet { defaults.set(analyzerIncludesHidden, forKey: "analyzerIncludesHidden") } }
 
     @Published var theme: AppTheme {
         didSet {
@@ -111,6 +117,8 @@ final class AppSettings: ObservableObject {
             "glassIntensity": 0.15,
             "theme": AppTheme.system.rawValue,
             "hideDockIcon": false,
+            "autoAnalyzeStorage": false,
+            "analyzerIncludesHidden": true,
         ])
 
         refreshInterval = defaults.double(forKey: "refreshInterval")
@@ -127,6 +135,8 @@ final class AppSettings: ObservableObject {
         glassIntensity = defaults.double(forKey: "glassIntensity")
         theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
+        autoAnalyzeStorage = defaults.bool(forKey: "autoAnalyzeStorage")
+        analyzerIncludesHidden = defaults.bool(forKey: "analyzerIncludesHidden")
 
         // SMAppService.status is an XPC round-trip; in init it sat directly
         // on the launch path and delayed the first frame. Load it async.
