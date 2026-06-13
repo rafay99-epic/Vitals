@@ -15,8 +15,12 @@ struct StorageView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     capacityHero
+                    if !model.hasFullDiskAccess {
+                        fdaBanner
+                    }
                     if model.hasRun {
                         categoryGrid
+                        insightsCard
                         analyzerCard
                     } else {
                         idlePrompt
@@ -29,9 +33,10 @@ struct StorageView: View {
             footer
         }
         .onAppear {
-            // Capacity is instant; the disk-walking analysis waits for the
-            // button unless the user opted into auto-analyze in Settings.
+            // Capacity and the access check are instant; the disk-walking
+            // analysis waits for the button unless auto-analyze is on.
             model.loadVolume()
+            model.refreshAccess()
             if settings.autoAnalyzeStorage && !model.hasRun {
                 model.analyze(includeHidden: settings.analyzerIncludesHidden)
             }
@@ -40,6 +45,91 @@ struct StorageView: View {
 
     private func runAnalyze() {
         model.analyze(includeHidden: settings.analyzerIncludesHidden)
+    }
+
+    private func openFullDiskAccessSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    // MARK: Full Disk Access banner
+
+    private var fdaBanner: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 20, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.orange)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Grant Full Disk Access for a complete report")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Without it, Vitals measures what it can and skips the folders macOS protects, so some totals read low. Add Vitals in System Settings, then Recheck.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            VStack(spacing: 6) {
+                Button("Open Settings") { openFullDiskAccessSettings() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                Button("Recheck") { model.refreshAccess() }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.orange.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.orange.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    // MARK: Insights
+
+    @ViewBuilder
+    private var insightsCard: some View {
+        if !model.insights.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Label("Hidden space", systemImage: "eye.trianglebadge.exclamationmark")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if model.isScanningInsights {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+                Text("Places that quietly fill up. Vitals points them out — it never deletes them; reclaim space in Cleanup.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(model.insights.enumerated()), id: \.element.id) { index, insight in
+                        if index > 0 {
+                            Divider()
+                                .opacity(0.35)
+                                .padding(.leading, 40)
+                        }
+                        InsightRow(
+                            insight: insight,
+                            onOpen: { model.openInsight(insight) },
+                            onReveal: { revealInFinder(insight.url) }
+                        )
+                    }
+                }
+            }
+            .padding(16)
+            .cardBackground()
+        }
     }
 
     // MARK: Capacity hero
@@ -466,6 +556,65 @@ private struct StorageRow: View {
             Button("Reveal in Finder", systemImage: "magnifyingglass") { onReveal() }
         }
         .help(entry.isDirectory ? "Open \(entry.name)" : "Reveal \(entry.name) in Finder")
+    }
+}
+
+// MARK: - Insight row
+
+private struct InsightRow: View {
+    let insight: StorageAnalyzer.StorageInsight
+    let onOpen: () -> Void
+    let onReveal: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 11) {
+                Image(systemName: "folder.badge.questionmark")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.teal)
+                    .frame(width: 18)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(insight.name)
+                        .font(.system(size: 13, weight: .medium))
+                    Text(insight.detail)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 12)
+
+                if let size = insight.sizeBytes {
+                    Text(size > 0 ? formatBytes(size) : "Empty")
+                        .font(.system(.callout, design: .rounded, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(size > 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
+                        .frame(width: 86, alignment: .trailing)
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 86, alignment: .trailing)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Rectangle().fill(hovered ? AnyShapeStyle(.quaternary.opacity(0.4)) : AnyShapeStyle(.clear)))
+        .onHover { hovered = $0 }
+        .contextMenu {
+            Button("Reveal in Finder", systemImage: "magnifyingglass") { onReveal() }
+        }
+        .help("Open \(insight.name)")
     }
 }
 

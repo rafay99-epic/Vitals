@@ -47,7 +47,7 @@ struct HelpView: View {
             symbol: "internaldrive",
             tint: .blue,
             title: "Storage",
-            body: "See how full your disk is and where the space went — Applications, your home folder, and both Libraries, measured as real on-disk bytes. The analyzer drills into the largest folders and files under any location. Storage only reads: it never deletes. Reveal in Finder is the most it does; reclaiming space lives in Cleanup."
+            body: "See how full your disk is and where the space went — Applications, your home folder, and both Libraries, measured as real on-disk bytes. Press Analyze to scan (it walks the disk, so it waits for you), Stop any time, and drill into the largest folders and files. For a complete report, grant Full Disk Access when prompted — without it Vitals still works but skips protected folders. Storage only reads: it never deletes. Reclaiming space lives in Cleanup."
         ),
         Topic(
             symbol: "bell.badge",

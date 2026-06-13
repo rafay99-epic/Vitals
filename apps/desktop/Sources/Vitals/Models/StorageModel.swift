@@ -15,7 +15,12 @@ import SwiftUI
 final class StorageModel: ObservableObject {
     @Published private(set) var volume: StorageAnalyzer.VolumeUsage?
     @Published private(set) var categories: [StorageCategory] = []
+    @Published private(set) var insights: [StorageAnalyzer.StorageInsight] = []
     @Published private(set) var isScanning = false
+    @Published private(set) var isScanningInsights = false
+    /// Whether Vitals can read every folder. Without it the report is partial
+    /// (protected folders read low); the view offers to fix that.
+    @Published private(set) var hasFullDiskAccess = false
     /// True once Analyze has been pressed at least once — drives the idle
     /// prompt vs. the populated overview.
     @Published private(set) var hasRun = false
@@ -28,6 +33,7 @@ final class StorageModel: ObservableObject {
 
     private let inventory = AppInventory()
     private var categoryTask: Task<Void, Never>?
+    private var insightTask: Task<Void, Never>?
     private var analyzeTask: Task<Void, Never>?
     /// Carried across drill-downs so every navigation honours the setting that
     /// was in effect when the user pressed Analyze.
@@ -41,12 +47,18 @@ final class StorageModel: ObservableObject {
     var categoriesTotal: UInt64 { categories.reduce(0) { $0 + ($1.sizeBytes ?? 0) } }
 
     /// Any disk-walking work in flight.
-    var isBusy: Bool { isScanning || isAnalyzing }
+    var isBusy: Bool { isScanning || isScanningInsights || isAnalyzing }
 
     /// Cheap one-shot capacity read for tab open — no disk walk, no background
     /// task. Safe to call on every appearance; it only reads once.
     func loadVolume() {
         if volume == nil { volume = StorageAnalyzer.volumeUsage() }
+    }
+
+    /// Re-probe Full Disk Access. Cheap; call on appear and after the user
+    /// returns from System Settings so the banner reflects reality.
+    func refreshAccess() {
+        hasFullDiskAccess = StorageAnalyzer.hasFullDiskAccess()
     }
 
     /// The Analyze button: refresh capacity, measure the categories, and open
@@ -56,8 +68,10 @@ final class StorageModel: ObservableObject {
         guard !isScanning else { return }
         self.includeHidden = includeHidden
         hasRun = true
+        refreshAccess()
         volume = StorageAnalyzer.volumeUsage()
         scanCategories()
+        scanInsights()
         navigate(to: FileManager.default.homeDirectoryForCurrentUser, reset: true)
     }
 
@@ -65,8 +79,10 @@ final class StorageModel: ObservableObject {
     /// in the background" lever. Whatever was measured so far stays on screen.
     func cancelScan() {
         categoryTask?.cancel()
+        insightTask?.cancel()
         analyzeTask?.cancel()
         isScanning = false
+        isScanningInsights = false
         isAnalyzing = false
     }
 
@@ -91,10 +107,35 @@ final class StorageModel: ObservableObject {
         }
     }
 
+    private func scanInsights() {
+        insightTask?.cancel()
+        isScanningInsights = true
+        insightTask = Task { [weak self] in
+            guard let self else { return }
+            var scanned = StorageAnalyzer.insights()
+            insights = scanned  // show the list immediately; sizes follow
+            for index in scanned.indices {
+                if Task.isCancelled { isScanningInsights = false; return }
+                let insight = scanned[index]
+                let size = await Task.detached(priority: .utility) {
+                    StorageAnalyzer.insightSize(insight)
+                }.value
+                if Task.isCancelled { isScanningInsights = false; return }
+                scanned[index].sizeBytes = size
+                insights = scanned
+            }
+            isScanningInsights = false
+        }
+    }
+
     // MARK: Analyzer navigation
 
     func openCategory(_ category: StorageCategory) {
         navigate(to: category.root, reset: true)
+    }
+
+    func openInsight(_ insight: StorageAnalyzer.StorageInsight) {
+        navigate(to: insight.url, reset: true)
     }
 
     func drill(into entry: StorageEntry) {
@@ -172,6 +213,7 @@ final class StorageModel: ObservableObject {
 
     deinit {
         categoryTask?.cancel()
+        insightTask?.cancel()
         analyzeTask?.cancel()
     }
 }

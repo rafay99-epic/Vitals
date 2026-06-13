@@ -151,4 +151,93 @@ enum StorageAnalyzer {
             )
         }
     }
+
+    // MARK: Full Disk Access
+
+    /// macOS exposes no API to query — or to request — Full Disk Access, so we
+    /// probe a file only an FDA-granted process can read: the system TCC
+    /// database. Any failure (almost always EPERM) means we don't have it.
+    /// Without FDA the analyzer still works; it just can't see into the folders
+    /// macOS protects, so totals there read low.
+    static func hasFullDiskAccess() -> Bool {
+        let probe = URL(fileURLWithPath: "/Library/Application Support/com.apple.TCC/TCC.db")
+        guard let handle = try? FileHandle(forReadingFrom: probe) else { return false }
+        try? handle.close()
+        return true
+    }
+
+    // MARK: Hidden-space insights
+
+    /// A location that quietly accumulates disk usage — surfaced so the user
+    /// can peek at it, never auto-deleted. Informed by Mole's insight catalog.
+    struct StorageInsight: Identifiable {
+        let name: String
+        let detail: String
+        let url: URL
+        var sizeBytes: UInt64?
+        /// Old Downloads is special: only files untouched for 90+ days count.
+        let oldDownloadsOnly: Bool
+
+        var id: URL { url }
+    }
+
+    /// The insight locations that exist on this Mac. These overlap the overview
+    /// categories (they live inside Home / ~/Library), so they are deliberately
+    /// kept out of the capacity bar — they're pointers, not a second breakdown.
+    static func insights() -> [StorageInsight] {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+        func lib(_ component: String) -> URL { home.appendingPathComponent("Library/\(component)") }
+
+        var found: [StorageInsight] = []
+        func add(_ name: String, _ detail: String, _ url: URL, oldDownloadsOnly: Bool = false) {
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { return }
+            found.append(.init(name: name, detail: detail, url: url, sizeBytes: nil, oldDownloadsOnly: oldDownloadsOnly))
+        }
+
+        add("iOS Backups", "Device backups under ~/Library/Application Support/MobileSync", lib("Application Support/MobileSync/Backup"))
+        add("Old Downloads", "Files in ~/Downloads untouched for 90+ days", home.appendingPathComponent("Downloads"), oldDownloadsOnly: true)
+        add("Xcode DerivedData", "Build products Xcode regenerates on the next build", lib("Developer/Xcode/DerivedData"))
+        add("Xcode Simulators", "Installed Simulator runtimes and devices", lib("Developer/CoreSimulator/Devices"))
+        add("Xcode Archives", "Saved app archives — your builds, not cache", lib("Developer/Xcode/Archives"))
+        add("Docker Data", "Docker Desktop's disk image and data", lib("Containers/com.docker.docker/Data"))
+        add("JetBrains Caches", "IDE caches and indexes", lib("Caches/JetBrains"))
+        add("Spotify Cache", "Offline and streaming cache", lib("Application Support/Spotify/PersistentCache"))
+        add("Homebrew Cache", "Downloaded bottles and old versions", lib("Caches/Homebrew"))
+        add("System Logs", "App and system logs in ~/Library/Logs", lib("Logs"))
+        add("Gradle Cache", "Downloaded build dependencies", home.appendingPathComponent(".gradle/caches"))
+        add("CocoaPods Cache", "Downloaded pods", lib("Caches/CocoaPods"))
+        add("pip Cache", "Python package cache", lib("Caches/pip"))
+        return found
+    }
+
+    static func insightSize(_ insight: StorageInsight) -> UInt64 {
+        insight.oldDownloadsOnly
+            ? sizeOfFiles(in: insight.url, olderThanDays: 90)
+            : AppInventory.directorySize(insight.url)
+    }
+
+    /// Sum of immediate entries (files and folders) last modified before the
+    /// cutoff — so "Old Downloads" counts only what's genuinely stale.
+    private static func sizeOfFiles(in directory: URL, olderThanDays days: Int) -> UInt64 {
+        let fm = FileManager.default
+        guard let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) else { return 0 }
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .isDirectoryKey, .totalFileAllocatedSizeKey]
+        guard let entries = try? fm.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles]
+        ) else { return 0 }
+
+        var total: UInt64 = 0
+        for entry in entries {
+            guard let values = try? entry.resourceValues(forKeys: keys),
+                  let modified = values.contentModificationDate, modified < cutoff else { continue }
+            if values.isDirectory == true {
+                total += AppInventory.directorySize(entry)
+            } else {
+                total += UInt64(values.totalFileAllocatedSize ?? 0)
+            }
+        }
+        return total
+    }
 }
