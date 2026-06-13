@@ -6,6 +6,7 @@ struct VitalsApp: App {
     @StateObject private var model: VitalsModel
     @StateObject private var updater: Updater
     @StateObject private var fanControl: FanController
+    @StateObject private var widgets: WidgetManager
 
     init() {
         let settings = AppSettings()
@@ -19,6 +20,8 @@ struct VitalsApp: App {
         _model = StateObject(wrappedValue: model)
         _updater = StateObject(wrappedValue: updater)
         _fanControl = StateObject(wrappedValue: FanController())
+        // Widgets observe the same model/settings — one data path, no re-polling.
+        _widgets = StateObject(wrappedValue: WidgetManager(model: model, settings: settings))
     }
 
     var body: some Scene {
@@ -48,6 +51,7 @@ struct VitalsApp: App {
             SettingsView()
                 .environmentObject(settings)
                 .environmentObject(updater)
+                .environmentObject(widgets)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
