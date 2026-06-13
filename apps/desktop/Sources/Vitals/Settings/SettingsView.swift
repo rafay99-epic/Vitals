@@ -266,6 +266,11 @@ private struct GeneralPane: View {
                     caption: "Count dotfiles and hidden folders (caches, the Trash). Applies on the next analyze.",
                     isOn: $settings.analyzerIncludesHidden
                 )
+                SwitchRow(
+                    label: "Allow scanning the whole disk",
+                    caption: "Adds a Scan whole disk action that walks every folder from the top of your drive, including system areas. It can take a while and use the disk heavily — Vitals confirms before each run.",
+                    isOn: $settings.allowWholeDiskScan
+                )
             }
 
             SettingsCard(title: "Application", symbol: "macwindow", tint: .teal) {

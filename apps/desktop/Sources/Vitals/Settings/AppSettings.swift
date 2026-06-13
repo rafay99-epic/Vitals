@@ -65,6 +65,10 @@ final class AppSettings: ObservableObject {
     @Published var autoAnalyzeStorage: Bool { didSet { defaults.set(autoAnalyzeStorage, forKey: "autoAnalyzeStorage") } }
     /// Whether the Storage analyzer counts dotfiles and hidden folders.
     @Published var analyzerIncludesHidden: Bool { didSet { defaults.set(analyzerIncludesHidden, forKey: "analyzerIncludesHidden") } }
+    /// Unlocks the "Scan whole disk" action in Storage. Off by default — it
+    /// walks system areas from the volume root and can take a while; the UI
+    /// still confirms each time before running it.
+    @Published var allowWholeDiskScan: Bool { didSet { defaults.set(allowWholeDiskScan, forKey: "allowWholeDiskScan") } }
 
     @Published var theme: AppTheme {
         didSet {
@@ -119,6 +123,7 @@ final class AppSettings: ObservableObject {
             "hideDockIcon": false,
             "autoAnalyzeStorage": false,
             "analyzerIncludesHidden": true,
+            "allowWholeDiskScan": false,
         ])
 
         refreshInterval = defaults.double(forKey: "refreshInterval")
@@ -137,6 +142,7 @@ final class AppSettings: ObservableObject {
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         autoAnalyzeStorage = defaults.bool(forKey: "autoAnalyzeStorage")
         analyzerIncludesHidden = defaults.bool(forKey: "analyzerIncludesHidden")
+        allowWholeDiskScan = defaults.bool(forKey: "allowWholeDiskScan")
 
         // SMAppService.status is an XPC round-trip; in init it sat directly
         // on the launch path and delayed the first frame. Load it async.

@@ -9,6 +9,7 @@ import AppKit
 struct StorageView: View {
     @ObservedObject var model: StorageModel
     @EnvironmentObject private var settings: AppSettings
+    @State private var confirmWholeDisk = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -282,12 +283,33 @@ struct StorageView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+                if settings.allowWholeDiskScan {
+                    Button {
+                        confirmWholeDisk = true
+                    } label: {
+                        Label("Whole disk", systemImage: "externaldrive")
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .disabled(model.isBusy)
+                    .help("Scan the entire boot volume from the top")
+                }
             }
 
             analyzerTable
         }
         .padding(16)
         .cardBackground()
+        .confirmationDialog(
+            "Scan the whole disk?",
+            isPresented: $confirmWholeDisk,
+            titleVisibility: .visible
+        ) {
+            Button("Scan Whole Disk") { model.analyzeWholeDisk() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This walks every readable folder from the top of your drive, including system areas, so it can take several minutes and use the disk heavily. Vitals only reads — nothing is deleted — and you can press Stop at any time.")
+        }
     }
 
     private var breadcrumb: some View {
@@ -320,9 +342,10 @@ struct StorageView: View {
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, minHeight: 120)
         } else {
-            let shown = Array(model.entries.prefix(200))
+            // entries is already the largest-first top-N from the model.
+            let largest = model.largestEntryBytes
             LazyVStack(spacing: 0) {
-                ForEach(Array(shown.enumerated()), id: \.element.id) { index, entry in
+                ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
                     if index > 0 {
                         Divider()
                             .opacity(0.35)
@@ -330,7 +353,7 @@ struct StorageView: View {
                     }
                     StorageRow(
                         entry: entry,
-                        fraction: model.largestEntryBytes > 0 ? Double(entry.sizeBytes) / Double(model.largestEntryBytes) : 0,
+                        fraction: largest > 0 ? Double(entry.sizeBytes) / Double(largest) : 0,
                         onOpen: {
                             if entry.isDirectory {
                                 model.drill(into: entry)
@@ -342,8 +365,8 @@ struct StorageView: View {
                     )
                 }
             }
-            if model.entries.count > shown.count {
-                Text("Showing the 200 largest of \(model.entries.count) items")
+            if model.entryTotal > model.entries.count {
+                Text("Showing the \(model.entries.count) largest of \(model.entryTotal) items")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.top, 8)

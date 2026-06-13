@@ -140,7 +140,13 @@ enum StorageAnalyzer {
             at: url, includingPropertiesForKeys: Array(keys), options: options
         ) else { return [] }
 
+        // At the volume root, drop firmware/virtual mounts and — crucially —
+        // /Volumes, so a whole-disk scan never wanders into external or network
+        // drives. Everything real (System, Library, Users, …) stays.
+        let atVolumeRoot = url.path == "/"
+
         return urls.compactMap { child in
+            if atVolumeRoot && volumeRootSkip.contains(child.lastPathComponent) { return nil }
             let values = try? child.resourceValues(forKeys: keys)
             if values?.isSymbolicLink == true { return nil }
             return StorageEntry(
@@ -151,6 +157,12 @@ enum StorageAnalyzer {
             )
         }
     }
+
+    /// Top-level entries skipped when scanning from "/": device/firmware
+    /// pseudo-directories and mount points that aren't part of this volume.
+    private static let volumeRootSkip: Set<String> = [
+        "dev", "Volumes", "Network", "net", "home", "cores", ".vol",
+    ]
 
     // MARK: Full Disk Access
 

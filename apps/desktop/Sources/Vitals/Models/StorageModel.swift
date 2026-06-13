@@ -5,14 +5,21 @@ import SwiftUI
 /// read taken on open) and — gated behind an explicit Analyze press — the
 /// occupied-storage overview and the analyzer drill-down.
 ///
-/// The split is deliberate: capacity is a single `statfs`-style read and costs
-/// nothing, but measuring categories and folders walks the disk, so none of
-/// that runs until the user asks. All filesystem work runs off the main actor;
-/// this model only polls and publishes. Sizes arrive incrementally so a
-/// multi-gigabyte tree never blocks the UI, `cancelScan()` stops everything in
-/// flight, and both tasks cancel in `deinit`.
+/// Performance shape (tuned for Apple silicon, but it helps everywhere):
+/// every byte-counting walk runs *off* the main actor. The main actor only
+/// receives finished, bounded snapshots — never a raw growing list and never a
+/// sort. The analyzer holds at most `displayLimit` rows regardless of how many
+/// children a folder has; ranking happens on a background thread and only the
+/// visible top-N crosses back to the UI. Category and insight sizes are
+/// measured concurrently (bounded), so a 12-core Mac isn't sizing one folder
+/// at a time. `cancelScan()` stops everything in flight; all tasks cancel in
+/// `deinit`.
 @MainActor
 final class StorageModel: ObservableObject {
+    /// The analyzer never publishes more than this many rows — the UI can't
+    /// show more usefully, and it caps render cost on huge directories.
+    static let displayLimit = 200
+
     @Published private(set) var volume: StorageAnalyzer.VolumeUsage?
     @Published private(set) var categories: [StorageCategory] = []
     @Published private(set) var insights: [StorageAnalyzer.StorageInsight] = []
@@ -28,7 +35,10 @@ final class StorageModel: ObservableObject {
     // Analyzer
     /// Breadcrumb stack — the last element is the path being analyzed.
     @Published private(set) var path: [URL] = []
+    /// Top `displayLimit` entries of the current folder, largest first.
     @Published private(set) var entries: [StorageEntry] = []
+    /// How many children the current folder actually has (entries is capped).
+    @Published private(set) var entryTotal = 0
     @Published private(set) var isAnalyzing = false
 
     private let inventory = AppInventory()
@@ -41,8 +51,9 @@ final class StorageModel: ObservableObject {
 
     var currentRoot: URL? { path.last }
 
-    /// The biggest entry's size, used to scale the proportional bars.
-    var largestEntryBytes: UInt64 { entries.map(\.sizeBytes).max() ?? 0 }
+    /// Largest entry's size, for scaling the bars. O(1): entries is already
+    /// sorted largest-first, so the first element is the maximum.
+    var largestEntryBytes: UInt64 { entries.first?.sizeBytes ?? 0 }
 
     var categoriesTotal: UInt64 { categories.reduce(0) { $0 + ($1.sizeBytes ?? 0) } }
 
@@ -61,11 +72,11 @@ final class StorageModel: ObservableObject {
         hasFullDiskAccess = StorageAnalyzer.hasFullDiskAccess()
     }
 
-    /// The Analyze button: refresh capacity, measure the categories, and open
-    /// the analyzer on the home folder. Everything that walks the disk lives
-    /// behind this call — opening the tab never starts it on its own.
+    /// The Analyze button: refresh capacity, measure the categories and
+    /// insights, and open the analyzer on the home folder. Everything that
+    /// walks the disk lives behind this call — opening the tab never starts it.
     func analyze(includeHidden: Bool) {
-        guard !isScanning else { return }
+        guard !isBusy else { return }
         self.includeHidden = includeHidden
         hasRun = true
         refreshAccess()
@@ -86,45 +97,80 @@ final class StorageModel: ObservableObject {
         isAnalyzing = false
     }
 
+    // MARK: Overview categories
+
     private func scanCategories() {
         categoryTask?.cancel()
         isScanning = true
+        let template = StorageAnalyzer.categories()
+        categories = template
+        // Unique roots across all categories, sized concurrently (bounded) by
+        // the shared sizer rather than one category at a time.
+        let roots = Array(Set(template.flatMap { $0.scanRoots }))
+        guard !roots.isEmpty else { isScanning = false; return }
+
         categoryTask = Task { [weak self] in
             guard let self else { return }
-            var scanned = StorageAnalyzer.categories()
-            categories = scanned  // show the cards immediately; sizes follow
-            for index in scanned.indices {
+            var sizes: [URL: UInt64] = [:]
+            for await (url, size) in inventory.sizes(for: roots) {
                 if Task.isCancelled { isScanning = false; return }
-                let category = scanned[index]
-                let size = await Task.detached(priority: .utility) {
-                    StorageAnalyzer.size(of: category)
-                }.value
-                if Task.isCancelled { isScanning = false; return }
-                scanned[index].sizeBytes = size
-                categories = scanned
+                sizes[url] = size
+                categories = Self.applyingCategorySizes(template, sizes)
             }
+            categories = Self.applyingCategorySizes(template, sizes)
             isScanning = false
         }
     }
 
+    /// Fills each category's size from measured roots. A category stays `nil`
+    /// (its card keeps spinning) until *all* its roots are measured, so a
+    /// stopped scan reads "Not measured" rather than a misleading partial.
+    nonisolated private static func applyingCategorySizes(
+        _ template: [StorageCategory], _ sizes: [URL: UInt64]
+    ) -> [StorageCategory] {
+        template.map { category in
+            var category = category
+            let measured = category.scanRoots.allSatisfy { sizes[$0] != nil }
+            category.sizeBytes = measured
+                ? category.scanRoots.reduce(0) { $0 + (sizes[$1] ?? 0) }
+                : nil
+            return category
+        }
+    }
+
+    // MARK: Insights
+
     private func scanInsights() {
         insightTask?.cancel()
         isScanningInsights = true
+        let list = StorageAnalyzer.insights()
+        insights = list
+        guard !list.isEmpty else { isScanningInsights = false; return }
+
         insightTask = Task { [weak self] in
             guard let self else { return }
-            var scanned = StorageAnalyzer.insights()
-            insights = scanned  // show the list immediately; sizes follow
-            for index in scanned.indices {
+            // Old Downloads needs date-filtered sizing; the rest are plain
+            // directory sizes, routed through the shared concurrent sizer.
+            for insight in list where insight.oldDownloadsOnly {
                 if Task.isCancelled { isScanningInsights = false; return }
-                let insight = scanned[index]
                 let size = await Task.detached(priority: .utility) {
                     StorageAnalyzer.insightSize(insight)
                 }.value
                 if Task.isCancelled { isScanningInsights = false; return }
-                scanned[index].sizeBytes = size
-                insights = scanned
+                applyInsightSize(insight.url, size)
+            }
+            let plain = list.filter { !$0.oldDownloadsOnly }.map(\.url)
+            for await (url, size) in inventory.sizes(for: plain) {
+                if Task.isCancelled { isScanningInsights = false; return }
+                applyInsightSize(url, size)
             }
             isScanningInsights = false
+        }
+    }
+
+    private func applyInsightSize(_ url: URL, _ size: UInt64) {
+        if let index = insights.firstIndex(where: { $0.url == url }) {
+            insights[index].sizeBytes = size
         }
     }
 
@@ -136,6 +182,12 @@ final class StorageModel: ObservableObject {
 
     func openInsight(_ insight: StorageAnalyzer.StorageInsight) {
         navigate(to: insight.url, reset: true)
+    }
+
+    /// Drill into the whole boot volume from "/" — gated behind a setting and a
+    /// confirmation in the UI because it walks system areas and can be slow.
+    func analyzeWholeDisk() {
+        navigate(to: URL(fileURLWithPath: "/", isDirectory: true), reset: true)
     }
 
     func drill(into entry: StorageEntry) {
@@ -165,50 +217,74 @@ final class StorageModel: ObservableObject {
         runAnalyze(root)
     }
 
+    /// Lists, sizes, and ranks a folder's children entirely off the main actor,
+    /// publishing only bounded, finished snapshots. The main actor never sorts
+    /// and never holds more than `displayLimit` rows, so even a directory with
+    /// tens of thousands of entries can't stutter the UI.
     private func runAnalyze(_ root: URL) {
         analyzeTask?.cancel()
         isAnalyzing = true
+        entries = []
+        entryTotal = 0
+        let includeHidden = self.includeHidden
+        let limit = Self.displayLimit
 
-        let children = StorageAnalyzer.children(of: root, includeHidden: includeHidden)
-        // Show the structure alphabetically straight away; rows re-sort by size
-        // as measurements land.
-        entries = children.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        let urls = children.map(\.url)
+        analyzeTask = Task.detached(priority: .utility) { [weak self, inventory] in
+            let children = StorageAnalyzer.children(of: root, includeHidden: includeHidden)
+            if Task.isCancelled { return }
 
-        guard !urls.isEmpty else {
-            isAnalyzing = false
-            return
-        }
+            // Show structure immediately (alphabetical), capped to the limit.
+            let initial = Array(
+                children.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                    .prefix(limit)
+            )
+            let total = children.count
+            await MainActor.run { [weak self] in
+                guard let self, !Task.isCancelled else { return }
+                self.entries = initial
+                self.entryTotal = total
+            }
+            guard !children.isEmpty else {
+                await MainActor.run { [weak self] in self?.isAnalyzing = false }
+                return
+            }
 
-        analyzeTask = Task { [weak self] in
-            guard let self else { return }
-            var buffer: [URL: UInt64] = [:]
-            for await (url, size) in inventory.sizes(for: urls) {
+            var sizes: [URL: UInt64] = [:]
+            var sincePublish = 0
+            for await (url, size) in inventory.sizes(for: children.map(\.url)) {
                 if Task.isCancelled { return }
-                buffer[url] = size
-                if buffer.count >= 8 {
-                    applyEntrySizes(buffer)
-                    buffer.removeAll(keepingCapacity: true)
+                sizes[url] = size
+                sincePublish += 1
+                // Re-rank off-main on a throttle; publish only the visible top-N.
+                if sincePublish >= 24 {
+                    sincePublish = 0
+                    let snapshot = Self.ranked(children, sizes: sizes, limit: limit)
+                    await MainActor.run { [weak self] in
+                        guard let self, !Task.isCancelled else { return }
+                        self.entries = snapshot
+                    }
                 }
             }
-            applyEntrySizes(buffer)
-            isAnalyzing = false
+            let snapshot = Self.ranked(children, sizes: sizes, limit: limit)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.entries = snapshot
+                self.isAnalyzing = false
+            }
         }
     }
 
-    /// Folds a batch of measured sizes in and re-sorts largest-first. Batching
-    /// (rather than publishing each size) keeps the list from re-rendering once
-    /// per child the way the apps list would.
-    private func applyEntrySizes(_ sizes: [URL: UInt64]) {
-        guard !sizes.isEmpty else { return }
-        var updated = entries
-        for index in updated.indices {
-            if let size = sizes[updated[index].url] {
-                updated[index].sizeBytes = size
-            }
+    /// Applies measured sizes and returns the largest `limit` entries, sorted
+    /// descending. Runs off the main actor.
+    nonisolated private static func ranked(
+        _ children: [StorageEntry], sizes: [URL: UInt64], limit: Int
+    ) -> [StorageEntry] {
+        var sized = children
+        for index in sized.indices {
+            sized[index].sizeBytes = sizes[sized[index].url] ?? 0
         }
-        updated.sort { $0.sizeBytes > $1.sizeBytes }
-        entries = updated
+        sized.sort { $0.sizeBytes > $1.sizeBytes }
+        return Array(sized.prefix(limit))
     }
 
     deinit {
