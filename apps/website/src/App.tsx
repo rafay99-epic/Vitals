@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/react'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
 import Dashboard from './components/Dashboard'
@@ -11,10 +10,12 @@ import DownloadSection from './components/DownloadSection'
 import Footer from './components/Footer'
 import { useLiveVitals } from './lib/useLiveVitals'
 import { useLatestRelease } from './lib/useLatestRelease'
+import { useTitle } from './lib/useTitle'
 
 export default function App() {
   const vitals = useLiveVitals()
   const release = useLatestRelease()
+  useTitle('Vitals — Your Mac has a dashboard. Apple just hid it.')
 
   return (
     <div
@@ -37,7 +38,6 @@ export default function App() {
       <Manage />
       <DownloadSection release={release} />
       <Footer />
-      <Analytics />
     </div>
   )
 }

@@ -29,3 +29,6 @@ build
 .env
 .env.local
 .env.*.local
+
+# TanStack Router plugin scratch dir (routeTree.gen.ts is committed; this isn't)
+.tanstack

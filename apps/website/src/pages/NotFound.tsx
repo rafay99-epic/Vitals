@@ -1,11 +1,13 @@
 import { REPO_URL } from '../lib/links'
 import { StatusScreen } from './StatusScreen'
 import { statusButton } from './statusStyles'
+import { useTitle } from '../lib/useTitle'
 
-/// The 404 page. Built to `dist/404.html`, which Vercel serves with a 404
-/// status for any path that doesn't match a real file. No fabricated content —
-/// it says plainly that the page isn't here and points back to the real ones.
+/// The 404 page — the router's notFoundComponent, rendered client-side for any
+/// path that doesn't match a route. No fabricated content: it says plainly that
+/// the page isn't here and points back to the real ones.
 export default function NotFound() {
+  useTitle('Page not found — Vitals')
   return (
     <StatusScreen
       eyebrow="404 · NO SIGNAL"

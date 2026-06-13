@@ -1,7 +1,9 @@
 import { LegalLayout, Section, P, List, Item, Strong, ExtLink } from './LegalLayout'
 import { COMPANY, DEVELOPER, DEVELOPER_URL, REPO_URL } from '../lib/links'
+import { useTitle } from '../lib/useTitle'
 
 export default function Terms() {
+  useTitle('Terms & Conditions — Vitals')
   return (
     <LegalLayout title="Terms & Conditions" updated="June 12, 2026">
       <Section title="1. Agreement to these terms">

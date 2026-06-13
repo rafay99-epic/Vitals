@@ -143,11 +143,23 @@ Settings → Desktop Widgets.
 - Implements a Claude Design handoff pixel-faithfully; breakpoint-dependent styles live
   in Tailwind classes (inline styles defeat media queries) — mobile-first responsive.
 - `lib/links.ts` is the single source for repo/download/company URLs.
-- Legal pages (`/terms/`, `/privacy/`) are separate Vite entries. **The privacy policy
-  must match reality** — it discloses Vercel Web Analytics; any new data flow must be
-  added there before it ships.
+- **SPA on TanStack Router** (file-based). One HTML entry (`index.html` → `main.tsx` →
+  `RouterProvider`). Routes are files in `src/routes/` (`__root.tsx`, `index.tsx`,
+  `terms.tsx`, `privacy.tsx`); the `@tanstack/router-plugin` generates
+  `src/routeTree.gen.ts` — **committed** (the `tsc -b` in `build` runs before `vite build`,
+  so it must exist). The root route wires the 404 (`notFoundComponent` → `NotFound`) and
+  error page (`errorComponent` → `ErrorScreen`); a top-level `ErrorBoundary` is the outer
+  net. Cross-route links use `<Link>`; status pages keep plain `<a href="/">` so they work
+  outside the router context too. `router` uses `trailingSlash: 'never'` (old `/terms/`
+  redirects to `/terms`). Deep links rely on the SPA fallback — `vercel.json` rewrites all
+  paths to `/index.html`, so an unknown path is a **soft 404** (200 + client-rendered
+  NotFound), not an HTTP 404.
+- Legal pages are the `/terms` and `/privacy` routes. **The privacy policy must match
+  reality** — it discloses Vercel Web Analytics (mounted once in `RootLayout`); any new
+  data flow must be added there before it ships.
 - e2e (`e2e/check.mjs`) drives the system Chrome/Brave (no browser downloads), starts
-  its own preview server, and asserts no horizontal overflow at 390/1440 px.
+  its own preview server, and asserts no horizontal overflow at 390/1440 px, plus client
+  navigation and the 404/legal routes.
 
 ## License & credit (legal requirements)
 
