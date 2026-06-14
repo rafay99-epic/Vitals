@@ -195,15 +195,19 @@ Settings → Desktop Widgets.
   abuse and keeps us under GitHub's ceiling. On limit: `list` throws (error state), `latest`
   returns null. The component keeps its **own** internal storage — it does **not** add a
   host-app schema/table, so the backend stays schemaless.
-- **Deployment is automatic:** `.github/workflows/convex.yml` typechecks `convex/` on PRs
-  and **deploys to production on push to main** (path-filtered to `convex/**`). `convex
-  deploy` typechecks, bundles, installs components (the rate-limiter), and pushes. Needs a
+- **Deployment is automatic, gated on the website.** `.github/workflows/convex.yml` runs
+  ONLY when `convex/**` changes (path filter → skipped otherwise). Two quality jobs run **in
+  parallel** — convex typecheck, and the **full website CI** (lint/test/build/e2e), since the
+  website imports the convex API and a backend change can break the build. The `deploy` job
+  runs **only after both pass**, only on push to main: it runs `convex codegen` (with a
+  `git diff` drift check so a stale committed `_generated` fails the build) then `convex
+  deploy` (which also typechecks, installs the rate-limiter component, and pushes). Needs a
   repo secret **`CONVEX_DEPLOY_KEY`** (production deploy key) — separate from the deployment
-  **env var** `GITHUB_TOKEN`, which is set on the deployment itself, not in CI. (`bun run
-  convex:deploy` does the same thing by hand.) The website on Vercel just needs
-  `VITE_CONVEX_URL` = the production Convex **Cloud URL** (`.convex.cloud`), inlined at build
-  time (redeploy after setting). The workflow has **no seed/refresh step** — that's what
-  failed before (a deploy key can't run an internal action); the live proxy needs none.
+  **env var** `GITHUB_TOKEN` (set on the deployment, not in CI). `bun run convex:deploy` does
+  the deploy by hand. The website on Vercel needs `VITE_CONVEX_URL` = the production Convex
+  **Cloud URL** (`.convex.cloud`), inlined at build (redeploy after setting). The workflow
+  has **no seed/refresh step** — that's what failed before (a deploy key can't run an
+  internal action); the live proxy needs none.
 - The website imports the typed API through the **`@convex` alias** (`apps/website`
   `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
   '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the

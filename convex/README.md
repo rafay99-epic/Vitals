@@ -51,11 +51,13 @@ bun run convex:codegen   # regenerate convex/_generated
 bun run convex:deploy    # deploy to production by hand (CI does this for you)
 ```
 
-**Production deploys automatically:** `.github/workflows/convex.yml` runs `convex deploy`
-on every push to `main` that touches `convex/` (it typechecks, bundles, installs the
-rate-limiter component, and pushes — no manual step). It needs a repo secret
-`CONVEX_DEPLOY_KEY` (a production deploy key from the dashboard). Note that's separate from
-the `GITHUB_TOKEN` *env var*, which lives on the deployment, not in CI.
+**Production deploys automatically (gated on the website).** `.github/workflows/convex.yml`
+runs only when `convex/` changes. It runs two quality checks **in parallel** — the convex
+typecheck and the full website CI (lint/test/build/e2e, because the site imports this API) —
+and deploys to production **only after both pass**, on push to `main`. The deploy step runs
+`convex codegen` (with a drift check that fails if the committed `_generated` is stale) then
+`convex deploy`. Needs a repo secret `CONVEX_DEPLOY_KEY` (a production deploy key) — separate
+from the `GITHUB_TOKEN` *env var*, which lives on the deployment, not in CI.
 
 `convex/_generated/` is **committed** so the website's `@convex/_generated/api` import
 and `tsc -b` resolve without a codegen step.

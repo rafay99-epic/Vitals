@@ -1,13 +1,14 @@
 name: Convex
 
-# Auto-deploys the Convex backend (at the repo root) to production on every push
-# to main that touches it. `convex deploy` typechecks, bundles, installs any
-# components (the rate-limiter), and pushes — no manual step, no seeding.
+# Backend pipeline for the root-level Convex project. Runs ONLY when convex code
+# changes (the path filter skips it otherwise). Two quality checks run in
+# parallel — the convex typecheck and the full website CI (the website imports
+# the convex API, so a backend change can break the build) — and the backend is
+# deployed to production ONLY after BOTH pass, and only on push to main.
 #
-# Requires a repo secret CONVEX_DEPLOY_KEY: a *production* deploy key from the
-# Convex dashboard (Project → Settings → Deploy keys). The GITHUB_TOKEN that
-# lifts GitHub's rate limit is a separate Convex *env var* set on the deployment
-# itself (`bunx convex env set GITHUB_TOKEN …`), not a GitHub Actions secret.
+# Requires a repo secret CONVEX_DEPLOY_KEY: a *production* deploy key (Convex
+# dashboard → Project → Settings → Deploy keys). The GITHUB_TOKEN that lifts the
+# GitHub rate limit is a separate Convex *env var* on the deployment, not here.
 on:
   push:
     branches: [main]
@@ -37,11 +38,8 @@ jobs:
       - name: Typecheck convex/
         run: bunx tsc -p convex/tsconfig.json --noEmit
 
-  deploy:
-    name: Deploy to Convex
-    # Only on push to main, after the functions typecheck.
-    if: github.event_name == 'push'
-    needs: typecheck
+  website:
+    name: Website (lint, test, build, e2e)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -50,6 +48,31 @@ jobs:
           bun-version: latest
       - name: Install
         run: bun install --frozen-lockfile
+      - name: Lint, test, build
+        run: bunx turbo lint test build --filter=website
+      - name: End-to-end checks (system Chrome)
+        run: bunx turbo test:e2e --filter=website
+
+  deploy:
+    name: Codegen + deploy
+    # Only on push to main, and only after BOTH quality checks pass.
+    if: github.event_name == 'push'
+    needs: [typecheck, website]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Codegen (and verify the committed output is current)
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          bunx convex codegen
+          git diff --exit-code convex/_generated \
+            || { echo "::error::convex/_generated is stale — run 'bun run convex:codegen' and commit it"; exit 1; }
       - name: Deploy
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
