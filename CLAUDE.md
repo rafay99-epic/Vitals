@@ -161,50 +161,47 @@ Settings → Desktop Widgets.
 - e2e (`e2e/check.mjs`) drives the system Chrome/Brave (no browser downloads), starts
   its own preview server, and asserts no horizontal overflow at 390/1440 px, plus client
   navigation and the 404/legal routes.
-- The download badge's version/size comes from the backend (`useLatestRelease`): Convex
-  when `VITE_CONVEX_URL` is set, else a **direct GitHub fetch fallback** so the site always
-  works (CI builds have no URL). `ConvexProvider` is mounted only when the URL is present.
-  The hook binds to one source at module load — never switch sources per render.
+- The release data (badge `version`/`size`, and the `/releases` list) comes from the
+  backend (`useLatestRelease` / `useReleases`): the Convex action when `VITE_CONVEX_URL` is
+  set, else a **direct GitHub fetch fallback** so the site always works (CI builds have no
+  URL). `ConvexProvider` is mounted only when the URL is present. Each hook binds to one
+  source at module load — never switch sources per render.
 
 ## Backend (Convex, at the repo root `convex/`)
 
-- **The repo root is the Convex project root** — deliberately *not* inside `apps/website`,
-  so the desktop app can use it later. Functions in `convex/`, the `convex` dependency +
-  scripts in the **root** `package.json` (`convex:dev` / `convex:codegen` / `convex:deploy`),
-  deployment read from the **root** `.env.local` (gitignored). Run all convex commands from
-  the repo root.
-- Headless/non-interactive: `CONVEX_AGENT_MODE=anonymous bunx convex dev` forces an
-  anonymous **local** deployment (no account). Logged in, `bunx convex dev` targets the
-  cloud dev deployment in `.env.local`. Either way the app code is identical — only the URL
-  differs.
-- Functions: object-form syntax, `args`+`returns` validators, public vs `internal*`,
-  indexed reads. Today, `releases.ts`: `get` (latest, from the singleton `releases` table —
-  the hot path for the landing badge) + `list` (all releases, from the `releaseList` table,
-  newest-first via `by_published`) public queries; `upsert` + `syncList` internal mutations;
-  `refresh` internal action. **`refresh` makes ONE GitHub call** (`fetchReleases`) and
-  updates both the list (`syncList` reconciles by tag — insert/patch-if-changed/delete) and
-  the latest singleton (from index 0). The reusable GitHub fetch/parse lives in
-  **`convex/lib/github.ts`** (Convex-free, so the website's GitHub-fallback hooks import the
-  *same* parser via `@convex/lib/github` — one parser, not two). External IO runs only in
-  the action; on failure the cache is kept, never blanked; mutations skip the write when
-  nothing changed (no spurious reactive re-renders). Put shared helpers in `convex/lib/`.
-- **Refresh is event-driven, not polled — there is no cron** (the cached release only
-  changes when a release is published, so polling would waste free-tier calls). CI
-  (`.github/workflows/convex.yml`) typechecks `convex/` on every PR/push that touches it,
-  **deploys to production on push to main** (path-filtered → no-op when convex didn't
-  change) and then seeds the cache, and **refreshes on `release: published`** so the badge
-  updates within seconds of a new app release. Needs a repo secret **`CONVEX_DEPLOY_KEY`**
-  (production deploy key). If you ever want a backstop, a *daily* cron is plenty — never an
-  hourly one.
+- **Deliberately a thin live proxy — no database, no caching, no cron, no reactive
+  streaming.** The frontend calls a Convex action; the action fetches GitHub server-side and
+  returns the data straight through; the page shows its shimmer/loading state meanwhile.
+  This is intentionally simple (it was over-built with a cache + cron + CI deploy/refresh
+  once; that was removed). Don't reintroduce tables/crons unless asked.
+- **The repo root is the Convex project root** — *not* inside `apps/website`, so the desktop
+  app can use it later. Functions in `convex/`; the `convex` dependency + `convex:dev` /
+  `convex:codegen` / `convex:deploy` scripts in the **root** `package.json`; deployment read
+  from the **root** `.env.local` (gitignored). Run all convex commands from the repo root.
+  (`CONVEX_AGENT_MODE=anonymous bunx convex dev` forces an anonymous local deployment.)
+- `releases.ts`: two public **actions** — `list` (all releases, newest-first; throws on a
+  GitHub failure → the page shows its error state) and `latest` (the badge; null on
+  failure). No queries, mutations, tables, or schema. The fetch/parse lives in the reusable
+  Convex-free **`convex/lib/github.ts`** (`fetchReleases`, `fetchLatestRelease`), which the
+  website's fallback hooks import too — one parser, not two. There is no `schema.ts`
+  (schemaless).
+- **Rate limit:** GitHub's unauthenticated API is 60 req/hour **per IP**, and all visitors
+  share the Convex deployment's one IP. Set a `GITHUB_TOKEN` env var on the deployment
+  (`bunx convex env set GITHUB_TOKEN …`) to get 5,000/hour; the actions add the auth header
+  when it's present. Reads via `process.env` (typed by `convex/env.d.ts`, since `env` isn't
+  in this Convex version's codegen).
+- **Deployment is manual + simple:** `bun run convex:deploy` (prod) when the functions
+  change — they rarely do. No GitHub Action. The website on Vercel just needs
+  `VITE_CONVEX_URL` = the production Convex **Cloud URL** (`.convex.cloud`), inlined at build
+  time (redeploy after setting).
 - The website imports the typed API through the **`@convex` alias** (`apps/website`
   `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
   '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the
   website's `tsc -b` resolve without a codegen step; turbo's `globalDependencies` lists
-  `convex/_generated/**` so a backend change busts the website cache. After changing a
-  schema/function, re-run `bun run convex:codegen` (or `convex:dev`) to regenerate it.
-- `bun run lint` runs `turbo lint` **and** typechecks `convex/` (`tsc -p convex/tsconfig.json`).
-  The Convex CLI's opt-in "AI files" (`AGENTS.md`, `.agents/`, `skills-lock.json`) are
-  gitignored. For any code under `convex/`, use the **convex-expert** subagent.
+  `convex/_generated/**`. After changing a function, re-run `bun run convex:codegen`.
+- `bun run lint` runs `turbo lint` **and** typechecks `convex/`. The Convex CLI's opt-in "AI
+  files" (`AGENTS.md`, `.agents/`, `skills-lock.json`) are gitignored. For any code under
+  `convex/`, use the **convex-expert** subagent.
 
 ## License & credit (legal requirements)
 

@@ -1,7 +1,7 @@
-/// Reusable, Convex-free GitHub release fetcher. No Convex imports — just
-/// `fetch` + parse — so it can be unit-tested in isolation and reused by any
-/// future action. Returns `null` on any failure (network, non-2xx, malformed)
-/// so callers keep their last cached value rather than blank it.
+/// Reusable, Convex-free GitHub release fetchers. No Convex imports — just
+/// `fetch` + parse — so the Convex actions and the website's direct-fetch
+/// fallback share one parser. Returns `null` on any failure (network, non-2xx,
+/// malformed) so the caller can show an empty/error state.
 
 /// The shape of a GitHub release payload we care about.
 interface GitHubReleasePayload {
@@ -27,10 +27,33 @@ export interface ReleaseSummary {
   sizeMB: string | null
 }
 
-/// Default repository (owner/name) and request timeout.
+/// The latest release as the download badge consumes it.
+export interface LatestRelease {
+  version: string
+  sizeMB: string | null
+}
+
+/// `token` lifts GitHub's unauthenticated 60-req/hour-per-IP limit to 5,000.
+/// Only the server-side Convex actions pass it (from `GITHUB_TOKEN`); the
+/// browser fallback never does — a token must not reach client code.
+export interface FetchOptions {
+  repo?: string
+  timeoutMs?: number
+  token?: string
+}
+
 const DEFAULT_REPO = 'rafay99-epic/Vitals'
 const DEFAULT_TIMEOUT_MS = 10_000
 const BYTES_PER_MB = 1_048_576
+
+function headers(token?: string): Record<string, string> {
+  const h: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'vitals-website',
+  }
+  if (token) h.Authorization = `Bearer ${token}`
+  return h
+}
 
 /// Formats a byte count as a `"12.3 MB"` string. Returns `null` for missing or
 /// non-positive sizes so the badge stays honest.
@@ -39,17 +62,34 @@ export function bytesToMB(bytes: number | undefined): string | null {
   return (bytes / BYTES_PER_MB).toFixed(1) + ' MB'
 }
 
+/// Fetches the latest published release for the download badge, or `null` on
+/// any failure (so the badge shows no version rather than a fake one).
+export async function fetchLatestRelease(opts: FetchOptions = {}): Promise<LatestRelease | null> {
+  const { repo = DEFAULT_REPO, timeoutMs = DEFAULT_TIMEOUT_MS, token } = opts
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+      headers: headers(token),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!res.ok) return null
+    const json = (await res.json()) as GitHubReleasePayload
+    if (!json.tag_name) return null
+    const dmg = json.assets?.find((a) => a.name?.endsWith('.dmg'))
+    return { version: json.tag_name, sizeMB: bytesToMB(dmg?.size) }
+  } catch {
+    return null
+  }
+}
+
 /// Fetches the full release list for `repo` (one call, up to 100 releases).
 /// Resolves to a newest-first array of `ReleaseSummary`, or `null` on any
-/// failure (network error, non-2xx, non-array body) so callers keep their
-/// cached rows. Drafts, prereleases, and tag-less releases are filtered out.
-export async function fetchReleases(
-  repo: string = DEFAULT_REPO,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
-): Promise<ReleaseSummary[] | null> {
+/// failure (network error, non-2xx, non-array body) so the caller can show an
+/// error state. Drafts, prereleases, and tag-less releases are filtered out.
+export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSummary[] | null> {
+  const { repo = DEFAULT_REPO, timeoutMs = DEFAULT_TIMEOUT_MS, token } = opts
   try {
     const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'vitals-website' },
+      headers: headers(token),
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) return null
@@ -69,12 +109,10 @@ export async function fetchReleases(
         sizeMB: bytesToMB(dmg?.size),
       })
     }
-    // Newest first — the page lists in this order and `refresh` derives latest
-    // from index 0.
+    // Newest first — the page lists in this order.
     summaries.sort((a, b) => b.publishedAt - a.publishedAt)
     return summaries
   } catch {
-    // Network/parse failure: signal "no update" so the caller keeps its cache.
     return null
   }
 }

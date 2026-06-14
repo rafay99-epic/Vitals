@@ -1,69 +1,53 @@
 # Convex backend
 
-The shared Vitals backend, on [Convex](https://convex.dev). It lives at the **repo
-root** (not inside `apps/website`) so any app — the website today, the desktop app
-later — can use it.
+A thin [Convex](https://convex.dev) backend for the Vitals website — a **live proxy
+to the GitHub Releases API**. The frontend calls a Convex action, the action fetches
+GitHub server-side and returns the data, and the page shows its shimmer/loading state
+while it's in flight. No database, no caching, no cron — deliberately simple.
 
-The repo root is the Convex project root: functions are in `convex/`, the `convex`
-dependency and scripts are in the root `package.json`, and the deployment is read
-from the root `.env.local` (gitignored).
+It lives at the **repo root** (not inside `apps/website`) so any app — the website
+today, the desktop app later — can use it. The repo root is the Convex project root:
+functions in `convex/`, the `convex` dependency + scripts in the root `package.json`,
+deployment in the root `.env.local` (gitignored).
 
-## What it does
+## Functions (`releases.ts`)
 
-One feature today: it caches the **latest GitHub release** so the website doesn't
-hit GitHub's API from every visitor's browser.
+- `list` (public action) — every published release, newest first (for `/releases`).
+  Throws on a GitHub failure so the page can show its error state.
+- `latest` (public action) — the latest release for the download badge, or `null`.
+- `lib/github.ts` — reusable, Convex-free `fetchReleases` / `fetchLatestRelease`. The
+  website's direct-fetch fallback imports the same module, so there's one parser.
 
-- `releases.ts`
-  - `refresh` (internal action) — fetches `github.com/rafay99-epic/Vitals`
-    `releases/latest`, parses the version + `.dmg` size, upserts one row.
-  - `upsert` (internal mutation) — writes the singleton row.
-  - `get` (public query) — the latest, from the `releases` singleton; what the landing
-    badge subscribes to.
-  - `list` (public query) — every release, newest-first, from the `releaseList` table; what
-    the website's `/releases` page subscribes to.
-  - `refresh` makes **one** GitHub call and updates both the list (`syncList` reconciles by
-    tag) and the latest singleton.
-- `lib/github.ts` — reusable, Convex-free GitHub fetch/parse (`fetchReleases`, `bytesToMB`).
-  Shared helpers live in `lib/`; the website's fallback hooks import this same module.
-- `schema.ts` — the `releases` singleton (latest) + the `releaseList` table (all releases).
+## Rate limit — set a GitHub token
 
-On any GitHub failure the cached value is left untouched — never blanked. `upsert` also
-skips the write when nothing changed.
+GitHub's **unauthenticated** API allows **60 requests/hour per IP**, and every visitor
+shares the Convex deployment's single IP. At low traffic that's fine; to be safe, set a
+token (a classic PAT with no scopes, or a fine-grained token with public read is enough)
+so requests are authenticated (5,000/hour):
 
-**No cron.** The cached release only changes when a release is published, so refreshing is
-**event-driven** (it would waste free-tier function calls to poll): the CI workflow
-(`.github/workflows/convex.yml`) refreshes on every backend deploy and on
-`release: published`. A *daily* cron would be a fine optional backstop; an hourly one isn't
-worth it.
+```sh
+bunx convex env set GITHUB_TOKEN <token>           # dev deployment
+bunx convex env set GITHUB_TOKEN <token> --prod    # production
+```
+
+The actions add the auth header automatically when `GITHUB_TOKEN` is set. Never commit
+the token — it lives only in the Convex env (and never reaches client code).
 
 ## Commands (run from the repo root)
 
 ```sh
 bun run convex:dev       # start the dev server + watch/push functions
-bun run convex:codegen   # regenerate convex/_generated without deploying
-bun run convex:deploy    # deploy to the production deployment
-
-# headless / non-interactive shells: force an anonymous local deployment
-CONVEX_AGENT_MODE=anonymous bunx convex dev
-
-# seed the cache once (CI also seeds it on every deploy and on each release)
-bunx convex run releases:refresh '{}'
+bun run convex:codegen   # regenerate convex/_generated
+bun run convex:deploy    # deploy to production (do this when functions change)
 ```
+
+`convex/_generated/` is **committed** so the website's `@convex/_generated/api` import
+and `tsc -b` resolve without a codegen step.
 
 ## How the apps consume it
 
-- **Website** imports the typed API via the `@convex` alias (configured in
-  `apps/website/vite.config.ts` + `tsconfig.app.json`): `import { api } from
-  '@convex/_generated/api'`. It reads the cache when `VITE_CONVEX_URL` is set,
-  else falls back to a direct GitHub fetch (so it always works). Point local dev
-  at the deployment with `apps/website/.env.local`:
-
-  ```sh
-  VITE_CONVEX_URL=<your CONVEX_URL from the root .env.local>
-  ```
-
+- **Website** imports the API via the `@convex` alias and calls the actions with
+  `useAction`. It reads from Convex when `VITE_CONVEX_URL` is set, else falls back to a
+  direct GitHub fetch (so it always works). On Vercel, set `VITE_CONVEX_URL` to the
+  production Convex **Cloud URL** (`.convex.cloud`).
 - **Desktop** (future) would call the deployment over HTTP using `CONVEX_URL`.
-
-`convex/_generated/` is **committed** so the website's `@convex/_generated/api`
-import and `tsc -b` resolve without a codegen step. After changing a schema or
-function, re-run `bun run convex:codegen` (or `convex:dev`) to regenerate it.
