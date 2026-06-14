@@ -16,3 +16,6 @@ AGENTS.md
 .agents/
 skills-lock.json
 convex/_generated/ai/
+
+# Dev-channel app icon — generated locally, not shipped.
+apps/desktop/Resources/AppIcon-Dev.icns
