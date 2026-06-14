@@ -1,9 +1,12 @@
 name: Pre-release (Dev)
 
 # The Dev channel's feed. Every push to a non-main branch builds the Dev app
-# and publishes a per-branch GitHub *pre-release* carrying Vitals-Dev.dmg. The
-# Dev app's updater tracks the newest pre-release, so anyone running Dev rides
-# the latest branch build. Stable (main → release.yml) is untouched.
+# and publishes TWO GitHub *pre-releases* carrying Vitals-Dev.dmg:
+#   1. a per-branch tag (dev-<branch>) — install a specific branch's build
+#   2. a rolling `dev` tag — always the newest Dev build; the stable download URL
+#      the Homebrew cask (rafay99-epic/apps/vitals-dev) points at.
+# The Dev app's updater tracks the newest pre-release. Stable (main →
+# release.yml) is untouched.
 #
 # Gated by tests: a broken branch publishes nothing.
 on:
@@ -80,3 +83,22 @@ jobs:
           **Install:** download \`Vitals-Dev.dmg\` below and drag to Applications. It installs as **Vitals Dev** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Dev auto-updates to the newest pre-release.
 
           ⚠️ Unsigned pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
+
+      - name: Update rolling "latest Dev" pre-release (for the Homebrew cask)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A single fixed `dev` tag that always holds the newest Dev DMG — GitHub
+          # has no /latest/ download URL for pre-releases, so the Homebrew cask
+          # (rafay99-epic/apps/vitals-dev) and anyone wanting "the latest Dev"
+          # need this stable pointer. Updated on every branch's build.
+          gh release delete dev --yes --cleanup-tag 2>/dev/null || true
+          gh release create dev build/Vitals-Dev.dmg \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Vitals Dev (latest) · build $BUILD" \
+            --notes "The newest Dev build — from branch \`$BRANCH\` @ \`$SHA\` (build $BUILD, version $VERSION-dev).
+
+          **Install:** \`brew install --cask rafay99-epic/apps/vitals-dev\`
+
+          Installs as **Vitals Dev** alongside a Stable copy (separate app, icon, and settings) and auto-updates from this feed. Unsigned pre-release build."
