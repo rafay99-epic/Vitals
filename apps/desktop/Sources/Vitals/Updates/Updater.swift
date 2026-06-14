@@ -22,6 +22,14 @@ final class Updater: ObservableObject {
         let tag: String
         let assetURL: String
         let assetName: String
+        /// Monotonic CI build number, parsed from the release name. 0 when absent
+        /// (e.g. Stable releases, which order by version instead).
+        var buildNumber: Int = 0
+
+        /// What to show the user: the version, plus the build number for Dev.
+        var displayVersion: String {
+            buildNumber > 0 ? "\(version) (build \(buildNumber))" : version
+        }
     }
 
     struct UpdateError: LocalizedError {
@@ -31,7 +39,16 @@ final class Updater: ObservableObject {
 
     nonisolated static let repository = "rafay99-epic/Vitals"
     nonisolated static let currentVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
-    nonisolated private static let installPath = "/Applications/Vitals.app"
+    /// This build's CI build number (`VitalsBuildNumber`), used to order Dev
+    /// pre-releases. 0 for local builds — so a local Dev build always sees the
+    /// published pre-release as newer and can pull the official one.
+    nonisolated static let currentBuildNumber = Int(Bundle.main.infoDictionary?["VitalsBuildNumber"] as? String ?? "") ?? 0
+    /// Replace the actual running bundle (wherever it lives), not a hardcoded
+    /// path — so an app launched from a non-standard location updates in place.
+    nonisolated private static let installPath = Bundle.main.bundlePath
+    /// The DMG asset this channel installs, and the app bundle inside it.
+    nonisolated static var assetName: String { Channel.current.isDev ? "Vitals-Dev.dmg" : "Vitals.dmg" }
+    nonisolated static var bundleInImage: String { "\(Channel.current.displayName).app" }
 
     @Published private(set) var status: Status = .idle
     @Published private(set) var lastChecked: Date?
@@ -47,6 +64,8 @@ final class Updater: ObservableObject {
     }
 
     /// Checks at launch and every 6 hours while the automatic toggle is on.
+    /// Each channel tracks its own feed: Stable → the latest release, Dev → the
+    /// latest pre-release (see `fetchLatestRelease`).
     func startAutomaticChecks(settings: AppSettings) {
         settings.$autoUpdateCheck
             .removeDuplicates()
@@ -71,13 +90,13 @@ final class Updater: ObservableObject {
         do {
             let release = try await Self.fetchLatestRelease()
             lastChecked = Date()
-            if let release, Self.isVersion(release.version, newerThan: Self.currentVersion) {
+            if let release, Self.isNewer(release) {
                 status = .available(release)
-                if !userInitiated, notifiedVersion != release.version {
-                    notifiedVersion = release.version
+                if !userInitiated, notifiedVersion != release.tag + "#\(release.buildNumber)" {
+                    notifiedVersion = release.tag + "#\(release.buildNumber)"
                     notifications.send(
-                        title: "Vitals \(release.version) is available",
-                        body: "Open Vitals and click Install Update to upgrade from \(Self.currentVersion).",
+                        title: "\(Channel.current.displayName) \(release.displayVersion) is available",
+                        body: "Open \(Channel.current.displayName) and click Install Update.",
                         id: "vitals.update"
                     )
                 }
@@ -86,6 +105,16 @@ final class Updater: ObservableObject {
             }
         } catch {
             status = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Is `release` newer than what's installed? Stable compares the numeric
+    /// version; Dev compares the monotonic CI build number (the pre-release feed
+    /// reuses tags, so the version string alone can't order builds).
+    nonisolated static func isNewer(_ release: Release) -> Bool {
+        switch Channel.current {
+        case .stable: return isVersion(release.version, newerThan: currentVersion)
+        case .dev:    return release.buildNumber > currentBuildNumber
         }
     }
 
@@ -109,45 +138,84 @@ final class Updater: ObservableObject {
 
     // MARK: - GitHub API
 
-    nonisolated static func fetchLatestRelease() async throws -> Release? {
-        let token = githubToken()
-        var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        if let token {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    private struct APIRelease: Decodable {
+        struct Asset: Decodable {
+            let name: String
+            let url: String
         }
+        let tagName: String
+        let name: String?
+        let prerelease: Bool?
+        let assets: [Asset]
+    }
+
+    /// Stable tracks the latest published release; Dev tracks the newest
+    /// pre-release across all branches (the feed `prerelease.yml` publishes).
+    nonisolated static func fetchLatestRelease() async throws -> Release? {
+        Channel.current.isDev ? try await fetchLatestPrerelease() : try await fetchStableRelease()
+    }
+
+    nonisolated private static func fetchStableRelease() async throws -> Release? {
+        let endpoint = "https://api.github.com/repos/\(repository)/releases/latest"
+        guard let data = try await get(endpoint) else { return nil }
+        let api = try jsonDecoder().decode(APIRelease.self, from: data)
+        return release(from: api)
+    }
+
+    nonisolated private static func fetchLatestPrerelease() async throws -> Release? {
+        // The list is newest-first; take the first pre-release carrying a Dev DMG.
+        let endpoint = "https://api.github.com/repos/\(repository)/releases?per_page=30"
+        guard let data = try await get(endpoint) else { return nil }
+        let releases = try jsonDecoder().decode([APIRelease].self, from: data)
+        for api in releases where (api.prerelease ?? false) {
+            if let release = release(from: api) { return release }
+        }
+        return nil  // no Dev pre-release published yet
+    }
+
+    /// Shared GET with auth + status handling. Returns nil for a 404 "nothing
+    /// published yet" once we know the token can see the (private) repo.
+    nonisolated private static func get(_ urlString: String) async throws -> Data? {
+        let token = githubToken()
+        var request = URLRequest(url: URL(string: urlString)!)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw UpdateError(message: "Unexpected response from GitHub.")
         }
         switch http.statusCode {
-        case 200:
-            break
+        case 200: return data
         case 404 where token == nil:
             throw UpdateError(message: "Can't see the private repository. Install GitHub CLI and run “gh auth login”.")
-        case 404:
-            return nil  // no releases published yet
-        default:
-            throw UpdateError(message: "GitHub returned HTTP \(http.statusCode).")
+        case 404: return nil  // nothing published yet
+        default: throw UpdateError(message: "GitHub returned HTTP \(http.statusCode).")
         }
+    }
 
-        struct APIRelease: Decodable {
-            struct Asset: Decodable {
-                let name: String
-                let url: String
-            }
-            let tagName: String
-            let assets: [Asset]
-        }
+    nonisolated private static func jsonDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let api = try decoder.decode(APIRelease.self, from: data)
-        guard let asset = api.assets.first(where: { $0.name.hasSuffix(".dmg") }) else {
-            throw UpdateError(message: "Release \(api.tagName) has no DMG asset.")
-        }
+        return decoder
+    }
+
+    /// Build a `Release` from an API payload, preferring this channel's DMG.
+    nonisolated private static func release(from api: APIRelease) -> Release? {
+        let asset = api.assets.first { $0.name == assetName }
+            ?? api.assets.first { $0.name.hasSuffix(".dmg") }
+        guard let asset else { return nil }
         let version = api.tagName.hasPrefix("v") ? String(api.tagName.dropFirst()) : api.tagName
-        return Release(version: version, tag: api.tagName, assetURL: asset.url, assetName: asset.name)
+        return Release(version: version, tag: api.tagName, assetURL: asset.url,
+                       assetName: asset.name, buildNumber: buildNumber(in: api.name))
+    }
+
+    /// Parse the monotonic build number out of a release name like
+    /// "Vitals Dev · feature/x · build 42". 0 when absent.
+    nonisolated static func buildNumber(in name: String?) -> Int {
+        guard let name,
+              let range = name.range(of: #"build (\d+)"#, options: .regularExpression) else { return 0 }
+        return Int(name[range].dropFirst("build ".count)) ?? 0
     }
 
     nonisolated static func download(_ release: Release) async throws -> URL {
@@ -185,9 +253,9 @@ final class Updater: ObservableObject {
             try? FileManager.default.removeItem(at: dmg)
         }
 
-        let source = mountPoint.appendingPathComponent("Vitals.app")
+        let source = mountPoint.appendingPathComponent(bundleInImage)
         guard FileManager.default.fileExists(atPath: source.path) else {
-            throw UpdateError(message: "The update image doesn't contain Vitals.app.")
+            throw UpdateError(message: "The update image doesn't contain \(bundleInImage).")
         }
         if FileManager.default.fileExists(atPath: installPath) {
             try FileManager.default.removeItem(atPath: installPath)

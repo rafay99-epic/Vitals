@@ -26,5 +26,7 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Syntax Lab Technology. Licensed under GPL-3.0.</string>
+	<key>VitalsChannel</key>
+	<string>stable</string>
 </dict>
 </plist>

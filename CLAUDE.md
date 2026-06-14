@@ -42,6 +42,28 @@ License: **GPL-3.0**.
 - Website + app updater both rely on `releases/latest/download/Vitals.dmg` — never
   rename the DMG asset.
 
+### Build channels (Stable + Dev)
+
+- `VITALS_CHANNEL` (read by `build.sh` + `make-dmg.sh`) selects the channel; **default
+  `stable`**, so `release.yml` is unaffected. `dev` builds **`Vitals Dev.app`** /
+  **`Vitals-Dev.dmg`** with bundle id `…vitals.dev`, a purple+`DEV` icon, version
+  `…-dev`, a baked `VitalsBuildInfo` (`branch@sha`), and a `VitalsBuildNumber`
+  (`VITALS_BUILD`, the CI run number). The two install side by side and run at once —
+  the single-instance guard keys off `Bundle.main.bundleIdentifier`.
+- Everything channel-specific derives at runtime from the bundle, not hardcoded:
+  `Channel.current` (reads the `VitalsChannel` Info.plist key), `FanControl.label` /
+  `supportDir` (so Dev's fan helper + `/Library/Application Support/Vitals Dev` are
+  isolated), and `Updater.installPath` (= `Bundle.main.bundlePath`).
+- **Two release feeds.** Stable → `release.yml` (push to main) publishes a normal
+  release (`Vitals.dmg`, marked latest). Dev → `prerelease.yml` (push to any non-main
+  branch) publishes a **per-branch pre-release** (`dev-<branch>`) carrying
+  `Vitals-Dev.dmg`; both are test-gated. The release **title must contain `build <n>`**
+  — the Dev updater parses it. The Dev updater (`fetchLatestPrerelease`) tracks the
+  **newest pre-release** and orders builds by `VitalsBuildNumber` (Stable still orders
+  by version). The release DMG must contain `<CFBundleName>.app` (`Updater.bundleInImage`).
+- **`./dev.sh`** builds the current branch as Dev and installs+launches it locally next
+  to Stable (build number 0, so it'll offer to pull the published pre-release).
+
 ## Commands
 
 ```sh

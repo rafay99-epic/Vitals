@@ -1,25 +1,37 @@
 #!/bin/zsh
-# Packages build/Vitals.app into a polished drag-to-install disk image.
-# Usage: ./make-dmg.sh   (runs ./build.sh first if the app is missing)
+# Packages the built app into a polished drag-to-install disk image.
+#   VITALS_CHANNEL=stable (default) → build/Vitals.dmg     (Vitals.app)
+#   VITALS_CHANNEL=dev              → build/Vitals-Dev.dmg  ("Vitals Dev.app")
+# Runs ./build.sh first if the app is missing.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="build/Vitals.app"
-[ -d "$APP" ] || ./build.sh
+CHANNEL="${VITALS_CHANNEL:-stable}"
+if [[ "$CHANNEL" == "dev" ]]; then
+  APP_NAME="Vitals Dev"
+  VOLUME="Vitals Dev"
+  OUT_DMG="build/Vitals-Dev.dmg"
+else
+  APP_NAME="Vitals"
+  VOLUME="Vitals"
+  OUT_DMG="build/Vitals.dmg"
+fi
 
-VOLUME="Vitals"
+APP="build/$APP_NAME.app"
+[ -d "$APP" ] || VITALS_CHANNEL="$CHANNEL" ./build.sh
+
 STAGE="build/dmg-stage"
 RW_DMG="build/Vitals-rw.dmg"
-OUT_DMG="build/Vitals.dmg"
 
 echo "Rendering installer background…"
 swift Scripts/MakeDMGBackground.swift build/dmg-background.png
 
 rm -rf "$STAGE" "$RW_DMG" "$OUT_DMG"
 mkdir -p "$STAGE/.background"
-cp -R "$APP" "$STAGE/Vitals.app"
+cp -R "$APP" "$STAGE/$APP_NAME.app"
 cp build/dmg-background.png "$STAGE/.background/background.png"
-cp Resources/AppIcon.icns "$STAGE/.VolumeIcon.icns"
+# Use this channel's own icon as the volume icon.
+cp "$APP/Contents/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
 ln -s /Applications "$STAGE/Applications"
 
 echo "Creating writable image…"
@@ -36,9 +48,10 @@ fi
 
 # Window size, icon positions, and background. If Finder automation is not
 # permitted (e.g. some CI runners), the DMG still works with default layout.
-if ! osascript <<'EOF'
+# Unquoted heredoc so $VOLUME / $APP_NAME interpolate (AppleScript has no $).
+if ! osascript <<EOF
 tell application "Finder"
-	tell disk "Vitals"
+	tell disk "$VOLUME"
 		open
 		set current view of container window to icon view
 		set toolbar visible of container window to false
@@ -49,7 +62,7 @@ tell application "Finder"
 		set icon size of viewOptions to 104
 		set text size of viewOptions to 13
 		set background picture of viewOptions to file ".background:background.png"
-		set position of item "Vitals.app" of container window to {165, 205}
+		set position of item "$APP_NAME.app" of container window to {165, 205}
 		set position of item "Applications" of container window to {495, 205}
 		update without registering applications
 		close

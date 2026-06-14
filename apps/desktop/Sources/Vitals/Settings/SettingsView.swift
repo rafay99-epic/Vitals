@@ -444,7 +444,7 @@ private struct UpdatesPane: View {
         VStack(spacing: 12) {
             SettingsCard(title: "Software updates", symbol: "arrow.down.circle", tint: .green) {
                 settingsRow("Installed version") {
-                    Text(Updater.currentVersion)
+                    Text(installedVersion)
                         .font(.system(.callout, design: .rounded, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -457,7 +457,7 @@ private struct UpdatesPane: View {
                         }
                         .disabled(updater.isBusy)
                         if case .available(let release) = updater.status {
-                            Button("Install Vitals \(release.version)") {
+                            Button("Install \(Channel.current.displayName) \(release.displayVersion)") {
                                 Task { await updater.downloadAndInstall() }
                             }
                             .buttonStyle(.borderedProminent)
@@ -472,21 +472,28 @@ private struct UpdatesPane: View {
         }
     }
 
+    private var installedVersion: String {
+        let build = Updater.currentBuildNumber
+        return build > 0 ? "\(Updater.currentVersion) (build \(build))" : Updater.currentVersion
+    }
+
     private var updateStatusLine: String {
         switch updater.status {
         case .idle:
-            return "Updates install from this project's GitHub releases."
+            return Channel.current.isDev
+                ? "Dev tracks the newest pre-release build on GitHub."
+                : "Updates install from this project's GitHub releases."
         case .checking:
             return "Checking for updates…"
         case .upToDate:
             let when = updater.lastChecked.map { $0.formatted(date: .omitted, time: .shortened) } ?? ""
             return "You're up to date. Last checked \(when)."
         case .available(let release):
-            return "Vitals \(release.version) is ready to install."
+            return "\(Channel.current.displayName) \(release.displayVersion) is ready to install."
         case .downloading:
             return "Downloading update…"
         case .installing:
-            return "Installing — Vitals will relaunch in a moment."
+            return "Installing — \(Channel.current.displayName) will relaunch in a moment."
         case .failed(let message):
             return message
         }
@@ -509,11 +516,16 @@ private struct AboutPane: View {
     private static let moleURL = URL(string: "https://github.com/tw93/mole")!
 
     private var versionLine: String {
+        var line: String
         let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? Updater.currentVersion
         if build == Updater.currentVersion {
-            return "Version \(Updater.currentVersion)"
+            line = "Version \(Updater.currentVersion)"
+        } else {
+            line = "Version \(Updater.currentVersion) (build \(build))"
         }
-        return "Version \(Updater.currentVersion) (build \(build))"
+        // Dev builds stamp the exact branch@sha so you know what's running.
+        if let info = Channel.buildInfo { line += " · \(info)" }
+        return line
     }
 
     var body: some View {
@@ -522,8 +534,18 @@ private struct AboutPane: View {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
                     .frame(width: 64, height: 64)
-                Text("Vitals")
-                    .font(.system(size: 18, weight: .semibold))
+                HStack(spacing: 7) {
+                    Text(Channel.current.displayName)
+                        .font(.system(size: 18, weight: .semibold))
+                    if let badge = Channel.current.badge {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(.orange))
+                            .foregroundStyle(.white)
+                    }
+                }
                 Text(versionLine)
                     .font(.system(.callout, design: .rounded))
                     .monospacedDigit()
