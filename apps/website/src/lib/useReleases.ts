@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useQuery } from 'convex/react'
+import { useAction } from 'convex/react'
 import { api } from '@convex/_generated/api'
 import { fetchReleases, type ReleaseSummary } from '@convex/lib/github'
 import { convexEnabled } from './convex'
@@ -14,21 +14,10 @@ export interface ReleasesResult {
   retry: () => void
 }
 
-/// Convex-backed: reactive read of the cached list. `undefined` means the first
-/// load is still in flight. A query error throws up to the route's error
-/// boundary (rare, infra-level), so this path doesn't surface `error` inline.
-function useReleasesFromConvex(): ReleasesResult {
-  const data = useQuery(api.releases.list, {})
-  return {
-    status: data === undefined ? 'loading' : 'ready',
-    releases: data ?? [],
-    retry: () => window.location.reload(),
-  }
-}
-
-/// Fallback: fetch straight from GitHub (same `fetchReleases` helper the backend
-/// uses). Surfaces a real `error` state, and `retry` re-runs the fetch.
-function useReleasesFromGitHub(): ReleasesResult {
+/// Shared load state machine. `load` resolves to the releases, or `null` on
+/// failure (→ error state). It must be referentially stable so the effect
+/// re-runs only on retry.
+function useReleaseLoader(load: () => Promise<ReleaseSummary[] | null>): ReleasesResult {
   const [nonce, setNonce] = useState(0)
   const [state, setState] = useState<{ status: 'loading' | 'error' | 'ready'; releases: ReleaseSummary[] }>({
     status: 'loading',
@@ -37,7 +26,7 @@ function useReleasesFromGitHub(): ReleasesResult {
 
   useEffect(() => {
     let alive = true
-    fetchReleases()
+    load()
       .then((list) => {
         if (!alive) return
         setState(list === null ? { status: 'error', releases: [] } : { status: 'ready', releases: list })
@@ -48,14 +37,28 @@ function useReleasesFromGitHub(): ReleasesResult {
     return () => {
       alive = false
     }
-  }, [nonce])
+  }, [nonce, load])
 
-  // Reset to loading here (not in the effect) and bump the nonce to re-fetch.
+  // Reset to loading here (not in the effect) and bump the nonce to re-run.
   const retry = useCallback(() => {
     setState({ status: 'loading', releases: [] })
     setNonce((n) => n + 1)
   }, [])
   return { ...state, retry }
+}
+
+/// Convex-backed: call the proxy action (one-shot, not reactive). The action
+/// throws on a GitHub failure → treat as the error state.
+function useReleasesFromConvex(): ReleasesResult {
+  const listAction = useAction(api.releases.list)
+  const load = useCallback(() => listAction({}).catch(() => null), [listAction])
+  return useReleaseLoader(load)
+}
+
+/// Fallback: fetch GitHub directly (no backend configured). `fetchReleases` is
+/// already stable and returns `null` on failure.
+function useReleasesFromGitHub(): ReleasesResult {
+  return useReleaseLoader(fetchReleases)
 }
 
 /// Every published release, newest first, plus its load state. Bound once at

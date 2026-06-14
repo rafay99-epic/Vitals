@@ -1,17 +1,15 @@
 import { v } from 'convex/values'
-import { query, internalAction, internalMutation } from './_generated/server'
-import { internal } from './_generated/api'
-import { fetchReleases } from './lib/github'
+import { RateLimiter, MINUTE } from '@convex-dev/rate-limiter'
+import { action } from './_generated/server'
+import { components } from './_generated/api'
+import { fetchReleases, fetchLatestRelease } from './lib/github'
 
-/// Shape returned to the client for the singleton. Mirrors the website's
-/// `LatestRelease`.
-const releaseValidator = v.object({
-  version: v.string(),
-  sizeMB: v.union(v.string(), v.null()),
-})
+/// A thin live proxy to the GitHub Releases API — no database, no caching, no
+/// schema. The frontend calls these actions, they fetch GitHub server-side, and
+/// return the data straight through. The frontend shows the loading/shimmer
+/// state while the call is in flight.
 
-/// One row of the full release list, as `list` returns it and `syncList`
-/// accepts it. Shared so the public read and the reconcile mutation can't drift.
+/// One release as `list` returns it.
 const releaseSummaryValidator = v.object({
   tag: v.string(),
   name: v.string(),
@@ -21,140 +19,46 @@ const releaseSummaryValidator = v.object({
   sizeMB: v.union(v.string(), v.null()),
 })
 
-/// The public read: the cached latest release, or null before the first fetch.
-/// Reactive — when `refresh` upserts a new version, every subscribed visitor's
-/// download badge updates automatically.
-export const get = query({
-  args: {},
-  returns: v.union(releaseValidator, v.null()),
-  handler: async (ctx) => {
-    const row = await ctx.db
-      .query('releases')
-      .withIndex('by_key', (q) => q.eq('key', 'latest'))
-      .unique()
-    if (row === null) return null
-    return { version: row.version, sizeMB: row.sizeMB }
-  },
+// Optional GitHub token (set `GITHUB_TOKEN` in the Convex dashboard) lifts the
+// rate limit from 60 to 5,000 requests/hour. Works without it at low traffic.
+const githubToken = () => process.env.GITHUB_TOKEN
+
+// One shared GLOBAL bucket (no per-user key — there's no auth) gating every
+// outbound GitHub call across both actions. A token bucket of 30/min sustained
+// with a burst capacity of 60 stays far under GitHub's authenticated 5,000/hour
+// while never bothering low traffic. The component owns this state internally —
+// no host-app table needed.
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  githubFetch: { kind: 'token bucket', rate: 30, period: MINUTE, capacity: 60 },
 })
 
-/// The public read for the `/releases` page: every cached release, newest first.
-/// Reactive — `syncList` reconciles the table and every subscriber re-renders.
-export const list = query({
+/// Every published release, newest first (for the `/releases` page). Throws on a
+/// GitHub failure so the caller can show its error state; an empty array means
+/// the repo simply has no releases.
+export const list = action({
   args: {},
   returns: v.array(releaseSummaryValidator),
   handler: async (ctx) => {
-    const rows = await ctx.db
-      .query('releaseList')
-      .withIndex('by_published')
-      .order('desc')
-      .take(50)
-    // Strip `_id`/`_creationTime` so the shape matches the validator exactly.
-    return rows.map((r) => ({
-      tag: r.tag,
-      name: r.name,
-      publishedAt: r.publishedAt,
-      url: r.url,
-      dmgUrl: r.dmgUrl,
-      sizeMB: r.sizeMB,
-    }))
+    const status = await rateLimiter.limit(ctx, 'githubFetch')
+    if (!status.ok) {
+      throw new Error(
+        `Too many requests to the GitHub Releases API. Try again in ${Math.ceil(status.retryAfter / 1000)}s.`,
+      )
+    }
+    const releases = await fetchReleases({ token: githubToken() })
+    if (releases === null) throw new Error('Could not reach the GitHub Releases API.')
+    return releases
   },
 })
 
-/// Upserts the singleton row. Internal — only `refresh` calls it.
-export const upsert = internalMutation({
-  args: { version: v.string(), sizeMB: v.union(v.string(), v.null()) },
-  returns: v.null(),
-  handler: async (ctx, { version, sizeMB }) => {
-    const existing = await ctx.db
-      .query('releases')
-      .withIndex('by_key', (q) => q.eq('key', 'latest'))
-      .unique()
-    // Nothing changed → don't write. Skips a needless mutation and avoids
-    // re-running every subscriber's `get` query for an identical value.
-    if (existing !== null && existing.version === version && existing.sizeMB === sizeMB) {
-      return null
-    }
-    const fields = { key: 'latest' as const, version, sizeMB, fetchedAt: Date.now() }
-    if (existing === null) {
-      await ctx.db.insert('releases', fields)
-    } else {
-      await ctx.db.patch(existing._id, fields)
-    }
-    return null
-  },
-})
-
-/// Reconciles the `releaseList` table against a freshly-fetched list. Internal —
-/// only `refresh` calls it. Loads every existing row once (`.collect()` — bounded
-/// by the release count) and, keyed by tag: inserts new releases, patches changed
-/// ones (skipping the write when every field is identical), and deletes rows
-/// whose tag has disappeared. No needless writes, so subscribers only re-render
-/// on a real change.
-export const syncList = internalMutation({
-  args: { releases: v.array(releaseSummaryValidator) },
-  returns: v.null(),
-  handler: async (ctx, { releases }) => {
-    const existing = await ctx.db.query('releaseList').collect()
-    const byTag = new Map(existing.map((row) => [row.tag, row]))
-    const seen = new Set<string>()
-
-    for (const rel of releases) {
-      seen.add(rel.tag)
-      const row = byTag.get(rel.tag)
-      if (row === undefined) {
-        await ctx.db.insert('releaseList', rel)
-        continue
-      }
-      // Patch only when something actually differs.
-      if (
-        row.name !== rel.name ||
-        row.publishedAt !== rel.publishedAt ||
-        row.url !== rel.url ||
-        row.dmgUrl !== rel.dmgUrl ||
-        row.sizeMB !== rel.sizeMB
-      ) {
-        await ctx.db.patch(row._id, {
-          name: rel.name,
-          publishedAt: rel.publishedAt,
-          url: rel.url,
-          dmgUrl: rel.dmgUrl,
-          sizeMB: rel.sizeMB,
-        })
-      }
-    }
-
-    // Drop rows whose tag is no longer present upstream.
-    for (const row of existing) {
-      if (!seen.has(row.tag)) {
-        await ctx.db.delete(row._id)
-      }
-    }
-    return null
-  },
-})
-
-/// Fetches the GitHub release list and caches both the full list and the latest
-/// singleton from ONE call. Internal action (does IO), invoked event-driven —
-/// not polled: the CI `convex.yml` runs it on `release: published` (so the page
-/// and badge update within seconds of a new app release) and once after each
-/// backend deploy (to seed/heal the cache). The fetch/parse lives in the reusable
-/// `lib/github` helper; on any failure it returns null and we leave the last good
-/// values untouched — honesty over a blank page.
-export const refresh = internalAction({
+/// The latest release (for the download badge), or null if it can't be read —
+/// the badge just shows no version then, never a fake one.
+export const latest = action({
   args: {},
-  returns: v.null(),
+  returns: v.union(v.object({ version: v.string(), sizeMB: v.union(v.string(), v.null()) }), v.null()),
   handler: async (ctx) => {
-    const releases = await fetchReleases()
-    if (releases === null) return null
-    await ctx.runMutation(internal.releases.syncList, { releases })
-    // Newest first — index 0 is the latest. Guard the empty array.
-    const latest = releases[0]
-    if (latest !== undefined) {
-      await ctx.runMutation(internal.releases.upsert, {
-        version: latest.tag,
-        sizeMB: latest.sizeMB,
-      })
-    }
-    return null
+    const status = await rateLimiter.limit(ctx, 'githubFetch')
+    if (!status.ok) return null
+    return await fetchLatestRelease({ token: githubToken() })
   },
 })

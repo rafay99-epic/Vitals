@@ -6,7 +6,9 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "turbo dev",
+    "dev": "concurrently --kill-others --names web,convex --prefix-colors cyan,magenta \"turbo dev\" \"convex dev\"",
+    "dev:web": "turbo dev",
+    "dev:convex": "convex dev",
     "build": "turbo build",
     "lint": "turbo lint && tsc -p convex/tsconfig.json --noEmit",
     "build:website": "turbo build --filter=website",
@@ -19,9 +21,11 @@
     "convex:deploy": "convex deploy"
   },
   "dependencies": {
+    "@convex-dev/rate-limiter": "^0.3.2",
     "convex": "^1.40.0"
   },
   "devDependencies": {
+    "concurrently": "^10.0.3",
     "turbo": "^2.5.8",
     "typescript": "~6.0.2"
   }
