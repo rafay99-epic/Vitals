@@ -77,6 +77,65 @@ h3 {
   }
 }
 
+/* Ambient atmosphere: drifting aurora blobs + film grain. */
+.vt-aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(95px);
+  opacity: 0.42;
+}
+.vt-aurora-1 {
+  width: 620px;
+  height: 620px;
+  background: rgba(10, 132, 255, 0.5);
+  top: -240px;
+  left: 8%;
+}
+.vt-aurora-2 {
+  width: 540px;
+  height: 540px;
+  background: rgba(255, 159, 10, 0.32);
+  top: 2%;
+  right: -60px;
+}
+.vt-aurora-3 {
+  width: 600px;
+  height: 600px;
+  background: rgba(50, 215, 75, 0.26);
+  top: 32%;
+  left: -80px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vt-aurora-1 {
+    animation: vt-drift-1 26s ease-in-out infinite;
+  }
+  .vt-aurora-2 {
+    animation: vt-drift-2 32s ease-in-out infinite;
+  }
+  .vt-aurora-3 {
+    animation: vt-drift-3 38s ease-in-out infinite;
+  }
+}
+@keyframes vt-drift-1 {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(60px, 40px, 0); }
+}
+@keyframes vt-drift-2 {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-50px, 30px, 0); }
+}
+@keyframes vt-drift-3 {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(40px, -50px, 0); }
+}
+
+.vt-grain {
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
 /* CommandBox copy icon: cross-fade copy↔check with a tiny spring. */
 .vt-cmd-icon {
   position: absolute;
