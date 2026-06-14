@@ -185,11 +185,16 @@ Settings → Desktop Widgets.
   Convex-free **`convex/lib/github.ts`** (`fetchReleases`, `fetchLatestRelease`), which the
   website's fallback hooks import too — one parser, not two. There is no `schema.ts`
   (schemaless).
-- **Rate limit:** GitHub's unauthenticated API is 60 req/hour **per IP**, and all visitors
-  share the Convex deployment's one IP. Set a `GITHUB_TOKEN` env var on the deployment
-  (`bunx convex env set GITHUB_TOKEN …`) to get 5,000/hour; the actions add the auth header
-  when it's present. Reads via `process.env` (typed by `convex/env.d.ts`, since `env` isn't
-  in this Convex version's codegen).
+- **Rate limit, two layers.** (1) GitHub's unauthenticated API is 60 req/hour **per IP** and
+  all visitors share the deployment's one IP — set a `GITHUB_TOKEN` env var
+  (`bunx convex env set GITHUB_TOKEN …`) for 5,000/hour; the actions add the auth header when
+  present (read via `process.env`, typed by `convex/env.d.ts` since `env` isn't in this
+  Convex version's codegen). (2) The **`@convex-dev/rate-limiter` component** (mounted in
+  `convex/convex.config.ts`) caps our own egress: a single shared global `githubFetch` token
+  bucket (30/min, burst 60) checked at the top of **both** actions before any fetch — stops
+  abuse and keeps us under GitHub's ceiling. On limit: `list` throws (error state), `latest`
+  returns null. The component keeps its **own** internal storage — it does **not** add a
+  host-app schema/table, so the backend stays schemaless.
 - **Deployment is manual + simple:** `bun run convex:deploy` (prod) when the functions
   change — they rarely do. No GitHub Action. The website on Vercel just needs
   `VITE_CONVEX_URL` = the production Convex **Cloud URL** (`.convex.cloud`), inlined at build

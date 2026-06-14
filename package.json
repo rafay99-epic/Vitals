@@ -19,6 +19,7 @@
     "convex:deploy": "convex deploy"
   },
   "dependencies": {
+    "@convex-dev/rate-limiter": "^0.3.2",
     "convex": "^1.40.0"
   },
   "devDependencies": {

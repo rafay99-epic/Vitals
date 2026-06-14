@@ -33,6 +33,16 @@ bunx convex env set GITHUB_TOKEN <token> --prod    # production
 The actions add the auth header automatically when `GITHUB_TOKEN` is set. Never commit
 the token — it lives only in the Convex env (and never reaches client code).
 
+## Rate limiter (caps our own egress)
+
+On top of the token, the [`@convex-dev/rate-limiter`](https://www.convex.dev/components/rate-limiter)
+component (mounted in `convex.config.ts`) throttles the outbound GitHub calls — protecting
+against abuse and keeping us under GitHub's ceiling. Both actions check one shared global
+`githubFetch` token bucket (**30/min, burst 60**) before fetching; on limit, `list` throws
+(the page shows its error state) and `latest` returns null. Tune the numbers in
+`releases.ts`. The component stores its own counters internally — **it adds no schema or
+table to this backend**, so it stays simple.
+
 ## Commands (run from the repo root)
 
 ```sh

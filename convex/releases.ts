@@ -1,5 +1,7 @@
 import { v } from 'convex/values'
+import { RateLimiter, MINUTE } from '@convex-dev/rate-limiter'
 import { action } from './_generated/server'
+import { components } from './_generated/api'
 import { fetchReleases, fetchLatestRelease } from './lib/github'
 
 /// A thin live proxy to the GitHub Releases API — no database, no caching, no
@@ -21,13 +23,28 @@ const releaseSummaryValidator = v.object({
 // rate limit from 60 to 5,000 requests/hour. Works without it at low traffic.
 const githubToken = () => process.env.GITHUB_TOKEN
 
+// One shared GLOBAL bucket (no per-user key — there's no auth) gating every
+// outbound GitHub call across both actions. A token bucket of 30/min sustained
+// with a burst capacity of 60 stays far under GitHub's authenticated 5,000/hour
+// while never bothering low traffic. The component owns this state internally —
+// no host-app table needed.
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  githubFetch: { kind: 'token bucket', rate: 30, period: MINUTE, capacity: 60 },
+})
+
 /// Every published release, newest first (for the `/releases` page). Throws on a
 /// GitHub failure so the caller can show its error state; an empty array means
 /// the repo simply has no releases.
 export const list = action({
   args: {},
   returns: v.array(releaseSummaryValidator),
-  handler: async () => {
+  handler: async (ctx) => {
+    const status = await rateLimiter.limit(ctx, 'githubFetch')
+    if (!status.ok) {
+      throw new Error(
+        `Too many requests to the GitHub Releases API. Try again in ${Math.ceil(status.retryAfter / 1000)}s.`,
+      )
+    }
     const releases = await fetchReleases({ token: githubToken() })
     if (releases === null) throw new Error('Could not reach the GitHub Releases API.')
     return releases
@@ -39,5 +56,9 @@ export const list = action({
 export const latest = action({
   args: {},
   returns: v.union(v.object({ version: v.string(), sizeMB: v.union(v.string(), v.null()) }), v.null()),
-  handler: async () => await fetchLatestRelease({ token: githubToken() }),
+  handler: async (ctx) => {
+    const status = await rateLimiter.limit(ctx, 'githubFetch')
+    if (!status.ok) return null
+    return await fetchLatestRelease({ token: githubToken() })
+  },
 })
