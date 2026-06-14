@@ -21,7 +21,7 @@ struct AppProtectionTests {
 
     @Test func vitalsItselfIsProtected() {
         #expect(AppInventory.isProtected(
-            bundleID: "com.tudotechlab.vitals",
+            bundleID: "com.syntaxlabtechnology.vitals",
             url: URL(fileURLWithPath: "/Applications/Vitals.app")
         ))
     }

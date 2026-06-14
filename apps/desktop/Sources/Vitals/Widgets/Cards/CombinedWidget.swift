@@ -5,11 +5,12 @@ import SwiftUI
 struct CombinedWidget: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
+    @Environment(\.widgetScale) private var scale
 
     var body: some View {
         WidgetCard(title: "Vitals", symbol: "gauge.with.dots.needle.50percent", tint: .green,
                    intensity: overallIntensity) {
-            Grid(horizontalSpacing: 14, verticalSpacing: 7) {
+            Grid(horizontalSpacing: 14 * scale, verticalSpacing: 7 * scale) {
                 GridRow {
                     metric("CPU", cpuTemp, "cpu", cpuTint)
                     metric("Usage", String(format: "%.0f%%", model.cpuUsage), "gauge.with.dots.needle.50percent", .blue)
@@ -40,19 +41,19 @@ struct CombinedWidget: View {
     }
 
     private func metric(_ label: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 7 * scale) {
             Image(systemName: symbol)
-                .font(.system(size: 10, weight: .medium))
+                .scaledFont(10, weight: .medium)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(tint)
-                .frame(width: 20, height: 20)
-                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(tint.opacity(0.16)))
+                .frame(width: 20 * scale, height: 20 * scale)
+                .background(RoundedRectangle(cornerRadius: 5 * scale, style: .continuous).fill(tint.opacity(0.16)))
             VStack(alignment: .leading, spacing: 0) {
                 Text(label)
-                    .font(.system(size: 9.5, weight: .medium))
+                    .scaledFont(9.5, weight: .medium)
                     .foregroundStyle(.tertiary)
                 Text(value)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .scaledFont(16, weight: .semibold, design: .rounded)
                     .monospacedDigit()
                     .contentTransition(.numericText())
             }

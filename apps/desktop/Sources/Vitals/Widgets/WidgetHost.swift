@@ -18,6 +18,7 @@ struct WidgetCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @EnvironmentObject private var settings: AppSettings
+    @Environment(\.widgetScale) private var scale
     @State private var breathing = false
 
     /// Live rim strength: 0 when animation is off, otherwise the severity
@@ -27,37 +28,39 @@ struct WidgetCard<Content: View>: View {
         return min(max(intensity, 0), 1) * (breathing ? 1.0 : 0.5)
     }
 
+    private var corner: CGFloat { 16 * scale }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 8 * scale) {
+            HStack(spacing: 7 * scale) {
                 WidgetIconTile(symbol: symbol, tint: tint,
                                spinFraction: spinFraction, animate: settings.animateWidgets)
                 Text(title)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .scaledFont(11.5, weight: .medium)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
             content()
             Spacer(minLength: 0)
         }
-        .padding(13)
+        .padding(13 * scale)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .fill(.regularMaterial)
                 // Inner heat-tint that brightens with the reading.
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
                         .fill(tint.opacity(0.12 * glow))
                 )
                 // Resting hairline, always present.
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
                         .strokeBorder(.separator.opacity(0.6), lineWidth: 1)
                 )
                 // Reactive rim that lights up in the tint.
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
                         .strokeBorder(tint.opacity(0.75 * glow), lineWidth: 1.2)
                 )
         )
@@ -75,6 +78,7 @@ private struct WidgetIconTile: View {
     let tint: Color
     var spinFraction: Double? = nil
     var animate: Bool = false
+    @Environment(\.widgetScale) private var scale
     @State private var angle: Double = 0
 
     private var spinning: Bool { animate && (spinFraction ?? 0) > 0 }
@@ -92,13 +96,13 @@ private struct WidgetIconTile: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 11, weight: .medium))
+            .scaledFont(11, weight: .medium)
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(tint)
             .rotationEffect(.degrees(angle))
-            .frame(width: 22, height: 22)
+            .frame(width: 22 * scale, height: 22 * scale)
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(tint.opacity(0.16))
+                RoundedRectangle(cornerRadius: 6 * scale, style: .continuous).fill(tint.opacity(0.16))
             )
             .task(id: spinKey) { restartSpin() }
     }
@@ -129,34 +133,38 @@ struct WidgetHost: View {
     @State private var resizeFrame: CGRect?
 
     var body: some View {
-        ZStack {
-            card
-            if hovering {
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
+        GeometryReader { geo in
+            ZStack {
+                card
+                if hovering {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .scaledFont(15)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(6)
+                    .transition(.opacity)
+                    .help("Close this widget")
                 }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(6)
-                .transition(.opacity)
-                .help("Close this widget")
+                // Always in the tree (only *shown* on hover) so its gesture can
+                // always claim a corner drag — otherwise the drag falls through to
+                // the move gesture and the widget slides instead of resizing.
+                resizeGrip.opacity(hovering ? 1 : 0)
             }
-            // Always in the tree (only *shown* on hover) so its gesture can
-            // always claim a corner drag — otherwise the drag falls through to
-            // the move gesture and the widget slides instead of resizing.
-            resizeGrip.opacity(hovering ? 1 : 0)
-        }
-        // Make the whole body — including transparent corners — grabbable.
-        .contentShape(Rectangle())
-        .gesture(moveGesture)
-        .background(WindowReader { window = $0 })
-        .animation(.easeOut(duration: 0.12), value: hovering)
-        .onHover { hovering = $0 }
-        .contextMenu {
-            Button("Close \(kind.shortTitle)", systemImage: "xmark") { onClose() }
+            // Scale content to the panel so a resized widget fills, not strands.
+            .environment(\.widgetScale, widgetScale(for: geo.size, default: kind.defaultSize))
+            // Make the whole body — including transparent corners — grabbable.
+            .contentShape(Rectangle())
+            .gesture(moveGesture)
+            .background(WindowReader { window = $0 })
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .onHover { hovering = $0 }
+            .contextMenu {
+                Button("Close \(kind.shortTitle)", systemImage: "xmark") { onClose() }
+            }
         }
     }
 

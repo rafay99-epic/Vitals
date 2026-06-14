@@ -11,7 +11,7 @@ struct FanCommand: Codable {
 
 /// Filesystem contract between the app and its privileged helper.
 enum FanControl {
-    static let label = "com.tudotechlab.vitals.fand"
+    static let label = "com.syntaxlabtechnology.vitals.fand"
     static let supportDir = URL(fileURLWithPath: "/Library/Application Support/Vitals", isDirectory: true)
     static let stateURL = supportDir.appendingPathComponent("fan-state.json")
     static let daemonPlistPath = "/Library/LaunchDaemons/\(label).plist"

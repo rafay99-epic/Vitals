@@ -13,9 +13,16 @@ final class WidgetManager: ObservableObject {
     /// they float above everything.
     @Published var onTop: Bool {
         didSet {
+            let level = WidgetPanel.windowLevel(onTop: onTop)
             for panel in panels.values {
-                panel.level = WidgetPanel.windowLevel(onTop: onTop)
                 panel.isFloatingPanel = onTop
+                panel.level = level
+                // Re-order so the new level takes effect immediately — changing
+                // `.level` on a visible window doesn't restack until it's ordered
+                // (this is why the toggle used to need an app restart).
+                // orderFrontRegardless respects the level, so when off it still
+                // settles onto the desktop layer rather than over your windows.
+                panel.orderFrontRegardless()
             }
             defaults.set(onTop, forKey: Keys.onTop)
         }

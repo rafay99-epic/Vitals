@@ -7,7 +7,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>Vitals</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.tudotechlab.vitals</string>
+	<string>com.syntaxlabtechnology.vitals</string>
 	<key>CFBundleExecutable</key>
 	<string>Vitals</string>
 	<key>CFBundleIconFile</key>
@@ -25,6 +25,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Built with Claude Code</string>
+	<string>© 2026 Syntax Lab Technology. Licensed under GPL-3.0.</string>
 </dict>
 </plist>

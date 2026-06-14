@@ -3,24 +3,25 @@ import SwiftUI
 /// Fan speed — honest about a stopped or absent fan (0 rpm / Fanless / no SMC).
 struct FanWidget: View {
     @EnvironmentObject private var model: VitalsModel
+    @Environment(\.widgetScale) private var scale
 
     var body: some View {
         WidgetCard(title: "Fan", symbol: "fan", tint: .cyan,
                    intensity: spinFraction ?? 0, spinFraction: spinFraction) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 4 * scale) {
                 Text(value)
-                    .font(.system(size: 30, weight: .semibold, design: .rounded))
+                    .scaledFont(30, weight: .semibold, design: .rounded)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                 if model.hasSMC, model.fans.first != nil {
                     Text("rpm")
-                        .font(.callout)
+                        .scaledFont(13)
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
             }
             Text(subtitle)
-                .font(.caption2)
+                .scaledFont(10.5)
                 .foregroundStyle(.tertiary)
         }
     }
