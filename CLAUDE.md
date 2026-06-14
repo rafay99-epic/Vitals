@@ -46,6 +46,8 @@ License: **GPL-3.0**.
 
 ```sh
 bun install                  # root, once
+bun run dev                  # website (vite) + convex dev together, via concurrently
+                             #   (dev:web / dev:convex run them separately)
 bun run build / lint / test  # everything via turbo
 bun run dmg                  # desktop app + DMG (macOS only)
 # desktop directly (from apps/desktop): swift build, swift test, ./build.sh, ./make-dmg.sh
