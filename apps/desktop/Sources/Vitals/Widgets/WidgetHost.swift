@@ -122,8 +122,11 @@ struct WidgetHost: View {
     @State private var hovering = false
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            card
+        ZStack {
+            // Drag layer sits *under* the card; the card's content is
+            // hit-test-disabled so a drag anywhere on the body reaches here.
+            WidgetDragSurface(onClose: onClose)
+            card.allowsHitTesting(false)
             if hovering {
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
@@ -132,16 +135,31 @@ struct WidgetHost: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(6)
                 .transition(.opacity)
                 .help("Close this widget")
+                resizeGrip
+                    .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.12), value: hovering)
         .onHover { hovering = $0 }
-        .contextMenu {
-            Button("Close \(kind.shortTitle)", systemImage: "xmark") { onClose() }
+    }
+
+    /// Bottom-right corner grip — revealed on hover, like the close button.
+    private var resizeGrip: some View {
+        ZStack {
+            WidgetResizeGrip(minSize: kind.minSize, maxSize: kind.maxSize)
+            Image(systemName: "arrow.down.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+                .allowsHitTesting(false)
         }
+        .frame(width: 16, height: 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(5)
+        .help("Drag to resize")
     }
 
     @ViewBuilder

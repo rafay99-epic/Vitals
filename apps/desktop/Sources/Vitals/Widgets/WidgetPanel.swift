@@ -39,6 +39,8 @@ enum WidgetPanel {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
+        panel.minSize = kind.minSize
+        panel.maxSize = kind.maxSize
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.isExcludedFromWindowsMenu = true

@@ -62,4 +62,13 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     var defaultSize: CGSize {
         self == .combined ? CGSize(width: 320, height: 132) : CGSize(width: 212, height: 118)
     }
+
+    /// Resize bounds — a widget can't collapse to nothing or balloon off-screen.
+    var minSize: CGSize {
+        self == .combined ? CGSize(width: 280, height: 120) : CGSize(width: 178, height: 104)
+    }
+
+    var maxSize: CGSize {
+        self == .combined ? CGSize(width: 560, height: 280) : CGSize(width: 380, height: 240)
+    }
 }
