@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+:root {
+  /* Dark theme: fixes native scrollbars, form controls, etc. */
+  color-scheme: dark;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth in-page navigation (e.g. the nav's Download button → #download),
+   disabled for reduced-motion users. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Anchor targets clear the fixed nav instead of hiding under it. */
+section[id],
+[id].vt-anchor {
+  scroll-margin-top: 88px;
+}
+
 body {
   margin: 0;
   background: #060608;
@@ -7,10 +30,48 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  touch-action: manipulation;
+}
+
+/* Headings avoid orphan/widow lines. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 ::selection {
   background: rgba(10, 132, 255, 0.4);
+}
+
+/* Consistent keyboard focus ring. Inline styles don't set `outline`, so this
+   applies cleanly across the inline-styled buttons/links. */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid #4aa3ff;
+  outline-offset: 3px;
+  border-radius: 7px;
+}
+
+/* Film grain overlay. */
+.vt-grain {
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+/* CommandBox copy icon: cross-fade copy↔check with a tiny spring. */
+.vt-cmd-icon {
+  position: absolute;
+  inset: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.28s cubic-bezier(0.2, 1.4, 0.5, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-cmd-icon {
+    transition: opacity 0.12s linear;
+  }
 }
 
 @keyframes vt-float {

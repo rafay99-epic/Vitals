@@ -4,7 +4,21 @@ Your Mac has a dashboard. Apple just hid it.
 
 Vitals reads the temperature of your chip, the speed of your fans, and the health of your battery — straight from the hardware — and shows it in a window that looks like Apple built it. Free, open source, Apple Silicon only.
 
-**[Download the latest release](https://github.com/rafay99-epic/Vitals/releases/latest/download/Vitals.dmg)** · requires macOS 15+
+## Install
+
+```sh
+brew install --cask rafay99-epic/apps/vitals
+```
+
+Recommended — installs to `/Applications` and opens with **no macOS security prompt**. Vitals updates itself after that. Requires macOS 15+, Apple Silicon.
+
+Living on the edge? The **Dev channel** installs alongside it as a separate app (own icon + settings):
+
+```sh
+brew install --cask rafay99-epic/apps/vitals-dev
+```
+
+Prefer a direct download? Grab the **[.dmg](https://github.com/rafay99-epic/Vitals/releases/latest/download/Vitals.dmg)** — it isn't notarized (no paid Apple Developer account), so **right-click → Open** the first time to get past Gatekeeper. Homebrew is the smoother path.
 
 ## Monorepo layout
 
@@ -37,7 +51,7 @@ Desktop-app docs (architecture, sensors, fan control, release pipeline) live in 
 
 - `CI` and `Release` workflows run on `apps/desktop/**` changes; every app change on `main` publishes a GitHub Release (version = commit count) with the DMG.
 - `Website` workflow runs on `apps/website/**` changes (bun + turbo on Ubuntu).
-- The website's download button always serves the newest DMG via `releases/latest/download/Vitals.dmg`.
+- The website + README lead with `brew install --cask rafay99-epic/apps/vitals` (the [`homebrew-apps`](https://github.com/rafay99-epic/homebrew-apps) tap); the direct DMG via `releases/latest/download/Vitals.dmg` is the fallback. The cask tracks `:latest`, so new releases flow automatically.
 
 ## License
 
