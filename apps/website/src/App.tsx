@@ -7,14 +7,17 @@ import Honesty from './components/Honesty'
 import FanControl from './components/FanControl'
 import Manage from './components/Manage'
 import DownloadSection from './components/DownloadSection'
+import DevChannelSection from './components/DevChannelSection'
 import Footer from './components/Footer'
 import { useLiveVitals } from './lib/useLiveVitals'
 import { useLatestRelease } from './lib/useLatestRelease'
+import { useLatestPrerelease } from './lib/useLatestPrerelease'
 import { useTitle } from './lib/useTitle'
 
 export default function App() {
   const vitals = useLiveVitals()
   const release = useLatestRelease()
+  const prerelease = useLatestPrerelease()
   useTitle('Vitals — Your Mac has a dashboard. Apple just hid it.')
 
   return (
@@ -37,6 +40,7 @@ export default function App() {
       <FanControl />
       <Manage />
       <DownloadSection release={release} />
+      <DevChannelSection prerelease={prerelease} />
       <Footer />
     </div>
   )

@@ -33,6 +33,20 @@ export interface LatestRelease {
   sizeMB: string | null
 }
 
+/// The latest Dev pre-release (a GitHub *prerelease* carrying a `Vitals-Dev.dmg`
+/// asset) as the marketing site consumes it. `branch`/`buildNumber` are parsed
+/// from the release name `Vitals Dev · <branch> · build <n>`; any field is null
+/// when it can't be read honestly.
+export type LatestPrerelease = {
+  tag: string
+  name: string
+  branch: string | null
+  buildNumber: number | null
+  dmgUrl: string | null
+  sizeMB: string | null
+  publishedAt: string
+}
+
 /// `token` lifts GitHub's unauthenticated 60-req/hour-per-IP limit to 5,000.
 /// Only the server-side Convex actions pass it (from `GITHUB_TOKEN`); the
 /// browser fallback never does — a token must not reach client code.
@@ -55,6 +69,19 @@ function headers(token?: string): Record<string, string> {
   return h
 }
 
+/// Shared GET against the GitHub API with the common auth header + abort timeout.
+/// Returns the parsed JSON, or `null` on any failure (network error, non-2xx).
+/// Callers add their own shape validation.
+async function githubGet(path: string, opts: FetchOptions): Promise<unknown | null> {
+  const { repo = DEFAULT_REPO, timeoutMs = DEFAULT_TIMEOUT_MS, token } = opts
+  const res = await fetch(`https://api.github.com/repos/${repo}/${path}`, {
+    headers: headers(token),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!res.ok) return null
+  return (await res.json()) as unknown
+}
+
 /// Formats a byte count as a `"12.3 MB"` string. Returns `null` for missing or
 /// non-positive sizes so the badge stays honest.
 export function bytesToMB(bytes: number | undefined): string | null {
@@ -65,15 +92,9 @@ export function bytesToMB(bytes: number | undefined): string | null {
 /// Fetches the latest published release for the download badge, or `null` on
 /// any failure (so the badge shows no version rather than a fake one).
 export async function fetchLatestRelease(opts: FetchOptions = {}): Promise<LatestRelease | null> {
-  const { repo = DEFAULT_REPO, timeoutMs = DEFAULT_TIMEOUT_MS, token } = opts
   try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-      headers: headers(token),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (!res.ok) return null
-    const json = (await res.json()) as GitHubReleasePayload
-    if (!json.tag_name) return null
+    const json = (await githubGet('releases/latest', opts)) as GitHubReleasePayload | null
+    if (!json || !json.tag_name) return null
     const dmg = json.assets?.find((a) => a.name?.endsWith('.dmg'))
     return { version: json.tag_name, sizeMB: bytesToMB(dmg?.size) }
   } catch {
@@ -86,14 +107,8 @@ export async function fetchLatestRelease(opts: FetchOptions = {}): Promise<Lates
 /// failure (network error, non-2xx, non-array body) so the caller can show an
 /// error state. Drafts, prereleases, and tag-less releases are filtered out.
 export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSummary[] | null> {
-  const { repo = DEFAULT_REPO, timeoutMs = DEFAULT_TIMEOUT_MS, token } = opts
   try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, {
-      headers: headers(token),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (!res.ok) return null
-    const json = (await res.json()) as unknown
+    const json = await githubGet('releases?per_page=100', opts)
     if (!Array.isArray(json)) return null
 
     const summaries: ReleaseSummary[] = []
@@ -112,6 +127,49 @@ export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSum
     // Newest first — the page lists in this order.
     summaries.sort((a, b) => b.publishedAt - a.publishedAt)
     return summaries
+  } catch {
+    return null
+  }
+}
+
+/// The exact asset name a Dev pre-release ships. A release may carry both
+/// `Vitals.dmg` and `Vitals-Dev.dmg`, so we match this name exactly (never
+/// `.endsWith('.dmg')`).
+const DEV_DMG_NAME = 'Vitals-Dev.dmg'
+
+/// Fetches the latest Dev *pre-release* — the inverse of the public fetchers,
+/// which deliberately drop prereleases. Scans the (newest-first) release list
+/// and returns the FIRST non-draft prerelease carrying an asset named exactly
+/// `Vitals-Dev.dmg`, parsing `branch`/`buildNumber` from its name
+/// `Vitals Dev · <branch> · build <n>`. Returns `null` on any failure or when no
+/// matching prerelease exists, so the site degrades gracefully (never throws).
+export async function fetchLatestPrerelease(options: FetchOptions = {}): Promise<LatestPrerelease | null> {
+  try {
+    const json = await githubGet('releases?per_page=30', options)
+    if (!Array.isArray(json)) return null
+
+    for (const raw of json as GitHubReleasePayload[]) {
+      if (!raw.prerelease || raw.draft || !raw.tag_name) continue
+      const dmg = raw.assets?.find((a) => a.name === DEV_DMG_NAME)
+      if (!dmg) continue
+
+      const name = raw.name && raw.name.length > 0 ? raw.name : raw.tag_name
+      const buildMatch = name.match(/build (\d+)/)
+      const buildNumber = buildMatch ? Number(buildMatch[1]) : null
+      const branchMatch = name.match(/^Vitals Dev · (.+?) · build \d+/)
+      const branch = branchMatch ? branchMatch[1] : null
+
+      return {
+        tag: raw.tag_name,
+        name,
+        branch,
+        buildNumber,
+        dmgUrl: dmg.browser_download_url ?? null,
+        sizeMB: bytesToMB(dmg.size),
+        publishedAt: raw.published_at ?? '',
+      }
+    }
+    return null
   } catch {
     return null
   }

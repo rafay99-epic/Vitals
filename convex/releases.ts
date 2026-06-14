@@ -2,7 +2,7 @@ import { v } from 'convex/values'
 import { RateLimiter, MINUTE } from '@convex-dev/rate-limiter'
 import { action } from './_generated/server'
 import { components } from './_generated/api'
-import { fetchReleases, fetchLatestRelease } from './lib/github'
+import { fetchReleases, fetchLatestRelease, fetchLatestPrerelease } from './lib/github'
 
 /// A thin live proxy to the GitHub Releases API — no database, no caching, no
 /// schema. The frontend calls these actions, they fetch GitHub server-side, and
@@ -60,5 +60,30 @@ export const latest = action({
     const status = await rateLimiter.limit(ctx, 'githubFetch')
     if (!status.ok) return null
     return await fetchLatestRelease({ token: githubToken() })
+  },
+})
+
+/// The latest Dev *pre-release* (a GitHub prerelease carrying a `Vitals-Dev.dmg`
+/// asset), or null if it can't be read — the inverse of `latest`, which drops
+/// prereleases. Shares the global rate limiter; returns null on limit/failure so
+/// the marketing site degrades gracefully.
+export const latestPrerelease = action({
+  args: {},
+  returns: v.union(
+    v.object({
+      tag: v.string(),
+      name: v.string(),
+      branch: v.union(v.string(), v.null()),
+      buildNumber: v.union(v.number(), v.null()),
+      dmgUrl: v.union(v.string(), v.null()),
+      sizeMB: v.union(v.string(), v.null()),
+      publishedAt: v.string(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx) => {
+    const status = await rateLimiter.limit(ctx, 'githubFetch')
+    if (!status.ok) return null
+    return await fetchLatestPrerelease({ token: githubToken() })
   },
 })
