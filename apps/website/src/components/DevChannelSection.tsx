@@ -1,4 +1,5 @@
-import { RELEASES_URL } from '../lib/links'
+import CommandBox from './CommandBox'
+import { BREW_INSTALL_DEV, RELEASES_URL } from '../lib/links'
 import type { LatestPrerelease } from '../lib/useLatestPrerelease'
 
 const PURPLE = '#bf5af2'
@@ -24,9 +25,9 @@ function DevHeartbeat({ size = 14 }: { size?: number }) {
 }
 
 /// A deliberately understated aside under the main download — not a second hero
-/// card. A hairline divider sets it apart, a small purple mark ties it to the
-/// Dev app icon, and the copy is a quiet footnote for the curious. It blends in
-/// instead of competing with the stable download above it.
+/// card. A hairline divider sets it apart and a small purple mark ties it to the
+/// Dev app icon. Leads with the Homebrew command (same as Stable), with the .dmg
+/// as a quiet fallback. It blends in instead of competing with the download above.
 export default function DevChannelSection({ prerelease }: { prerelease: LatestPrerelease | null }) {
   const dmgUrl = prerelease?.dmgUrl ?? null
   const meta = [
@@ -37,89 +38,68 @@ export default function DevChannelSection({ prerelease }: { prerelease: LatestPr
 
   return (
     <section id="dev" style={{ padding: '0 24px 60px', display: 'flex', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 980 }}>
+      <div style={{ width: '100%', maxWidth: 760 }}>
         <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', marginBottom: 26 }} />
-        <div
-          className="flex-col md:flex-row"
-          style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18 }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, maxWidth: 600 }}>
-            <span
-              style={{
-                flexShrink: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 26,
-                height: 26,
-                borderRadius: 8,
-                background: 'rgba(191,90,242,0.13)',
-                border: '1px solid rgba(191,90,242,0.3)',
-                marginTop: 1,
-              }}
-            >
-              <DevHeartbeat />
-            </span>
-            <div>
-              <div style={{ fontSize: 14.5, fontWeight: 600, color: '#f5f5f7' }}>
-                Living on the edge? Try the Dev channel.
-              </div>
-              <div style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(235,235,245,0.5)', marginTop: 4 }}>
-                Every branch ships here first as a separate <strong style={{ color: 'rgba(235,235,245,0.72)', fontWeight: 600 }}>Vitals Dev</strong>{' '}
-                app — its own purple icon and settings, won&rsquo;t touch your stable copy, auto-updates from this
-                pre-release feed. Unsigned by design.
-              </div>
-              {meta.length > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 9,
-                    flexWrap: 'wrap',
-                    marginTop: 9,
-                    fontSize: 12,
-                    color: 'rgba(235,235,245,0.38)',
-                  }}
-                >
-                  {meta.map((m, i) => (
-                    <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-                      {i > 0 && <Dot />}
-                      {m}
-                    </span>
-                  ))}
-                </div>
-              )}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span
+            style={{
+              flexShrink: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 26,
+              height: 26,
+              borderRadius: 8,
+              background: 'rgba(191,90,242,0.13)',
+              border: '1px solid rgba(191,90,242,0.3)',
+              marginTop: 1,
+            }}
+          >
+            <DevHeartbeat />
+          </span>
+          <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+            <div style={{ fontSize: 14.5, fontWeight: 600, color: '#f5f5f7' }}>
+              Living on the edge? Try the Dev channel.
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, flexWrap: 'wrap' }}>
-            <a
-              href={dmgUrl ?? RELEASES_URL}
-              {...(dmgUrl ? {} : { target: '_blank', rel: 'noreferrer' })}
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(235,235,245,0.5)', marginTop: 4 }}>
+              Every branch ships here first as a separate <strong style={{ color: 'rgba(235,235,245,0.72)', fontWeight: 600 }}>Vitals Dev</strong>{' '}
+              app — its own purple icon and settings, won&rsquo;t touch your stable copy, auto-updates from this
+              pre-release feed. Unsigned by design.
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <CommandBox command={BREW_INSTALL_DEV} accent={PURPLE} />
+            </div>
+
+            <div
               style={{
-                display: 'inline-flex',
+                display: 'flex',
                 alignItems: 'center',
-                gap: 7,
-                fontSize: 13.5,
-                fontWeight: 600,
-                color: PURPLE,
-                textDecoration: 'none',
-                padding: '8px 14px',
-                borderRadius: 10,
-                background: 'rgba(191,90,242,0.1)',
-                border: '1px solid rgba(191,90,242,0.32)',
+                gap: 10,
+                flexWrap: 'wrap',
+                marginTop: 12,
+                fontSize: 12.5,
+                color: 'rgba(235,235,245,0.4)',
               }}
             >
-              <DevHeartbeat size={13} />
-              {dmgUrl ? 'Download Vitals Dev' : 'Browse dev builds'}
-            </a>
-            <a
-              href={RELEASES_URL}
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontSize: 13, color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}
-            >
-              All pre-releases →
-            </a>
+              <a
+                href={dmgUrl ?? RELEASES_URL}
+                {...(dmgUrl ? {} : { target: '_blank', rel: 'noreferrer' })}
+                style={{ color: 'rgba(235,235,245,0.62)', textDecoration: 'none' }}
+              >
+                {dmgUrl ? 'Download .dmg' : 'Browse dev builds'}
+              </a>
+              <Dot />
+              <a href={RELEASES_URL} target="_blank" rel="noreferrer" style={{ color: 'rgba(235,235,245,0.62)', textDecoration: 'none' }}>
+                All pre-releases →
+              </a>
+              {meta.map((m) => (
+                <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <Dot />
+                  {m}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
