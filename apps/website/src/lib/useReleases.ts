@@ -31,12 +31,11 @@ function useReleaseLoader(load: (page: number) => Promise<ReleaseSummary[] | nul
     releases: [],
   })
 
-  // First page on mount / retry.
+  // First page on mount / retry. The reset-to-loading happens in `retry` (an
+  // event handler), not here — calling setState synchronously in an effect body
+  // triggers cascading renders.
   useEffect(() => {
     let alive = true
-    setState({ status: 'loading', releases: [] })
-    setPage(1)
-    setHasMore(false)
     load(1)
       .then((list) => {
         if (!alive) return
@@ -76,9 +75,12 @@ function useReleaseLoader(load: (page: number) => Promise<ReleaseSummary[] | nul
       })
   }, [page, loadingMore, load])
 
-  // Reset to loading here (not in the effect) and bump the nonce to re-run.
+  // Reset to loading here (an event handler — setState is fine) and bump the
+  // nonce to re-run the first-page effect.
   const retry = useCallback(() => {
     setState({ status: 'loading', releases: [] })
+    setPage(1)
+    setHasMore(false)
     setNonce((n) => n + 1)
   }, [])
 

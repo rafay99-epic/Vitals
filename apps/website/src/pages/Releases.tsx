@@ -150,25 +150,37 @@ function ReleaseRow({ release, index }: { release: ReleaseSummary; index: number
         ) : null}
       </div>
 
-      {open && (
-        <div
-          style={{
-            borderTop: '1px solid rgba(255,255,255,0.07)',
-            padding: '14px 18px 18px 30px',
-            background: 'rgba(0,0,0,0.15)',
-          }}
-        >
-          <ReleaseNotes body={release.body} />
-          <a
-            href={release.url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ display: 'inline-block', marginTop: 14, fontSize: 12.5, color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}
+      {/* Smooth open/close: the outer grid animates 0fr→1fr (height) while the
+          panel fades in. No JS height measurement needed. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateRows: open ? '1fr' : '0fr',
+          transition: 'grid-template-rows 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+          <div
+            style={{
+              borderTop: '1px solid rgba(255,255,255,0.07)',
+              padding: '14px 18px 18px 30px',
+              background: 'rgba(0,0,0,0.15)',
+              opacity: open ? 1 : 0,
+              transition: 'opacity 0.28s ease',
+            }}
           >
-            View on GitHub →
-          </a>
+            <ReleaseNotes body={release.body} />
+            <a
+              href={release.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: 'inline-block', marginTop: 14, fontSize: 12.5, color: 'rgba(235,235,245,0.5)', textDecoration: 'none' }}
+            >
+              View on GitHub →
+            </a>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
