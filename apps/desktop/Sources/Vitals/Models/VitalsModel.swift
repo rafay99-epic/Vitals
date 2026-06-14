@@ -204,7 +204,7 @@ final class VitalsModel: ObservableObject {
             checkAlerts(averageTemp: average)
 
             if settings.loggingEnabled {
-                logger.append(
+                logger.append(HistoryLogger.Entry(
                     averageTemp: average,
                     hottestTemp: hottest.celsius,
                     gpuTemp: gpuTemp,
@@ -215,7 +215,7 @@ final class VitalsModel: ObservableObject {
                     batteryPercent: battery?.percent,
                     gpuUsage: gpu?.utilization,
                     gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) }
-                )
+                ))
             }
         }
     }
