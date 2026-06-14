@@ -1,90 +1,34 @@
 import SwiftUI
 import Charts
 
-struct CPUUsageCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
-    @State private var hoverTime: Date?
-
-    var body: some View {
-        SectionCard(title: "CPU usage · last \(settings.historyMinutes) minutes", symbol: "gauge.with.dots.needle.50percent") {
-            Deferred {
-                Chart {
-                ForEach(model.chartHistory) { sample in
-                    AreaMark(
-                        x: .value("Time", sample.time),
-                        y: .value("%", sample.usage)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue.opacity(0.35), .blue.opacity(0.02)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .interpolationMethod(.catmullRom)
-
-                    LineMark(
-                        x: .value("Time", sample.time),
-                        y: .value("%", sample.usage)
-                    )
-                    .foregroundStyle(.blue)
-                    .interpolationMethod(.catmullRom)
-                }
-
-                if let sample = model.history.nearest(to: hoverTime) {
-                    RuleMark(x: .value("Time", sample.time))
-                        .foregroundStyle(.secondary.opacity(0.5))
-                        .lineStyle(StrokeStyle(lineWidth: 1))
-                        .annotation(
-                            position: .top,
-                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                        ) {
-                            HoverTooltip(time: sample.time) {
-                                Text(String(format: "CPU %.0f%%", sample.usage))
-                            }
-                        }
-                }
-            }
-            .chartYScale(domain: 0...100)
-            .chartYAxisLabel("%")
-            .chartHover($hoverTime)
-            }
-            .frame(height: 160)
-        }
-    }
-}
-
-struct TopProcessesCard: View {
+/// Top CPU consumers. Wrapper-free content so it can sit inside a CollapsibleCard.
+struct TopProcessesContent: View {
     @EnvironmentObject private var model: VitalsModel
 
     var body: some View {
-        SectionCard(title: "Top processes", symbol: "list.bullet.rectangle") {
-            if model.topProcesses.isEmpty {
-                Text("Gathering…")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 140)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(model.topProcesses) { process in
-                        HStack {
-                            Text(process.name)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer()
-                            Text(String(format: "%.1f%%", process.cpuPercent))
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.callout)
+        if model.topProcesses.isEmpty {
+            Text("Gathering…")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 120)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(model.topProcesses) { process in
+                    HStack {
+                        Text(process.name)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Text(String(format: "%.1f%%", process.cpuPercent))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
                     }
-                    Spacer(minLength: 0)
-                    Text("CPU per process · 100% = one core")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    .font(.callout)
                 }
-                .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
+                Text("CPU per process · 100% = one core")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 }
@@ -358,72 +302,26 @@ struct MemoryCard: View {
     }
 }
 
-struct MemoryHistoryCard: View {
+/// Battery detail rows. Wrapper-free so it can sit inside a CollapsibleCard.
+struct BatteryContent: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
-    @State private var hoverTime: Date?
 
-    var body: some View {
-        SectionCard(title: "Memory & swap · last \(settings.historyMinutes) minutes", symbol: "chart.line.uptrend.xyaxis") {
-            Deferred {
-                Chart {
-                ForEach(model.chartHistory) { sample in
-                    AreaMark(
-                        x: .value("Time", sample.time),
-                        y: .value("GB", gigabytes(sample.memoryUsed)),
-                        series: .value("Series", "Memory")
-                    )
-                    .foregroundStyle(
-                        LinearGradient(colors: [.indigo.opacity(0.30), .indigo.opacity(0.02)], startPoint: .top, endPoint: .bottom)
-                    )
-                    .interpolationMethod(.catmullRom)
-
-                    LineMark(
-                        x: .value("Time", sample.time),
-                        y: .value("GB", gigabytes(sample.memoryUsed)),
-                        series: .value("Series", "Memory")
-                    )
-                    .foregroundStyle(.indigo)
-                    .interpolationMethod(.catmullRom)
-
-                    LineMark(
-                        x: .value("Time", sample.time),
-                        y: .value("GB", gigabytes(sample.swapUsed)),
-                        series: .value("Series", "Swap")
-                    )
-                    .foregroundStyle(.orange)
-                    .interpolationMethod(.catmullRom)
-                }
-
-                if let sample = model.history.nearest(to: hoverTime) {
-                    RuleMark(x: .value("Time", sample.time))
-                        .foregroundStyle(.secondary.opacity(0.5))
-                        .lineStyle(StrokeStyle(lineWidth: 1))
-                        .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                            HoverTooltip(time: sample.time) {
-                                Text(String(format: "Memory %.2f GB", gigabytes(sample.memoryUsed)))
-                                Text(String(format: "Swap %.2f GB", gigabytes(sample.swapUsed)))
-                            }
-                        }
-                }
-            }
-            .chartForegroundStyleScale(["Memory": Color.indigo, "Swap": Color.orange])
-            .chartYScale(domain: 0...gigabytes(model.memory?.total ?? 1))
-            .chartYAxisLabel("GB")
-            .chartLegend(position: .top, alignment: .trailing)
-            .chartHover($hoverTime)
-            }
-            .frame(height: 150)
+    /// Charge-state SF Symbol for the section header (used by the dashboard).
+    static func symbol(for battery: BatterySnapshot?) -> String {
+        guard let battery else { return "battery.100percent" }
+        if battery.isCharging { return "battery.100percent.bolt" }
+        switch battery.percent {
+        case ..<13: return "battery.0percent"
+        case ..<38: return "battery.25percent"
+        case ..<63: return "battery.50percent"
+        case ..<88: return "battery.75percent"
+        default: return "battery.100percent"
         }
     }
-}
-
-struct BatteryCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        SectionCard(title: "Battery", symbol: batterySymbol) {
+        Group {
             if let battery = model.battery {
                 HStack(alignment: .center, spacing: 24) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -473,18 +371,6 @@ struct BatteryCard: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 60)
             }
-        }
-    }
-
-    private var batterySymbol: String {
-        guard let battery = model.battery else { return "battery.100percent" }
-        if battery.isCharging { return "battery.100percent.bolt" }
-        switch battery.percent {
-        case ..<13: return "battery.0percent"
-        case ..<38: return "battery.25percent"
-        case ..<63: return "battery.50percent"
-        case ..<88: return "battery.75percent"
-        default: return "battery.100percent"
         }
     }
 

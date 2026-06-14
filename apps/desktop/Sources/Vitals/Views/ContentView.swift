@@ -219,110 +219,32 @@ struct DashboardView: View {
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: 16) {
             UpdateBanner()
-            statCards
-            TemperatureHistoryCard()
+            DashboardHero()
+            PerformanceHistoryCard()
             HStack(alignment: .top, spacing: 16) {
-                PerCoreCard()
-                FanCard()
-                    .frame(width: 280)
-            }
-            HStack(alignment: .top, spacing: 16) {
-                CPUUsageCard()
-                TopProcessesCard()
-                    .frame(width: 280)
-            }
-            if model.gpu != nil {
+                CPUCard()
                 GPUCard()
-                GPUHistoryCard()
             }
-            MemoryCard()
-            MemoryHistoryCard()
-            BatteryCard()
+            HStack(alignment: .top, spacing: 16) {
+                MemoryCard()
+                FanCard()
+            }
+            CollapsibleCard(
+                title: "Top processes",
+                symbol: "list.bullet.rectangle",
+                subtitle: model.topProcesses.first.map { String(format: "%@ · %.0f%%", $0.name, $0.cpuPercent) }
+            ) {
+                TopProcessesContent()
+            }
+            CollapsibleCard(
+                title: "Battery",
+                symbol: BatteryContent.symbol(for: model.battery),
+                subtitle: model.battery.map { "\(Int($0.percent))%" }
+            ) {
+                BatteryContent()
+            }
             footer
         }
-    }
-
-    private var statCards: some View {
-        // Fixed columns, not adaptive: adaptive grids re-flow their column
-        // count at every width, which made the cards snap around (and stall
-        // the frame) on each step of the sidebar animation. Three flexible
-        // columns scale smoothly at any width.
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-            StatCard(
-                title: "Average CPU",
-                value: model.averageCPUTemp.map { settings.format($0) } ?? "—",
-                subtitle: "\(model.cpuSensors.count) die sensors",
-                symbol: "cpu",
-                tint: model.averageCPUTemp.map(tempGradientColor) ?? .secondary
-            )
-            StatCard(
-                title: "Hottest Core",
-                value: model.hottestCPUSensor.map { settings.format($0.celsius) } ?? "—",
-                subtitle: model.hottestCPUSensor.map { "Sensor \($0.label)" } ?? "",
-                symbol: "flame",
-                tint: model.hottestCPUSensor.map { tempGradientColor($0.celsius) } ?? .secondary
-            )
-            StatCard(
-                title: "Fan",
-                value: fanValue,
-                subtitle: fanSubtitle,
-                symbol: "fan",
-                tint: .cyan
-            )
-            StatCard(
-                title: "CPU Usage",
-                value: String(format: "%.0f%%", model.cpuUsage),
-                subtitle: "\(HardwareInfo.coreCount) cores",
-                symbol: "gauge.with.dots.needle.50percent",
-                tint: .blue
-            )
-            StatCard(
-                title: "Memory",
-                value: String(format: "%.1f GB", gigabytes(model.memory?.used ?? 0)),
-                subtitle: memorySubtitle,
-                symbol: "memorychip",
-                tint: model.memory.map { pressureColor($0.pressure) } ?? .indigo
-            )
-            if let gpu = model.gpu {
-                StatCard(
-                    title: "GPU Usage",
-                    value: gpu.utilization.map { String(format: "%.0f%%", $0) } ?? "—",
-                    subtitle: gpuSubtitle(gpu),
-                    symbol: "cpu.fill",
-                    tint: .purple
-                )
-            }
-            StatCard(
-                title: "Thermal Pressure",
-                value: model.thermalState.label,
-                subtitle: "Reported by macOS",
-                symbol: "thermometer.medium",
-                tint: model.thermalState.tint
-            )
-        }
-    }
-
-    private var memorySubtitle: String {
-        guard let memory = model.memory else { return "—" }
-        return String(format: "of %.0f GB · %@ pressure", gigabytes(memory.total), memory.pressure.label)
-    }
-
-    private func gpuSubtitle(_ gpu: GPUSnapshot) -> String {
-        if let used = gpu.memoryUsed {
-            return String(format: "%.1f GB memory", gigabytes(used))
-        }
-        return gpu.name ?? "GPU"
-    }
-
-    private var fanValue: String {
-        guard model.hasSMC else { return "—" }
-        guard let fan = model.fans.first else { return "Fanless" }
-        return "\(Int(fan.rpm)) rpm"
-    }
-
-    private var fanSubtitle: String {
-        guard let fan = model.fans.first else { return "No fan detected" }
-        return model.fans.count > 1 ? "\(model.fans.count) fans" : "Max \(Int(fan.maxRPM)) rpm"
     }
 
     private var footer: some View {
