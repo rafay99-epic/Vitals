@@ -17,6 +17,8 @@ const releaseSummaryValidator = v.object({
   url: v.string(),
   dmgUrl: v.union(v.string(), v.null()),
   sizeMB: v.union(v.string(), v.null()),
+  body: v.string(),
+  prerelease: v.boolean(),
 })
 
 // Optional GitHub token (set `GITHUB_TOKEN` in the Convex dashboard) lifts the
@@ -36,16 +38,16 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
 /// GitHub failure so the caller can show its error state; an empty array means
 /// the repo simply has no releases.
 export const list = action({
-  args: {},
+  args: { page: v.optional(v.number()) },
   returns: v.array(releaseSummaryValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const status = await rateLimiter.limit(ctx, 'githubFetch')
     if (!status.ok) {
       throw new Error(
         `Too many requests to the GitHub Releases API. Try again in ${Math.ceil(status.retryAfter / 1000)}s.`,
       )
     }
-    const releases = await fetchReleases({ token: githubToken() })
+    const releases = await fetchReleases({ page: args.page, token: githubToken() })
     if (releases === null) throw new Error('Could not reach the GitHub Releases API.')
     return releases
   },

@@ -11,6 +11,7 @@ interface GitHubReleasePayload {
   published_at?: string | null
   draft?: boolean
   prerelease?: boolean
+  body?: string | null
   assets?: { name?: string; size?: number; browser_download_url?: string }[]
 }
 
@@ -25,6 +26,8 @@ export interface ReleaseSummary {
   url: string
   dmgUrl: string | null
   sizeMB: string | null
+  body: string
+  prerelease: boolean
 }
 
 /// The latest release as the download badge consumes it.
@@ -54,11 +57,16 @@ export interface FetchOptions {
   repo?: string
   timeoutMs?: number
   token?: string
+  page?: number
 }
 
 const DEFAULT_REPO = 'rafay99-epic/Vitals'
 const DEFAULT_TIMEOUT_MS = 10_000
 const BYTES_PER_MB = 1_048_576
+
+/// How many releases `fetchReleases` requests per page. The website imports this
+/// to detect "has more" (a full page means there may be another).
+export const RELEASES_PER_PAGE = 15
 
 function headers(token?: string): Record<string, string> {
   const h: Record<string, string> = {
@@ -102,18 +110,20 @@ export async function fetchLatestRelease(opts: FetchOptions = {}): Promise<Lates
   }
 }
 
-/// Fetches the full release list for `repo` (one call, up to 100 releases).
-/// Resolves to a newest-first array of `ReleaseSummary`, or `null` on any
-/// failure (network error, non-2xx, non-array body) so the caller can show an
-/// error state. Drafts, prereleases, and tag-less releases are filtered out.
+/// Fetches one page of the release list for `repo` (`RELEASES_PER_PAGE` items,
+/// `options.page` defaulting to 1). Resolves to a newest-first array of
+/// `ReleaseSummary`, or `null` on any failure (network error, non-2xx, non-array
+/// body) so the caller can show an error state. Drafts and tag-less releases are
+/// filtered out; prereleases (Dev builds) are KEPT and flagged via `prerelease`.
 export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSummary[] | null> {
   try {
-    const json = await githubGet('releases?per_page=100', opts)
+    const page = opts.page ?? 1
+    const json = await githubGet(`releases?per_page=${RELEASES_PER_PAGE}&page=${page}`, opts)
     if (!Array.isArray(json)) return null
 
     const summaries: ReleaseSummary[] = []
     for (const raw of json as GitHubReleasePayload[]) {
-      if (raw.draft || raw.prerelease || !raw.tag_name) continue
+      if (raw.draft || !raw.tag_name) continue
       const dmg = raw.assets?.find((a) => a.name?.endsWith('.dmg'))
       summaries.push({
         tag: raw.tag_name,
@@ -122,6 +132,8 @@ export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSum
         url: raw.html_url ?? '',
         dmgUrl: dmg?.browser_download_url ?? null,
         sizeMB: bytesToMB(dmg?.size),
+        body: raw.body ?? '',
+        prerelease: raw.prerelease ?? false,
       })
     }
     // Newest first — the page lists in this order.
