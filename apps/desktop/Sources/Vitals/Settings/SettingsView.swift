@@ -217,12 +217,17 @@ private struct GeneralPane: View {
                     .fixedSize()
                 }
                 SwitchRow(
+                    label: "GPU acceleration",
+                    caption: "Use the GPU for Liquid Glass and animations. Turn off for opaque, motionless cards that stay light on the GPU — handy while gaming, compiling, or on battery.",
+                    isOn: $settings.gpuAcceleration
+                )
+                SwitchRow(
                     label: "Liquid Glass",
-                    caption: "Translucent window with glass cards. Requires macOS 26.",
+                    caption: "Translucent window with glass cards. Needs GPU acceleration and macOS 26.",
                     isOn: $settings.liquidGlass
                 )
-                .disabled(!Hardware.supportsLiquidGlass)
-                .opacity(Hardware.supportsLiquidGlass ? 1 : 0.5)
+                .disabled(!Hardware.supportsLiquidGlass || !settings.gpuAcceleration)
+                .opacity(Hardware.supportsLiquidGlass && settings.gpuAcceleration ? 1 : 0.5)
                 if !Hardware.supportsLiquidGlass {
                     Label(
                         "Turned off automatically — this Mac has no hardware GPU (it's a virtual machine), so translucency would be software-rendered and use far too much memory.",

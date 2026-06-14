@@ -21,11 +21,19 @@ struct WidgetCard<Content: View>: View {
     @Environment(\.widgetScale) private var scale
     @State private var breathing = false
 
-    /// Live rim strength: 0 when animation is off, otherwise the severity
-    /// oscillating between full and half on the breathing cycle.
+    /// Whether the rim should breathe: the user's widget-animation preference,
+    /// gated by the global animation switch (GPU acceleration on + app focused).
+    private var animating: Bool { settings.animationsEnabled && settings.animateWidgets }
+
+    /// Live rim strength. Off entirely when the user disables widget animation.
+    /// When frozen by the global switch (backgrounded / accel off) the rim holds
+    /// steady at the real severity rather than oscillating — a still fill costs
+    /// nothing per frame.
     private var glow: Double {
         guard settings.animateWidgets else { return 0 }
-        return min(max(intensity, 0), 1) * (breathing ? 1.0 : 0.5)
+        let base = min(max(intensity, 0), 1)
+        guard settings.animationsEnabled else { return base }
+        return base * (breathing ? 1.0 : 0.5)
     }
 
     private var corner: CGFloat { 16 * scale }
@@ -34,7 +42,7 @@ struct WidgetCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 8 * scale) {
             HStack(spacing: 7 * scale) {
                 WidgetIconTile(symbol: symbol, tint: tint,
-                               spinFraction: spinFraction, animate: settings.animateWidgets)
+                               spinFraction: spinFraction, animate: animating)
                 Text(title)
                     .scaledFont(11.5, weight: .medium)
                     .foregroundStyle(.secondary)
@@ -64,8 +72,11 @@ struct WidgetCard<Content: View>: View {
                         .strokeBorder(tint.opacity(0.75 * glow), lineWidth: 1.2)
                 )
         )
-        .animation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true), value: breathing)
-        .onAppear { breathing = true }
+        // Only the live, breathing rim runs a repeating animation; when frozen
+        // the glow is a steady fill with no per-frame work.
+        .animation(animating ? .easeInOut(duration: 2.2).repeatForever(autoreverses: true) : .default, value: breathing)
+        .onAppear { breathing = animating }
+        .onChange(of: animating) { _, on in breathing = on }
     }
 }
 
@@ -123,6 +134,7 @@ private struct WidgetIconTile: View {
 struct WidgetHost: View {
     let kind: WidgetKind
     let onClose: () -> Void
+    @EnvironmentObject private var settings: AppSettings
     @State private var hovering = false
 
     /// A single drag either moves or resizes, decided once from where it began.
@@ -162,6 +174,7 @@ struct WidgetHost: View {
             .environment(\.widgetScale, widgetScale(for: geo.size, default: kind.defaultSize))
             // Make the whole body — including transparent corners — grabbable.
             .contentShape(Rectangle())
+            .environment(\.animationsEnabled, settings.animationsEnabled)
             .gesture(dragGesture(in: geo.size))
             .background(WindowReader { window = $0 })
             .animation(.easeOut(duration: 0.12), value: hovering)
@@ -243,6 +256,7 @@ struct WidgetHost: View {
         switch kind {
         case .cpu: CPUWidget()
         case .cpuUsage: CPUUsageWidget()
+        case .gpu: GPUWidget()
         case .memory: MemoryWidget()
         case .fan: FanWidget()
         case .storage: StorageWidget()

@@ -148,7 +148,7 @@ struct StatCard: View {
                 Text(value)
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTransition()
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -266,6 +266,35 @@ struct Deferred<Content: View>: View {
             withAnimation(.easeIn(duration: 0.18)) { ready = true }
         }
     }
+}
+
+// MARK: - Animation gating
+
+/// Whether views in this subtree may run continuous animations. Off when GPU
+/// acceleration is disabled or Vitals isn't the focused app. Defaults to `true`,
+/// so any surface that doesn't inject it keeps animating (safe fallback). The
+/// live surfaces (dashboard, menu bar, widgets) inject `settings.animationsEnabled`.
+private struct AnimationsEnabledKey: EnvironmentKey { static let defaultValue = true }
+
+extension EnvironmentValues {
+    var animationsEnabled: Bool {
+        get { self[AnimationsEnabledKey.self] }
+        set { self[AnimationsEnabledKey.self] = newValue }
+    }
+}
+
+private struct NumericTransition: ViewModifier {
+    @Environment(\.animationsEnabled) private var enabled
+    func body(content: Content) -> some View {
+        content.contentTransition(enabled ? .numericText() : .identity)
+    }
+}
+
+extension View {
+    /// Animate digit changes with `.numericText()` — but only where
+    /// `\.animationsEnabled` is true. Snaps with `.identity` otherwise, so no
+    /// per-tick transition runs while the app is backgrounded or accel is off.
+    func numericTransition() -> some View { modifier(NumericTransition()) }
 }
 
 // MARK: - Chart hover support

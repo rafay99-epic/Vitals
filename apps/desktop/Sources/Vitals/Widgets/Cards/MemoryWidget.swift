@@ -15,7 +15,7 @@ struct MemoryWidget: View {
                 Text(memory.map { String(format: "%.1f GB", gigabytes($0.used)) } ?? "—")
                     .scaledFont(27, weight: .semibold, design: .rounded)
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTransition()
                 Spacer(minLength: 0)
                 if let memory {
                     Text("\(Int((memory.usedFraction * 100).rounded()))%")

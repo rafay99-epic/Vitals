@@ -139,7 +139,7 @@ struct FanCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(Int(fan.rpm)) rpm")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
-                    .contentTransition(.numericText())
+                    .numericTransition()
                 Text(modeLine(fan))
                     .font(.caption)
                     .foregroundStyle(isManual(fan) ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
@@ -275,7 +275,7 @@ struct MemoryCard: View {
         HStack(alignment: .firstTextBaseline) {
             Text(String(format: "%.2f GB", gigabytes(memory.used)))
                 .font(.system(size: 26, weight: .semibold, design: .rounded))
-                .contentTransition(.numericText())
+                .numericTransition()
             Text("used of \(String(format: "%.0f GB", gigabytes(memory.total)))")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -429,7 +429,7 @@ struct BatteryCard: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("\(Int(battery.percent))%")
                             .font(.system(size: 28, weight: .semibold, design: .rounded))
-                            .contentTransition(.numericText())
+                            .numericTransition()
                         Text(stateLine(for: battery))
                             .font(.caption)
                             .foregroundStyle(.secondary)

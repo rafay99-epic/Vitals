@@ -12,7 +12,7 @@ struct CPUUsageWidget: View {
                 Text(String(format: "%.0f%%", model.cpuUsage))
                     .scaledFont(30, weight: .semibold, design: .rounded)
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTransition()
                 Spacer(minLength: 0)
                 Text(model.thermalState.label)
                     .scaledFont(10.5)

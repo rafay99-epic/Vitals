@@ -9,7 +9,7 @@ final class HistoryLogger {
         .appendingPathComponent("Vitals", isDirectory: true)
     static let fileURL = directory.appendingPathComponent("history.csv")
 
-    private static let header = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct\n"
+    private static let header = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"
     private static let minimumInterval: TimeInterval = 10
     private static let maximumBytes: UInt64 = 50_000_000
 
@@ -26,30 +26,38 @@ final class HistoryLogger {
         return formatter
     }()
 
-    func append(
-        averageTemp: Double,
-        hottestTemp: Double,
-        gpuTemp: Double?,
-        fanRPM: Double?,
-        cpuUsage: Double,
-        memoryUsedGB: Double,
-        thermalState: String,
-        batteryPercent: Double?
-    ) {
+    /// One row of readings to log. Bundled into a struct so `append` takes a
+    /// single argument (and stays under the lint parameter-count limit).
+    struct Entry {
+        let averageTemp: Double
+        let hottestTemp: Double
+        let gpuTemp: Double?
+        let fanRPM: Double?
+        let cpuUsage: Double
+        let memoryUsedGB: Double
+        let thermalState: String
+        let batteryPercent: Double?
+        let gpuUsage: Double?
+        let gpuMemoryGB: Double?
+    }
+
+    func append(_ entry: Entry) {
         let now = Date()
         guard now.timeIntervalSince(lastWrite) >= Self.minimumInterval else { return }
         guard let handle = openHandleIfNeeded() else { return }
 
         let fields: [String] = [
             Self.timestampFormatter.string(from: now),
-            String(format: "%.1f", averageTemp),
-            String(format: "%.1f", hottestTemp),
-            gpuTemp.map { String(format: "%.1f", $0) } ?? "",
-            fanRPM.map { String(format: "%.0f", $0) } ?? "",
-            String(format: "%.1f", cpuUsage),
-            String(format: "%.2f", memoryUsedGB),
-            thermalState,
-            batteryPercent.map { String(format: "%.0f", $0) } ?? "",
+            String(format: "%.1f", entry.averageTemp),
+            String(format: "%.1f", entry.hottestTemp),
+            entry.gpuTemp.map { String(format: "%.1f", $0) } ?? "",
+            entry.fanRPM.map { String(format: "%.0f", $0) } ?? "",
+            String(format: "%.1f", entry.cpuUsage),
+            String(format: "%.2f", entry.memoryUsedGB),
+            entry.thermalState,
+            entry.batteryPercent.map { String(format: "%.0f", $0) } ?? "",
+            entry.gpuUsage.map { String(format: "%.1f", $0) } ?? "",
+            entry.gpuMemoryGB.map { String(format: "%.2f", $0) } ?? "",
         ]
         if let data = (fields.joined(separator: ",") + "\n").data(using: .utf8) {
             try? handle.write(contentsOf: data)

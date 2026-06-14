@@ -15,7 +15,7 @@ struct CPUWidget: View {
                 Text(model.averageCPUTemp.map { settings.format($0, decimals: 0) } ?? "—")
                     .scaledFont(30, weight: .semibold, design: .rounded)
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTransition()
                     .foregroundStyle(tint)
                 Spacer(minLength: 0)
                 Text("\(HardwareInfo.coreCount) cores")

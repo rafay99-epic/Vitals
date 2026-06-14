@@ -24,12 +24,16 @@ License: **GPL-3.0**.
 - **No Claude attribution anywhere**: no `Co-Authored-By`, no "Generated with Claude"
   in commits, PR bodies, or app credits. The app is credited to Syntax Lab Technology /
   Abdul Rafay (rafay99.com).
-- After app changes, build + install for the user to test:
-  `osascript -e 'tell app "Vitals" to quit'; ditto build/Vitals.app /Applications/Vitals.app`
-  then verify with `md5 -q` against the build output, then `open -a Vitals`.
-- Verify UI changes visually: activate the window, get bounds via System Events,
-  `screencapture -x -R<x,y,w,h>`, and read the image. AX-clicking SwiftUI buttons is
-  unreliable — click by screen coordinates or use keyboard shortcuts (⌘1/2/3, ⌘,).
+- **Test on the Dev build, never disturb Stable.** During development, build +
+  install for the user to test with **`./dev.sh`** (from `apps/desktop`) — it builds
+  **`Vitals Dev.app`** (bundle id `…vitals.dev`) and installs+launches it side by side
+  with the user's Stable `/Applications/Vitals.app`. **Never** `ditto` a dev build over
+  `/Applications/Vitals.app` or quit/relaunch the "Vitals" Stable app — that overwrites
+  the user's real install. The two run at once; verify against **"Vitals Dev"**.
+- Verify UI changes visually: activate the **"Vitals Dev"** window, get bounds via System
+  Events (process name `"Vitals Dev"`), `screencapture -x -R<x,y,w,h>`, and read the image.
+  AX-clicking SwiftUI buttons is unreliable — click by screen coordinates or use keyboard
+  shortcuts (⌘1/2/3, ⌘,).
 
 ## Versioning & releases
 
