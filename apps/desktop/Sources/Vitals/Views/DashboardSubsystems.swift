@@ -91,7 +91,8 @@ struct CPUCard: View {
                 if showCores { dieGrid }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Match the paired card's height in the row (see SectionCard).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .cardBackground()
     }
