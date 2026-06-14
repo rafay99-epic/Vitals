@@ -64,7 +64,7 @@ struct CombinedWidget: View {
                 Text(value)
                     .scaledFont(16, weight: .semibold, design: .rounded)
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTransition()
             }
             Spacer(minLength: 0)
         }

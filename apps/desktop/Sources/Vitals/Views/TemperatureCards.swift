@@ -136,7 +136,7 @@ struct DieCell: View {
             Text("\(Int(settings.display(sensor.celsius).rounded()))°")
                 .font(.system(.callout, design: .rounded, weight: .semibold))
                 .monospacedDigit()
-                .contentTransition(.numericText())
+                .numericTransition()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 7)

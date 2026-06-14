@@ -34,6 +34,7 @@ struct VitalsApp: App {
                 .environmentObject(settings)
                 .environmentObject(updater)
                 .environmentObject(fanControl)
+                .environment(\.animationsEnabled, settings.animationsEnabled)
         }
         .defaultSize(width: 1100, height: 760)
         // No system title bar: ContentView's header carries branding, tabs,
@@ -67,6 +68,7 @@ struct VitalsApp: App {
                 .environmentObject(model)
                 .environmentObject(settings)
                 .environmentObject(fanControl)
+                .environment(\.animationsEnabled, settings.animationsEnabled)
         } label: {
             menuBarLabel
         }

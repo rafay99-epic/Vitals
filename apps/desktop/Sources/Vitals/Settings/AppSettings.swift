@@ -56,13 +56,28 @@ final class AppSettings: ObservableObject {
     @Published var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
+    /// Master switch for GPU-driven rendering: Liquid Glass and every animation.
+    /// On by default, but turning it off drops the app to opaque classic cards
+    /// with no motion — Activity-Monitor-light on the GPU. Liquid Glass requires
+    /// this to be on (see `glassEnabled`).
+    @Published var gpuAcceleration: Bool { didSet { defaults.set(gpuAcceleration, forKey: "gpuAcceleration") } }
+    /// Opt-in (defaults off): the translucent Liquid Glass look. Costs real GPU,
+    /// so the app ships lean and the user turns this on deliberately.
     @Published var liquidGlass: Bool { didSet { defaults.set(liquidGlass, forKey: "liquidGlass") } }
-    /// Whether Liquid Glass should actually render. Forced off without a
-    /// hardware GPU (VMs, paravirtual/headless hosts): software-rendered
-    /// backdrop blurs grow into the gigabytes (see `Hardware.supportsLiquidGlass`).
-    /// The stored `liquidGlass` preference is left untouched, so it returns
-    /// automatically when the app runs on real hardware.
-    var glassEnabled: Bool { liquidGlass && Hardware.supportsLiquidGlass }
+    /// Whether Liquid Glass should actually render. Requires the user opt-in,
+    /// GPU acceleration, and real hardware: without a hardware GPU (VMs,
+    /// paravirtual/headless hosts) software-rendered backdrop blurs grow into the
+    /// gigabytes (see `Hardware.supportsLiquidGlass`). The stored preferences are
+    /// left untouched, so glass returns automatically when conditions allow.
+    var glassEnabled: Bool { liquidGlass && gpuAcceleration && Hardware.supportsLiquidGlass }
+
+    /// True while Vitals is the focused app. Drives the background freeze: when
+    /// the user switches away, continuous animations stop (numbers stay live).
+    @Published private(set) var appActive: Bool = NSApp?.isActive ?? true
+
+    /// The single flag every view consults before animating. Off when GPU
+    /// acceleration is disabled or the app isn't focused.
+    var animationsEnabled: Bool { gpuAcceleration && appActive }
     /// 0 = clearest window backdrop, 1 = most frosted.
     @Published var glassIntensity: Double { didSet { defaults.set(glassIntensity, forKey: "glassIntensity") } }
     /// Whether opening the Storage tab kicks off the disk-walking analysis on
@@ -117,6 +132,7 @@ final class AppSettings: ObservableObject {
 
     private let defaults: UserDefaults
     private var syncingLoginItem = false
+    private var activeObservers: [NSObjectProtocol] = []
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -131,7 +147,9 @@ final class AppSettings: ObservableObject {
             "notifyThermal": true,
             "loggingEnabled": true,
             "autoUpdateCheck": true,
-            "liquidGlass": true,
+            "gpuAcceleration": true,
+            // Ships off: the app is lean (opaque cards) by default; glass is opt-in.
+            "liquidGlass": false,
             "glassIntensity": 0.15,
             "theme": AppTheme.system.rawValue,
             "hideDockIcon": false,
@@ -152,6 +170,7 @@ final class AppSettings: ObservableObject {
         notifyThermal = defaults.bool(forKey: "notifyThermal")
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
+        gpuAcceleration = defaults.bool(forKey: "gpuAcceleration")
         liquidGlass = defaults.bool(forKey: "liquidGlass")
         glassIntensity = defaults.double(forKey: "glassIntensity")
         theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
@@ -172,6 +191,24 @@ final class AppSettings: ObservableObject {
             self.launchAtLogin = enabled
             self.syncingLoginItem = false
         }
+
+        // Freeze animations when Vitals isn't the focused app: observe app
+        // activation and republish `appActive`. The model keeps sampling, so
+        // numbers stay live — only motion stops. Registered last: the closures
+        // capture self, which must be fully initialized first.
+        let center = NotificationCenter.default
+        activeObservers = [
+            center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.appActive = true }
+            },
+            center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.appActive = false }
+            },
+        ]
+    }
+
+    deinit {
+        activeObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     // MARK: Temperature formatting

@@ -31,7 +31,7 @@ struct GPUCard: View {
             Text(gpu.utilization.map { String(format: "%.0f%%", $0) } ?? "—")
                 .font(.system(size: 32, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .contentTransition(.numericText())
+                .numericTransition()
             Text("utilization")
                 .font(.callout)
                 .foregroundStyle(.secondary)

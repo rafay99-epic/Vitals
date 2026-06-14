@@ -12,7 +12,7 @@ struct FanWidget: View {
                 Text(value)
                     .scaledFont(30, weight: .semibold, design: .rounded)
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTransition()
                 if model.hasSMC, model.fans.first != nil {
                     Text("rpm")
                         .scaledFont(13)

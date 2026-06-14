@@ -13,7 +13,7 @@ struct GPUWidget: View {
                 Text(model.gpu?.utilization.map { String(format: "%.0f%%", $0) } ?? "—")
                     .scaledFont(30, weight: .semibold, design: .rounded)
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTransition()
                 Spacer(minLength: 0)
                 Text(detail)
                     .scaledFont(10.5)

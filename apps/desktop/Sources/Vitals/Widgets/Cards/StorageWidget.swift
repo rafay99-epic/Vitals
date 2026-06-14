@@ -20,7 +20,7 @@ struct StorageWidget: View {
                     Text(formatBytes(usage.used))
                         .scaledFont(24, weight: .semibold, design: .rounded)
                         .monospacedDigit()
-                        .contentTransition(.numericText())
+                        .numericTransition()
                     Text("used")
                         .scaledFont(13)
                         .foregroundStyle(.secondary)
