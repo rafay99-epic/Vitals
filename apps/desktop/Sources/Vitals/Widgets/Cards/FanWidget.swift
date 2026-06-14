@@ -5,7 +5,8 @@ struct FanWidget: View {
     @EnvironmentObject private var model: VitalsModel
 
     var body: some View {
-        WidgetCard(title: "Fan", symbol: "fan", tint: .cyan) {
+        WidgetCard(title: "Fan", symbol: "fan", tint: .cyan,
+                   intensity: spinFraction ?? 0, spinFraction: spinFraction) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
                     .font(.system(size: 30, weight: .semibold, design: .rounded))
@@ -22,6 +23,13 @@ struct FanWidget: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
+    }
+
+    /// Real RPM as a fraction of this fan's rated maximum — drives both the spin
+    /// speed and the rim glow. nil when there's no live, moving fan.
+    private var spinFraction: Double? {
+        guard model.hasSMC, let fan = model.fans.first, fan.maxRPM > 0 else { return nil }
+        return min(max(fan.rpm / fan.maxRPM, 0), 1)
     }
 
     private var value: String {

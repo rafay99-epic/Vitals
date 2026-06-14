@@ -7,7 +7,8 @@ struct CombinedWidget: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        WidgetCard(title: "Vitals", symbol: "gauge.with.dots.needle.50percent", tint: .green) {
+        WidgetCard(title: "Vitals", symbol: "gauge.with.dots.needle.50percent", tint: .green,
+                   intensity: overallIntensity) {
             Grid(horizontalSpacing: 14, verticalSpacing: 7) {
                 GridRow {
                     metric("CPU", cpuTemp, "cpu", cpuTint)
@@ -19,6 +20,13 @@ struct CombinedWidget: View {
                 }
             }
         }
+    }
+
+    /// Overall system stress: the worst of CPU heat, CPU load, and memory
+    /// pressure — so the at-a-glance card glows for whatever's actually loaded.
+    private var overallIntensity: Double {
+        max(model.averageCPUTemp.map(tempSeverity) ?? 0,
+            max(model.cpuUsage / 100, model.memory?.usedFraction ?? 0))
     }
 
     private var cpuTint: Color { model.averageCPUTemp.map(tempGradientColor) ?? .secondary }

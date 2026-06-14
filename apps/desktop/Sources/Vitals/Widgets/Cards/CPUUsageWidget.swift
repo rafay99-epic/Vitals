@@ -5,7 +5,8 @@ struct CPUUsageWidget: View {
     @EnvironmentObject private var model: VitalsModel
 
     var body: some View {
-        WidgetCard(title: "CPU Usage", symbol: "gauge.with.dots.needle.50percent", tint: .blue) {
+        WidgetCard(title: "CPU Usage", symbol: "gauge.with.dots.needle.50percent", tint: .blue,
+                   intensity: model.cpuUsage / 100) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(String(format: "%.0f%%", model.cpuUsage))
                     .font(.system(size: 30, weight: .semibold, design: .rounded))

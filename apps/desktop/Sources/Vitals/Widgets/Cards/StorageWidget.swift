@@ -11,7 +11,8 @@ struct StorageWidget: View {
     }
 
     private func card(_ usage: StorageAnalyzer.VolumeUsage?) -> some View {
-        WidgetCard(title: "Storage", symbol: "internaldrive", tint: .teal) {
+        WidgetCard(title: "Storage", symbol: "internaldrive", tint: .teal,
+                   intensity: usage?.usedFraction ?? 0) {
             if let usage {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(formatBytes(usage.used))

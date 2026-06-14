@@ -8,7 +8,8 @@ struct MemoryWidget: View {
     var body: some View {
         let memory = model.memory
         let tint = memory.map { pressureColor($0.pressure) } ?? .indigo
-        WidgetCard(title: "Memory", symbol: "memorychip", tint: tint) {
+        WidgetCard(title: "Memory", symbol: "memorychip", tint: tint,
+                   intensity: memory?.usedFraction ?? 0) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(memory.map { String(format: "%.1f GB", gigabytes($0.used)) } ?? "—")
                     .font(.system(size: 27, weight: .semibold, design: .rounded))

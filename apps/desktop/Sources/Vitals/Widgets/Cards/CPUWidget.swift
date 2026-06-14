@@ -8,7 +8,8 @@ struct CPUWidget: View {
 
     var body: some View {
         let tint = model.averageCPUTemp.map(tempGradientColor) ?? .secondary
-        WidgetCard(title: "CPU", symbol: "cpu", tint: tint) {
+        WidgetCard(title: "CPU", symbol: "cpu", tint: tint,
+                   intensity: model.averageCPUTemp.map(tempSeverity) ?? 0) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(model.averageCPUTemp.map { settings.format($0, decimals: 0) } ?? "—")
                     .font(.system(size: 30, weight: .semibold, design: .rounded))

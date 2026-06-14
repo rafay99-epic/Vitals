@@ -79,6 +79,10 @@ final class AppSettings: ObservableObject {
     /// Off by default — the scan waits for an explicit press. Cleaning always
     /// requires selection + confirmation regardless.
     @Published var autoScanCleanup: Bool { didSet { defaults.set(autoScanCleanup, forKey: "autoScanCleanup") } }
+    /// Whether desktop widgets react to their readings — a rim glow that breathes
+    /// with severity and a fan icon that spins at a speed proportional to real
+    /// RPM. On by default; turn it off for perfectly still panels.
+    @Published var animateWidgets: Bool { didSet { defaults.set(animateWidgets, forKey: "animateWidgets") } }
 
     @Published var theme: AppTheme {
         didSet {
@@ -135,6 +139,7 @@ final class AppSettings: ObservableObject {
             "analyzerIncludesHidden": true,
             "allowWholeDiskScan": false,
             "autoScanCleanup": false,
+            "animateWidgets": true,
         ])
 
         refreshInterval = defaults.double(forKey: "refreshInterval")
@@ -155,6 +160,7 @@ final class AppSettings: ObservableObject {
         analyzerIncludesHidden = defaults.bool(forKey: "analyzerIncludesHidden")
         allowWholeDiskScan = defaults.bool(forKey: "allowWholeDiskScan")
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
+        animateWidgets = defaults.bool(forKey: "animateWidgets")
 
         // SMAppService.status is an XPC round-trip; in init it sat directly
         // on the launch path and delayed the first frame. Load it async.

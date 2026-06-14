@@ -311,6 +311,11 @@ private struct GeneralPane: View {
                     caption: "Off: widgets stay on the desktop, behind your windows (default). On: they float above everything.",
                     isOn: Binding(get: { widgets.onTop }, set: { widgets.onTop = $0 })
                 )
+                SwitchRow(
+                    label: "Animate widgets",
+                    caption: "Widgets react to their readings: a rim glow that breathes with severity and a fan that spins faster as RPM climbs. Off: perfectly still panels.",
+                    isOn: $settings.animateWidgets
+                )
             }
 
             SettingsCard(title: "Application", symbol: "macwindow", tint: .teal) {
