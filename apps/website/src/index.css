@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+:root {
+  /* Dark theme: fixes native scrollbars, form controls, etc. */
+  color-scheme: dark;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth in-page navigation (e.g. the nav's Download button → #download),
+   disabled for reduced-motion users. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Anchor targets clear the fixed nav instead of hiding under it. */
+section[id],
+[id].vt-anchor {
+  scroll-margin-top: 88px;
+}
+
 body {
   margin: 0;
   background: #060608;
@@ -7,10 +30,65 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  touch-action: manipulation;
+}
+
+/* Headings avoid orphan/widow lines. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 ::selection {
   background: rgba(10, 132, 255, 0.4);
+}
+
+/* Consistent keyboard focus ring. Inline styles don't set `outline`, so this
+   applies cleanly across the inline-styled buttons/links. */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid #4aa3ff;
+  outline-offset: 3px;
+  border-radius: 7px;
+}
+
+/* Universal interactive feedback — brighten on hover, settle on press — without
+   fighting each element's inline base styles (only `filter`/`transform`, which
+   they don't set). Compositor-friendly and interruptible. */
+:where(a, button) {
+  transition:
+    filter 0.16s ease,
+    transform 0.12s ease;
+}
+@media (hover: hover) {
+  :where(a, button):hover {
+    filter: brightness(1.12);
+  }
+}
+:where(a, button):active {
+  transform: translateY(0.5px) scale(0.99);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(a, button) {
+    transition: none;
+  }
+  :where(a, button):active {
+    transform: none;
+  }
+}
+
+/* CommandBox copy icon: cross-fade copy↔check with a tiny spring. */
+.vt-cmd-icon {
+  position: absolute;
+  inset: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.28s cubic-bezier(0.2, 1.4, 0.5, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-cmd-icon {
+    transition: opacity 0.12s linear;
+  }
 }
 
 @keyframes vt-float {
