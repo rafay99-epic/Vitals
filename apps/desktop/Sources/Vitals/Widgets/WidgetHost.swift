@@ -121,12 +121,16 @@ struct WidgetHost: View {
     let onClose: () -> Void
     @State private var hovering = false
 
+    // Handle on the real panel, plus the anchors captured at gesture start.
+    @State private var window: NSWindow?
+    @State private var dragMouse: CGPoint?
+    @State private var dragOrigin: CGPoint?
+    @State private var resizeMouse: CGPoint?
+    @State private var resizeFrame: CGRect?
+
     var body: some View {
         ZStack {
-            // Drag layer sits *under* the card; the card's content is
-            // hit-test-disabled so a drag anywhere on the body reaches here.
-            WidgetDragSurface(onClose: onClose)
-            card.allowsHitTesting(false)
+            card
             if hovering {
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
@@ -139,27 +143,98 @@ struct WidgetHost: View {
                 .padding(6)
                 .transition(.opacity)
                 .help("Close this widget")
-                resizeGrip
-                    .transition(.opacity)
             }
+            // Always in the tree (only *shown* on hover) so its gesture can
+            // always claim a corner drag — otherwise the drag falls through to
+            // the move gesture and the widget slides instead of resizing.
+            resizeGrip.opacity(hovering ? 1 : 0)
         }
+        // Make the whole body — including transparent corners — grabbable.
+        .contentShape(Rectangle())
+        .gesture(moveGesture)
+        .background(WindowReader { window = $0 })
         .animation(.easeOut(duration: 0.12), value: hovering)
         .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Close \(kind.shortTitle)", systemImage: "xmark") { onClose() }
+        }
     }
 
-    /// Bottom-right corner grip — revealed on hover, like the close button.
+    /// Drag the panel from anywhere on its body. Tracks the absolute mouse in
+    /// screen coordinates against an anchor captured at the start, so the moving
+    /// window can't feed back into the delta (a translation-based gesture jitters).
+    private var moveGesture: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { _ in
+                guard let window else { return }
+                let mouse = NSEvent.mouseLocation
+                if dragMouse == nil {
+                    dragMouse = mouse
+                    dragOrigin = window.frame.origin
+                }
+                guard let dm = dragMouse, let origin = dragOrigin else { return }
+                window.setFrameOrigin(CGPoint(x: origin.x + (mouse.x - dm.x),
+                                              y: origin.y + (mouse.y - dm.y)))
+            }
+            .onEnded { _ in
+                dragMouse = nil
+                dragOrigin = nil
+                persistFrame()
+            }
+    }
+
+    /// Bottom-right corner grip — revealed on hover, like the close button. Its
+    /// own gesture wins over the move gesture inside this small hit target.
     private var resizeGrip: some View {
-        ZStack {
-            WidgetResizeGrip(minSize: kind.minSize, maxSize: kind.maxSize)
-            Image(systemName: "arrow.down.right")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(.secondary)
-                .allowsHitTesting(false)
+        VStack {
+            Spacer(minLength: 0)
+            HStack {
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.down.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)        // generous hit target
+                    .contentShape(Rectangle())
+                    // High priority so the corner always resizes, beating the
+                    // body's move gesture.
+                    .highPriorityGesture(resizeGesture)
+                    .help("Drag to resize")
+            }
         }
-        .frame(width: 16, height: 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .padding(5)
-        .help("Drag to resize")
+        .padding(2)
+    }
+
+    /// Resize the panel anchored at its top-left (the corner stays put while the
+    /// bottom-right follows the cursor), clamped to the kind's min/max.
+    private var resizeGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { _ in
+                guard let window else { return }
+                let mouse = NSEvent.mouseLocation
+                if resizeFrame == nil {
+                    resizeFrame = window.frame
+                    resizeMouse = mouse
+                }
+                guard let rf = resizeFrame, let rm = resizeMouse else { return }
+                let width = min(max(rf.width + (mouse.x - rm.x), kind.minSize.width), kind.maxSize.width)
+                let height = min(max(rf.height - (mouse.y - rm.y), kind.minSize.height), kind.maxSize.height)
+                window.setFrame(CGRect(x: rf.minX, y: rf.maxY - height, width: width, height: height),
+                                display: true)
+            }
+            .onEnded { _ in
+                resizeFrame = nil
+                resizeMouse = nil
+                persistFrame()
+            }
+    }
+
+    private func persistFrame() {
+        guard let window else { return }
+        let frame = window.frame
+        UserDefaults.standard.set(
+            [frame.origin.x, frame.origin.y, frame.width, frame.height],
+            forKey: WidgetPanel.frameKey(for: kind)
+        )
     }
 
     @ViewBuilder

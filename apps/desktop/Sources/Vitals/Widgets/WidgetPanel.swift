@@ -38,7 +38,10 @@ enum WidgetPanel {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
-        panel.isMovableByWindowBackground = true
+        // Dragging is driven by a SwiftUI gesture in `WidgetHost` (the AppKit
+        // window-background drag doesn't fire reliably under the hosting view),
+        // so leave this off to avoid two movers fighting.
+        panel.isMovableByWindowBackground = false
         panel.minSize = kind.minSize
         panel.maxSize = kind.maxSize
         panel.hidesOnDeactivate = false
@@ -61,19 +64,34 @@ enum WidgetPanel {
         host.autoresizingMask = [.width, .height]
         panel.contentView = host
 
-        // Restore the saved position; otherwise tuck it into the top-right,
-        // cascading so multiple widgets don't stack on the exact same spot.
-        let name = "vitals.widget.\(kind.rawValue)"
-        if !panel.setFrameUsingName(name) {
-            if let visible = NSScreen.main?.visibleFrame {
-                let dy = CGFloat(index) * (size.height + 14)
-                panel.setFrameOrigin(NSPoint(
-                    x: visible.maxX - size.width - 22,
-                    y: visible.maxY - size.height - 22 - dy
-                ))
-            }
+        // Restore the saved frame (position *and* size) if we have one;
+        // otherwise tuck it into the top-right, cascading so multiple widgets
+        // don't stack on the exact same spot. We own this in UserDefaults rather
+        // than via `setFrameAutosaveName`: the AppKit autosave restored position
+        // but not size for these borderless panels, then re-saved the default
+        // size on close — clobbering a resize.
+        if let saved = savedFrame(for: kind) {
+            panel.setFrame(saved, display: false)
+        } else if let visible = NSScreen.main?.visibleFrame {
+            let dy = CGFloat(index) * (size.height + 14)
+            panel.setFrameOrigin(NSPoint(
+                x: visible.maxX - size.width - 22,
+                y: visible.maxY - size.height - 22 - dy
+            ))
         }
-        panel.setFrameAutosaveName(name)
         return panel
+    }
+
+    /// UserDefaults key holding a widget's last `[x, y, width, height]`.
+    static func frameKey(for kind: WidgetKind) -> String { "vitals.widget.frame.\(kind.rawValue)" }
+
+    /// The persisted frame for a widget, clamped to its current size bounds, or
+    /// nil if it has never been placed.
+    private static func savedFrame(for kind: WidgetKind) -> CGRect? {
+        guard let values = UserDefaults.standard.array(forKey: frameKey(for: kind)) as? [Double],
+              values.count == 4 else { return nil }
+        let width = min(max(CGFloat(values[2]), kind.minSize.width), kind.maxSize.width)
+        let height = min(max(CGFloat(values[3]), kind.minSize.height), kind.maxSize.height)
+        return CGRect(x: values[0], y: values[1], width: width, height: height)
     }
 }
