@@ -1,0 +1,56 @@
+name: Convex
+
+# Auto-deploys the Convex backend (at the repo root) to production on every push
+# to main that touches it. `convex deploy` typechecks, bundles, installs any
+# components (the rate-limiter), and pushes — no manual step, no seeding.
+#
+# Requires a repo secret CONVEX_DEPLOY_KEY: a *production* deploy key from the
+# Convex dashboard (Project → Settings → Deploy keys). The GITHUB_TOKEN that
+# lifts GitHub's rate limit is a separate Convex *env var* set on the deployment
+# itself (`bunx convex env set GITHUB_TOKEN …`), not a GitHub Actions secret.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "convex/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/convex.yml"
+  pull_request:
+    paths:
+      - "convex/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/convex.yml"
+
+jobs:
+  typecheck:
+    name: Typecheck functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Typecheck convex/
+        run: bunx tsc -p convex/tsconfig.json --noEmit
+
+  deploy:
+    name: Deploy to Convex
+    # Only on push to main, after the functions typecheck.
+    if: github.event_name == 'push'
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Deploy
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: bunx convex deploy --yes

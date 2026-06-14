@@ -195,10 +195,15 @@ Settings → Desktop Widgets.
   abuse and keeps us under GitHub's ceiling. On limit: `list` throws (error state), `latest`
   returns null. The component keeps its **own** internal storage — it does **not** add a
   host-app schema/table, so the backend stays schemaless.
-- **Deployment is manual + simple:** `bun run convex:deploy` (prod) when the functions
-  change — they rarely do. No GitHub Action. The website on Vercel just needs
+- **Deployment is automatic:** `.github/workflows/convex.yml` typechecks `convex/` on PRs
+  and **deploys to production on push to main** (path-filtered to `convex/**`). `convex
+  deploy` typechecks, bundles, installs components (the rate-limiter), and pushes. Needs a
+  repo secret **`CONVEX_DEPLOY_KEY`** (production deploy key) — separate from the deployment
+  **env var** `GITHUB_TOKEN`, which is set on the deployment itself, not in CI. (`bun run
+  convex:deploy` does the same thing by hand.) The website on Vercel just needs
   `VITE_CONVEX_URL` = the production Convex **Cloud URL** (`.convex.cloud`), inlined at build
-  time (redeploy after setting).
+  time (redeploy after setting). The workflow has **no seed/refresh step** — that's what
+  failed before (a deploy key can't run an internal action); the live proxy needs none.
 - The website imports the typed API through the **`@convex` alias** (`apps/website`
   `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
   '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the

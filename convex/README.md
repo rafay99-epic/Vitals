@@ -48,8 +48,14 @@ table to this backend**, so it stays simple.
 ```sh
 bun run convex:dev       # start the dev server + watch/push functions
 bun run convex:codegen   # regenerate convex/_generated
-bun run convex:deploy    # deploy to production (do this when functions change)
+bun run convex:deploy    # deploy to production by hand (CI does this for you)
 ```
+
+**Production deploys automatically:** `.github/workflows/convex.yml` runs `convex deploy`
+on every push to `main` that touches `convex/` (it typechecks, bundles, installs the
+rate-limiter component, and pushes — no manual step). It needs a repo secret
+`CONVEX_DEPLOY_KEY` (a production deploy key from the dashboard). Note that's separate from
+the `GITHUB_TOKEN` *env var*, which lives on the deployment, not in CI.
 
 `convex/_generated/` is **committed** so the website's `@convex/_generated/api` import
 and `tsc -b` resolve without a codegen step.
