@@ -1,10 +1,12 @@
 import SwiftUI
 import Charts
 
-/// Current GPU state: utilization hero, memory used/total, temperature, name.
+/// Current GPU state: utilization hero, memory used/total, name. Apple Silicon
+/// exposes no GPU-specific temperature sensor (CPU and GPU share one die, and
+/// the die diodes aren't labeled by block), so temperature is deliberately not
+/// shown here — the honesty rule forbids labelling a generic die reading "GPU".
 struct GPUCard: View {
     @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         SectionCard(title: "GPU", symbol: "cpu.fill") {
@@ -15,8 +17,6 @@ struct GPUCard: View {
                         memoryBar(gpu)
                         memoryLegend(gpu)
                     }
-                    Divider()
-                    details(gpu)
                 }
             } else {
                 Text("GPU statistics unavailable.")
@@ -73,17 +73,6 @@ struct GPUCard: View {
             return String(format: "%.2f GB of %.0f GB", gigabytes(used), gigabytes(total))
         }
         return String(format: "%.2f GB", gigabytes(used))
-    }
-
-    private func details(_ gpu: GPUSnapshot) -> some View {
-        HStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Temperature").font(.caption).foregroundStyle(.secondary)
-                Text(model.gpuTemp.map { settings.formatWithUnit($0, decimals: 0) } ?? "—")
-                    .font(.system(.body, design: .rounded, weight: .medium))
-            }
-            Spacer()
-        }
     }
 }
 

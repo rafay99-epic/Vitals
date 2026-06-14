@@ -3,7 +3,6 @@ import SwiftUI
 /// GPU utilization with a usage sparkline. Mirrors `CPUUsageWidget`.
 struct GPUWidget: View {
     @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
     @Environment(\.widgetScale) private var scale
 
     var body: some View {
@@ -25,14 +24,9 @@ struct GPUWidget: View {
         }
     }
 
-    /// Prefer temperature, fall back to memory in use — whichever we can read.
+    /// Memory in use — Apple Silicon exposes no GPU-specific temperature.
     private var detail: String {
-        if let temp = model.gpuTemp {
-            return settings.formatWithUnit(temp, decimals: 0)
-        }
-        if let used = model.gpu?.memoryUsed {
-            return String(format: "%.1f GB", gigabytes(used))
-        }
-        return ""
+        guard let used = model.gpu?.memoryUsed else { return "" }
+        return String(format: "%.1f GB", gigabytes(used))
     }
 }

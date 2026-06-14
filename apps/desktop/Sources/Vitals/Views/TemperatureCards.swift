@@ -27,16 +27,6 @@ struct TemperatureHistoryCard: View {
                     .foregroundStyle(by: .value("Series", "CPU average"))
                     .interpolationMethod(.catmullRom)
                     .lineStyle(StrokeStyle(lineWidth: 2))
-
-                    if let gpu = sample.gpu {
-                        LineMark(
-                            x: .value("Time", sample.time),
-                            y: .value("Temp", settings.display(gpu)),
-                            series: .value("Series", "GPU")
-                        )
-                        .foregroundStyle(by: .value("Series", "GPU"))
-                        .interpolationMethod(.catmullRom)
-                    }
                 }
 
                 if let sample = model.history.nearest(to: hoverTime) {
@@ -57,7 +47,6 @@ struct TemperatureHistoryCard: View {
             .chartForegroundStyleScale([
                 "CPU average": Color.orange,
                 "Hottest core": Color.red.opacity(0.7),
-                "GPU": Color.purple,
             ])
             .chartYAxisLabel(settings.unit.symbol)
             .chartLegend(position: .top, alignment: .trailing)
