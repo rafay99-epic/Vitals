@@ -9,10 +9,17 @@ struct FanCommand: Codable {
     let rpm: Double
 }
 
-/// Filesystem contract between the app and its privileged helper.
+/// Filesystem contract between the app and its privileged helper. The label and
+/// support dir are derived from the running bundle so each build channel gets
+/// its own isolated helper + state (`…vitals` vs `…vitals.dev`) — a Dev build
+/// can never disturb Stable's fan daemon. The GUI and the daemon are the same
+/// binary, so `Bundle.main` resolves identically in both.
 enum FanControl {
-    static let label = "com.syntaxlabtechnology.vitals.fand"
-    static let supportDir = URL(fileURLWithPath: "/Library/Application Support/Vitals", isDirectory: true)
+    static let label = (Bundle.main.bundleIdentifier ?? "com.syntaxlabtechnology.vitals") + ".fand"
+    static let supportDir = URL(
+        fileURLWithPath: "/Library/Application Support/\(Channel.current.displayName)",
+        isDirectory: true
+    )
     static let stateURL = supportDir.appendingPathComponent("fan-state.json")
     static let daemonPlistPath = "/Library/LaunchDaemons/\(label).plist"
 

@@ -31,7 +31,9 @@ final class Updater: ObservableObject {
 
     nonisolated static let repository = "rafay99-epic/Vitals"
     nonisolated static let currentVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
-    nonisolated private static let installPath = "/Applications/Vitals.app"
+    /// Replace the actual running bundle (wherever it lives), not a hardcoded
+    /// path — so an app launched from a non-standard location updates in place.
+    nonisolated private static let installPath = Bundle.main.bundlePath
 
     @Published private(set) var status: Status = .idle
     @Published private(set) var lastChecked: Date?
@@ -47,7 +49,10 @@ final class Updater: ObservableObject {
     }
 
     /// Checks at launch and every 6 hours while the automatic toggle is on.
+    /// Dev builds never update — you built them yourself, and the release DMG is
+    /// a different (Stable) app entirely.
     func startAutomaticChecks(settings: AppSettings) {
+        guard Channel.current == .stable else { return }
         settings.$autoUpdateCheck
             .removeDuplicates()
             .sink { [weak self] enabled in
@@ -66,6 +71,7 @@ final class Updater: ObservableObject {
     }
 
     func check(userInitiated: Bool) async {
+        guard Channel.current == .stable else { return }
         guard !isBusy else { return }
         status = .checking
         do {

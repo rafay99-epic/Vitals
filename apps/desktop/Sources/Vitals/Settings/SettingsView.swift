@@ -449,24 +449,33 @@ private struct UpdatesPane: View {
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
-                SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Button("Check for Updates") {
-                            Task { await updater.check(userInitiated: true) }
-                        }
-                        .disabled(updater.isBusy)
-                        if case .available(let release) = updater.status {
-                            Button("Install Vitals \(release.version)") {
-                                Task { await updater.downloadAndInstall() }
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
-                    .controlSize(.small)
-                    Text(updateStatusLine)
+                if Channel.current.isDev {
+                    // Dev builds are whatever you compiled — the release DMG is a
+                    // different (Stable) app, so updating here makes no sense.
+                    Text("This is a Dev build — updates are disabled. Rebuild from your branch to change it; your Stable install updates on its own.")
                         .font(.caption)
-                        .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Button("Check for Updates") {
+                                Task { await updater.check(userInitiated: true) }
+                            }
+                            .disabled(updater.isBusy)
+                            if case .available(let release) = updater.status {
+                                Button("Install Vitals \(release.version)") {
+                                    Task { await updater.downloadAndInstall() }
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                        .controlSize(.small)
+                        Text(updateStatusLine)
+                            .font(.caption)
+                            .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                    }
                 }
             }
         }
@@ -509,11 +518,16 @@ private struct AboutPane: View {
     private static let moleURL = URL(string: "https://github.com/tw93/mole")!
 
     private var versionLine: String {
+        var line: String
         let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? Updater.currentVersion
         if build == Updater.currentVersion {
-            return "Version \(Updater.currentVersion)"
+            line = "Version \(Updater.currentVersion)"
+        } else {
+            line = "Version \(Updater.currentVersion) (build \(build))"
         }
-        return "Version \(Updater.currentVersion) (build \(build))"
+        // Dev builds stamp the exact branch@sha so you know what's running.
+        if let info = Channel.buildInfo { line += " · \(info)" }
+        return line
     }
 
     var body: some View {
@@ -522,8 +536,18 @@ private struct AboutPane: View {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
                     .frame(width: 64, height: 64)
-                Text("Vitals")
-                    .font(.system(size: 18, weight: .semibold))
+                HStack(spacing: 7) {
+                    Text(Channel.current.displayName)
+                        .font(.system(size: 18, weight: .semibold))
+                    if let badge = Channel.current.badge {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(.orange))
+                            .foregroundStyle(.white)
+                    }
+                }
                 Text(versionLine)
                     .font(.system(.callout, design: .rounded))
                     .monospacedDigit()

@@ -42,6 +42,21 @@ License: **GPL-3.0**.
 - Website + app updater both rely on `releases/latest/download/Vitals.dmg` — never
   rename the DMG asset.
 
+### Build channels (Stable + Dev)
+
+- `VITALS_CHANNEL` (read by `build.sh`) selects the channel; **default `stable`**, so
+  CI / `release.yml` are unaffected. `dev` builds **`Vitals Dev.app`** with bundle id
+  `…vitals.dev`, a purple+`DEV` icon, version `…-dev` + a baked `VitalsBuildInfo`
+  (`branch@sha`), and **no updater**. The two install side by side and run at once —
+  the single-instance guard keys off `Bundle.main.bundleIdentifier`.
+- Everything channel-specific derives at runtime from the bundle, not hardcoded:
+  `Channel.current` (reads the `VitalsChannel` Info.plist key), `FanControl.label` /
+  `supportDir` (so Dev's fan helper + `/Library/Application Support/Vitals Dev` are
+  isolated), and `Updater.installPath` (= `Bundle.main.bundlePath`). The updater is
+  gated to `stable` only.
+- **`./dev.sh`** builds the current branch as Dev and installs+launches it next to
+  Stable. Stable stays your auto-updating daily driver; break Dev freely.
+
 ## Commands
 
 ```sh

@@ -1,6 +1,9 @@
 .build/
 build/
 .swiftpm/
+
+# Dev-channel app icon — generated locally on the first `./dev.sh`, not shipped.
+apps/desktop/Resources/AppIcon-Dev.icns
 .DS_Store
 node_modules/
 .turbo/
