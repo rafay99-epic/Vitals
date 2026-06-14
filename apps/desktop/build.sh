@@ -55,6 +55,12 @@ fi
 "$PB" -c "Add :CFBundleDisplayName string $APP_NAME" "$APP/Contents/Info.plist" 2>/dev/null \
   || "$PB" -c "Set :CFBundleDisplayName $APP_NAME" "$APP/Contents/Info.plist"
 "$PB" -c "Set :VitalsChannel $CHANNEL" "$APP/Contents/Info.plist"
+# Monotonic build number (CI run number) — orders Dev pre-releases for the
+# updater. Absent/0 for local builds.
+if [ -n "${VITALS_BUILD:-}" ]; then
+  "$PB" -c "Add :VitalsBuildNumber string $VITALS_BUILD" "$APP/Contents/Info.plist" 2>/dev/null \
+    || "$PB" -c "Set :VitalsBuildNumber $VITALS_BUILD" "$APP/Contents/Info.plist"
+fi
 echo "Version $VERSION  ($APP_NAME · $BUNDLE_ID)"
 
 # Generate the channel's icon once; delete the cache file to force a re-render.

@@ -1,0 +1,82 @@
+name: Pre-release (Dev)
+
+# The Dev channel's feed. Every push to a non-main branch builds the Dev app
+# and publishes a per-branch GitHub *pre-release* carrying Vitals-Dev.dmg. The
+# Dev app's updater tracks the newest pre-release, so anyone running Dev rides
+# the latest branch build. Stable (main → release.yml) is untouched.
+#
+# Gated by tests: a broken branch publishes nothing.
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/prerelease.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One in-flight build per branch; a newer push supersedes an older one.
+concurrency:
+  group: prerelease-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/desktop
+
+jobs:
+  test:
+    name: Test before pre-release
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run tests
+        run: swift test
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --reporter github-actions-logging
+
+  prerelease:
+    name: Build and publish Dev pre-release
+    runs-on: macos-26
+    needs: test
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history — the version is the commit count
+
+      - name: Compute identity
+        run: |
+          echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+          echo "BRANCH=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          # Tag is per-branch; slashes aren't tag-friendly.
+          echo "TAG=dev-$(echo "${GITHUB_REF_NAME}" | tr '/' '-')" >> "$GITHUB_ENV"
+
+      - name: Build Dev app and installer
+        run: |
+          export VITALS_CHANNEL=dev
+          export VITALS_VERSION="$VERSION"
+          export VITALS_BUILD="$BUILD"
+          ./make-dmg.sh
+
+      - name: Publish per-branch pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Replace the branch's previous pre-release so the tag follows HEAD.
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          # The title MUST contain "build <n>" — the updater parses it to order builds.
+          gh release create "$TAG" build/Vitals-Dev.dmg \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Vitals Dev · $BRANCH · build $BUILD" \
+            --notes "Dev build of branch \`$BRANCH\` @ \`$SHA\` (build $BUILD, version $VERSION-dev).
+
+          **Install:** download \`Vitals-Dev.dmg\` below and drag to Applications. It installs as **Vitals Dev** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Dev auto-updates to the newest pre-release.
+
+          ⚠️ Unsigned pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."

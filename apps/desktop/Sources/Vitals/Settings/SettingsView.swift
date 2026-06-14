@@ -444,58 +444,56 @@ private struct UpdatesPane: View {
         VStack(spacing: 12) {
             SettingsCard(title: "Software updates", symbol: "arrow.down.circle", tint: .green) {
                 settingsRow("Installed version") {
-                    Text(Updater.currentVersion)
+                    Text(installedVersion)
                         .font(.system(.callout, design: .rounded, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
-                if Channel.current.isDev {
-                    // Dev builds are whatever you compiled — the release DMG is a
-                    // different (Stable) app, so updating here makes no sense.
-                    Text("This is a Dev build — updates are disabled. Rebuild from your branch to change it; your Stable install updates on its own.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Button("Check for Updates") {
-                                Task { await updater.check(userInitiated: true) }
-                            }
-                            .disabled(updater.isBusy)
-                            if case .available(let release) = updater.status {
-                                Button("Install Vitals \(release.version)") {
-                                    Task { await updater.downloadAndInstall() }
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
+                SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Button("Check for Updates") {
+                            Task { await updater.check(userInitiated: true) }
                         }
-                        .controlSize(.small)
-                        Text(updateStatusLine)
-                            .font(.caption)
-                            .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        .disabled(updater.isBusy)
+                        if case .available(let release) = updater.status {
+                            Button("Install \(Channel.current.displayName) \(release.displayVersion)") {
+                                Task { await updater.downloadAndInstall() }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
+                    .controlSize(.small)
+                    Text(updateStatusLine)
+                        .font(.caption)
+                        .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
             }
         }
     }
 
+    private var installedVersion: String {
+        let build = Updater.currentBuildNumber
+        return build > 0 ? "\(Updater.currentVersion) (build \(build))" : Updater.currentVersion
+    }
+
     private var updateStatusLine: String {
         switch updater.status {
         case .idle:
-            return "Updates install from this project's GitHub releases."
+            return Channel.current.isDev
+                ? "Dev tracks the newest pre-release build on GitHub."
+                : "Updates install from this project's GitHub releases."
         case .checking:
             return "Checking for updates…"
         case .upToDate:
             let when = updater.lastChecked.map { $0.formatted(date: .omitted, time: .shortened) } ?? ""
             return "You're up to date. Last checked \(when)."
         case .available(let release):
-            return "Vitals \(release.version) is ready to install."
+            return "\(Channel.current.displayName) \(release.displayVersion) is ready to install."
         case .downloading:
             return "Downloading update…"
         case .installing:
-            return "Installing — Vitals will relaunch in a moment."
+            return "Installing — \(Channel.current.displayName) will relaunch in a moment."
         case .failed(let message):
             return message
         }
