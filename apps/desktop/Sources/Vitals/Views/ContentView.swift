@@ -52,9 +52,22 @@ struct ContentView: View {
             header
             Divider()
                 .opacity(0.5)
-            Group {
+            ZStack {
+                // The Dashboard stays mounted across tab switches: its Swift
+                // Charts cost 50–150 ms each to build, so rebuilding them on
+                // every visit caused a visible hitch. Kept alive (just hidden),
+                // returning to it is instant. Hidden, it isn't drawn — only the
+                // light per-tick data refresh runs, which lean mode keeps cheap.
+                DashboardView()
+                    .opacity(section == .dashboard ? 1 : 0)
+                    .allowsHitTesting(section == .dashboard)
+                    .accessibilityHidden(section != .dashboard)
+
+                // The list-based tabs are cheap to rebuild and some refresh on
+                // appear (Storage re-reads volume/access), so they stay
+                // build-on-demand to preserve that.
                 switch section {
-                case .dashboard: DashboardView()
+                case .dashboard: EmptyView()
                 case .applications: AppsView(model: appsModel)
                 case .cleanup: CleanupView(model: cleanupModel)
                 case .storage: StorageView(model: storageModel)
