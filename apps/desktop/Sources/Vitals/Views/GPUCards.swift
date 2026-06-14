@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// Current GPU state: utilization hero, memory used/total, name. Apple Silicon
 /// exposes no GPU-specific temperature sensor (CPU and GPU share one die, and
@@ -73,62 +72,5 @@ struct GPUCard: View {
             return String(format: "%.2f GB of %.0f GB", gigabytes(used), gigabytes(total))
         }
         return String(format: "%.2f GB", gigabytes(used))
-    }
-}
-
-/// GPU utilization over time — mirrors `CPUUsageCard`.
-struct GPUHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
-    @State private var hoverTime: Date?
-
-    var body: some View {
-        SectionCard(title: "GPU usage · last \(settings.historyMinutes) minutes", symbol: "chart.line.uptrend.xyaxis") {
-            Deferred {
-                Chart {
-                    ForEach(model.chartHistory) { sample in
-                        if let usage = sample.gpuUsage {
-                            AreaMark(
-                                x: .value("Time", sample.time),
-                                y: .value("%", usage)
-                            )
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.purple.opacity(0.35), .purple.opacity(0.02)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .interpolationMethod(.catmullRom)
-
-                            LineMark(
-                                x: .value("Time", sample.time),
-                                y: .value("%", usage)
-                            )
-                            .foregroundStyle(.purple)
-                            .interpolationMethod(.catmullRom)
-                        }
-                    }
-
-                    if let sample = model.history.nearest(to: hoverTime), let usage = sample.gpuUsage {
-                        RuleMark(x: .value("Time", sample.time))
-                            .foregroundStyle(.secondary.opacity(0.5))
-                            .lineStyle(StrokeStyle(lineWidth: 1))
-                            .annotation(
-                                position: .top,
-                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                            ) {
-                                HoverTooltip(time: sample.time) {
-                                    Text(String(format: "GPU %.0f%%", usage))
-                                }
-                            }
-                    }
-                }
-                .chartYScale(domain: 0...100)
-                .chartYAxisLabel("%")
-                .chartHover($hoverTime)
-            }
-            .frame(height: 150)
-        }
     }
 }

@@ -172,7 +172,10 @@ struct SectionCard<Content: View>: View {
                 .foregroundStyle(.secondary)
             content
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // maxHeight so paired cards in a row share the row's height (the
+        // background fills instead of leaving the shorter card stranded). In a
+        // vertical scroll the proposed height is the ideal, so it doesn't stretch.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .cardBackground()
     }
