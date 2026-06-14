@@ -125,12 +125,16 @@ struct WidgetHost: View {
     let onClose: () -> Void
     @State private var hovering = false
 
-    // Handle on the real panel, plus the anchors captured at gesture start.
+    /// A single drag either moves or resizes, decided once from where it began.
+    private enum DragMode { case move, resize }
+    /// Size of the bottom-right zone that resizes instead of moves.
+    private let resizeCorner: CGFloat = 30
+
+    // Handle on the real panel, plus the mode + anchors captured at drag start.
     @State private var window: NSWindow?
-    @State private var dragMouse: CGPoint?
-    @State private var dragOrigin: CGPoint?
-    @State private var resizeMouse: CGPoint?
-    @State private var resizeFrame: CGRect?
+    @State private var dragMode: DragMode?
+    @State private var anchorMouse: CGPoint?
+    @State private var anchorFrame: CGRect?
 
     var body: some View {
         GeometryReader { geo in
@@ -158,7 +162,7 @@ struct WidgetHost: View {
             .environment(\.widgetScale, widgetScale(for: geo.size, default: kind.defaultSize))
             // Make the whole body — including transparent corners — grabbable.
             .contentShape(Rectangle())
-            .gesture(moveGesture)
+            .gesture(dragGesture(in: geo.size))
             .background(WindowReader { window = $0 })
             .animation(.easeOut(duration: 0.12), value: hovering)
             .onHover { hovering = $0 }
@@ -168,31 +172,47 @@ struct WidgetHost: View {
         }
     }
 
-    /// Drag the panel from anywhere on its body. Tracks the absolute mouse in
-    /// screen coordinates against an anchor captured at the start, so the moving
-    /// window can't feed back into the delta (a translation-based gesture jitters).
-    private var moveGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { _ in
+    /// One gesture for the whole body. The first move locks in a mode: a drag
+    /// that starts in the bottom-right corner resizes (top-left pinned), anything
+    /// else moves. Both track the absolute mouse in screen coordinates against an
+    /// anchor captured at the start, so the moving/resizing window can't feed back
+    /// into the delta (a translation-based gesture jitters). One gesture means no
+    /// move-vs-resize priority fight — the bug that broke resize.
+    private func dragGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .local)
+            .onChanged { value in
                 guard let window else { return }
-                let mouse = NSEvent.mouseLocation
-                if dragMouse == nil {
-                    dragMouse = mouse
-                    dragOrigin = window.frame.origin
+                if dragMode == nil {
+                    let inCorner = value.startLocation.x >= size.width - resizeCorner
+                        && value.startLocation.y >= size.height - resizeCorner
+                    dragMode = inCorner ? .resize : .move
+                    anchorMouse = NSEvent.mouseLocation
+                    anchorFrame = window.frame
                 }
-                guard let dm = dragMouse, let origin = dragOrigin else { return }
-                window.setFrameOrigin(CGPoint(x: origin.x + (mouse.x - dm.x),
-                                              y: origin.y + (mouse.y - dm.y)))
+                guard let mode = dragMode, let am = anchorMouse, let af = anchorFrame else { return }
+                let mouse = NSEvent.mouseLocation
+                switch mode {
+                case .move:
+                    window.setFrameOrigin(CGPoint(x: af.origin.x + (mouse.x - am.x),
+                                                  y: af.origin.y + (mouse.y - am.y)))
+                case .resize:
+                    let width = min(max(af.width + (mouse.x - am.x), kind.minSize.width), kind.maxSize.width)
+                    let height = min(max(af.height - (mouse.y - am.y), kind.minSize.height), kind.maxSize.height)
+                    // Top-left stays put (AppKit origin is bottom-left).
+                    window.setFrame(CGRect(x: af.minX, y: af.maxY - height, width: width, height: height),
+                                    display: true)
+                }
             }
             .onEnded { _ in
-                dragMouse = nil
-                dragOrigin = nil
+                dragMode = nil
+                anchorMouse = nil
+                anchorFrame = nil
                 persistFrame()
             }
     }
 
-    /// Bottom-right corner grip — revealed on hover, like the close button. Its
-    /// own gesture wins over the move gesture inside this small hit target.
+    /// Bottom-right grip — a hover-revealed affordance only; the unified drag
+    /// gesture (above) handles the actual resize when a drag starts in this corner.
     private var resizeGrip: some View {
         VStack {
             Spacer(minLength: 0)
@@ -201,39 +221,12 @@ struct WidgetHost: View {
                 Image(systemName: "arrow.down.right")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)        // generous hit target
-                    .contentShape(Rectangle())
-                    // High priority so the corner always resizes, beating the
-                    // body's move gesture.
-                    .highPriorityGesture(resizeGesture)
+                    .frame(width: 24, height: 24)
+                    .allowsHitTesting(false)
                     .help("Drag to resize")
             }
         }
         .padding(2)
-    }
-
-    /// Resize the panel anchored at its top-left (the corner stays put while the
-    /// bottom-right follows the cursor), clamped to the kind's min/max.
-    private var resizeGesture: some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { _ in
-                guard let window else { return }
-                let mouse = NSEvent.mouseLocation
-                if resizeFrame == nil {
-                    resizeFrame = window.frame
-                    resizeMouse = mouse
-                }
-                guard let rf = resizeFrame, let rm = resizeMouse else { return }
-                let width = min(max(rf.width + (mouse.x - rm.x), kind.minSize.width), kind.maxSize.width)
-                let height = min(max(rf.height - (mouse.y - rm.y), kind.minSize.height), kind.maxSize.height)
-                window.setFrame(CGRect(x: rf.minX, y: rf.maxY - height, width: width, height: height),
-                                display: true)
-            }
-            .onEnded { _ in
-                resizeFrame = nil
-                resizeMouse = nil
-                persistFrame()
-            }
     }
 
     private func persistFrame() {
