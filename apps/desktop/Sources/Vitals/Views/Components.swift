@@ -328,6 +328,12 @@ func tempGradientColor(_ celsius: Double) -> Color {
     return Color(hue: 0.33 * (1 - t), saturation: 0.85, brightness: 0.88)
 }
 
+/// 0 at ≤40 °C rising to 1 at ≥90 °C — the same ramp `tempGradientColor` uses,
+/// exposed for driving widget glow intensity from a real temperature.
+func tempSeverity(_ celsius: Double) -> Double {
+    min(max((celsius - 40) / 50, 0), 1)
+}
+
 func gigabytes(_ bytes: UInt64) -> Double {
     Double(bytes) / 1_073_741_824
 }
