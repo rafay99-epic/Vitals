@@ -243,6 +243,7 @@ struct WidgetHost: View {
         switch kind {
         case .cpu: CPUWidget()
         case .cpuUsage: CPUUsageWidget()
+        case .gpu: GPUWidget()
         case .memory: MemoryWidget()
         case .fan: FanWidget()
         case .storage: StorageWidget()

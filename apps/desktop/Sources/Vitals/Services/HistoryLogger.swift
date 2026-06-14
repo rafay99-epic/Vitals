@@ -9,7 +9,7 @@ final class HistoryLogger {
         .appendingPathComponent("Vitals", isDirectory: true)
     static let fileURL = directory.appendingPathComponent("history.csv")
 
-    private static let header = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct\n"
+    private static let header = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"
     private static let minimumInterval: TimeInterval = 10
     private static let maximumBytes: UInt64 = 50_000_000
 
@@ -34,7 +34,9 @@ final class HistoryLogger {
         cpuUsage: Double,
         memoryUsedGB: Double,
         thermalState: String,
-        batteryPercent: Double?
+        batteryPercent: Double?,
+        gpuUsage: Double?,
+        gpuMemoryGB: Double?
     ) {
         let now = Date()
         guard now.timeIntervalSince(lastWrite) >= Self.minimumInterval else { return }
@@ -50,6 +52,8 @@ final class HistoryLogger {
             String(format: "%.2f", memoryUsedGB),
             thermalState,
             batteryPercent.map { String(format: "%.0f", $0) } ?? "",
+            gpuUsage.map { String(format: "%.1f", $0) } ?? "",
+            gpuMemoryGB.map { String(format: "%.2f", $0) } ?? "",
         ]
         if let data = (fields.joined(separator: ",") + "\n").data(using: .utf8) {
             try? handle.write(contentsOf: data)

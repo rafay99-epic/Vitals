@@ -110,6 +110,24 @@ struct MenuBarPanel: View {
                         .interpolationMethod(.catmullRom)
                 }
             }
+            if let utilization = model.gpu?.utilization {
+                sparkline(
+                    title: "GPU",
+                    value: String(format: "%.0f%%", utilization),
+                    color: .purple
+                ) {
+                    ForEach(data) { sample in
+                        if let usage = sample.gpuUsage {
+                            AreaMark(x: .value("t", sample.time), y: .value("v", usage))
+                                .foregroundStyle(.purple.opacity(0.18))
+                                .interpolationMethod(.catmullRom)
+                            LineMark(x: .value("t", sample.time), y: .value("v", usage))
+                                .foregroundStyle(.purple)
+                                .interpolationMethod(.catmullRom)
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -19,6 +19,12 @@ struct CombinedWidget: View {
                     metric("Memory", memoryValue, "memorychip", memoryTint)
                     metric("Fan", fanValue, "fan", .cyan)
                 }
+                if model.gpu != nil {
+                    GridRow {
+                        metric("GPU", gpuValue, "cpu.fill", .purple)
+                        metric("GPU °", gpuTemp, "thermometer.medium", gpuTempTint)
+                    }
+                }
             }
         }
     }
@@ -39,6 +45,9 @@ struct CombinedWidget: View {
         guard let fan = model.fans.first else { return "Fanless" }
         return "\(Int(fan.rpm))"
     }
+    private var gpuValue: String { model.gpu?.utilization.map { String(format: "%.0f%%", $0) } ?? "—" }
+    private var gpuTemp: String { model.gpuTemp.map { settings.format($0, decimals: 0) } ?? "—" }
+    private var gpuTempTint: Color { model.gpuTemp.map(tempGradientColor) ?? .secondary }
 
     private func metric(_ label: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
         HStack(spacing: 7 * scale) {

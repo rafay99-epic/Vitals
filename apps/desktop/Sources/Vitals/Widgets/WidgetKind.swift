@@ -5,6 +5,7 @@ import SwiftUI
 enum WidgetKind: String, CaseIterable, Identifiable {
     case cpu
     case cpuUsage
+    case gpu
     case memory
     case fan
     case storage
@@ -16,6 +17,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         switch self {
         case .cpu: return "CPU Temperature"
         case .cpuUsage: return "CPU Usage"
+        case .gpu: return "GPU"
         case .memory: return "Memory"
         case .fan: return "Fan"
         case .storage: return "Storage"
@@ -28,6 +30,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         switch self {
         case .cpu: return "CPU"
         case .cpuUsage: return "CPU Usage"
+        case .gpu: return "GPU"
         case .memory: return "Memory"
         case .fan: return "Fan"
         case .storage: return "Storage"
@@ -39,6 +42,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         switch self {
         case .cpu: return "cpu"
         case .cpuUsage: return "gauge.with.dots.needle.50percent"
+        case .gpu: return "cpu.fill"
         case .memory: return "memorychip"
         case .fan: return "fan"
         case .storage: return "internaldrive"
@@ -52,6 +56,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         switch self {
         case .cpu: return .orange
         case .cpuUsage: return .blue
+        case .gpu: return .purple
         case .memory: return .indigo
         case .fan: return .cyan
         case .storage: return .teal
@@ -60,12 +65,12 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     }
 
     var defaultSize: CGSize {
-        self == .combined ? CGSize(width: 320, height: 132) : CGSize(width: 212, height: 118)
+        self == .combined ? CGSize(width: 320, height: 172) : CGSize(width: 212, height: 118)
     }
 
     /// Resize bounds — a widget can't collapse to nothing or balloon off-screen.
     var minSize: CGSize {
-        self == .combined ? CGSize(width: 280, height: 120) : CGSize(width: 178, height: 104)
+        self == .combined ? CGSize(width: 280, height: 152) : CGSize(width: 178, height: 104)
     }
 
     var maxSize: CGSize {

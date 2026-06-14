@@ -18,6 +18,7 @@ final class VitalsModel: ObservableObject {
         let averageCPU: Double
         let hottestCPU: Double
         let gpu: Double?
+        let gpuUsage: Double?   // GPU busy %, nil when no GPU reading
         let usage: Double
         let memoryUsed: Double  // bytes
         let swapUsed: Double    // bytes
@@ -25,6 +26,8 @@ final class VitalsModel: ObservableObject {
 
     @Published private(set) var cpuSensors: [Sensor] = []
     @Published private(set) var gpuTemp: Double?
+    /// GPU utilization and memory (nil when there's no readable GPU, e.g. a VM).
+    @Published private(set) var gpu: GPUSnapshot?
     @Published private(set) var ssdTemp: Double?
     @Published private(set) var batteryTemp: Double?
     @Published private(set) var fans: [SMC.Fan] = []
@@ -181,6 +184,7 @@ final class VitalsModel: ObservableObject {
         memory = snapshot.memory
         topProcesses = snapshot.topProcesses
         battery = snapshot.battery
+        gpu = snapshot.gpu
         hasLoaded = true
 
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
@@ -190,6 +194,7 @@ final class VitalsModel: ObservableObject {
                 averageCPU: average,
                 hottestCPU: hottest.celsius,
                 gpu: gpuTemp,
+                gpuUsage: gpu?.utilization,
                 usage: cpuUsage,
                 memoryUsed: Double(memory?.used ?? 0),
                 swapUsed: Double(memory?.swapUsed ?? 0)
@@ -207,7 +212,9 @@ final class VitalsModel: ObservableObject {
                     cpuUsage: cpuUsage,
                     memoryUsedGB: gigabytes(memory?.used ?? 0),
                     thermalState: thermalState.label,
-                    batteryPercent: battery?.percent
+                    batteryPercent: battery?.percent,
+                    gpuUsage: gpu?.utilization,
+                    gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) }
                 )
             }
         }
