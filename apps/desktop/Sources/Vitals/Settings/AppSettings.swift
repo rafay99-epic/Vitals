@@ -30,16 +30,42 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
-enum MenuBarMode: String, CaseIterable, Identifiable {
-    case average, hottest, fan, iconOnly
+/// A live reading the menu-bar item can show next to the icon. Any number can
+/// be enabled at once; an empty set means "icon only".
+enum MenuBarMetric: String, CaseIterable, Identifiable {
+    case cpuTemp, cpuUsage, gpuUsage, memory, fan
     var id: String { rawValue }
 
+    /// Label shown in the Settings picker.
     var label: String {
         switch self {
-        case .average: return "Average CPU temperature"
-        case .hottest: return "Hottest core"
-        case .fan: return "Fan speed"
-        case .iconOnly: return "Icon only"
+        case .cpuTemp:  return "CPU temperature"
+        case .cpuUsage: return "CPU usage"
+        case .gpuUsage: return "GPU usage"
+        case .memory:   return "Memory used"
+        case .fan:      return "Fan speed"
+        }
+    }
+
+    /// SF Symbol shown before the value — matches the dashboard subsystems.
+    var symbol: String {
+        switch self {
+        case .cpuTemp:  return "thermometer.medium"
+        case .cpuUsage: return "cpu"
+        case .gpuUsage: return "cpu.fill"
+        case .memory:   return "memorychip"
+        case .fan:      return "fan"
+        }
+    }
+
+    /// Compact word used in the menu bar's Text style (in place of the symbol).
+    var shortLabel: String {
+        switch self {
+        case .cpuTemp:  return "Temp"
+        case .cpuUsage: return "CPU"
+        case .gpuUsage: return "GPU"
+        case .memory:   return "RAM"
+        case .fan:      return "Fan"
         }
     }
 }
@@ -50,7 +76,18 @@ final class AppSettings: ObservableObject {
     @Published var refreshInterval: Double { didSet { defaults.set(refreshInterval, forKey: "refreshInterval") } }
     @Published var unit: TemperatureUnit { didSet { defaults.set(unit.rawValue, forKey: "temperatureUnit") } }
     @Published var historyMinutes: Int { didSet { defaults.set(historyMinutes, forKey: "historyMinutes") } }
-    @Published var menuBarMode: MenuBarMode { didSet { defaults.set(menuBarMode.rawValue, forKey: "menuBarMode") } }
+    /// Stored as a comma-joined list of raw values ("" = icon only).
+    @Published var menuBarMetrics: Set<MenuBarMetric> {
+        didSet {
+            defaults.set(MenuBarMetric.allCases.filter(menuBarMetrics.contains).map(\.rawValue).joined(separator: ","),
+                         forKey: "menuBarMetrics")
+        }
+    }
+    /// Icon style (SF Symbol + value) vs. plain text style (short word + value).
+    @Published var menuBarUseIcons: Bool { didSet { defaults.set(menuBarUseIcons, forKey: "menuBarUseIcons") } }
+    /// Gently animate the menu-bar icons (fan spins, the rest breathe). Costs a
+    /// few redraws a second while shown; ignored in Text style.
+    @Published var menuBarAnimated: Bool { didSet { defaults.set(menuBarAnimated, forKey: "menuBarAnimated") } }
     @Published var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
     @Published var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     @Published var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
@@ -141,7 +178,8 @@ final class AppSettings: ObservableObject {
             "temperatureUnit": TemperatureUnit.celsius.rawValue,
             "historyMinutes": 10,
             "showMenuBar": true,
-            "menuBarMode": MenuBarMode.average.rawValue,
+            "menuBarUseIcons": true,
+            "menuBarAnimated": true,
             "warnThreshold": 85.0,
             "notifyOverheat": true,
             "notifyThermal": true,
@@ -164,7 +202,9 @@ final class AppSettings: ObservableObject {
         unit = TemperatureUnit(rawValue: defaults.string(forKey: "temperatureUnit") ?? "") ?? .celsius
         historyMinutes = defaults.integer(forKey: "historyMinutes")
         showMenuBar = defaults.bool(forKey: "showMenuBar")
-        menuBarMode = MenuBarMode(rawValue: defaults.string(forKey: "menuBarMode") ?? "") ?? .average
+        menuBarMetrics = AppSettings.loadMenuBarMetrics(defaults)
+        menuBarUseIcons = defaults.bool(forKey: "menuBarUseIcons")
+        menuBarAnimated = defaults.bool(forKey: "menuBarAnimated")
         warnThreshold = defaults.double(forKey: "warnThreshold")
         notifyOverheat = defaults.bool(forKey: "notifyOverheat")
         notifyThermal = defaults.bool(forKey: "notifyThermal")
@@ -216,6 +256,20 @@ final class AppSettings: ObservableObject {
     /// Converts a sensor reading (always stored in °C) to the display unit.
     func display(_ celsius: Double) -> Double {
         unit == .fahrenheit ? celsius * 9 / 5 + 32 : celsius
+    }
+
+    /// Reads the menu-bar metric set, migrating the pre-v0.20 single `menuBarMode`
+    /// key (average/hottest → CPU temperature, fan → fan, iconOnly → none).
+    private static func loadMenuBarMetrics(_ defaults: UserDefaults) -> Set<MenuBarMetric> {
+        if let raw = defaults.string(forKey: "menuBarMetrics") {
+            // An empty string is a deliberate "icon only" choice, not absence.
+            return Set(raw.split(separator: ",").compactMap { MenuBarMetric(rawValue: String($0)) })
+        }
+        switch defaults.string(forKey: "menuBarMode") {
+        case "fan":      return [.fan]
+        case "iconOnly": return []
+        default:         return [.cpuTemp]
+        }
     }
 
     /// "45.1°" in the display unit.

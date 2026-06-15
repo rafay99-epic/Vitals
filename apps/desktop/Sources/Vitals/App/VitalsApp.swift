@@ -2,16 +2,21 @@ import SwiftUI
 import AppKit
 
 struct VitalsApp: App {
+    // Keeps the app running when every window is closed, so the menu-bar item
+    // (now a custom status item, not MenuBarExtra) stays put.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var settings: AppSettings
     @StateObject private var model: VitalsModel
     @StateObject private var updater: Updater
     @StateObject private var fanControl: FanController
     @StateObject private var widgets: WidgetManager
+    @StateObject private var menuBar: MenuBarController
 
     init() {
         let settings = AppSettings()
         let model = VitalsModel(settings: settings)
         let updater = Updater()
+        let fanControl = FanController()
         model.start()
         updater.startAutomaticChecks(settings: settings)
         settings.applyActivationPolicy()
@@ -19,9 +24,11 @@ struct VitalsApp: App {
         _settings = StateObject(wrappedValue: settings)
         _model = StateObject(wrappedValue: model)
         _updater = StateObject(wrappedValue: updater)
-        _fanControl = StateObject(wrappedValue: FanController())
+        _fanControl = StateObject(wrappedValue: fanControl)
         // Widgets observe the same model/settings — one data path, no re-polling.
         _widgets = StateObject(wrappedValue: WidgetManager(model: model, settings: settings))
+        // The menu-bar status item hosts a live, compositor-animated label.
+        _menuBar = StateObject(wrappedValue: MenuBarController(model: model, settings: settings, fanControl: fanControl))
     }
 
     var body: some Scene {
@@ -63,50 +70,8 @@ struct VitalsApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
 
-        MenuBarExtra(isInserted: menuBarInserted) {
-            MenuBarPanel()
-                .environmentObject(model)
-                .environmentObject(settings)
-                .environmentObject(fanControl)
-                .environment(\.animationsEnabled, settings.animationsEnabled)
-        } label: {
-            menuBarLabel
-        }
-        .menuBarExtraStyle(.window)
-    }
-
-    /// SwiftUI writes back to `isInserted` on every scene evaluation. Binding
-    /// straight to the @Published property republishes even for same-value
-    /// writes, which re-invalidates the scene — an infinite render loop that
-    /// pegs the main thread. Only forward real changes.
-    private var menuBarInserted: Binding<Bool> {
-        Binding(
-            get: { settings.showMenuBar },
-            set: { newValue in
-                if settings.showMenuBar != newValue {
-                    settings.showMenuBar = newValue
-                }
-            }
-        )
-    }
-
-    @ViewBuilder
-    private var menuBarLabel: some View {
-        let warning = model.averageCPUTemp.map { $0 >= settings.warnThreshold } ?? false
-        let symbol = warning ? "flame.fill" : "thermometer.medium"
-        switch settings.menuBarMode {
-        case .iconOnly:
-            Image(systemName: symbol)
-        case .average:
-            Label(model.averageCPUTemp.map { settings.format($0, decimals: 0) } ?? "–", systemImage: symbol)
-                .labelStyle(.titleAndIcon)
-        case .hottest:
-            Label(model.hottestCPUSensor.map { settings.format($0.celsius, decimals: 0) } ?? "–", systemImage: symbol)
-                .labelStyle(.titleAndIcon)
-        case .fan:
-            Label(model.fans.first.map { "\(Int($0.rpm))" } ?? "–", systemImage: "fan")
-                .labelStyle(.titleAndIcon)
-        }
+        // The menu-bar item is a custom NSStatusItem managed by `MenuBarController`
+        // (created in init), not a MenuBarExtra scene — see that type for why.
     }
 }
 
