@@ -31,7 +31,11 @@ actor SensorSampler {
     private var batteryHealthCheckedAt = Date.distantPast
     private static let batteryHealthInterval: TimeInterval = 600
 
-    func sample() -> Snapshot {
+    /// `includeTopProcesses` gates the per-process rusage sweep — the heaviest
+    /// part of a tick (a syscall per PID). It's only needed when the window is
+    /// open or a process-CPU alert is armed; skipping it idle (menu-bar only)
+    /// cuts the tick's cost noticeably.
+    func sample(includeTopProcesses: Bool) -> Snapshot {
         let battery = Battery.read(officialHealth: batteryHealth)
         if battery != nil { refreshBatteryHealthIfStale() }
         return Snapshot(
@@ -40,7 +44,7 @@ actor SensorSampler {
             hasSMC: smc != nil,
             cpuUsage: cpuSampler.sample(),
             memory: MemoryStats.read(),
-            topProcesses: processSampler.sample(top: 5),
+            topProcesses: includeTopProcesses ? processSampler.sample(top: 5) : [],
             battery: battery,
             gpu: gpu.sample(),
             power: power.sample()

@@ -77,6 +77,16 @@ final class VitalsModel: ObservableObject {
     private let logger = HistoryLogger()
     private var timer: Timer?
     private var isSampling = false
+    /// Whether the main window is open. Top-process sampling (the costliest part
+    /// of a tick) is skipped when it's closed and no process-CPU alert needs it.
+    private var mainWindowVisible = false
+
+    /// Call when the main window opens/closes (ContentView appear/disappear).
+    func setMainWindowVisible(_ visible: Bool) { mainWindowVisible = visible }
+
+    private var needsTopProcesses: Bool {
+        mainWindowVisible || settings.alertRules.contains { $0.enabled && $0.metric == .processCPU }
+    }
     private var cancellables: Set<AnyCancellable> = []
     private static let maxChartPoints = 300
     /// A single sample must finish within this long or the watchdog frees the
@@ -166,9 +176,10 @@ final class VitalsModel: ObservableObject {
         guard !isSampling else { return }
         isSampling = true
 
+        let includeTopProcesses = needsTopProcesses
         let work = Task { [weak self] in
             guard let self else { return }
-            let snapshot = await self.sampler.sample()
+            let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses)
             guard !Task.isCancelled else { return }
             self.apply(snapshot)
             self.sensorsStalled = false
