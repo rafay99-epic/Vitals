@@ -120,6 +120,42 @@ struct LoadingStateView: View {
     }
 }
 
+// MARK: - Tab scaffold
+
+/// A monitoring tab's scrolling canvas, batched into one Liquid Glass pass when
+/// enabled — the shared chrome behind the GPU, Battery and Health tabs, matching
+/// the Dashboard's `LazyVStack` + `GlassEffectContainer` so every surface reads
+/// as one app. Lazy, so off-screen cards cost nothing until scrolled to.
+struct MetricScroll<Content: View>: View {
+    @EnvironmentObject private var settings: AppSettings
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            batched
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var batched: some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *), settings.glassEnabled {
+            GlassEffectContainer { stack }
+        } else {
+            stack
+        }
+        #else
+        stack
+        #endif
+    }
+
+    private var stack: some View {
+        LazyVStack(alignment: .leading, spacing: 16, content: content)
+    }
+}
+
 // MARK: - Cards
 
 struct StatCard: View {

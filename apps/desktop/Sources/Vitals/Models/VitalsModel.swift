@@ -41,6 +41,10 @@ final class VitalsModel: ObservableObject {
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
     @Published private(set) var battery: BatterySnapshot?
+    /// Live SoC power draw (CPU/GPU/ANE rails). Nil until the second sample —
+    /// power is an energy delta and needs a prior reading — and on the rare
+    /// machine where IOReport is unavailable.
+    @Published private(set) var power: PowerSnapshot?
     /// False until the first sample lands — drives the dashboard loading state.
     @Published private(set) var hasLoaded = false
     /// True when a sample overran the watchdog (a sensor syscall wedged). The
@@ -185,6 +189,7 @@ final class VitalsModel: ObservableObject {
         topProcesses = snapshot.topProcesses
         battery = snapshot.battery
         gpu = snapshot.gpu
+        if let power = snapshot.power { self.power = power }
         hasLoaded = true
 
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {

@@ -6,12 +6,15 @@ import SwiftUI
 /// switches change what's drawn, never the geometry it's drawn in.
 struct ContentView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case dashboard, processes, applications, cleanup, storage
+        case dashboard, gpu, battery, health, processes, applications, cleanup, storage
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .dashboard: return "Dashboard"
+            case .gpu: return "GPU"
+            case .battery: return "Battery"
+            case .health: return "Health"
             case .processes: return "Processes"
             case .applications: return "Applications"
             case .cleanup: return "Cleanup"
@@ -22,6 +25,9 @@ struct ContentView: View {
         var symbol: String {
             switch self {
             case .dashboard: return "gauge.with.dots.needle.50percent"
+            case .gpu: return "cpu.fill"
+            case .battery: return "battery.100percent"
+            case .health: return "waveform.path.ecg"
             case .processes: return "list.bullet"
             case .applications: return "square.grid.2x2"
             case .cleanup: return "sparkles"
@@ -32,10 +38,13 @@ struct ContentView: View {
         var shortcut: KeyEquivalent {
             switch self {
             case .dashboard: return "1"
-            case .processes: return "2"
-            case .applications: return "3"
-            case .cleanup: return "4"
-            case .storage: return "5"
+            case .gpu: return "2"
+            case .battery: return "3"
+            case .health: return "4"
+            case .processes: return "5"
+            case .applications: return "6"
+            case .cleanup: return "7"
+            case .storage: return "8"
             }
         }
     }
@@ -71,6 +80,12 @@ struct ContentView: View {
             ZStack {
                 DashboardView()
                     .tabVisibility(section == .dashboard)
+                GPUView()
+                    .tabVisibility(section == .gpu)
+                BatteryView()
+                    .tabVisibility(section == .battery)
+                HealthView()
+                    .tabVisibility(section == .health)
                 ProcessesView(model: processesModel, isActive: section == .processes)
                     .tabVisibility(section == .processes)
                 AppsView(model: appsModel, isActive: section == .applications)
@@ -93,7 +108,10 @@ struct ContentView: View {
         // leaving a dead band above itself.
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
-        .frame(minWidth: 980, minHeight: 680)
+        // Wide enough that the centered capsule tabs (eight of them) never
+        // collide with the leading wordmark or the trailing controls — measured
+        // against the real tab-bar width, ~766 pt, plus both clusters.
+        .frame(minWidth: 1100, minHeight: 680)
     }
 
     // MARK: Header

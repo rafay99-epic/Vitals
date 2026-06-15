@@ -14,6 +14,7 @@ actor SensorSampler {
         let topProcesses: [ProcessSampler.Process]
         let battery: BatterySnapshot?
         let gpu: GPUSnapshot?
+        let power: PowerSnapshot?
     }
 
     private let hid = HIDSensors()
@@ -21,6 +22,7 @@ actor SensorSampler {
     private let cpuSampler = CPUUsageSampler()
     private let processSampler = ProcessSampler()
     private let gpu = GPUSampler()
+    private let power = SoCPowerSampler()
 
     func sample() -> Snapshot {
         Snapshot(
@@ -31,7 +33,8 @@ actor SensorSampler {
             memory: MemoryStats.read(),
             topProcesses: processSampler.sample(top: 5),
             battery: Battery.read(),
-            gpu: gpu.sample()
+            gpu: gpu.sample(),
+            power: power.sample()
         )
     }
 }
