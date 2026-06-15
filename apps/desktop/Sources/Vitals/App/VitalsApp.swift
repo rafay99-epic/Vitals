@@ -174,7 +174,10 @@ private struct MenuBarLabelView: View {
         .padding(2)                  // headroom so a spinning/breathing icon never clips
 
         let renderer = ImageRenderer(content: row)
-        renderer.scale = 2 // the menu bar is rendered @2x on every modern Mac
+        // Match the sharpest attached display instead of forcing @2x: on an
+        // all-1x (non-Retina Intel) Mac this renders a quarter of the pixels,
+        // while staying crisp on Retina.
+        renderer.scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
         guard let image = renderer.nsImage else { return nil }
         image.isTemplate = true
         return image
@@ -222,22 +225,66 @@ private struct MenuBarLabelView: View {
     }
 }
 
-/// Drives the menu-bar icon animation: publishes a `phase` ~12×/second while
+/// Drives the menu-bar icon animation: publishes a `phase` ~10×/second while
 /// running, so only `MenuBarLabelView` re-renders. Uses `.common` run-loop mode
-/// so it keeps ticking even while a menu is being tracked.
+/// so it keeps ticking even while a menu is being tracked, and pauses whenever
+/// the work would be wasted — display asleep or Low Power Mode — so a constantly
+/// re-rendered status item never drains an idle or battery-saving Mac.
 @MainActor
 private final class MenuBarAnimator: ObservableObject {
     @Published private(set) var phase: TimeInterval = Date().timeIntervalSinceReferenceDate
     private var timer: Timer?
+    private var wantsAnimation = false
+    private var displayAsleep = false
+    private var workspaceTokens: [NSObjectProtocol] = []
+    private var defaultTokens: [NSObjectProtocol] = []
 
+    /// 10 fps is plenty for a gentle spin/breath and lighter than a higher rate;
+    /// the timer also runs with tolerance so the OS can batch the wake-ups.
+    private static let interval: TimeInterval = 1.0 / 10.0
+
+    init() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspaceTokens.append(workspace.addObserver(forName: NSWorkspace.screensDidSleepNotification,
+                                                     object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.displayAsleep = true; self?.sync() }
+        })
+        workspaceTokens.append(workspace.addObserver(forName: NSWorkspace.screensDidWakeNotification,
+                                                     object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.displayAsleep = false; self?.sync() }
+        })
+        defaultTokens.append(NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange,
+                                                                    object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sync() }
+        })
+    }
+
+    deinit {
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspaceTokens.forEach { workspace.removeObserver($0) }
+        defaultTokens.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    /// Called by the view as its `animate` condition flips.
     func setRunning(_ running: Bool) {
-        if running {
+        wantsAnimation = running
+        sync()
+    }
+
+    /// Animate only when the view wants it, the display is awake, and we aren't
+    /// in Low Power Mode — animating an unseen or battery-saving menu bar is
+    /// pure waste.
+    private var shouldRun: Bool {
+        wantsAnimation && !displayAsleep && !ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
+
+    private func sync() {
+        if shouldRun {
             guard timer == nil else { return }
-            let timer = Timer(timeInterval: 1.0 / 12.0, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.phase = Date().timeIntervalSinceReferenceDate
-                }
+            let timer = Timer(timeInterval: Self.interval, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.phase = Date().timeIntervalSinceReferenceDate }
             }
+            timer.tolerance = Self.interval * 0.25
             RunLoop.main.add(timer, forMode: .common)
             self.timer = timer
         } else {
