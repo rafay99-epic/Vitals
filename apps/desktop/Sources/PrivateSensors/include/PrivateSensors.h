@@ -73,4 +73,39 @@ typedef struct {
 #define VITALS_SMC_CMD_WRITE_KEY 6
 #define VITALS_SMC_CMD_GET_KEY_INFO 9
 
+// ---------------------------------------------------------------------------
+// SoC power, via IOReport's "Energy Model" group. IOReport is a private
+// framework with no link-time stub, so we resolve it with dlopen at runtime
+// (see shim.c) — if that fails, sampling reports "unavailable" rather than
+// crashing. The model accumulates per-rail energy counters; we sample the
+// delta between two reads and divide by the elapsed wall time to get watts.
+// Each channel carries its own unit label (mJ / uJ / nJ), honoured exactly so
+// the watt figures are real, never assumed. CPU/GPU/ANE are the aggregate SoC
+// rails — the same accounting `powermetrics` reports, with no root required.
+//
+// Every field below is filled only when a real delta was measured; `valid`
+// stays 0 on the first sample (no prior counter to diff against) and whenever
+// IOReport is missing, so callers can render an honest "—".
+// ---------------------------------------------------------------------------
+
+typedef struct {
+    int    valid;       // 1 once a delta has been computed
+    double cpu_watts;   // CPU rail (E+P clusters), 0 if the channel is absent
+    double gpu_watts;   // GPU rail
+    double ane_watts;   // Apple Neural Engine rail
+} VitalsSoCPower;
+
+// Opens an IOReport subscription on the Energy Model. Returns an opaque handle,
+// or NULL if IOReport is unavailable. Create once and reuse — the subscription
+// and the previous sample live inside the handle.
+void *_Nullable vitals_socpower_create(void);
+
+// Samples the rails since the previous call. Returns 1 and fills `out` when a
+// delta was measured, 0 otherwise (first call, or unavailable). Cheap: one
+// IOReport sample plus a dictionary diff.
+int vitals_socpower_sample(void *_Nonnull handle, VitalsSoCPower *_Nonnull out);
+
+// Releases the subscription and any retained samples.
+void vitals_socpower_destroy(void *_Nullable handle);
+
 #endif

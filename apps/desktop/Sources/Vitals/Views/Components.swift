@@ -120,6 +120,42 @@ struct LoadingStateView: View {
     }
 }
 
+// MARK: - Tab scaffold
+
+/// A monitoring tab's scrolling canvas, batched into one Liquid Glass pass when
+/// enabled — the shared chrome behind the GPU, Battery and Health tabs, matching
+/// the Dashboard's `LazyVStack` + `GlassEffectContainer` so every surface reads
+/// as one app. Lazy, so off-screen cards cost nothing until scrolled to.
+struct MetricScroll<Content: View>: View {
+    @EnvironmentObject private var settings: AppSettings
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            batched
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var batched: some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *), settings.glassEnabled {
+            GlassEffectContainer { stack }
+        } else {
+            stack
+        }
+        #else
+        stack
+        #endif
+    }
+
+    private var stack: some View {
+        LazyVStack(alignment: .leading, spacing: 16, content: content)
+    }
+}
+
 // MARK: - Cards
 
 struct StatCard: View {
@@ -179,6 +215,42 @@ struct SectionCard<Content: View>: View {
         .padding(16)
         .cardBackground()
     }
+}
+
+/// A compact power readout tile in the shared card language. Shared by the GPU
+/// and Health tabs.
+struct PowerTile: View {
+    let title: String
+    let watts: Double
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(tint)
+                    .frame(width: 26, height: 26)
+                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.14)))
+                Text(title).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
+            }
+            Text(wattsText(watts))
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .numericTransition()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.3)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.separator.opacity(0.5)))
+    }
+}
+
+/// Watts with a sensible precision: sub-watt rails (an idle Neural Engine) keep
+/// two decimals so they don't collapse to a flat "0 W".
+func wattsText(_ watts: Double) -> String {
+    watts < 10 ? String(format: "%.2f W", watts) : String(format: "%.1f W", watts)
 }
 
 extension View {

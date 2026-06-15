@@ -188,6 +188,106 @@ private struct MenuBarMetricToggle: View {
     }
 }
 
+// MARK: - Tabs customization
+
+/// Navigation-bar customization: label display mode, size, and a show / reorder
+/// list. Reordering uses arrows rather than drag — predictable, keyboard- and
+/// VoiceOver-friendly, and a clean fit for the card design.
+private struct TabsCard: View {
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        SettingsCard(title: "Tabs", symbol: "menubar.rectangle", tint: .indigo) {
+            settingsRow("Labels") {
+                Picker("", selection: $settings.tabDisplayMode) {
+                    ForEach(TabDisplayMode.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
+            settingsRow("Size") {
+                Picker("", selection: $settings.tabSize) {
+                    ForEach(TabSize.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
+            Divider().opacity(0.5)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Show & reorder")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(Array(settings.tabOrder.enumerated()), id: \.element) { index, tab in
+                    TabReorderRow(tab: tab, index: index)
+                }
+                Text("Reorder with the arrows and switch off tabs you don't need. The Dashboard always stays, and ⌘1–9 follow this order.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
+private struct TabReorderRow: View {
+    @EnvironmentObject private var settings: AppSettings
+    let tab: AppTab
+    let index: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 1) {
+                moveButton(systemName: "chevron.up", delta: -1, disabled: index == 0)
+                moveButton(systemName: "chevron.down", delta: 1, disabled: index == settings.tabOrder.count - 1)
+            }
+            Image(systemName: tab.symbol)
+                .font(.system(size: 11, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.indigo)
+                .frame(width: 22, height: 22)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.indigo.opacity(0.14)))
+            Text(tab.title)
+                .font(.system(size: 12.5))
+            Spacer()
+            Toggle("", isOn: visibility)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(!tab.canHide)
+                .help(tab.canHide ? "Show \(tab.title) in the navigation bar" : "The Dashboard is always shown")
+        }
+    }
+
+    private func moveButton(systemName: String, delta: Int, disabled: Bool) -> some View {
+        Button {
+            let target = index + delta
+            guard settings.tabOrder.indices.contains(index),
+                  settings.tabOrder.indices.contains(target) else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                settings.tabOrder.swapAt(index, target)
+            }
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 9, weight: .bold))
+                .frame(width: 18, height: 14)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(disabled ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.secondary))
+        .disabled(disabled)
+    }
+
+    private var visibility: Binding<Bool> {
+        Binding(
+            get: { !settings.hiddenTabs.contains(tab) },
+            set: { visible in
+                if visible {
+                    settings.hiddenTabs.remove(tab)
+                } else if tab.canHide {
+                    settings.hiddenTabs.insert(tab)
+                }
+            }
+        )
+    }
+}
+
 private func settingsRow(_ label: String, @ViewBuilder control: () -> some View) -> some View {
     HStack {
         Text(label)
@@ -287,6 +387,8 @@ private struct GeneralPane: View {
                 .disabled(!settings.glassEnabled)
                 .opacity(settings.glassEnabled ? 1 : 0.5)
             }
+
+            TabsCard()
 
             SettingsCard(title: "Menu bar", symbol: "menubar.rectangle", tint: .blue) {
                 SwitchRow(label: "Show in menu bar", isOn: $settings.showMenuBar)

@@ -5,42 +5,8 @@ import SwiftUI
 /// window toolbar, so nothing can resize or snap the content, ever: tab
 /// switches change what's drawn, never the geometry it's drawn in.
 struct ContentView: View {
-    enum Section: String, CaseIterable, Identifiable {
-        case dashboard, processes, applications, cleanup, storage
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .dashboard: return "Dashboard"
-            case .processes: return "Processes"
-            case .applications: return "Applications"
-            case .cleanup: return "Cleanup"
-            case .storage: return "Storage"
-            }
-        }
-
-        var symbol: String {
-            switch self {
-            case .dashboard: return "gauge.with.dots.needle.50percent"
-            case .processes: return "list.bullet"
-            case .applications: return "square.grid.2x2"
-            case .cleanup: return "sparkles"
-            case .storage: return "internaldrive"
-            }
-        }
-
-        var shortcut: KeyEquivalent {
-            switch self {
-            case .dashboard: return "1"
-            case .processes: return "2"
-            case .applications: return "3"
-            case .cleanup: return "4"
-            case .storage: return "5"
-            }
-        }
-    }
-
-    @State private var section: Section = .dashboard
+    @EnvironmentObject private var settings: AppSettings
+    @State private var section: AppTab = .dashboard
     @State private var gearHovered = false
     @Environment(\.openWindow) private var openWindow
     @Namespace private var tabIndicator
@@ -71,6 +37,12 @@ struct ContentView: View {
             ZStack {
                 DashboardView()
                     .tabVisibility(section == .dashboard)
+                GPUView(isActive: section == .gpu)
+                    .tabVisibility(section == .gpu)
+                BatteryView()
+                    .tabVisibility(section == .battery)
+                HealthView()
+                    .tabVisibility(section == .health)
                 ProcessesView(model: processesModel, isActive: section == .processes)
                     .tabVisibility(section == .processes)
                 AppsView(model: appsModel, isActive: section == .applications)
@@ -93,7 +65,20 @@ struct ContentView: View {
         // leaving a dead band above itself.
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
-        .frame(minWidth: 980, minHeight: 680)
+        .frame(minWidth: minWindowWidth, minHeight: 680)
+        // If the user hides the tab they're on, fall back to the Dashboard so
+        // the canvas never shows a tab with no indicator in the bar.
+        .onChange(of: settings.hiddenTabs) { _, hidden in
+            if hidden.contains(section) { section = .dashboard }
+        }
+    }
+
+    /// "Labels" mode shows every tab name, so the centered bar needs a wider
+    /// floor to stay clear of the wordmark — more so at the larger size. The
+    /// icon-led modes always fit at 980.
+    private var minWindowWidth: CGFloat {
+        guard settings.tabDisplayMode == .labels else { return 980 }
+        return settings.tabSize == .large ? 1200 : 1100
     }
 
     // MARK: Header
@@ -134,58 +119,87 @@ struct ContentView: View {
         }
         .padding(.leading, 84)  // clear the traffic lights
         .padding(.trailing, 12)
-        .frame(height: 46)
+        .frame(height: settings.tabSize.headerHeight)
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
     }
 
     private var tabBar: some View {
         HStack(spacing: 2) {
-            ForEach(Section.allCases) { item in
-                tabButton(item)
+            ForEach(Array(settings.visibleTabs.enumerated()), id: \.element) { index, item in
+                tabButton(item, index: index)
             }
         }
         .padding(3)
         .background(Capsule().fill(.quaternary.opacity(0.45)))
     }
 
-    private func tabButton(_ item: Section) -> some View {
-        Button {
+    /// Whether this tab shows its text label, per the display-mode setting:
+    /// Labels → always, Icons → never, Expanding → only when selected.
+    private func showsLabel(for item: AppTab, selected: Bool) -> Bool {
+        switch settings.tabDisplayMode {
+        case .labels: return true
+        case .icons: return false
+        case .expanding: return selected
+        }
+    }
+
+    /// A capsule tab whose label appears per the display mode and whose metrics
+    /// scale with the size setting. In Expanding mode only the selected tab
+    /// reveals its label (riding the same spring as the sliding indicator, so it
+    /// grows out of the icon); the rest stay icon-only with the name on hover /
+    /// for VoiceOver. The ⌘ shortcut follows visible position, so ⌘1 is always
+    /// the leftmost tab.
+    private func tabButton(_ item: AppTab, index: Int) -> some View {
+        let selected = section == item
+        let size = settings.tabSize
+        let showLabel = showsLabel(for: item, selected: selected)
+        let shortcut = index < 9 ? KeyEquivalent(Character("\(index + 1)")) : nil
+        return Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
                 section = item
             }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: size.iconSize, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                Text(item.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: size.iconSlot)  // stable slot so icons don't shift as labels grow
+                if showLabel {
+                    Text(item.title)
+                        .font(.system(size: size.labelSize, weight: .medium))
+                        .fixedSize()
+                        .transition(.opacity)
+                }
             }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 6)
+            .padding(.horizontal, showLabel ? size.hPadSelected : size.hPadCollapsed)
+            .padding(.vertical, size.vPad)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(section == item ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+        .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
         .background {
-            if section == item {
+            if selected {
                 Capsule()
                     .fill(.quaternary)
                     .matchedGeometryEffect(id: "selected-tab", in: tabIndicator)
             }
         }
-        .keyboardShortcut(item.shortcut, modifiers: .command)
-        .help("\(item.title) (⌘\(item.shortcut.character))")
+        .keyboardShortcut(shortcut.map { KeyboardShortcut($0, modifiers: .command) })
+        .accessibilityLabel(item.title)
+        .help(shortcut != nil ? "\(item.title) (⌘\(index + 1))" : item.title)
     }
 }
 
-/// The header's update affordance: a blue "Update" pill when one's available
-/// (one click installs, from any tab), and live progress while it downloads and
-/// installs. Reads the shared `Updater`, so it stays in sync with the Dashboard
-/// banner. Nothing shows when up to date.
+/// The header's update affordance: a compact badged download icon when an
+/// update is available (one click installs, from any tab), and a small spinner
+/// while it downloads and installs. Icon-only so the header stays uncrowded with
+/// eight tabs — the full "Install Update" call to action still lives in the
+/// Dashboard banner. Reads the shared `Updater`, so it stays in sync. Nothing
+/// shows when up to date.
 private struct HeaderUpdateButton: View {
     @EnvironmentObject private var updater: Updater
+    @State private var hovered = false
 
     var body: some View {
         switch updater.status {
@@ -193,35 +207,30 @@ private struct HeaderUpdateButton: View {
             Button {
                 Task { await updater.downloadAndInstall() }
             } label: {
-                pill { Image(systemName: "arrow.down.circle.fill"); Text("Update") }
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.blue)
-                    .background(Capsule().fill(.blue.opacity(0.15)))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(.blue.opacity(hovered ? 0.22 : 0.14)))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.12)) { hovered = hovering }
+            }
             .help("Install \(Channel.current.displayName) \(release.displayVersion)")
         case .downloading:
-            pill { progressDot; Text("Downloading…") }
-                .foregroundStyle(.secondary)
-                .background(Capsule().fill(.quaternary.opacity(0.5)))
+            spinner.help("Downloading update…")
         case .installing:
-            pill { progressDot; Text("Installing…") }
-                .foregroundStyle(.secondary)
-                .background(Capsule().fill(.quaternary.opacity(0.5)))
+            spinner.help("Installing — Vitals will relaunch in a moment")
         default:
             EmptyView()
         }
     }
 
-    private func pill<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        HStack(spacing: 5) { content() }
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .contentShape(Capsule())
-    }
-
-    private var progressDot: some View {
-        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 12, height: 12)
+    private var spinner: some View {
+        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 30, height: 30)
     }
 }
 
