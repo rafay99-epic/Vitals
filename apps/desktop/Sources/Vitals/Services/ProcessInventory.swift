@@ -21,6 +21,18 @@ struct RunningProcess: Identifiable {
 /// actor so the per-process syscall sweep (a few hundred `proc_*` calls) never
 /// runs on the main thread — same discipline as `SensorSampler`.
 actor ProcessInventory {
+    /// A process's identity — path, name, bundle, owner — which never changes
+    /// for a given pid. Cached so steady-state samples skip the costly lookups
+    /// (proc_pidpath + the disk-touching display-name resolve) and just read
+    /// the live cpu/memory.
+    private struct StaticInfo {
+        let name: String
+        let executablePath: String
+        let bundleURL: URL?
+        let uid: uid_t
+    }
+
+    private var staticCache: [pid_t: StaticInfo] = [:]
     private var previousCPUTime: [pid_t: UInt64] = [:]
     private var previousSampleAt: UInt64 = 0
     private let currentUID = getuid()
@@ -49,12 +61,37 @@ actor ProcessInventory {
         let hadPrevious = previousSampleAt > 0 && now > previousSampleAt
         let wallNanos = Double(now - previousSampleAt) * Self.nanosPerTick
         var currentCPUTime: [pid_t: UInt64] = [:]
+        var liveStatic: [pid_t: StaticInfo] = [:]
         var processes: [RunningProcess] = []
 
         for pid in pids.prefix(Int(filled)) where pid > 0 {
-            guard let uid = ownerUID(of: pid) else { continue }
+            // Owner first (cheap) so others' processes are skipped before the
+            // costlier path/name lookups.
+            let uid: uid_t
+            if let cached = staticCache[pid] {
+                uid = cached.uid
+            } else if let looked = ownerUID(of: pid) {
+                uid = looked
+            } else {
+                continue
+            }
             let ownedByMe = uid == currentUID
             if !includeSystem && !ownedByMe { continue }
+
+            // Resolve identity once per pid; reuse it on later samples.
+            let info: StaticInfo
+            if let cached = staticCache[pid] {
+                info = cached
+            } else {
+                let path = executablePath(of: pid)
+                info = StaticInfo(
+                    name: Self.displayName(path: path),
+                    executablePath: path,
+                    bundleURL: Self.bundleURL(forExecutablePath: path),
+                    uid: uid
+                )
+            }
+            liveStatic[pid] = info
 
             var usage = rusage_info_v4()
             let ok = withUnsafeMutablePointer(to: &usage) {
@@ -71,12 +108,11 @@ actor ProcessInventory {
                 cpuPercent = Double(cpuTime - before) * Self.nanosPerTick / wallNanos * 100
             }
 
-            let path = executablePath(of: pid)
             processes.append(RunningProcess(
                 id: pid,
-                name: Self.displayName(path: path),
-                executablePath: path,
-                bundleURL: Self.bundleURL(forExecutablePath: path),
+                name: info.name,
+                executablePath: info.executablePath,
+                bundleURL: info.bundleURL,
                 memoryBytes: usage.ri_phys_footprint,
                 cpuPercent: cpuPercent,
                 ownedByCurrentUser: ownedByMe
@@ -85,6 +121,7 @@ actor ProcessInventory {
 
         previousCPUTime = currentCPUTime
         previousSampleAt = now
+        staticCache = liveStatic // drop dead pids
         return processes
     }
 

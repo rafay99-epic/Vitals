@@ -67,12 +67,20 @@ struct ContentView: View {
                     .allowsHitTesting(section == .dashboard)
                     .accessibilityHidden(section != .dashboard)
 
-                // The list-based tabs are cheap to rebuild and some refresh on
+                // Kept mounted like the Dashboard: the Processes list is an
+                // NSTableView, and rebuilding it on every visit re-mounts that
+                // table — a visible pause on each switch. Mounted once, switching
+                // is instant; it only samples while it's the active section.
+                ProcessesView(model: processesModel, isActive: section == .processes)
+                    .opacity(section == .processes ? 1 : 0)
+                    .allowsHitTesting(section == .processes)
+                    .accessibilityHidden(section != .processes)
+
+                // The other list tabs are cheap to rebuild and some refresh on
                 // appear (Storage re-reads volume/access), so they stay
                 // build-on-demand to preserve that.
                 switch section {
-                case .dashboard: EmptyView()
-                case .processes: ProcessesView(model: processesModel)
+                case .dashboard, .processes: EmptyView()
                 case .applications: AppsView(model: appsModel)
                 case .cleanup: CleanupView(model: cleanupModel)
                 case .storage: StorageView(model: storageModel)
