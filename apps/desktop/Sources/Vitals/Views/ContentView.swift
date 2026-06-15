@@ -44,8 +44,7 @@ struct ContentView: View {
     @State private var gearHovered = false
     @Environment(\.openWindow) private var openWindow
     @Namespace private var tabIndicator
-    // Owned here so the scans survive section switches — recreating these per
-    // visit meant a full rescan (and a "Scanning…" flash) every time.
+    // Owned here so the scans survive section switches.
     @StateObject private var processesModel = ProcessesModel()
     @StateObject private var appsModel = AppsModel()
     @StateObject private var cleanupModel = CleanupModel()
@@ -56,35 +55,30 @@ struct ContentView: View {
             header
             Divider()
                 .opacity(0.5)
+            // Every tab is mounted once and kept alive — switching only toggles
+            // which one is visible. Re-mounting a tab is the expensive step
+            // (NSTableViews, Swift Charts, and especially Liquid Glass surfaces,
+            // which flash dark before they capture the backdrop), so doing it
+            // once up front makes every switch instant and flicker-free. Heavy
+            // *work* (scans, sampling) is gated on `isActive`, not on mount, and
+            // shows a loading state — so mounting stays cheap.
+            //
+            // Each tab keeps its own GlassEffectContainer: one container can't
+            // wrap all tabs, because it composites every glass descendant into a
+            // single layer that ignores the per-tab opacity, bleeding hidden
+            // tabs through. Mounted-once already means each tab's glass is
+            // created a single time and never re-initialized on switch.
             ZStack {
-                // The Dashboard stays mounted across tab switches: its Swift
-                // Charts cost 50–150 ms each to build, so rebuilding them on
-                // every visit caused a visible hitch. Kept alive (just hidden),
-                // returning to it is instant. Hidden, it isn't drawn — only the
-                // light per-tick data refresh runs, which lean mode keeps cheap.
                 DashboardView()
-                    .opacity(section == .dashboard ? 1 : 0)
-                    .allowsHitTesting(section == .dashboard)
-                    .accessibilityHidden(section != .dashboard)
-
-                // Kept mounted like the Dashboard: the Processes list is an
-                // NSTableView, and rebuilding it on every visit re-mounts that
-                // table — a visible pause on each switch. Mounted once, switching
-                // is instant; it only samples while it's the active section.
+                    .tabVisibility(section == .dashboard)
                 ProcessesView(model: processesModel, isActive: section == .processes)
-                    .opacity(section == .processes ? 1 : 0)
-                    .allowsHitTesting(section == .processes)
-                    .accessibilityHidden(section != .processes)
-
-                // The other list tabs are cheap to rebuild and some refresh on
-                // appear (Storage re-reads volume/access), so they stay
-                // build-on-demand to preserve that.
-                switch section {
-                case .dashboard, .processes: EmptyView()
-                case .applications: AppsView(model: appsModel)
-                case .cleanup: CleanupView(model: cleanupModel)
-                case .storage: StorageView(model: storageModel)
-                }
+                    .tabVisibility(section == .processes)
+                AppsView(model: appsModel, isActive: section == .applications)
+                    .tabVisibility(section == .applications)
+                CleanupView(model: cleanupModel, isActive: section == .cleanup)
+                    .tabVisibility(section == .cleanup)
+                StorageView(model: storageModel, isActive: section == .storage)
+                    .tabVisibility(section == .storage)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -177,6 +171,16 @@ struct ContentView: View {
     }
 }
 
+private extension View {
+    /// A kept-mounted tab: visible and interactive only when active, otherwise
+    /// hidden (but still laid out, so it never has to re-mount).
+    func tabVisibility(_ active: Bool) -> some View {
+        opacity(active ? 1 : 0)
+            .allowsHitTesting(active)
+            .accessibilityHidden(!active)
+    }
+}
+
 /// The original live dashboard, unchanged — now one section of the window.
 struct DashboardView: View {
     @EnvironmentObject private var model: VitalsModel
@@ -207,17 +211,14 @@ struct DashboardView: View {
         }
     }
 
-    /// On macOS 26 with Liquid Glass on, every card is its own glass surface
-    /// — a dozen independent backdrop captures re-rendered each frame of the
-    /// sidebar/window animation. GlassEffectContainer batches them into one
-    /// render pass, which is most of the "freeze before it moves" fix.
+    /// The dashboard's cards batched into one Liquid Glass pass. Kept per-view:
+    /// the tab is mounted once, so this container is created once and never
+    /// re-initialized on switch.
     @ViewBuilder
     private var glassBatched: some View {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *), settings.glassEnabled {
-            GlassEffectContainer {
-                cards
-            }
+            GlassEffectContainer { cards }
         } else {
             cards
         }

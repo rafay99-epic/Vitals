@@ -6,6 +6,8 @@ import SwiftUI
 /// one administrator prompt. Scanning is manual; nothing runs until asked.
 struct CleanupView: View {
     @ObservedObject var model: CleanupModel
+    /// True only while Cleanup is the visible tab; the view stays mounted.
+    var isActive: Bool
     @EnvironmentObject private var settings: AppSettings
     /// Persisted so the chosen depth sticks across launches.
     @AppStorage("cleanupDepth") private var depth: CleanDepth = .quick
@@ -30,8 +32,8 @@ struct CleanupView: View {
                 .opacity(0.5)
             footer
         }
-        .onAppear {
-            if settings.autoScanCleanup && !model.hasRun {
+        .onChange(of: isActive, initial: true) { _, active in
+            if active && settings.autoScanCleanup && !model.hasRun {
                 model.scan(depth: depth)
             }
         }
