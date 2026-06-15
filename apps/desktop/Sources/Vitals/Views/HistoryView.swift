@@ -13,6 +13,7 @@ struct HistoryView: View {
     @State private var range: HistoryRange = .day
     @State private var metric: Metric = .temp
     @State private var samples: [HistorySample] = []
+    @State private var alertEvents: [AlertEvent] = []
     @State private var loading = false
 
     enum Metric: String, CaseIterable, Identifiable {
@@ -32,20 +33,11 @@ struct HistoryView: View {
 
     var body: some View {
         MetricScroll {
-            if !samples.isEmpty {
-                // Existing history is browsable even if logging was since turned
-                // off — flag that it won't keep growing.
-                if !settings.loggingEnabled { loggingPausedNote }
-                HistoryControls(range: $range, metric: $metric)
-                HistoryChartCard(samples: samples, metric: metric, range: range)
-                HistoryStatsCard(samples: samples, metric: metric)
-                HistoryExportCard()
-            } else if loading {
-                emptyState
-            } else if !settings.loggingEnabled {
-                loggingOffState
-            } else {
-                emptyState
+            timeline
+            // Fired alerts are independent of the metric log, so they show even
+            // when logging is off and the chart is empty.
+            if !alertEvents.isEmpty {
+                AlertHistoryCard(events: alertEvents)
             }
         }
         .task(id: ReloadKey(active: isActive, range: range, logging: settings.loggingEnabled)) {
@@ -53,15 +45,35 @@ struct HistoryView: View {
         }
     }
 
+    @ViewBuilder
+    private var timeline: some View {
+        if !samples.isEmpty {
+            // Existing history is browsable even if logging was since turned
+            // off — flag that it won't keep growing.
+            if !settings.loggingEnabled { loggingPausedNote }
+            HistoryControls(range: $range, metric: $metric)
+            HistoryChartCard(samples: samples, metric: metric, range: range)
+            HistoryStatsCard(samples: samples, metric: metric)
+            HistoryExportCard()
+        } else if loading {
+            emptyState
+        } else if !settings.loggingEnabled {
+            loggingOffState
+        } else {
+            emptyState
+        }
+    }
+
     private func reload() async {
         guard isActive else { return }              // keep what we have when off-tab
         loading = true
         let range = self.range
-        let loaded = await Task.detached(priority: .userInitiated) {
-            HistoryReader.load(range: range, now: Date())
+        let result = await Task.detached(priority: .userInitiated) {
+            (HistoryReader.load(range: range, now: Date()), AlertLog.recent(limit: 30))
         }.value
         guard !Task.isCancelled else { return }     // a newer reload superseded this one
-        samples = loaded
+        samples = result.0
+        alertEvents = result.1
         loading = false
     }
 
@@ -294,6 +306,37 @@ private struct HistoryExportCard: View {
                 message = "Saved \(url.lastPathComponent)"
             } else {
                 message = "Nothing to export yet"
+            }
+        }
+    }
+}
+
+// MARK: - Recent alerts
+
+private struct AlertHistoryCard: View {
+    let events: [AlertEvent]
+
+    var body: some View {
+        SectionCard(title: "Recent alerts", symbol: "bell.badge") {
+            VStack(spacing: 10) {
+                ForEach(events) { event in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "bell.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .frame(width: 22, height: 22)
+                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.orange.opacity(0.14)))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(event.message)
+                                .font(.callout)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(event.time.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption2).foregroundStyle(.tertiary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    if event.id != events.last?.id { Divider().opacity(0.5) }
+                }
             }
         }
     }

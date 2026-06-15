@@ -28,3 +28,18 @@ struct HistoryReaderTests {
         #expect(HistoryReader.parse(Substring("")) == nil)
     }
 }
+
+/// The alert log is tab-separated so messages keep their commas; the parser must
+/// read that back and reject anything malformed.
+struct AlertLogTests {
+    @Test func parsesTabSeparatedEvent() {
+        let line = Substring("2026-06-16T01:02:03Z\tCPU temperature is 92°C — above your 90°C alert.")
+        #expect(AlertLog.parse(line)?.message == "CPU temperature is 92°C — above your 90°C alert.")
+    }
+
+    @Test func rejectsMalformed() {
+        #expect(AlertLog.parse(Substring("no tab present")) == nil)
+        #expect(AlertLog.parse(Substring("not-a-date\tmessage")) == nil)
+        #expect(AlertLog.parse(Substring("")) == nil)
+    }
+}
