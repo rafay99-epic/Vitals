@@ -73,6 +73,7 @@ final class VitalsModel: ObservableObject {
     private let settings: AppSettings
     private let sampler = SensorSampler()
     private let notifications = NotificationManager()
+    private let alertEngine = AlertEngine()
     private let logger = HistoryLogger()
     private var timer: Timer?
     private var isSampling = false
@@ -90,6 +91,12 @@ final class VitalsModel: ObservableObject {
     private static let heatAlertAfter: TimeInterval = 120
     private static let heatAlertCooldown: TimeInterval = 600
 
+    // Custom-rule alerting: free disk space is read on a throttle since it
+    // barely moves and statfs needn't run every tick.
+    private var diskFreeGB: Double?
+    private var diskCheckedAt: Date = .distantPast
+    private static let diskCheckInterval: TimeInterval = 30
+
     init(settings: AppSettings) {
         self.settings = settings
         settings.$refreshInterval
@@ -105,6 +112,10 @@ final class VitalsModel: ObservableObject {
         settings.$notifyOverheat
             .merge(with: settings.$notifyThermal)
             .filter { $0 }
+            .sink { [weak self] _ in self?.notifications.requestAuthorizationIfNeeded() }
+            .store(in: &cancellables)
+        settings.$alertRules
+            .filter { $0.contains(where: \.enabled) }
             .sink { [weak self] _ in self?.notifications.requestAuthorizationIfNeeded() }
             .store(in: &cancellables)
     }
@@ -192,6 +203,10 @@ final class VitalsModel: ObservableObject {
         if let power = snapshot.power { self.power = power }
         hasLoaded = true
 
+        // Custom rules run every tick — disk/battery/process alerts shouldn't
+        // depend on temperature sensors being present.
+        evaluateAlertRules()
+
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
             history.append(Sample(
                 id: Date(),
@@ -257,6 +272,69 @@ final class VitalsModel: ObservableObject {
             )
         }
         previousThermalState = thermalState
+    }
+
+    // MARK: Custom alert rules
+
+    /// Runs the user's rules against the current readings and sends a
+    /// notification for each that fires. The engine handles the sustain/cooldown
+    /// timing; we just format the message in the user's units.
+    private func evaluateAlertRules() {
+        // Zero work in the common case: no rules, or none enabled.
+        guard settings.alertRules.contains(where: \.enabled) else { return }
+        let readings = currentAlertReadings()
+        for (rule, value) in alertEngine.evaluate(rules: settings.alertRules, readings: readings, now: Date()) {
+            notifications.send(
+                title: "Vitals alert",
+                body: alertMessage(rule: rule, value: value, readings: readings),
+                id: "vitals.rule.\(rule.id.uuidString)"
+            )
+        }
+    }
+
+    private func currentAlertReadings() -> AlertReadings {
+        refreshDiskFreeIfStale()
+        let topProcess = topProcesses.max { $0.cpuPercent < $1.cpuPercent }
+        return AlertReadings(
+            cpuTemp: hottestCPUSensor?.celsius,
+            cpuUsage: cpuUsage,
+            gpuUsage: gpu?.utilization,
+            memoryUsedPercent: memory.map { $0.total > 0 ? Double($0.used) / Double($0.total) * 100 : 0 },
+            minFanRPM: fans.isEmpty ? nil : fans.map(\.rpm).min(),
+            diskFreeGB: diskFreeGB,
+            batteryPercent: battery?.percent,
+            topProcessCPU: topProcess?.cpuPercent,
+            topProcessName: topProcess?.name
+        )
+    }
+
+    private func refreshDiskFreeIfStale() {
+        guard Date().timeIntervalSince(diskCheckedAt) >= Self.diskCheckInterval else { return }
+        diskCheckedAt = Date()
+        if let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+           let bytes = values.volumeAvailableCapacityForImportantUsage {
+            diskFreeGB = Double(bytes) / 1_073_741_824
+        }
+    }
+
+    /// A short, human notification body in the user's units. Process rules name
+    /// the offending app.
+    private func alertMessage(rule: AlertRule, value: Double, readings: AlertReadings) -> String {
+        let now = formattedAlertValue(rule.metric, value)
+        let limit = formattedAlertValue(rule.metric, rule.threshold)
+        if rule.metric == .processCPU {
+            return "\(readings.topProcessName ?? "A process") is using \(now) CPU — \(rule.comparison.label) your \(limit) alert."
+        }
+        return "\(rule.metric.label) is \(now) — \(rule.comparison.label) your \(limit) alert."
+    }
+
+    private func formattedAlertValue(_ metric: AlertMetric, _ value: Double) -> String {
+        if metric.isTemperature { return settings.formatWithUnit(value, decimals: 0) }
+        switch metric {
+        case .fanRPM:   return "\(Int(value)) rpm"
+        case .diskFree: return String(format: "%.0f GB", value)
+        default:        return "\(Int(value))%"
+        }
     }
 
     /// Evenly thins `samples` to at most `maxCount` points, always keeping

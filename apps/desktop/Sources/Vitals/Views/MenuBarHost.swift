@@ -71,9 +71,11 @@ private struct MenuBarRow: View {
     private var warning: Bool {
         model.averageCPUTemp.map { $0 >= settings.warnThreshold } ?? false
     }
-    // Animate when the user wants it and GPU rendering is on. No focus gate: a
-    // menu-bar readout is watched from inside other apps. The compositor idles
-    // the animation on its own when nothing is on screen.
+    // Opt-in (off by default): a status item isn't GPU-composited like a window,
+    // so this repeating animation rasterizes every frame on the CPU and runs
+    // continuously while shown — measured ~11% — regardless of app focus. Worth
+    // it only if the user explicitly wants the motion; the numbers stay live
+    // either way.
     private var animate: Bool { settings.menuBarAnimated && settings.gpuAcceleration }
 
     /// 0 when the fan is stopped/unknown, toward 1 near its rated maximum.

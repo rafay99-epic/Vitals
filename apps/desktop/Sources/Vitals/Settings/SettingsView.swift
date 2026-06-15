@@ -517,6 +517,7 @@ private struct GeneralPane: View {
 private struct AlertsPane: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var notificationsDenied = false
+    @State private var expandedRule: UUID?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -541,7 +542,7 @@ private struct AlertsPane: View {
             SettingsCard(title: "Notifications", symbol: "bell.badge", tint: .red) {
                 SwitchRow(label: "Notify when the CPU stays hot", isOn: $settings.notifyOverheat)
                 SwitchRow(label: "Notify on high thermal pressure", isOn: $settings.notifyThermal)
-                if notificationsDenied && (settings.notifyOverheat || settings.notifyThermal) {
+                if notificationsDenied && hasAnyAlert {
                     Label(
                         "Notifications are turned off for Vitals. Enable them in System Settings → Notifications → Vitals.",
                         systemImage: "exclamationmark.triangle"
@@ -550,14 +551,185 @@ private struct AlertsPane: View {
                     .foregroundStyle(.orange)
                 }
             }
+
+            SettingsCard(title: "Custom alerts", symbol: "bell.badge.waveform", tint: .blue) {
+                if settings.alertRules.isEmpty {
+                    Text("Build your own alerts — get notified when a temperature, fan, disk, battery, or process crosses a line you set.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach($settings.alertRules) { $rule in
+                        AlertRuleRow(
+                            rule: $rule,
+                            isExpanded: Binding(
+                                get: { expandedRule == rule.id },
+                                set: { expandedRule = $0 ? rule.id : nil }
+                            ),
+                            onDelete: { settings.alertRules.removeAll { $0.id == rule.id } }
+                        )
+                        if rule.id != settings.alertRules.last?.id {
+                            Divider().opacity(0.5)
+                        }
+                    }
+                }
+                Button {
+                    let rule = AlertRule(metric: .cpuTemp)
+                    settings.alertRules.append(rule)
+                    expandedRule = rule.id
+                } label: {
+                    Label("Add alert", systemImage: "plus.circle")
+                }
+                .controlSize(.small)
+                .padding(.top, 4)
+            }
         }
         .task { await refreshNotificationStatus() }
+    }
+
+    private var hasAnyAlert: Bool {
+        settings.notifyOverheat || settings.notifyThermal || settings.alertRules.contains(where: \.enabled)
     }
 
     private func refreshNotificationStatus() async {
         guard NotificationManager.supported else { return }
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         notificationsDenied = status == .denied
+    }
+}
+
+/// One custom-alert row: a plain-language sentence with an enable switch, that
+/// expands into an editor (metric, condition, threshold, sustain). The threshold
+/// is stored canonically (°C) but shown/edited in the user's temperature unit.
+private struct AlertRuleRow: View {
+    @EnvironmentObject private var settings: AppSettings
+    @Binding var rule: AlertRule
+    @Binding var isExpanded: Bool
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Toggle("", isOn: $rule.enabled)
+                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                Image(systemName: rule.metric.symbol)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.blue)
+                    .frame(width: 22, height: 22)
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.blue.opacity(0.14)))
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { isExpanded.toggle() }
+                } label: {
+                    HStack {
+                        Text(sentence)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(rule.enabled ? .primary : .secondary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            if isExpanded { editor }
+        }
+    }
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            settingsRow("Metric") {
+                Picker("", selection: metricBinding) {
+                    ForEach(AlertMetric.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().fixedSize()
+            }
+            settingsRow("Condition") {
+                Picker("", selection: $rule.comparison) {
+                    ForEach(AlertComparison.allCases) { Text($0.label.capitalized).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Threshold").font(.system(size: 12.5))
+                    Spacer()
+                    Text(displayThreshold)
+                        .font(.system(.callout, design: .rounded, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.blue)
+                }
+                Slider(value: thresholdBinding, in: thresholdRange, step: sliderStep)
+            }
+            settingsRow("Sustained for") {
+                Stepper(value: $rule.sustainedMinutes, in: 0...30, step: 1) {
+                    Text(rule.sustainedMinutes == 0 ? "Immediately" : "\(Int(rule.sustainedMinutes)) min")
+                        .font(.system(size: 12.5)).monospacedDigit()
+                }
+                .fixedSize()
+            }
+            HStack {
+                Spacer()
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(.leading, 30)
+        .padding(.top, 2)
+    }
+
+    /// Switching the metric resets the condition + threshold to that metric's
+    /// sensible defaults, so a 90% threshold never carries over to "free disk".
+    private var metricBinding: Binding<AlertMetric> {
+        Binding(
+            get: { rule.metric },
+            set: { metric in
+                rule.metric = metric
+                rule.comparison = metric.defaultComparison
+                rule.threshold = metric.defaultThreshold
+            }
+        )
+    }
+
+    private var thresholdRange: ClosedRange<Double> {
+        let range = rule.metric.range
+        guard rule.metric.isTemperature else { return range }
+        return settings.display(range.lowerBound)...settings.display(range.upperBound)
+    }
+
+    private var sliderStep: Double { rule.metric.isTemperature ? 1 : rule.metric.step }
+
+    private var thresholdBinding: Binding<Double> {
+        Binding(
+            get: { rule.metric.isTemperature ? settings.display(rule.threshold) : rule.threshold },
+            set: { shown in
+                if rule.metric.isTemperature {
+                    rule.threshold = settings.unit == .fahrenheit ? (shown - 32) * 5 / 9 : shown
+                } else {
+                    rule.threshold = shown
+                }
+            }
+        )
+    }
+
+    private var displayThreshold: String {
+        if rule.metric.isTemperature {
+            return "\(Int(settings.display(rule.threshold).rounded()))\(settings.unit.symbol)"
+        }
+        switch rule.metric {
+        case .fanRPM:   return "\(Int(rule.threshold)) rpm"
+        case .diskFree: return "\(Int(rule.threshold)) GB"
+        default:        return "\(Int(rule.threshold))%"
+        }
+    }
+
+    private var sentence: String {
+        var line = "\(rule.metric.label) \(rule.comparison.label) \(displayThreshold)"
+        if rule.sustainedMinutes > 0 { line += " for \(Int(rule.sustainedMinutes)) min" }
+        return line
     }
 }
 
