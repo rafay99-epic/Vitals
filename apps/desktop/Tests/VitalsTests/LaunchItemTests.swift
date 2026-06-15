@@ -11,11 +11,21 @@ struct LaunchItemTests {
                    kind: kind, runAtLoad: true, disabled: false)
     }
 
-    @Test func onlyUserNonAppleItemsAreToggleable() {
-        #expect(item(label: "com.thirdparty.agent", program: nil, kind: .userAgent).canToggle)
-        #expect(!item(label: "com.apple.something", program: nil, kind: .userAgent).canToggle)   // Apple, never
-        #expect(!item(label: "com.thirdparty.agent", program: nil, kind: .systemAgent).canToggle) // system
-        #expect(!item(label: "com.thirdparty.daemon", program: nil, kind: .systemDaemon).canToggle)
+    @Test func appleItemsAreNeverActionable() {
+        #expect(item(label: "com.apple.something", program: nil, kind: .userAgent).isActionable == false)
+        #expect(item(label: "com.apple.daemon", program: nil, kind: .systemDaemon).isActionable == false)
+        #expect(item(label: "com.thirdparty.agent", program: nil, kind: .userAgent).isActionable)
+    }
+
+    @Test func escalationMatchesDomain() {
+        // Disable: agents use the no-password gui override; only daemons need admin.
+        #expect(item(label: "x", program: nil, kind: .userAgent).disableNeedsAdmin == false)
+        #expect(item(label: "x", program: nil, kind: .systemAgent).disableNeedsAdmin == false)
+        #expect(item(label: "x", program: nil, kind: .systemDaemon).disableNeedsAdmin)
+        // Remove: your own agent trashes its plist; anything in /Library needs admin.
+        #expect(item(label: "x", program: nil, kind: .userAgent).removeNeedsAdmin == false)
+        #expect(item(label: "x", program: nil, kind: .systemAgent).removeNeedsAdmin)
+        #expect(item(label: "x", program: nil, kind: .systemDaemon).removeNeedsAdmin)
     }
 
     @Test func displayNamePrefersAppName() {

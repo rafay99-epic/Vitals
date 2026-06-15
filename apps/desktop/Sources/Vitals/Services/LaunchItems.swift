@@ -36,11 +36,18 @@ struct LaunchItem: Identifiable, Equatable {
         return label
     }
 
-    /// Only the user's own non-Apple login agents are toggled here: it's
-    /// root-free and reversible (`launchctl enable`/`disable`). System and Apple
-    /// items are shown read-only — disabling those needs admin and risks the OS,
-    /// which the safety rules keep off-limits.
-    var canToggle: Bool { kind == .userAgent && !isApple }
+    /// Apple's own items are never modified (safety rule); everything else can
+    /// be disabled or removed.
+    var isActionable: Bool { !isApple }
+
+    /// Disabling needs an admin prompt only for system daemons (the `system`
+    /// domain). User *and* system agents load per-user, so they use the
+    /// no-password `gui` override.
+    var disableNeedsAdmin: Bool { kind == .systemDaemon }
+
+    /// Removing your own agent just trashes its plist (recoverable, no password).
+    /// Anything in `/Library` is root-owned, so removing it needs admin.
+    var removeNeedsAdmin: Bool { kind != .userAgent }
 }
 
 /// Reads the launchd plist directories and toggles user agents via `launchctl`.
@@ -51,6 +58,15 @@ enum LaunchItemScanner {
         var items = parseDir(home.appendingPathComponent("Library/LaunchAgents"), kind: .userAgent)
         items += parseDir(URL(fileURLWithPath: "/Library/LaunchAgents"), kind: .systemAgent)
         items += parseDir(URL(fileURLWithPath: "/Library/LaunchDaemons"), kind: .systemDaemon)
+
+        // Never list or touch Vitals itself or its own helpers (safety rule) —
+        // both the Stable and Dev namespaces, and anything launching from a
+        // Vitals app bundle.
+        items.removeAll { item in
+            item.label.hasPrefix("com.syntaxlabtechnology.vitals")
+                || (item.program?.contains("/Vitals.app/") ?? false)
+                || (item.program?.contains("/Vitals Dev.app/") ?? false)
+        }
 
         // The persistent enable/disable override is authoritative for user agents.
         let disabled = disabledLabels()
@@ -63,15 +79,66 @@ enum LaunchItemScanner {
         }
     }
 
-    /// Enables/disables a user login agent. Disabling also stops it now
-    /// (best-effort `bootout`); enabling takes effect at next login. Reversible.
-    static func setDisabled(_ disabled: Bool, item: LaunchItem) {
-        guard item.canToggle else { return }
+    /// What an admin script does (built by `adminScript`).
+    enum AdminAction { case disable(Bool), remove }
+
+    /// Enables/disables an agent via the per-user `gui` override (no root) — for
+    /// user and system agents. Disabling also stops it now. Reversible.
+    static func directDisable(_ disabled: Bool, item: LaunchItem) {
+        guard item.isActionable, !item.disableNeedsAdmin else { return }
         let target = "gui/\(getuid())/\(item.label)"
         run("/bin/launchctl", [disabled ? "disable" : "enable", target])
-        if disabled {
-            run("/bin/launchctl", ["bootout", target])
+        if disabled { run("/bin/launchctl", ["bootout", target]) }
+    }
+
+    /// Removes your own agent by stopping it and moving its plist to the Trash
+    /// (recoverable). User-domain only — no root. Returns true on success.
+    static func trashUserAgent(item: LaunchItem) -> Bool {
+        guard item.kind == .userAgent, item.isActionable else { return false }
+        run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(item.label)"])
+        return (try? FileManager.default.trashItem(at: item.plistPath, resultingItemURL: nil)) != nil
+    }
+
+    /// Builds a root script for a system-domain disable/remove, re-validating the
+    /// label and (for removal) the plist path against the same allowlist the app
+    /// uses everywhere it escalates — absolute, no `..`/quotes, never `/System`,
+    /// never `com.apple.*`, confined to the launchd dirs. Returns nil (no script)
+    /// if anything fails validation, so an unsafe action simply can't run.
+    static func adminScript(for action: AdminAction, item: LaunchItem) -> (script: String, prompt: String)? {
+        guard item.isActionable, isSafeLabel(item.label) else { return nil }
+        switch action {
+        case .disable(let disabled):
+            guard item.kind == .systemDaemon else { return nil }
+            let verb = disabled ? "disable" : "enable"
+            var script = "#!/bin/sh\n/bin/launchctl \(verb) system/\(item.label)\n"
+            if disabled { script += "/bin/launchctl bootout system/\(item.label) 2>/dev/null || true\n" }
+            return (script, "Vitals needs administrator access to \(verb) the system daemon “\(item.label)”.")
+        case .remove:
+            guard item.kind != .userAgent, let safePath = safeSystemPlistPath(item.plistPath) else { return nil }
+            let domain = item.kind == .systemDaemon ? "system" : "gui/\(getuid())"
+            let script = "#!/bin/sh\n"
+                + "/bin/launchctl bootout \(domain)/\(item.label) 2>/dev/null || true\n"
+                + "rm -f '\(safePath)' 2>/dev/null || true\n"
+            return (script, "Vitals needs administrator access to remove the launch item “\(item.label)”.")
         }
+    }
+
+    /// Labels go straight into a root shell command, so allow only launchd's own
+    /// safe character set — no spaces, quotes, slashes or shell metacharacters.
+    private static func isSafeLabel(_ label: String) -> Bool {
+        !label.isEmpty && label.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_" }
+    }
+
+    /// The validated absolute path for a system launchd plist, or nil if it fails
+    /// any check. Mirrors `AppUninstaller.systemRemovalScript`.
+    private static func safeSystemPlistPath(_ url: URL) -> String? {
+        let path = url.standardizedFileURL.path
+        guard path.hasPrefix("/"), path != "/", !path.contains(".."), !path.contains("'"),
+              !path.hasPrefix("/System"), url.pathExtension == "plist",
+              !url.lastPathComponent.hasPrefix("com.apple.")
+        else { return nil }
+        let roots = ["/Library/LaunchAgents/", "/Library/LaunchDaemons/"]
+        return roots.contains { path.hasPrefix($0) } ? path : nil
     }
 
     private static func parseDir(_ dir: URL, kind: LaunchItem.Kind) -> [LaunchItem] {

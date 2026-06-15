@@ -26,9 +26,27 @@ final class LoginItemsModel: ObservableObject {
     }
 
     func setDisabled(_ disabled: Bool, _ item: LaunchItem) async {
-        await Task.detached { LaunchItemScanner.setDisabled(disabled, item: item) }.value
+        if item.disableNeedsAdmin {
+            guard let (script, prompt) = LaunchItemScanner.adminScript(for: .disable(disabled), item: item),
+                  (try? await PrivilegedShell.runAsAdmin(script, prompt: prompt)) != nil
+            else { return }
+        } else {
+            await Task.detached { LaunchItemScanner.directDisable(disabled, item: item) }.value
+        }
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].disabled = disabled
         }
+    }
+
+    func remove(_ item: LaunchItem) async {
+        let removed: Bool
+        if item.removeNeedsAdmin {
+            guard let (script, prompt) = LaunchItemScanner.adminScript(for: .remove, item: item) else { return }
+            removed = (try? await PrivilegedShell.runAsAdmin(script, prompt: prompt)) != nil
+                && !FileManager.default.fileExists(atPath: item.plistPath.path)
+        } else {
+            removed = await Task.detached { LaunchItemScanner.trashUserAgent(item: item) }.value
+        }
+        if removed { items.removeAll { $0.id == item.id } }
     }
 }
