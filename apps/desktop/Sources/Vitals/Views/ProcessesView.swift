@@ -8,6 +8,7 @@ struct ProcessesView: View {
     @ObservedObject var model: ProcessesModel
     @EnvironmentObject private var settings: AppSettings
     @Environment(\.animationsEnabled) private var animationsEnabled
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,13 +30,6 @@ struct ProcessesView: View {
             model.start()
         }
         .onDisappear { model.stop() }
-        // Warm the icon cache off the scroll path: without this, a row scrolling
-        // into view fetches its app icon synchronously (NSWorkspace) and hitches.
-        .onReceive(model.$groups) { groups in
-            for group in groups where group.bundleURL != nil {
-                _ = AppIconCache.icon(for: group.bundleURL!)
-            }
-        }
         .onChange(of: settings.showSystemProcesses) { _, show in
             model.includeSystem = show; model.refresh()
         }
@@ -119,12 +113,44 @@ struct ProcessesView: View {
     @ViewBuilder
     private var content: some View {
         if !model.hasLoaded {
+            // Loading — the first sweep over every process can take a moment.
             LoadingStateView(
                 title: "Reading processes",
                 message: "Vitals is measuring how much memory and CPU each app is using."
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if model.filteredGroups.isEmpty && !model.searchText.isEmpty {
+        } else if model.loadFailed {
+            // Error — the OS wouldn't hand over the process list.
+            EmptyStateView(
+                symbol: "exclamationmark.triangle.fill",
+                tint: .orange,
+                title: "Couldn't read processes",
+                message: "Vitals wasn't allowed to list running processes. This usually means a restricted or virtualized environment."
+            ) {
+                Button { model.refresh() } label: {
+                    Label("Try Again", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.groups.isEmpty {
+            // Empty — nothing to show (e.g. system processes hidden and none of
+            // your own are running, which is rare).
+            EmptyStateView(
+                symbol: "list.bullet",
+                tint: .green,
+                title: "Nothing to show",
+                message: "No processes are listed. System processes are hidden by default — turn them on in Settings to see everything."
+            ) {
+                Button { openWindow(id: "settings") } label: {
+                    Label("Open Settings", systemImage: "gearshape")
+                }
+                .controlSize(.large)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.filteredGroups.isEmpty {
+            // Empty search.
             EmptyStateView(
                 symbol: "magnifyingglass",
                 tint: .blue,
@@ -206,7 +232,7 @@ private struct ProcessRow: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            icon
+            ProcessIcon(bundleURL: group.bundleURL)
             VStack(alignment: .leading, spacing: 1) {
                 Text(group.name)
                     .font(.system(size: 13, weight: .medium))
@@ -240,22 +266,6 @@ private struct ProcessRow: View {
         }
     }
 
-    private var icon: some View {
-        Group {
-            if let url = group.bundleURL {
-                Image(nsImage: AppIconCache.icon(for: url))
-                    .resizable()
-                    .frame(width: 28, height: 28)
-            } else {
-                Image(systemName: "terminal")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.quaternary.opacity(0.5)))
-            }
-        }
-    }
-
     private func metric(_ text: String, width: CGFloat) -> some View {
         Text(text)
             .font(.system(.callout, design: .rounded, weight: .medium))
@@ -275,6 +285,36 @@ private struct ProcessRow: View {
                 .foregroundStyle(.tertiary)
                 .frame(width: 64)
                 .help("This is a system process — Vitals won't quit it")
+        }
+    }
+}
+
+/// The row's leading icon. App icons load in a `.task` (after layout) rather
+/// than synchronously during the row's body, so arriving on the tab — or
+/// scrolling new rows in — never stalls a frame fetching icons. Cached, so it's
+/// instant after the first lookup.
+private struct ProcessIcon: View {
+    let bundleURL: URL?
+    @State private var image: NSImage?
+
+    var body: some View {
+        if let bundleURL {
+            ZStack {
+                if let image {
+                    Image(nsImage: image).resizable()
+                } else {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(.quaternary.opacity(0.4))
+                }
+            }
+            .frame(width: 28, height: 28)
+            .task(id: bundleURL) { image = AppIconCache.icon(for: bundleURL) }
+        } else {
+            Image(systemName: "terminal")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.quaternary.opacity(0.5)))
         }
     }
 }

@@ -44,6 +44,8 @@ final class ProcessesModel: ObservableObject {
 
     @Published private(set) var groups: [Group] = []
     @Published private(set) var hasLoaded = false
+    /// Set when the process list couldn't be read at all (restricted environment).
+    @Published private(set) var loadFailed = false
     @Published var searchText = ""
     @Published var sortOrder: SortOrder = .memory
     @Published var pendingQuit: PendingQuit?
@@ -108,12 +110,21 @@ final class ProcessesModel: ObservableObject {
         let includeSystem = includeSystem
         let groupHelpers = groupHelpers
         Task {
-            let processes = await inventory.sample(includeSystem: includeSystem)
+            let sampled = await inventory.sample(includeSystem: includeSystem)
             // A scroll may have begun while sampling — don't publish into it.
             guard !self.isScrolling else { return }
-            // Never list Vitals itself (safety rule): drop our own app's processes.
-            let ownBundle = Bundle.main.bundleURL.standardizedFileURL
-            let visible = processes.filter { $0.bundleURL?.standardizedFileURL != ownBundle }
+            guard let processes = sampled else {
+                self.loadFailed = true
+                self.hasLoaded = true
+                return
+            }
+            self.loadFailed = false
+            // Never list Vitals itself (safety rule): drop every process whose
+            // executable lives inside our own app bundle — the app and any
+            // helper it spawns. Matching the executable path is robust where
+            // bundle detection isn't.
+            let ownBundlePath = Bundle.main.bundleURL.standardizedFileURL.path
+            let visible = processes.filter { !$0.executablePath.hasPrefix(ownBundlePath) }
             self.groups = Self.grouped(visible, groupHelpers: groupHelpers)
             self.hasLoaded = true
         }

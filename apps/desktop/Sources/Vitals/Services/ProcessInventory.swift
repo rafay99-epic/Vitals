@@ -33,17 +33,18 @@ actor ProcessInventory {
 
     /// Snapshot every process. With `includeSystem` false (the default) only the
     /// current user's processes are returned — the apps you'd actually want to
-    /// quit, without the root/daemon noise.
-    func sample(includeSystem: Bool) -> [RunningProcess] {
+    /// quit, without the root/daemon noise. Returns nil if the process list
+    /// can't be read at all (restricted environment), distinct from an empty list.
+    func sample(includeSystem: Bool) -> [RunningProcess]? {
         let now = mach_absolute_time()
         let pidCount = proc_listallpids(nil, 0)
-        guard pidCount > 0, pidCount < 100_000 else { return [] }
+        guard pidCount > 0, pidCount < 100_000 else { return nil }
         let capacity = Int(pidCount) + 64
         var pids = [pid_t](repeating: 0, count: capacity)
         let byteSize = capacity * MemoryLayout<pid_t>.size
-        guard byteSize <= Int(Int32.max) else { return [] }
+        guard byteSize <= Int(Int32.max) else { return nil }
         let filled = proc_listallpids(&pids, Int32(byteSize))
-        guard filled > 0 else { return [] }
+        guard filled > 0 else { return nil }
 
         let hadPrevious = previousSampleAt > 0 && now > previousSampleAt
         let wallNanos = Double(now - previousSampleAt) * Self.nanosPerTick
