@@ -93,19 +93,54 @@ struct VitalsApp: App {
     @ViewBuilder
     private var menuBarLabel: some View {
         let warning = model.averageCPUTemp.map { $0 >= settings.warnThreshold } ?? false
-        let symbol = warning ? "flame.fill" : "thermometer.medium"
-        switch settings.menuBarMode {
-        case .iconOnly:
-            Image(systemName: symbol)
-        case .average:
-            Label(model.averageCPUTemp.map { settings.format($0, decimals: 0) } ?? "–", systemImage: symbol)
-                .labelStyle(.titleAndIcon)
-        case .hottest:
-            Label(model.hottestCPUSensor.map { settings.format($0.celsius, decimals: 0) } ?? "–", systemImage: symbol)
-                .labelStyle(.titleAndIcon)
-        case .fan:
-            Label(model.fans.first.map { "\(Int($0.rpm))" } ?? "–", systemImage: "fan")
-                .labelStyle(.titleAndIcon)
+        // allCases keeps a stable left-to-right order regardless of toggle order.
+        let metrics = MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)
+        if metrics.isEmpty {
+            Image(systemName: warning ? "flame.fill" : "thermometer.medium")
+        } else if let image = menuBarImage(metrics, warning: warning) {
+            // MenuBarExtra renders a multi-view label as only its first element,
+            // and bridging a Text to the status title strips inline SF Symbols —
+            // so the icon+value row is rendered to one template image instead.
+            Image(nsImage: image)
+        } else {
+            // Fallback if rendering ever fails: values only, no per-metric icons.
+            Text(metrics.map(menuBarValue).joined(separator: "  "))
+        }
+    }
+
+    /// Renders the selected metrics — each an SF Symbol plus its live value — to
+    /// a single template image. Template so macOS tints it for the menu bar
+    /// (white on dark, dimmed when inactive), exactly like a native item.
+    @MainActor
+    private func menuBarImage(_ metrics: [MenuBarMetric], warning: Bool) -> NSImage? {
+        let row = HStack(spacing: 6) {
+            ForEach(metrics) { metric in
+                // The CPU-temperature metric flips to a flame when hot — the
+                // same overheat cue the icon-only mode shows.
+                Label(menuBarValue(metric),
+                      systemImage: metric == .cpuTemp && warning ? "flame.fill" : metric.symbol)
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+        .font(.system(size: 12, weight: .regular))
+        .foregroundStyle(.black) // shape only; the template tints it
+
+        let renderer = ImageRenderer(content: row)
+        renderer.scale = 2 // the menu bar is rendered @2x on every modern Mac
+        guard let image = renderer.nsImage else { return nil }
+        image.isTemplate = true
+        return image
+    }
+
+    /// The live reading shown for one metric. A dash (never a fabricated value)
+    /// stands in when a subsystem isn't present or hasn't reported yet.
+    private func menuBarValue(_ metric: MenuBarMetric) -> String {
+        switch metric {
+        case .cpuTemp:  return model.averageCPUTemp.map { settings.format($0, decimals: 0) } ?? "–"
+        case .cpuUsage: return "\(Int(model.cpuUsage.rounded()))%"
+        case .gpuUsage: return model.gpu?.utilization.map { "\(Int($0.rounded()))%" } ?? "–"
+        case .memory:   return model.memory.map { String(format: "%.1fG", Double($0.used) / 1_073_741_824) } ?? "–"
+        case .fan:      return model.fans.first.map { "\(Int($0.rpm))" } ?? "–"
         }
     }
 }

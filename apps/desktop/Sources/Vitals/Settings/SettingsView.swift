@@ -157,6 +157,37 @@ private struct SwitchRow: View {
     }
 }
 
+/// One selectable menu-bar reading: a tinted icon tile, its label, and a switch
+/// that adds/removes it from the shown set.
+private struct MenuBarMetricToggle: View {
+    let metric: MenuBarMetric
+    @Binding var selection: Set<MenuBarMetric>
+
+    var body: some View {
+        Toggle(isOn: Binding(
+            get: { selection.contains(metric) },
+            set: { on in
+                if on { selection.insert(metric) } else { selection.remove(metric) }
+            }
+        )) {
+            HStack(spacing: 8) {
+                Image(systemName: metric.symbol)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.blue)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(.blue.opacity(0.14))
+                    )
+                Text(metric.label)
+                    .font(.system(size: 12.5))
+            }
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+    }
+}
+
 private func settingsRow(_ label: String, @ViewBuilder control: () -> some View) -> some View {
     HStack {
         Text(label)
@@ -259,16 +290,19 @@ private struct GeneralPane: View {
 
             SettingsCard(title: "Menu bar", symbol: "menubar.rectangle", tint: .blue) {
                 SwitchRow(label: "Show in menu bar", isOn: $settings.showMenuBar)
-                settingsRow("Display") {
-                    Picker("", selection: $settings.menuBarMode) {
-                        ForEach(MenuBarMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
-                        }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Readings to show")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(MenuBarMetric.allCases) { metric in
+                        MenuBarMetricToggle(metric: metric, selection: $settings.menuBarMetrics)
                     }
-                    .labelsHidden()
-                    .fixedSize()
-                    .disabled(!settings.showMenuBar)
+                    Text("Turn all off to show just the icon.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
+                .disabled(!settings.showMenuBar)
+                .opacity(settings.showMenuBar ? 1 : 0.5)
             }
 
             SettingsCard(title: "Storage", symbol: "internaldrive", tint: .blue) {
