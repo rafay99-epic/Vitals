@@ -68,9 +68,14 @@ struct MenuBarPanel: View {
         VitalsModel.downsample(model.chartHistory, to: 100)
     }
 
+    /// Two fixed columns (never `.adaptive`, per the perf rules). Four metrics
+    /// land as a clean 2×2; three fill the first row plus one. A single row of
+    /// four was far too narrow — labels and values truncated to "Te…"/"M…/12…".
+    private let sparkColumns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+
     private var sparklines: some View {
         let data = sparkData
-        return HStack(spacing: 8) {
+        return LazyVGrid(columns: sparkColumns, spacing: 8) {
             sparkline(
                 title: "Temp",
                 value: model.hottestCPUSensor.map { settings.format($0.celsius, decimals: 0) } ?? "—",
