@@ -67,3 +67,26 @@ struct BatteryConditionTests {
         #expect(BatterySnapshot.condition(permanentFailureStatus: 64) == "Service Recommended")
     }
 }
+
+/// Maximum Capacity must match what macOS shows, so it's parsed from
+/// `system_profiler`'s (non-localized) JSON. Lock the parse against the real
+/// shape and against junk.
+struct BatteryHealthTests {
+    private func json(_ s: String) -> Data { s.data(using: .utf8)! }
+
+    @Test func parsesMaximumCapacityFromRealShape() {
+        let data = json("""
+        {"SPPowerDataType":[{"sppower_battery_health_info":{"sppower_battery_cycle_count":173,"sppower_battery_health":"Good","sppower_battery_health_maximum_capacity":"95%"}}]}
+        """)
+        #expect(BatteryHealth.parse(data) == 95)
+    }
+
+    @Test func returnsNilWhenAbsentOrOutOfRange() {
+        #expect(BatteryHealth.parse(json("{\"SPPowerDataType\":[{}]}")) == nil)
+        #expect(BatteryHealth.parse(json("not json")) == nil)
+        // A nonsense >100% reading is rejected rather than shown.
+        #expect(BatteryHealth.parse(json("""
+        {"SPPowerDataType":[{"sppower_battery_health_info":{"sppower_battery_health_maximum_capacity":"150%"}}]}
+        """)) == nil)
+    }
+}

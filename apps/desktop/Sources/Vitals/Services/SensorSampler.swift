@@ -24,17 +24,42 @@ actor SensorSampler {
     private let gpu = GPUSampler()
     private let power = SoCPowerSampler()
 
+    // macOS's smoothed Maximum Capacity, refreshed rarely (it changes over
+    // weeks) on a background task so the per-tick sample never waits on the
+    // `system_profiler` spawn. Nil until the first read lands.
+    private var batteryHealth: Double?
+    private var batteryHealthCheckedAt = Date.distantPast
+    private static let batteryHealthInterval: TimeInterval = 600
+
     func sample() -> Snapshot {
-        Snapshot(
+        let battery = Battery.read(officialHealth: batteryHealth)
+        if battery != nil { refreshBatteryHealthIfStale() }
+        return Snapshot(
             readings: hid.readAll(),
             fans: smc?.fans() ?? [],
             hasSMC: smc != nil,
             cpuUsage: cpuSampler.sample(),
             memory: MemoryStats.read(),
             topProcesses: processSampler.sample(top: 5),
-            battery: Battery.read(),
+            battery: battery,
             gpu: gpu.sample(),
             power: power.sample()
         )
+    }
+
+    /// Kicks off a background read of macOS's Maximum Capacity if the cached
+    /// value is stale. Stamps the time up front so a slow read can't spawn a
+    /// second `system_profiler`; only a successful read updates the cache.
+    private func refreshBatteryHealthIfStale() {
+        guard Date().timeIntervalSince(batteryHealthCheckedAt) >= Self.batteryHealthInterval else { return }
+        batteryHealthCheckedAt = Date()
+        Task.detached { [weak self] in
+            let value = BatteryHealth.maximumCapacityPercent()
+            await self?.storeBatteryHealth(value)
+        }
+    }
+
+    private func storeBatteryHealth(_ value: Double?) {
+        if let value { batteryHealth = value }
     }
 }
