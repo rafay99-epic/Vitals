@@ -6,6 +6,7 @@ import SwiftUI
 /// switches change what's drawn, never the geometry it's drawn in.
 struct ContentView: View {
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var model: VitalsModel
     @State private var section: AppTab = .dashboard
     @State private var gearHovered = false
     @Environment(\.openWindow) private var openWindow
@@ -13,6 +14,7 @@ struct ContentView: View {
     // Owned here so the scans survive section switches.
     @StateObject private var processesModel = ProcessesModel()
     @StateObject private var appsModel = AppsModel()
+    @StateObject private var loginItemsModel = LoginItemsModel()
     @StateObject private var cleanupModel = CleanupModel()
     @StateObject private var storageModel = StorageModel()
 
@@ -49,6 +51,8 @@ struct ContentView: View {
                     .tabVisibility(section == .processes)
                 AppsView(model: appsModel, isActive: section == .applications)
                     .tabVisibility(section == .applications)
+                LoginItemsView(model: loginItemsModel, isActive: section == .loginItems)
+                    .tabVisibility(section == .loginItems)
                 CleanupView(model: cleanupModel, isActive: section == .cleanup)
                     .tabVisibility(section == .cleanup)
                 StorageView(model: storageModel, isActive: section == .storage)
@@ -68,6 +72,10 @@ struct ContentView: View {
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
         .frame(minWidth: minWindowWidth, minHeight: 680)
+        // Let the model skip the costly top-process sweep when the window is
+        // closed (menu-bar only).
+        .onAppear { model.setMainWindowVisible(true) }
+        .onDisappear { model.setMainWindowVisible(false) }
         // If the user hides the tab they're on, fall back to the Dashboard so
         // the canvas never shows a tab with no indicator in the bar.
         .onChange(of: settings.hiddenTabs) { _, hidden in
