@@ -8,7 +8,7 @@ import Foundation
 /// tab's visible position (⌘1 = leftmost), assigned in the header from the
 /// ordered, unhidden list — so a shortcut always matches what the eye sees.
 enum AppTab: String, CaseIterable, Identifiable {
-    case dashboard, gpu, battery, health, processes, applications, cleanup, storage
+    case dashboard, gpu, battery, health, history, processes, applications, cleanup, storage
     var id: String { rawValue }
 
     var title: String {
@@ -17,6 +17,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .gpu: return "GPU"
         case .battery: return "Battery"
         case .health: return "Health"
+        case .history: return "History"
         case .processes: return "Processes"
         case .applications: return "Applications"
         case .cleanup: return "Cleanup"
@@ -30,6 +31,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .gpu: return "cpu.fill"
         case .battery: return "battery.100percent"
         case .health: return "waveform.path.ecg"
+        case .history: return "chart.xyaxis.line"
         case .processes: return "list.bullet"
         case .applications: return "square.grid.2x2"
         case .cleanup: return "sparkles"

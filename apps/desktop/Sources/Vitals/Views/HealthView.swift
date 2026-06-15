@@ -75,6 +75,7 @@ struct HealthView: View {
             if let power = model.power {
                 HealthPowerCard(power: power)
             }
+            HealthDiagnosticsCard()
         }
     }
 }
@@ -171,6 +172,36 @@ private struct HealthPowerCard: View {
                         .monospacedDigit()
                         .numericTransition()
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Diagnostics
+
+private struct HealthDiagnosticsCard: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
+    @State private var copied = false
+
+    var body: some View {
+        SectionCard(title: "Diagnostics", symbol: "doc.on.clipboard") {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Copy a snapshot of every current reading")
+                        .font(.callout)
+                    Text("Plain text — handy to paste into a support thread or note.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    DiagnosticSnapshot.copyToPasteboard(model: model, settings: settings)
+                    copied = true
+                    Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
+                } label: {
+                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.clipboard")
+                }
+                .controlSize(.small)
             }
         }
     }
