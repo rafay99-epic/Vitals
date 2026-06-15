@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import UserNotifications
-import UniformTypeIdentifiers
 
 /// Settings in the same design language as the main window: capsule tabs,
 /// card sections with tinted icon tiles, switch toggles.
@@ -574,14 +573,14 @@ private struct DataPane: View {
                 settingsRow("History file") {
                     HStack(spacing: 8) {
                         Button("Export…") { exportCSV() }
-                        Button("Show in Finder") {
+                        Button("Reveal") {
                             NSWorkspace.shared.activateFileViewerSelecting([HistoryLogger.fileURL])
                         }
                     }
                     .controlSize(.small)
                     .disabled(!logFileExists)
                 }
-                Text("One line every 10 seconds while Vitals runs (\(logSizeText)). Open the CSV in Numbers or Excel to study long-term trends.")
+                Text("One line every 10 seconds while Vitals runs (\(logSizeText)). Stored in \(folderDisplayPath); Export saves a timestamped copy to \(folderDisplayPath)/exports. Open the CSV in Numbers or Excel.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -592,6 +591,16 @@ private struct DataPane: View {
         FileManager.default.fileExists(atPath: HistoryLogger.fileURL.path)
     }
 
+    private var folderDisplayPath: String {
+        (DataHome.directory.path as NSString).abbreviatingWithTildeInPath
+    }
+
+    private static let exportStampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return formatter
+    }()
+
     private var logSizeText: String {
         guard let size = try? FileManager.default.attributesOfItem(atPath: HistoryLogger.fileURL.path)[.size] as? UInt64 else {
             return "no file yet"
@@ -599,15 +608,17 @@ private struct DataPane: View {
         return "currently " + ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
 
+    /// Writes a timestamped copy of the log into the data home's `exports/`
+    /// folder and reveals it — the fixed, predictable location, rather than a
+    /// save panel.
     private func exportCSV() {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.commaSeparatedText]
-        panel.nameFieldStringValue = "vitals-history.csv"
-        panel.begin { response in
-            guard response == .OK, let destination = panel.url else { return }
-            try? FileManager.default.removeItem(at: destination)
-            try? FileManager.default.copyItem(at: HistoryLogger.fileURL, to: destination)
-        }
+        let exports = DataHome.exportsDirectory
+        try? FileManager.default.createDirectory(at: exports, withIntermediateDirectories: true)
+        let destination = exports.appendingPathComponent(
+            "vitals-history-\(Self.exportStampFormatter.string(from: Date())).csv")
+        try? FileManager.default.removeItem(at: destination)
+        guard (try? FileManager.default.copyItem(at: HistoryLogger.fileURL, to: destination)) != nil else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([destination])
     }
 }
 

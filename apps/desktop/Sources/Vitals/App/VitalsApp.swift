@@ -13,6 +13,8 @@ struct VitalsApp: App {
     @StateObject private var menuBar: MenuBarController
 
     init() {
+        // Create the data home and migrate any legacy log before logging starts.
+        DataHome.prepare()
         let settings = AppSettings()
         let model = VitalsModel(settings: settings)
         let updater = Updater()

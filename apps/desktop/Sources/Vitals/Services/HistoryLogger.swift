@@ -1,13 +1,11 @@
 import Foundation
 
-/// Appends readings to a CSV file in Application Support so temperature
-/// trends survive restarts. Writes at most one line every 10 seconds
-/// (~5 MB per month of continuous running).
+/// Appends readings to a CSV file in the Vitals data home (`DataHome`) so
+/// temperature trends survive restarts. Writes at most one line every 10
+/// seconds (~5 MB per month of continuous running).
 final class HistoryLogger {
-    static let directory = FileManager.default
-        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Vitals", isDirectory: true)
-    static let fileURL = directory.appendingPathComponent("history.csv")
+    static var directory: URL { DataHome.directory }
+    static var fileURL: URL { DataHome.historyFile }
 
     private static let header = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"
     private static let minimumInterval: TimeInterval = 10
@@ -83,7 +81,7 @@ final class HistoryLogger {
         do {
             try fm.createDirectory(at: Self.directory, withIntermediateDirectories: true)
             if let size = fileSizeBytes, size > Self.maximumBytes {
-                let archived = Self.directory.appendingPathComponent("history-previous.csv")
+                let archived = DataHome.historyPrevious
                 try? fm.removeItem(at: archived)
                 try fm.moveItem(at: Self.fileURL, to: archived)
             }
