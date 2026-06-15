@@ -11,18 +11,15 @@ struct ProcessesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    hero
-                    listCard
-                }
-                .padding(20)
-            }
-            // Pause live refreshes while scrolling — rebuilding the list
-            // mid-scroll is what stutters. It catches up the instant it stops.
-            .onScrollPhaseChange { _, phase in
-                model.setScrolling(phase != .idle)
-            }
+            // The hero stays put while the list scrolls, so search/sort are
+            // always reachable.
+            hero
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+            content
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
             Divider().opacity(0.5)
             footer
         }
@@ -120,12 +117,13 @@ struct ProcessesView: View {
     // MARK: List
 
     @ViewBuilder
-    private var listCard: some View {
+    private var content: some View {
         if !model.hasLoaded {
             LoadingStateView(
                 title: "Reading processes",
                 message: "Vitals is measuring how much memory and CPU each app is using."
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.filteredGroups.isEmpty && !model.searchText.isEmpty {
             EmptyStateView(
                 symbol: "magnifyingglass",
@@ -138,30 +136,45 @@ struct ProcessesView: View {
                 }
                 .controlSize(.large)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(model.filteredGroups.enumerated()), id: \.element.id) { index, group in
-                    if index > 0 {
-                        Divider().opacity(0.35).padding(.leading, 56)
-                    }
-                    ProcessRow(
-                        group: group,
-                        onQuit: { model.requestQuit(group, confirm: settings.confirmBeforeQuittingProcess) },
-                        onForceQuit: { model.requestForceQuit(group) }
-                    )
-                }
+            processList
+        }
+    }
+
+    /// A native `List` (NSTableView-backed) rather than a `ScrollView` +
+    /// `LazyVStack`: it recycles a small pool of rows, so scrolling stays smooth
+    /// no matter how far down a long process list you go. Styled to keep the
+    /// app's rounded card look.
+    private var processList: some View {
+        List {
+            ForEach(model.filteredGroups) { group in
+                ProcessRow(
+                    group: group,
+                    onQuit: { model.requestQuit(group, confirm: settings.confirmBeforeQuittingProcess) },
+                    onForceQuit: { model.requestForceQuit(group) }
+                )
+                .listRowInsets(EdgeInsets())          // the row controls its own padding
+                .listRowBackground(Color.clear)       // the row draws its own hover fill
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 56 } // separators align under the name
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.3))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(.separator.opacity(0.5), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            // GPU-accelerated reorder when the sort changes (lean mode snaps).
-            .animation(animationsEnabled ? .spring(response: 0.32, dampingFraction: 0.86) : nil,
-                       value: model.sortOrder)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 1)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.quaternary.opacity(0.3)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.separator.opacity(0.5), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // GPU-accelerated reorder when the sort changes (lean mode snaps).
+        .animation(animationsEnabled ? .spring(response: 0.32, dampingFraction: 0.86) : nil,
+                   value: model.sortOrder)
+        // Pause refreshes while scrolling so a republish never rebuilds rows
+        // mid-scroll; catches up the instant it stops.
+        .onScrollPhaseChange { _, phase in
+            model.setScrolling(phase != .idle)
         }
     }
 

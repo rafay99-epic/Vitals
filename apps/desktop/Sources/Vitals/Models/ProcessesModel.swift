@@ -111,7 +111,10 @@ final class ProcessesModel: ObservableObject {
             let processes = await inventory.sample(includeSystem: includeSystem)
             // A scroll may have begun while sampling — don't publish into it.
             guard !self.isScrolling else { return }
-            self.groups = Self.grouped(processes, groupHelpers: groupHelpers)
+            // Never list Vitals itself (safety rule): drop our own app's processes.
+            let ownBundle = Bundle.main.bundleURL.standardizedFileURL
+            let visible = processes.filter { $0.bundleURL?.standardizedFileURL != ownBundle }
+            self.groups = Self.grouped(visible, groupHelpers: groupHelpers)
             self.hasLoaded = true
         }
     }
