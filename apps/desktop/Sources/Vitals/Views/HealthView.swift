@@ -61,16 +61,15 @@ struct HealthView: View {
         return list
     }
 
-    private var overall: SystemHealth.Level {
-        factors.map(\.level).max() ?? .good
-    }
-
     private var throttling: Bool {
         SystemHealth.isThrottling(model.thermalState)
     }
 
     var body: some View {
-        MetricScroll {
+        // Build the signals once per render — `overall` is just their worst.
+        let factors = self.factors
+        let overall = factors.map(\.level).max() ?? .good
+        return MetricScroll {
             HealthHeroCard(level: overall, throttling: throttling)
             HealthFactorsCard(factors: factors)
             if let power = model.power {

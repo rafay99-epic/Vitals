@@ -37,7 +37,7 @@ struct ContentView: View {
             ZStack {
                 DashboardView()
                     .tabVisibility(section == .dashboard)
-                GPUView()
+                GPUView(isActive: section == .gpu)
                     .tabVisibility(section == .gpu)
                 BatteryView()
                     .tabVisibility(section == .battery)
@@ -65,14 +65,20 @@ struct ContentView: View {
         // leaving a dead band above itself.
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
-        // "Labels" mode shows every tab name, so it needs a wider floor to keep
-        // the centered bar clear of the wordmark; the icon-led modes fit at 980.
-        .frame(minWidth: settings.tabDisplayMode == .labels ? 1100 : 980, minHeight: 680)
+        .frame(minWidth: minWindowWidth, minHeight: 680)
         // If the user hides the tab they're on, fall back to the Dashboard so
         // the canvas never shows a tab with no indicator in the bar.
         .onChange(of: settings.hiddenTabs) { _, hidden in
             if hidden.contains(section) { section = .dashboard }
         }
+    }
+
+    /// "Labels" mode shows every tab name, so the centered bar needs a wider
+    /// floor to stay clear of the wordmark — more so at the larger size. The
+    /// icon-led modes always fit at 980.
+    private var minWindowWidth: CGFloat {
+        guard settings.tabDisplayMode == .labels else { return 980 }
+        return settings.tabSize == .large ? 1200 : 1100
     }
 
     // MARK: Header
