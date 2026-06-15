@@ -83,4 +83,12 @@ rm -f "$RW_DMG" build/dmg-background.png
 rm -rf "$STAGE"
 codesign --force --sign - "$OUT_DMG"
 
+# Stamp the app icon onto the .dmg file itself so it shows in Finder/Downloads
+# instead of the generic disk-image icon. Done after codesign — the icon is a
+# resource-fork xattr, not part of the signed image data. Non-fatal: if a
+# headless runner can't set it, the DMG still installs fine.
+echo "Setting DMG file icon…"
+swift Scripts/SetFileIcon.swift "$OUT_DMG" "$APP/Contents/Resources/AppIcon.icns" \
+  || echo "warning: could not set the DMG file icon — using Finder's default"
+
 echo "Done → $PWD/$OUT_DMG"
