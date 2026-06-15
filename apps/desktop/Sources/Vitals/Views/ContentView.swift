@@ -108,10 +108,7 @@ struct ContentView: View {
         // leaving a dead band above itself.
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
-        // Wide enough that the centered capsule tabs (eight of them) never
-        // collide with the leading wordmark or the trailing controls — measured
-        // against the real tab-bar width, ~766 pt, plus both clusters.
-        .frame(minWidth: 1100, minHeight: 680)
+        .frame(minWidth: 980, minHeight: 680)
     }
 
     // MARK: Header
@@ -167,8 +164,14 @@ struct ContentView: View {
         .background(Capsule().fill(.quaternary.opacity(0.45)))
     }
 
+    /// An expanding capsule tab: every tab shows its icon, but only the selected
+    /// one reveals its text label — the rest collapse to icon-only (name on
+    /// hover / for VoiceOver). Keeps all eight destinations one click away
+    /// without crowding the header. The label rides the same spring as the
+    /// sliding indicator, so selecting a tab grows its label out of the icon.
     private func tabButton(_ item: Section) -> some View {
-        Button {
+        let selected = section == item
+        return Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
                 section = item
             }
@@ -177,33 +180,42 @@ struct ContentView: View {
                 Image(systemName: item.symbol)
                     .font(.system(size: 12, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                Text(item.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 16)  // stable slot so icons don't shift as labels grow
+                if selected {
+                    Text(item.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .fixedSize()
+                        .transition(.opacity)
+                }
             }
-            .padding(.horizontal, 13)
+            .padding(.horizontal, selected ? 12 : 8)
             .padding(.vertical, 6)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(section == item ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+        .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
         .background {
-            if section == item {
+            if selected {
                 Capsule()
                     .fill(.quaternary)
                     .matchedGeometryEffect(id: "selected-tab", in: tabIndicator)
             }
         }
         .keyboardShortcut(item.shortcut, modifiers: .command)
+        .accessibilityLabel(item.title)
         .help("\(item.title) (⌘\(item.shortcut.character))")
     }
 }
 
-/// The header's update affordance: a blue "Update" pill when one's available
-/// (one click installs, from any tab), and live progress while it downloads and
-/// installs. Reads the shared `Updater`, so it stays in sync with the Dashboard
-/// banner. Nothing shows when up to date.
+/// The header's update affordance: a compact badged download icon when an
+/// update is available (one click installs, from any tab), and a small spinner
+/// while it downloads and installs. Icon-only so the header stays uncrowded with
+/// eight tabs — the full "Install Update" call to action still lives in the
+/// Dashboard banner. Reads the shared `Updater`, so it stays in sync. Nothing
+/// shows when up to date.
 private struct HeaderUpdateButton: View {
     @EnvironmentObject private var updater: Updater
+    @State private var hovered = false
 
     var body: some View {
         switch updater.status {
@@ -211,35 +223,30 @@ private struct HeaderUpdateButton: View {
             Button {
                 Task { await updater.downloadAndInstall() }
             } label: {
-                pill { Image(systemName: "arrow.down.circle.fill"); Text("Update") }
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.blue)
-                    .background(Capsule().fill(.blue.opacity(0.15)))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(.blue.opacity(hovered ? 0.22 : 0.14)))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.12)) { hovered = hovering }
+            }
             .help("Install \(Channel.current.displayName) \(release.displayVersion)")
         case .downloading:
-            pill { progressDot; Text("Downloading…") }
-                .foregroundStyle(.secondary)
-                .background(Capsule().fill(.quaternary.opacity(0.5)))
+            spinner.help("Downloading update…")
         case .installing:
-            pill { progressDot; Text("Installing…") }
-                .foregroundStyle(.secondary)
-                .background(Capsule().fill(.quaternary.opacity(0.5)))
+            spinner.help("Installing — Vitals will relaunch in a moment")
         default:
             EmptyView()
         }
     }
 
-    private func pill<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        HStack(spacing: 5) { content() }
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .contentShape(Capsule())
-    }
-
-    private var progressDot: some View {
-        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 12, height: 12)
+    private var spinner: some View {
+        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 30, height: 30)
     }
 }
 
