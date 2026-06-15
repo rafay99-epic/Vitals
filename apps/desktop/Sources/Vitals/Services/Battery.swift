@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import IOKit.ps
 
 struct BatterySnapshot {
     let percent: Double
@@ -81,8 +82,12 @@ enum Battery {
         // The gauge reports temperature in hundredths of a degree Celsius.
         let temperature = int("Temperature").map { Double($0) / 100 }
 
-        var timeRemaining = int("TimeRemaining")
-        if let t = timeRemaining, t <= 0 || t >= 0xFFFF { timeRemaining = nil }
+        // macOS's own smoothed estimate — the exact value the menu bar shows
+        // (time to empty on battery, time to full while charging). It returns
+        // negative sentinels for "still calculating" (-1) and "unlimited / on
+        // AC" (-2); both mean there's no estimate to show.
+        let estimate = IOPSGetTimeRemainingEstimate()
+        let timeRemaining = estimate > 0 ? Int(estimate / 60) : nil
 
         return BatterySnapshot(
             percent: min(max(percent, 0), 100),
