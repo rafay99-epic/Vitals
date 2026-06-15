@@ -140,6 +140,16 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(try? JSONEncoder().encode(alertRules), forKey: "alertRules") }
     }
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
+    /// Developer/diagnostic logging floor — distinct from `loggingEnabled` (which
+    /// is the user-facing metric history CSV). Drives `Log.minimumLevel`: `.off`
+    /// captures nothing, `.notice` (default) captures meaningful events + errors,
+    /// `.debug` is verbose. See `Log`.
+    @Published var diagnosticLogLevel: LogLevel {
+        didSet {
+            defaults.set(diagnosticLogLevel.rawValue, forKey: "diagnosticLogLevel")
+            Log.configure(minimumLevel: diagnosticLogLevel)
+        }
+    }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     /// Master switch for GPU-driven rendering: Liquid Glass and every animation.
     /// On by default, but turning it off drops the app to opaque classic cards
@@ -276,6 +286,10 @@ final class AppSettings: ObservableObject {
             // collection unless asked), which also keeps the History view empty
             // until the user turns logging on.
             "loggingEnabled": false,
+            // Capture meaningful events + all errors out of the box (negligible
+            // cost), but nothing chatty. The Logs tab that views them ships
+            // hidden (see "hiddenTabs"); logging happens regardless.
+            "diagnosticLogLevel": LogLevel.notice.rawValue,
             "autoUpdateCheck": true,
             "gpuAcceleration": true,
             // Ships off: the app is lean (opaque cards) by default; glass is opt-in.
@@ -293,7 +307,10 @@ final class AppSettings: ObservableObject {
             "confirmBeforeQuittingProcess": false,
             "tabDisplayMode": TabDisplayMode.expanding.rawValue,
             "tabSize": TabSize.medium.rawValue,
-            "hiddenTabs": "",
+            // The developer Logs tab ships hidden — users opt into it in
+            // Settings → Tabs. (Only applies to fresh installs / users who never
+            // customized tab visibility; their stored value wins otherwise.)
+            "hiddenTabs": AppTab.logs.rawValue,
             "tabOrder": AppTab.allCases.map(\.rawValue).joined(separator: ","),
         ])
 
@@ -309,6 +326,7 @@ final class AppSettings: ObservableObject {
         notifyThermal = defaults.bool(forKey: "notifyThermal")
         alertRules = AppSettings.loadAlertRules(defaults)
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
+        diagnosticLogLevel = LogLevel(rawValue: defaults.integer(forKey: "diagnosticLogLevel")) ?? .notice
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
         gpuAcceleration = defaults.bool(forKey: "gpuAcceleration")
         liquidGlass = defaults.bool(forKey: "liquidGlass")
@@ -352,6 +370,10 @@ final class AppSettings: ObservableObject {
                 MainActor.assumeIsolated { self?.appActive = false }
             },
         ]
+
+        // didSet doesn't fire during init, so push the stored level into the
+        // logger by hand — done last, once every stored property exists.
+        Log.configure(minimumLevel: diagnosticLogLevel)
     }
 
     deinit {
@@ -437,6 +459,7 @@ final class AppSettings: ObservableObject {
             }
             loginItemError = nil
         } catch {
+            Log.error(.settings, "login item \(launchAtLogin ? "register" : "unregister") failed — \(error.localizedDescription)")
             loginItemError = error.localizedDescription
             syncingLoginItem = true
             launchAtLogin = SMAppService.mainApp.status == .enabled

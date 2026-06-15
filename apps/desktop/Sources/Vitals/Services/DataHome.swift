@@ -19,6 +19,9 @@ enum DataHome {
 
     static var historyFile: URL { directory.appendingPathComponent("history.csv") }
     static var historyPrevious: URL { directory.appendingPathComponent("history-previous.csv") }
+    /// The developer/diagnostic log (JSONL), and its rotated predecessor.
+    static var logFile: URL { directory.appendingPathComponent("vitals.log") }
+    static var logPrevious: URL { directory.appendingPathComponent("vitals-previous.log") }
     /// Where user-initiated exports (CSV/JSON snapshots) are written.
     static var exportsDirectory: URL { directory.appendingPathComponent("exports", isDirectory: true) }
 

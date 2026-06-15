@@ -62,6 +62,7 @@ enum AppUninstaller {
                 outcome.trashed.append(app.id)
                 outcome.freedBytes += sizes[app.id] ?? 0
             } catch {
+                Log.notice(.uninstall, "bundle trash failed for \(app.id.lastPathComponent), will try admin path — \(error.localizedDescription)")
                 outcome.failedBundles.append(app.id)
             }
         }
@@ -71,6 +72,7 @@ enum AppUninstaller {
                 outcome.trashed.append(url)
                 outcome.freedBytes += sizes[url] ?? 0
             } catch {
+                Log.notice(.uninstall, "couldn't trash leftover \(url.lastPathComponent) — \(error.localizedDescription)")
                 outcome.failures.append((url, error.localizedDescription))
             }
         }

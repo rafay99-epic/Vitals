@@ -11,6 +11,7 @@ struct VitalsApp: App {
     @StateObject private var fanControl: FanController
     @StateObject private var widgets: WidgetManager
     @StateObject private var menuBar: MenuBarController
+    @StateObject private var logStore: LogStore
 
     init() {
         // Create the data home and migrate any legacy log before logging starts.
@@ -31,6 +32,10 @@ struct VitalsApp: App {
         _widgets = StateObject(wrappedValue: WidgetManager(model: model, settings: settings))
         // The menu-bar status item hosts a live, compositor-animated label.
         _menuBar = StateObject(wrappedValue: MenuBarController(model: model, settings: settings, fanControl: fanControl))
+        // Diagnostic log store: seeds from vitals.log and feeds the Logs tab.
+        // `AppSettings.init` already set the capture level before this point.
+        _logStore = StateObject(wrappedValue: LogStore())
+        Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.isDev ? "dev" : "stable"))")
     }
 
     var body: some Scene {
@@ -43,6 +48,7 @@ struct VitalsApp: App {
                 .environmentObject(settings)
                 .environmentObject(updater)
                 .environmentObject(fanControl)
+                .environmentObject(logStore)
                 .environment(\.animationsEnabled, settings.animationsEnabled)
         }
         .defaultSize(width: 1100, height: 760)

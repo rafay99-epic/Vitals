@@ -756,7 +756,32 @@ private struct DataPane: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            SettingsCard(title: "Diagnostic logging", symbol: "ant", tint: .teal) {
+                settingsRow("Level") {
+                    Picker("", selection: $settings.diagnosticLogLevel) {
+                        ForEach(LogLevel.settingChoices) { Text($0.settingLabel).tag($0) }
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                settingsRow("Log file") {
+                    HStack(spacing: 8) {
+                        Button("Reveal") {
+                            NSWorkspace.shared.activateFileViewerSelecting([DataHome.logFile])
+                        }
+                        .disabled(!diagnosticLogExists)
+                    }
+                    .controlSize(.small)
+                }
+                Text("Records what the app's services are doing — useful for bug reports. Normal keeps errors and key events; Verbose adds detail. Separate from the readings log above; written to \(folderDisplayPath)/vitals.log. View it live in the Logs tab (switch it on under Tabs).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    private var diagnosticLogExists: Bool {
+        FileManager.default.fileExists(atPath: DataHome.logFile.path)
     }
 
     private var logFileExists: Bool {

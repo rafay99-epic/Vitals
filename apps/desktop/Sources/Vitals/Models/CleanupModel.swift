@@ -109,8 +109,12 @@ final class CleanupModel: ObservableObject {
                     }
                     result.failures = stillFailed
                 } catch let error as PrivilegedShell.AdminError {
-                    if !error.cancelled { lastError = error.message }
+                    if !error.cancelled {
+                        Log.error(.cleanup, "privileged cache clean failed — \(error.message)")
+                        lastError = error.message
+                    }
                 } catch {
+                    Log.error(.cleanup, "privileged cache clean failed — \(error.localizedDescription)")
                     lastError = error.localizedDescription
                 }
             }
@@ -130,13 +134,18 @@ final class CleanupModel: ObservableObject {
                         result.removedItems += target.items.count
                     }
                 } catch let error as PrivilegedShell.AdminError {
-                    if !error.cancelled { lastError = error.message }
+                    if !error.cancelled {
+                        Log.error(.cleanup, "privileged system clean failed — \(error.message)")
+                        lastError = error.message
+                    }
                 } catch {
+                    Log.error(.cleanup, "privileged system clean failed — \(error.localizedDescription)")
                     lastError = error.localizedDescription
                 }
             }
 
             lastResult = result
+            Log.notice(.cleanup, "clean finished: \(result.removedItems) items, \(ByteCountFormatter.string(fromByteCount: Int64(result.freedBytes), countStyle: .file)) freed\(result.failures.isEmpty ? "" : ", \(result.failures.count) failed")")
             isCleaning = false
             selected.removeAll()
             scan(depth: currentDepth)

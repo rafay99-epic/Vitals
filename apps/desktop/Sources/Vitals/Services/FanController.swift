@@ -54,6 +54,7 @@ final class FanController: ObservableObject {
             try FanControl.writeCommands(commands)
             lastError = nil
         } catch {
+            Log.error(.fan, "couldn't save fan settings — \(error.localizedDescription)")
             lastError = "Couldn't save fan settings: \(error.localizedDescription)"
         }
     }
@@ -114,8 +115,12 @@ final class FanController: ObservableObject {
         do {
             try await body()
         } catch let error as PrivilegedShell.AdminError {
-            if !error.cancelled { lastError = error.message }
+            if !error.cancelled {
+                Log.error(.fan, "fan helper operation failed — \(error.message)")
+                lastError = error.message
+            }
         } catch {
+            Log.error(.fan, "fan helper operation failed — \(error.localizedDescription)")
             lastError = error.localizedDescription
         }
     }

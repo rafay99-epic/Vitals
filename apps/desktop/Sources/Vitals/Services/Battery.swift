@@ -153,6 +153,7 @@ enum BatteryHealth {
             process.waitUntilExit()
             return data.isEmpty ? nil : data
         } catch {
+            Log.notice(.sensors, "battery: data process failed to launch — \(error.localizedDescription)")
             return nil
         }
     }

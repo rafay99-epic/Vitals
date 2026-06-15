@@ -116,6 +116,7 @@ final class Updater: ObservableObject {
             let release = try await Self.fetchLatestRelease()
             lastChecked = Date()
             if let release, Self.isNewer(release) {
+                Log.notice(.updater, "update available: \(release.displayVersion) (current \(Self.currentVersion))")
                 status = .available(release)
                 if !userInitiated, notifiedVersion != release.tag + "#\(release.buildNumber)" {
                     notifiedVersion = release.tag + "#\(release.buildNumber)"
@@ -129,6 +130,7 @@ final class Updater: ObservableObject {
                 status = .upToDate
             }
         } catch {
+            Log.error(.updater, "update check failed — \(error.localizedDescription)")
             status = .failed(error.localizedDescription)
         }
     }
@@ -157,6 +159,7 @@ final class Updater: ObservableObject {
             try? relauncher.run()
             NSApp.terminate(nil)
         } catch {
+            Log.error(.updater, "download/install failed — \(error.localizedDescription)")
             status = .failed(error.localizedDescription)
         }
     }
