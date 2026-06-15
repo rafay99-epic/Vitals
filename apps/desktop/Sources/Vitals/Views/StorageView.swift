@@ -17,6 +17,9 @@ enum OverviewChart: String, CaseIterable, Identifiable {
 
 struct StorageView: View {
     @ObservedObject var model: StorageModel
+    /// True only while Storage is the visible tab; the view stays mounted, so it
+    /// re-reads the volume on activation rather than on appear.
+    var isActive: Bool
     @EnvironmentObject private var settings: AppSettings
     @State private var confirmWholeDisk = false
     /// Persisted so the chosen graphic sticks across launches.
@@ -48,7 +51,8 @@ struct StorageView: View {
                 .opacity(0.5)
             footer
         }
-        .onAppear {
+        .onChange(of: isActive, initial: true) { _, active in
+            guard active else { return }
             // Capacity and the access check are instant; the disk-walking
             // analysis waits for the button unless auto-analyze is on.
             model.loadVolume()

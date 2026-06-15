@@ -323,6 +323,24 @@ private struct GeneralPane: View {
                 .opacity(settings.showMenuBar ? 1 : 0.5)
             }
 
+            SettingsCard(title: "Processes", symbol: "list.bullet", tint: .green) {
+                SwitchRow(
+                    label: "Group app helpers",
+                    caption: "Fold an app's helper processes into one row (e.g. Brave's many helpers → a single “Brave”).",
+                    isOn: $settings.groupHelperProcesses
+                )
+                SwitchRow(
+                    label: "Show system processes",
+                    caption: "Also list root and background processes. They can't be quit without admin rights, so they're hidden by default.",
+                    isOn: $settings.showSystemProcesses
+                )
+                SwitchRow(
+                    label: "Confirm before quitting",
+                    caption: "Ask before a normal Quit. Force Quit always asks regardless.",
+                    isOn: $settings.confirmBeforeQuittingProcess
+                )
+            }
+
             SettingsCard(title: "Storage", symbol: "internaldrive", tint: .blue) {
                 SwitchRow(
                     label: "Analyze automatically on open",
