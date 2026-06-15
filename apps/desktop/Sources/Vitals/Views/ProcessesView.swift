@@ -18,6 +18,11 @@ struct ProcessesView: View {
                 }
                 .padding(20)
             }
+            // Pause live refreshes while scrolling — rebuilding the list
+            // mid-scroll is what stutters. It catches up the instant it stops.
+            .onScrollPhaseChange { _, phase in
+                model.setScrolling(phase != .idle)
+            }
             Divider().opacity(0.5)
             footer
         }
@@ -27,6 +32,13 @@ struct ProcessesView: View {
             model.start()
         }
         .onDisappear { model.stop() }
+        // Warm the icon cache off the scroll path: without this, a row scrolling
+        // into view fetches its app icon synchronously (NSWorkspace) and hitches.
+        .onReceive(model.$groups) { groups in
+            for group in groups where group.bundleURL != nil {
+                _ = AppIconCache.icon(for: group.bundleURL!)
+            }
+        }
         .onChange(of: settings.showSystemProcesses) { _, show in
             model.includeSystem = show; model.refresh()
         }

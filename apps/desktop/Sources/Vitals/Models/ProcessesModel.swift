@@ -54,6 +54,10 @@ final class ProcessesModel: ObservableObject {
 
     private let inventory = ProcessInventory()
     private var timer: Timer?
+    /// While the user is scrolling, refreshes are skipped: republishing the
+    /// list mid-scroll re-runs the view body and rebuilds the rows, which is
+    /// what makes scrolling stutter. The view reports scroll phase here.
+    private var isScrolling = false
 
     var filteredGroups: [Group] {
         var result = groups
@@ -90,11 +94,23 @@ final class ProcessesModel: ObservableObject {
         timer = nil
     }
 
+    /// Reported by the view on scroll-phase changes. Pauses refreshes while
+    /// scrolling and takes one immediately when it stops, so the list is live
+    /// when still and rock-steady while moving.
+    func setScrolling(_ scrolling: Bool) {
+        guard scrolling != isScrolling else { return }
+        isScrolling = scrolling
+        if !scrolling { refresh() }
+    }
+
     func refresh() {
+        guard !isScrolling else { return }
         let includeSystem = includeSystem
         let groupHelpers = groupHelpers
         Task {
             let processes = await inventory.sample(includeSystem: includeSystem)
+            // A scroll may have begun while sampling — don't publish into it.
+            guard !self.isScrolling else { return }
             self.groups = Self.grouped(processes, groupHelpers: groupHelpers)
             self.hasLoaded = true
         }
