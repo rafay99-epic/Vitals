@@ -134,6 +134,11 @@ final class AppSettings: ObservableObject {
     @Published var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
     @Published var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     @Published var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
+    /// User-defined threshold alerts, stored as JSON. Separate from the tuned
+    /// overheat/thermal built-ins above.
+    @Published var alertRules: [AlertRule] {
+        didSet { defaults.set(try? JSONEncoder().encode(alertRules), forKey: "alertRules") }
+    }
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     /// Master switch for GPU-driven rendering: Liquid Glass and every animation.
@@ -295,6 +300,7 @@ final class AppSettings: ObservableObject {
         warnThreshold = defaults.double(forKey: "warnThreshold")
         notifyOverheat = defaults.bool(forKey: "notifyOverheat")
         notifyThermal = defaults.bool(forKey: "notifyThermal")
+        alertRules = AppSettings.loadAlertRules(defaults)
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
         gpuAcceleration = defaults.bool(forKey: "gpuAcceleration")
@@ -364,6 +370,13 @@ final class AppSettings: ObservableObject {
         case "iconOnly": return []
         default:         return [.cpuTemp]
         }
+    }
+
+    private static func loadAlertRules(_ defaults: UserDefaults) -> [AlertRule] {
+        guard let data = defaults.data(forKey: "alertRules"),
+              let rules = try? JSONDecoder().decode([AlertRule].self, from: data)
+        else { return [] }
+        return rules
     }
 
     /// Hidden tabs, filtered so Dashboard can never end up hidden even if a
