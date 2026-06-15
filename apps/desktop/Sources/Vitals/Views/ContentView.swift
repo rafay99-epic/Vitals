@@ -6,12 +6,13 @@ import SwiftUI
 /// switches change what's drawn, never the geometry it's drawn in.
 struct ContentView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case dashboard, applications, cleanup, storage
+        case dashboard, processes, applications, cleanup, storage
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .dashboard: return "Dashboard"
+            case .processes: return "Processes"
             case .applications: return "Applications"
             case .cleanup: return "Cleanup"
             case .storage: return "Storage"
@@ -21,6 +22,7 @@ struct ContentView: View {
         var symbol: String {
             switch self {
             case .dashboard: return "gauge.with.dots.needle.50percent"
+            case .processes: return "list.bullet"
             case .applications: return "square.grid.2x2"
             case .cleanup: return "sparkles"
             case .storage: return "internaldrive"
@@ -30,9 +32,10 @@ struct ContentView: View {
         var shortcut: KeyEquivalent {
             switch self {
             case .dashboard: return "1"
-            case .applications: return "2"
-            case .cleanup: return "3"
-            case .storage: return "4"
+            case .processes: return "2"
+            case .applications: return "3"
+            case .cleanup: return "4"
+            case .storage: return "5"
             }
         }
     }
@@ -43,6 +46,7 @@ struct ContentView: View {
     @Namespace private var tabIndicator
     // Owned here so the scans survive section switches — recreating these per
     // visit meant a full rescan (and a "Scanning…" flash) every time.
+    @StateObject private var processesModel = ProcessesModel()
     @StateObject private var appsModel = AppsModel()
     @StateObject private var cleanupModel = CleanupModel()
     @StateObject private var storageModel = StorageModel()
@@ -68,6 +72,7 @@ struct ContentView: View {
                 // build-on-demand to preserve that.
                 switch section {
                 case .dashboard: EmptyView()
+                case .processes: ProcessesView(model: processesModel)
                 case .applications: AppsView(model: appsModel)
                 case .cleanup: CleanupView(model: cleanupModel)
                 case .storage: StorageView(model: storageModel)

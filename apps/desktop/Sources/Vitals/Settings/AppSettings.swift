@@ -136,6 +136,17 @@ final class AppSettings: ObservableObject {
     /// RPM. On by default; turn it off for perfectly still panels.
     @Published var animateWidgets: Bool { didSet { defaults.set(animateWidgets, forKey: "animateWidgets") } }
 
+    // MARK: Processes
+    /// Fold an app's helper processes under the app (Brave's 18 helpers → one
+    /// "Brave" row). On by default; off lists every process separately.
+    @Published var groupHelperProcesses: Bool { didSet { defaults.set(groupHelperProcesses, forKey: "groupHelperProcesses") } }
+    /// Show system/root-owned processes too. Off by default — those can't be
+    /// quit without admin rights and are mostly noise.
+    @Published var showSystemProcesses: Bool { didSet { defaults.set(showSystemProcesses, forKey: "showSystemProcesses") } }
+    /// Ask before a normal Quit. Off by default so quitting is one click; Force
+    /// Quit always confirms regardless.
+    @Published var confirmBeforeQuittingProcess: Bool { didSet { defaults.set(confirmBeforeQuittingProcess, forKey: "confirmBeforeQuittingProcess") } }
+
     @Published var theme: AppTheme {
         didSet {
             defaults.set(theme.rawValue, forKey: "theme")
@@ -196,6 +207,9 @@ final class AppSettings: ObservableObject {
             "allowWholeDiskScan": false,
             "autoScanCleanup": false,
             "animateWidgets": true,
+            "groupHelperProcesses": true,
+            "showSystemProcesses": false,
+            "confirmBeforeQuittingProcess": false,
         ])
 
         refreshInterval = defaults.double(forKey: "refreshInterval")
@@ -220,6 +234,9 @@ final class AppSettings: ObservableObject {
         allowWholeDiskScan = defaults.bool(forKey: "allowWholeDiskScan")
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
         animateWidgets = defaults.bool(forKey: "animateWidgets")
+        groupHelperProcesses = defaults.bool(forKey: "groupHelperProcesses")
+        showSystemProcesses = defaults.bool(forKey: "showSystemProcesses")
+        confirmBeforeQuittingProcess = defaults.bool(forKey: "confirmBeforeQuittingProcess")
 
         // SMAppService.status is an XPC round-trip; in init it sat directly
         // on the launch path and delayed the first frame. Load it async.
