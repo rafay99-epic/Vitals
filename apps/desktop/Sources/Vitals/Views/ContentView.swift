@@ -110,6 +110,9 @@ struct ContentView: View {
                 Text("Vitals")
                     .font(.system(size: 14, weight: .semibold))
                 Spacer()
+                // App-wide update affordance — visible on every tab, not just
+                // the Dashboard banner, so an available update is never missed.
+                HeaderUpdateButton()
                 Button {
                     openWindow(id: "settings")
                 } label: {
@@ -174,6 +177,51 @@ struct ContentView: View {
         }
         .keyboardShortcut(item.shortcut, modifiers: .command)
         .help("\(item.title) (⌘\(item.shortcut.character))")
+    }
+}
+
+/// The header's update affordance: a blue "Update" pill when one's available
+/// (one click installs, from any tab), and live progress while it downloads and
+/// installs. Reads the shared `Updater`, so it stays in sync with the Dashboard
+/// banner. Nothing shows when up to date.
+private struct HeaderUpdateButton: View {
+    @EnvironmentObject private var updater: Updater
+
+    var body: some View {
+        switch updater.status {
+        case .available(let release):
+            Button {
+                Task { await updater.downloadAndInstall() }
+            } label: {
+                pill { Image(systemName: "arrow.down.circle.fill"); Text("Update") }
+                    .foregroundStyle(.blue)
+                    .background(Capsule().fill(.blue.opacity(0.15)))
+            }
+            .buttonStyle(.plain)
+            .help("Install \(Channel.current.displayName) \(release.displayVersion)")
+        case .downloading:
+            pill { progressDot; Text("Downloading…") }
+                .foregroundStyle(.secondary)
+                .background(Capsule().fill(.quaternary.opacity(0.5)))
+        case .installing:
+            pill { progressDot; Text("Installing…") }
+                .foregroundStyle(.secondary)
+                .background(Capsule().fill(.quaternary.opacity(0.5)))
+        default:
+            EmptyView()
+        }
+    }
+
+    private func pill<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        HStack(spacing: 5) { content() }
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Capsule())
+    }
+
+    private var progressDot: some View {
+        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 12, height: 12)
     }
 }
 
