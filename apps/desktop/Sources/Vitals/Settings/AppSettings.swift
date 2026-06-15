@@ -30,6 +30,49 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
+/// How tab names appear in the main navigation bar.
+enum TabDisplayMode: String, CaseIterable, Identifiable {
+    /// Only the selected tab shows its label; the rest collapse to icons.
+    case expanding
+    /// Every tab shows its label (widest — hide tabs you don't use if it gets tight).
+    case labels
+    /// Icon-only for every tab; names show on hover and to VoiceOver.
+    case icons
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .expanding: return "Expanding"
+        case .labels: return "Labels"
+        case .icons: return "Icons"
+        }
+    }
+}
+
+/// Navigation-bar density. Mirrors System Settings' "Sidebar icon size":
+/// scales the tab icon, label and the header it sits in, together.
+enum TabSize: String, CaseIterable, Identifiable {
+    case small, medium, large
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        }
+    }
+
+    var iconSize: CGFloat { switch self { case .small: 11; case .medium: 12; case .large: 13.5 } }
+    var labelSize: CGFloat { switch self { case .small: 11.5; case .medium: 12; case .large: 13 } }
+    var iconSlot: CGFloat { switch self { case .small: 15; case .medium: 16; case .large: 18 } }
+    var hPadSelected: CGFloat { switch self { case .small: 10; case .medium: 12; case .large: 14 } }
+    var hPadCollapsed: CGFloat { switch self { case .small: 7; case .medium: 8; case .large: 10 } }
+    var vPad: CGFloat { switch self { case .small: 5; case .medium: 6; case .large: 7 } }
+    var headerHeight: CGFloat { switch self { case .small: 42; case .medium: 46; case .large: 52 } }
+}
+
 /// A live reading the menu-bar item can show next to the icon. Any number can
 /// be enabled at once; an empty set means "icon only".
 enum MenuBarMetric: String, CaseIterable, Identifiable {
@@ -147,6 +190,32 @@ final class AppSettings: ObservableObject {
     /// Quit always confirms regardless.
     @Published var confirmBeforeQuittingProcess: Bool { didSet { defaults.set(confirmBeforeQuittingProcess, forKey: "confirmBeforeQuittingProcess") } }
 
+    // MARK: Navigation bar
+    /// How tab labels appear (expanding / always / icon-only).
+    @Published var tabDisplayMode: TabDisplayMode { didSet { defaults.set(tabDisplayMode.rawValue, forKey: "tabDisplayMode") } }
+    /// Navigation-bar density.
+    @Published var tabSize: TabSize { didSet { defaults.set(tabSize.rawValue, forKey: "tabSize") } }
+    /// Tabs the user has hidden from the bar. Dashboard is never in here — it
+    /// can't be hidden, so the window always has somewhere to land.
+    @Published var hiddenTabs: Set<AppTab> {
+        didSet {
+            defaults.set(AppTab.allCases.filter(hiddenTabs.contains).map(\.rawValue).joined(separator: ","),
+                         forKey: "hiddenTabs")
+        }
+    }
+    /// The display order of every tab (visible or hidden). Always contains all
+    /// tabs — new tabs added in a future version are appended on load.
+    @Published var tabOrder: [AppTab] {
+        didSet { defaults.set(tabOrder.map(\.rawValue).joined(separator: ","), forKey: "tabOrder") }
+    }
+
+    /// Tabs in display order with hidden ones removed — what the header draws.
+    /// Non-hideable tabs (the Dashboard) always survive, so the bar is never
+    /// empty even if a stale value tried to hide one.
+    var visibleTabs: [AppTab] {
+        tabOrder.filter { !$0.canHide || !hiddenTabs.contains($0) }
+    }
+
     @Published var theme: AppTheme {
         didSet {
             defaults.set(theme.rawValue, forKey: "theme")
@@ -210,6 +279,10 @@ final class AppSettings: ObservableObject {
             "groupHelperProcesses": true,
             "showSystemProcesses": false,
             "confirmBeforeQuittingProcess": false,
+            "tabDisplayMode": TabDisplayMode.expanding.rawValue,
+            "tabSize": TabSize.medium.rawValue,
+            "hiddenTabs": "",
+            "tabOrder": AppTab.allCases.map(\.rawValue).joined(separator: ","),
         ])
 
         refreshInterval = defaults.double(forKey: "refreshInterval")
@@ -237,6 +310,10 @@ final class AppSettings: ObservableObject {
         groupHelperProcesses = defaults.bool(forKey: "groupHelperProcesses")
         showSystemProcesses = defaults.bool(forKey: "showSystemProcesses")
         confirmBeforeQuittingProcess = defaults.bool(forKey: "confirmBeforeQuittingProcess")
+        tabDisplayMode = TabDisplayMode(rawValue: defaults.string(forKey: "tabDisplayMode") ?? "") ?? .expanding
+        tabSize = TabSize(rawValue: defaults.string(forKey: "tabSize") ?? "") ?? .medium
+        hiddenTabs = AppSettings.loadHiddenTabs(defaults)
+        tabOrder = AppSettings.loadTabOrder(defaults)
 
         // SMAppService.status is an XPC round-trip; in init it sat directly
         // on the launch path and delayed the first frame. Load it async.
@@ -287,6 +364,28 @@ final class AppSettings: ObservableObject {
         case "iconOnly": return []
         default:         return [.cpuTemp]
         }
+    }
+
+    /// Hidden tabs, filtered so Dashboard can never end up hidden even if a
+    /// stale or hand-edited value lists it.
+    private static func loadHiddenTabs(_ defaults: UserDefaults) -> Set<AppTab> {
+        let raw = defaults.string(forKey: "hiddenTabs") ?? ""
+        return Set(raw.split(separator: ",").compactMap { AppTab(rawValue: String($0)) }.filter(\.canHide))
+    }
+
+    /// The saved order, then any tabs missing from it appended in their natural
+    /// order — so a tab added in a future version still shows up, and a corrupt
+    /// value degrades to the default rather than dropping tabs.
+    private static func loadTabOrder(_ defaults: UserDefaults) -> [AppTab] {
+        let stored = (defaults.string(forKey: "tabOrder") ?? "")
+            .split(separator: ",").compactMap { AppTab(rawValue: String($0)) }
+        var order = stored
+        var seen = Set(stored)
+        for tab in AppTab.allCases where !seen.contains(tab) {
+            order.append(tab)
+            seen.insert(tab)
+        }
+        return order
     }
 
     /// "45.1°" in the display unit.

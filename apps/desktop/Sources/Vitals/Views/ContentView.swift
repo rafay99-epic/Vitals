@@ -5,51 +5,8 @@ import SwiftUI
 /// window toolbar, so nothing can resize or snap the content, ever: tab
 /// switches change what's drawn, never the geometry it's drawn in.
 struct ContentView: View {
-    enum Section: String, CaseIterable, Identifiable {
-        case dashboard, gpu, battery, health, processes, applications, cleanup, storage
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .dashboard: return "Dashboard"
-            case .gpu: return "GPU"
-            case .battery: return "Battery"
-            case .health: return "Health"
-            case .processes: return "Processes"
-            case .applications: return "Applications"
-            case .cleanup: return "Cleanup"
-            case .storage: return "Storage"
-            }
-        }
-
-        var symbol: String {
-            switch self {
-            case .dashboard: return "gauge.with.dots.needle.50percent"
-            case .gpu: return "cpu.fill"
-            case .battery: return "battery.100percent"
-            case .health: return "waveform.path.ecg"
-            case .processes: return "list.bullet"
-            case .applications: return "square.grid.2x2"
-            case .cleanup: return "sparkles"
-            case .storage: return "internaldrive"
-            }
-        }
-
-        var shortcut: KeyEquivalent {
-            switch self {
-            case .dashboard: return "1"
-            case .gpu: return "2"
-            case .battery: return "3"
-            case .health: return "4"
-            case .processes: return "5"
-            case .applications: return "6"
-            case .cleanup: return "7"
-            case .storage: return "8"
-            }
-        }
-    }
-
-    @State private var section: Section = .dashboard
+    @EnvironmentObject private var settings: AppSettings
+    @State private var section: AppTab = .dashboard
     @State private var gearHovered = false
     @Environment(\.openWindow) private var openWindow
     @Namespace private var tabIndicator
@@ -108,7 +65,14 @@ struct ContentView: View {
         // leaving a dead band above itself.
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
-        .frame(minWidth: 980, minHeight: 680)
+        // "Labels" mode shows every tab name, so it needs a wider floor to keep
+        // the centered bar clear of the wordmark; the icon-led modes fit at 980.
+        .frame(minWidth: settings.tabDisplayMode == .labels ? 1100 : 980, minHeight: 680)
+        // If the user hides the tab they're on, fall back to the Dashboard so
+        // the canvas never shows a tab with no indicator in the bar.
+        .onChange(of: settings.hiddenTabs) { _, hidden in
+            if hidden.contains(section) { section = .dashboard }
+        }
     }
 
     // MARK: Header
@@ -149,28 +113,42 @@ struct ContentView: View {
         }
         .padding(.leading, 84)  // clear the traffic lights
         .padding(.trailing, 12)
-        .frame(height: 46)
+        .frame(height: settings.tabSize.headerHeight)
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
     }
 
     private var tabBar: some View {
         HStack(spacing: 2) {
-            ForEach(Section.allCases) { item in
-                tabButton(item)
+            ForEach(Array(settings.visibleTabs.enumerated()), id: \.element) { index, item in
+                tabButton(item, index: index)
             }
         }
         .padding(3)
         .background(Capsule().fill(.quaternary.opacity(0.45)))
     }
 
-    /// An expanding capsule tab: every tab shows its icon, but only the selected
-    /// one reveals its text label — the rest collapse to icon-only (name on
-    /// hover / for VoiceOver). Keeps all eight destinations one click away
-    /// without crowding the header. The label rides the same spring as the
-    /// sliding indicator, so selecting a tab grows its label out of the icon.
-    private func tabButton(_ item: Section) -> some View {
+    /// Whether this tab shows its text label, per the display-mode setting:
+    /// Labels → always, Icons → never, Expanding → only when selected.
+    private func showsLabel(for item: AppTab, selected: Bool) -> Bool {
+        switch settings.tabDisplayMode {
+        case .labels: return true
+        case .icons: return false
+        case .expanding: return selected
+        }
+    }
+
+    /// A capsule tab whose label appears per the display mode and whose metrics
+    /// scale with the size setting. In Expanding mode only the selected tab
+    /// reveals its label (riding the same spring as the sliding indicator, so it
+    /// grows out of the icon); the rest stay icon-only with the name on hover /
+    /// for VoiceOver. The ⌘ shortcut follows visible position, so ⌘1 is always
+    /// the leftmost tab.
+    private func tabButton(_ item: AppTab, index: Int) -> some View {
         let selected = section == item
+        let size = settings.tabSize
+        let showLabel = showsLabel(for: item, selected: selected)
+        let shortcut = index < 9 ? KeyEquivalent(Character("\(index + 1)")) : nil
         return Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
                 section = item
@@ -178,18 +156,18 @@ struct ContentView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: size.iconSize, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                    .frame(width: 16)  // stable slot so icons don't shift as labels grow
-                if selected {
+                    .frame(width: size.iconSlot)  // stable slot so icons don't shift as labels grow
+                if showLabel {
                     Text(item.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: size.labelSize, weight: .medium))
                         .fixedSize()
                         .transition(.opacity)
                 }
             }
-            .padding(.horizontal, selected ? 12 : 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, showLabel ? size.hPadSelected : size.hPadCollapsed)
+            .padding(.vertical, size.vPad)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -201,9 +179,9 @@ struct ContentView: View {
                     .matchedGeometryEffect(id: "selected-tab", in: tabIndicator)
             }
         }
-        .keyboardShortcut(item.shortcut, modifiers: .command)
+        .keyboardShortcut(shortcut.map { KeyboardShortcut($0, modifiers: .command) })
         .accessibilityLabel(item.title)
-        .help("\(item.title) (⌘\(item.shortcut.character))")
+        .help(shortcut != nil ? "\(item.title) (⌘\(index + 1))" : item.title)
     }
 }
 
