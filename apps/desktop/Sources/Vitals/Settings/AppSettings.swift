@@ -264,11 +264,18 @@ final class AppSettings: ObservableObject {
             "historyMinutes": 10,
             "showMenuBar": true,
             "menuBarUseIcons": true,
-            "menuBarAnimated": true,
+            // Off by default: a live status-item animation rasterizes every
+            // frame on the CPU (~11% continuously, even backgrounded) since the
+            // menu bar isn't GPU-composited like a window. Opt-in eye-candy; the
+            // readout's numbers stay live regardless.
+            "menuBarAnimated": false,
             "warnThreshold": 85.0,
             "notifyOverheat": true,
             "notifyThermal": true,
-            "loggingEnabled": true,
+            // Off by default: history logging is opt-in (no background data
+            // collection unless asked), which also keeps the History view empty
+            // until the user turns logging on.
+            "loggingEnabled": false,
             "autoUpdateCheck": true,
             "gpuAcceleration": true,
             // Ships off: the app is lean (opaque cards) by default; glass is opt-in.

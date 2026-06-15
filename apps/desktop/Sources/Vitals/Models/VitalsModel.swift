@@ -280,7 +280,8 @@ final class VitalsModel: ObservableObject {
     /// notification for each that fires. The engine handles the sustain/cooldown
     /// timing; we just format the message in the user's units.
     private func evaluateAlertRules() {
-        guard !settings.alertRules.isEmpty else { return }
+        // Zero work in the common case: no rules, or none enabled.
+        guard settings.alertRules.contains(where: \.enabled) else { return }
         let readings = currentAlertReadings()
         for (rule, value) in alertEngine.evaluate(rules: settings.alertRules, readings: readings, now: Date()) {
             notifications.send(
