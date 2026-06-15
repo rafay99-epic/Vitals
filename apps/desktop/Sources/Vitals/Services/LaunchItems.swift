@@ -68,10 +68,18 @@ enum LaunchItemScanner {
                 || (item.program?.contains("/Vitals Dev.app/") ?? false)
         }
 
-        // The persistent enable/disable override is authoritative for user agents.
-        let disabled = disabledLabels()
-        for index in items.indices where items[index].kind == .userAgent {
-            items[index].disabled = disabled.contains(items[index].label)
+        // Reflect the persistent enable/disable override when present (it wins
+        // over the plist's own `Disabled` key, which `parse` already read);
+        // otherwise keep the plist value. Agents (user + system) live in the
+        // per-user gui domain, daemons in the system domain — both readable
+        // without root.
+        let guiOverride = overrideStates(domain: "gui/\(getuid())")
+        let systemOverride = overrideStates(domain: "system")
+        for index in items.indices {
+            let override = items[index].kind == .systemDaemon ? systemOverride : guiOverride
+            if let disabled = override[items[index].label] {
+                items[index].disabled = disabled
+            }
         }
         // Third-party first (what the user can act on), then Apple's, alphabetical.
         return items.sorted {
@@ -162,16 +170,25 @@ enum LaunchItemScanner {
         )
     }
 
-    /// Labels the user has persistently disabled, from `launchctl print-disabled`
-    /// (lines like `"label" => disabled`).
-    private static func disabledLabels() -> Set<String> {
-        var set: Set<String> = []
-        for line in run("/bin/launchctl", ["print-disabled", "gui/\(getuid())"]).split(separator: "\n") {
-            guard line.contains("=> disabled") else { continue }
+    /// Explicit enable/disable overrides in `domain` (`label → isDisabled`), from
+    /// `launchctl print-disabled` (lines like `"label" => disabled` / `=> enabled`).
+    /// A label absent from the map has no override. Works without root for both
+    /// the gui and system domains.
+    static func overrideStates(domain: String) -> [String: Bool] {
+        parseOverrides(run("/bin/launchctl", ["print-disabled", domain]))
+    }
+
+    /// Parses `launchctl print-disabled` output (`"label" => disabled|enabled`)
+    /// into `label → isDisabled`. Pure, for testing.
+    static func parseOverrides(_ text: String) -> [String: Bool] {
+        var map: [String: Bool] = [:]
+        for line in text.split(separator: "\n") {
             let quoted = line.split(separator: "\"")
-            if quoted.count >= 2 { set.insert(String(quoted[1])) }
+            guard quoted.count >= 2 else { continue }
+            if line.contains("=> disabled") { map[String(quoted[1])] = true }
+            else if line.contains("=> enabled") { map[String(quoted[1])] = false }
         }
-        return set
+        return map
     }
 
     @discardableResult

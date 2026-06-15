@@ -37,4 +37,17 @@ struct LaunchItemTests {
         #expect(item(label: "com.foo.agent", program: "/usr/local/bin/foo", kind: .userAgent).displayName == "com.foo.agent")
         #expect(item(label: "com.foo.agent", program: nil, kind: .userAgent).displayName == "com.foo.agent")
     }
+
+    @Test func parsesLaunchctlOverrideStates() {
+        let text = """
+        \tdisabled services = {
+        \t\t"com.disabled.one" => disabled
+        \t\t"com.enabled.two" => enabled
+        \t}
+        """
+        let map = LaunchItemScanner.parseOverrides(text)
+        #expect(map["com.disabled.one"] == true)
+        #expect(map["com.enabled.two"] == false)
+        #expect(map["com.absent.three"] == nil)   // no override → fall back to plist key
+    }
 }
