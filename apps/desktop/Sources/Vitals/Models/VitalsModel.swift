@@ -284,11 +284,9 @@ final class VitalsModel: ObservableObject {
         guard settings.alertRules.contains(where: \.enabled) else { return }
         let readings = currentAlertReadings()
         for (rule, value) in alertEngine.evaluate(rules: settings.alertRules, readings: readings, now: Date()) {
-            notifications.send(
-                title: "Vitals alert",
-                body: alertMessage(rule: rule, value: value, readings: readings),
-                id: "vitals.rule.\(rule.id.uuidString)"
-            )
+            let body = alertMessage(rule: rule, value: value, readings: readings)
+            notifications.send(title: "Vitals alert", body: body, id: "vitals.rule.\(rule.id.uuidString)")
+            AlertLog.record(message: body, at: Date())
         }
     }
 

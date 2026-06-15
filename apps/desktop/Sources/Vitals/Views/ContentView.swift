@@ -43,6 +43,8 @@ struct ContentView: View {
                     .tabVisibility(section == .battery)
                 HealthView()
                     .tabVisibility(section == .health)
+                HistoryView(isActive: section == .history)
+                    .tabVisibility(section == .history)
                 ProcessesView(model: processesModel, isActive: section == .processes)
                     .tabVisibility(section == .processes)
                 AppsView(model: appsModel, isActive: section == .applications)

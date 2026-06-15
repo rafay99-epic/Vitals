@@ -9,6 +9,7 @@ struct MenuBarPanel: View {
     @EnvironmentObject private var fanControl: FanController
     @Environment(\.openWindow) private var openWindow
     @Namespace private var presetIndicator
+    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -306,6 +307,17 @@ struct MenuBarPanel: View {
             }
             .controlSize(.small)
             Spacer()
+            Button {
+                DiagnosticSnapshot.copyToPasteboard(model: model, settings: settings)
+                copied = true
+                Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.clipboard")
+                    .font(.system(size: 12))
+                    .foregroundStyle(copied ? AnyShapeStyle(.green) : AnyShapeStyle(.primary))
+            }
+            .controlSize(.small)
+            .help("Copy diagnostics to clipboard")
             Button {
                 openWindow(id: "help")
                 NSApp.activate(ignoringOtherApps: true)
