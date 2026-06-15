@@ -81,6 +81,12 @@ struct ContentView: View {
                     .tabVisibility(section == .storage)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Swap tabs instantly — never cross-fade. Fading a translucent tab
+            // in over the translucent glass window shows a dark intermediate
+            // before the blur resolves (the "dark then frost" flash). Snapping
+            // composites the incoming tab correctly in one frame. The tab
+            // indicator still springs — it lives in the header, unaffected.
+            .animation(nil, value: section)
         }
         // The hidden title bar still reserves a safe-area strip; claim it so
         // the header shares the row with the traffic lights instead of
