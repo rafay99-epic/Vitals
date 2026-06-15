@@ -70,7 +70,9 @@ struct VitalsApp: App {
                 .environmentObject(fanControl)
                 .environment(\.animationsEnabled, settings.animationsEnabled)
         } label: {
-            menuBarLabel
+            MenuBarLabelView()
+                .environmentObject(model)
+                .environmentObject(settings)
         }
         .menuBarExtraStyle(.window)
     }
@@ -90,46 +92,121 @@ struct VitalsApp: App {
         )
     }
 
+}
+
+/// The menu-bar status item's label. A standalone view (not an inline builder)
+/// so it can own a small animation ticker that re-renders *only this item* —
+/// the rest of the app never sees the per-frame updates. It also keeps the
+/// label's body a plain Image/Text: MenuBarExtra bridges those to the status
+/// item but renders nothing for a wrapper like TimelineView.
+private struct MenuBarLabelView: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
+    @StateObject private var animator = MenuBarAnimator()
+
+    // allCases keeps a stable left-to-right order regardless of toggle order.
+    private var metrics: [MenuBarMetric] {
+        MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)
+    }
+    private var warning: Bool {
+        model.averageCPUTemp.map { $0 >= settings.warnThreshold } ?? false
+    }
+    /// Animate only in icon style, when enabled and GPU rendering is on, and
+    /// when there's actually an icon to move. Deliberately *not* gated on
+    /// `animationsEnabled` — that freezes when Vitals is unfocused, but a
+    /// menu-bar readout is meant to be watched from inside other apps.
+    private var animate: Bool {
+        settings.menuBarUseIcons && settings.menuBarAnimated
+            && settings.gpuAcceleration && !metrics.isEmpty
+    }
+
+    var body: some View {
+        label
+            .task(id: animate) { animator.setRunning(animate) }
+    }
+
     @ViewBuilder
-    private var menuBarLabel: some View {
-        let warning = model.averageCPUTemp.map { $0 >= settings.warnThreshold } ?? false
-        // allCases keeps a stable left-to-right order regardless of toggle order.
-        let metrics = MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)
+    private var label: some View {
         if metrics.isEmpty {
             Image(systemName: warning ? "flame.fill" : "thermometer.medium")
-        } else if let image = menuBarImage(metrics, warning: warning) {
-            // MenuBarExtra renders a multi-view label as only its first element,
-            // and bridging a Text to the status title strips inline SF Symbols —
-            // so the icon+value row is rendered to one template image instead.
-            Image(nsImage: image)
+        } else if !settings.menuBarUseIcons {
+            // Text style: short word + value, rendered natively (crisp, no image).
+            Text(menuBarText)
         } else {
-            // Fallback if rendering ever fails: values only, no per-metric icons.
-            Text(metrics.map(menuBarValue).joined(separator: "  "))
+            iconReadout(time: animate ? animator.phase : nil)
         }
     }
 
-    /// Renders the selected metrics — each an SF Symbol plus its live value — to
-    /// a single template image. Template so macOS tints it for the menu bar
-    /// (white on dark, dimmed when inactive), exactly like a native item.
+    /// Text-style readout, e.g. "Temp 57° · CPU 23% · RAM 12.8G".
+    private var menuBarText: String {
+        metrics.map { "\($0.shortLabel) \(menuBarValue($0))" }.joined(separator: " · ")
+    }
+
+    /// Icon-style readout as one template image, falling back to text if the
+    /// render ever fails. MenuBarExtra renders a multi-view label as only its
+    /// first element and strips inline SF Symbols from a bridged Text, so the
+    /// whole icon+value row has to be drawn to an image.
+    @ViewBuilder
+    private func iconReadout(time: TimeInterval?) -> some View {
+        if let image = menuBarImage(time: time) {
+            Image(nsImage: image)
+        } else {
+            Text(menuBarText)
+        }
+    }
+
+    /// Renders each metric's symbol + value to a single template image (so macOS
+    /// tints it like a native item). When `time` is non-nil the icons animate at
+    /// that instant: the fan spins (speed scales with rpm), the rest breathe.
     @MainActor
-    private func menuBarImage(_ metrics: [MenuBarMetric], warning: Bool) -> NSImage? {
+    private func menuBarImage(time: TimeInterval?) -> NSImage? {
+        let fanFraction = fanSpinFraction
         let row = HStack(spacing: 6) {
-            ForEach(metrics) { metric in
-                // The CPU-temperature metric flips to a flame when hot — the
-                // same overheat cue the icon-only mode shows.
-                Label(menuBarValue(metric),
-                      systemImage: metric == .cpuTemp && warning ? "flame.fill" : metric.symbol)
-                    .labelStyle(.titleAndIcon)
+            ForEach(Array(metrics.enumerated()), id: \.element) { index, metric in
+                HStack(spacing: 3) {
+                    animatedSymbol(metric: metric, index: index, time: time, fanFraction: fanFraction)
+                    Text(menuBarValue(metric))
+                }
             }
         }
         .font(.system(size: 12, weight: .regular))
-        .foregroundStyle(.black) // shape only; the template tints it
+        .foregroundStyle(.black)     // shape only; the template tints it
+        .padding(2)                  // headroom so a spinning/breathing icon never clips
 
         let renderer = ImageRenderer(content: row)
         renderer.scale = 2 // the menu bar is rendered @2x on every modern Mac
         guard let image = renderer.nsImage else { return nil }
         image.isTemplate = true
         return image
+    }
+
+    /// One metric's symbol, animated when `time` is given. The CPU-temperature
+    /// metric flips to a flame when hot — the same overheat cue icon-only shows.
+    @ViewBuilder
+    private func animatedSymbol(metric: MenuBarMetric, index: Int,
+                                time: TimeInterval?, fanFraction: Double) -> some View {
+        let image = Image(systemName: metric == .cpuTemp && warning ? "flame.fill" : metric.symbol)
+        if let time {
+            if metric == .fan {
+                // Spin only while the fan turns; speed eases up with rpm.
+                let degreesPerSecond = fanFraction > 0 ? 90 + 130 * fanFraction : 0
+                image.rotationEffect(.degrees(time * degreesPerSecond))
+            } else {
+                // Slow, staggered breath so the icons don't pulse in lockstep.
+                image.scaleEffect(1 + 0.07 * sin(2 * .pi * 0.45 * time + Double(index) * 0.9))
+            }
+        } else {
+            image
+        }
+    }
+
+    /// 0 when the fan is stopped (or unknown), rising toward 1 as it nears its
+    /// rated maximum — drives how fast the menu-bar fan icon spins.
+    private var fanSpinFraction: Double {
+        guard let fan = model.fans.first, fan.rpm > 0 else { return 0 }
+        let range = fan.maxRPM - fan.minRPM
+        guard range > 0 else { return 0.5 } // spinning but no rated range → mid speed
+        return min(max((fan.rpm - fan.minRPM) / range, 0), 1)
     }
 
     /// The live reading shown for one metric. A dash (never a fabricated value)
@@ -141,6 +218,31 @@ struct VitalsApp: App {
         case .gpuUsage: return model.gpu?.utilization.map { "\(Int($0.rounded()))%" } ?? "–"
         case .memory:   return model.memory.map { String(format: "%.1fG", Double($0.used) / 1_073_741_824) } ?? "–"
         case .fan:      return model.fans.first.map { "\(Int($0.rpm))" } ?? "–"
+        }
+    }
+}
+
+/// Drives the menu-bar icon animation: publishes a `phase` ~12×/second while
+/// running, so only `MenuBarLabelView` re-renders. Uses `.common` run-loop mode
+/// so it keeps ticking even while a menu is being tracked.
+@MainActor
+private final class MenuBarAnimator: ObservableObject {
+    @Published private(set) var phase: TimeInterval = Date().timeIntervalSinceReferenceDate
+    private var timer: Timer?
+
+    func setRunning(_ running: Bool) {
+        if running {
+            guard timer == nil else { return }
+            let timer = Timer(timeInterval: 1.0 / 12.0, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.phase = Date().timeIntervalSinceReferenceDate
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
+        } else {
+            timer?.invalidate()
+            timer = nil
         }
     }
 }

@@ -290,16 +290,34 @@ private struct GeneralPane: View {
 
             SettingsCard(title: "Menu bar", symbol: "menubar.rectangle", tint: .blue) {
                 SwitchRow(label: "Show in menu bar", isOn: $settings.showMenuBar)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Readings to show")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ForEach(MenuBarMetric.allCases) { metric in
-                        MenuBarMetricToggle(metric: metric, selection: $settings.menuBarMetrics)
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Readings to show")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        ForEach(MenuBarMetric.allCases) { metric in
+                            MenuBarMetricToggle(metric: metric, selection: $settings.menuBarMetrics)
+                        }
+                        Text("Turn all off to show just the icon.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
-                    Text("Turn all off to show just the icon.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                    settingsRow("Style") {
+                        Picker("", selection: $settings.menuBarUseIcons) {
+                            Text("Icons").tag(true)
+                            Text("Text").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                    SwitchRow(
+                        label: "Animate icons",
+                        caption: "Gently spins the fan and breathes the rest. Needs GPU acceleration.",
+                        isOn: $settings.menuBarAnimated
+                    )
+                    .disabled(!settings.menuBarUseIcons || !settings.gpuAcceleration)
+                    .opacity(settings.menuBarUseIcons && settings.gpuAcceleration ? 1 : 0.5)
                 }
                 .disabled(!settings.showMenuBar)
                 .opacity(settings.showMenuBar ? 1 : 0.5)

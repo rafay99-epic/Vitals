@@ -57,6 +57,17 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
         case .fan:      return "fan"
         }
     }
+
+    /// Compact word used in the menu bar's Text style (in place of the symbol).
+    var shortLabel: String {
+        switch self {
+        case .cpuTemp:  return "Temp"
+        case .cpuUsage: return "CPU"
+        case .gpuUsage: return "GPU"
+        case .memory:   return "RAM"
+        case .fan:      return "Fan"
+        }
+    }
 }
 
 /// User preferences, persisted to UserDefaults.
@@ -72,6 +83,11 @@ final class AppSettings: ObservableObject {
                          forKey: "menuBarMetrics")
         }
     }
+    /// Icon style (SF Symbol + value) vs. plain text style (short word + value).
+    @Published var menuBarUseIcons: Bool { didSet { defaults.set(menuBarUseIcons, forKey: "menuBarUseIcons") } }
+    /// Gently animate the menu-bar icons (fan spins, the rest breathe). Costs a
+    /// few redraws a second while shown; ignored in Text style.
+    @Published var menuBarAnimated: Bool { didSet { defaults.set(menuBarAnimated, forKey: "menuBarAnimated") } }
     @Published var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
     @Published var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     @Published var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
@@ -162,6 +178,8 @@ final class AppSettings: ObservableObject {
             "temperatureUnit": TemperatureUnit.celsius.rawValue,
             "historyMinutes": 10,
             "showMenuBar": true,
+            "menuBarUseIcons": true,
+            "menuBarAnimated": true,
             "warnThreshold": 85.0,
             "notifyOverheat": true,
             "notifyThermal": true,
@@ -185,6 +203,8 @@ final class AppSettings: ObservableObject {
         historyMinutes = defaults.integer(forKey: "historyMinutes")
         showMenuBar = defaults.bool(forKey: "showMenuBar")
         menuBarMetrics = AppSettings.loadMenuBarMetrics(defaults)
+        menuBarUseIcons = defaults.bool(forKey: "menuBarUseIcons")
+        menuBarAnimated = defaults.bool(forKey: "menuBarAnimated")
         warnThreshold = defaults.double(forKey: "warnThreshold")
         notifyOverheat = defaults.bool(forKey: "notifyOverheat")
         notifyThermal = defaults.bool(forKey: "notifyThermal")
