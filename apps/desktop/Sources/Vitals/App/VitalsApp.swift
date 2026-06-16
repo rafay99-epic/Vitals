@@ -16,6 +16,8 @@ struct VitalsApp: App {
     init() {
         // Create the data home and migrate any legacy log before logging starts.
         DataHome.prepare()
+        // Arm crash capture before anything else can fault.
+        CrashReporter.install()
         let settings = AppSettings()
         let model = VitalsModel(settings: settings)
         let updater = Updater()
@@ -36,6 +38,8 @@ struct VitalsApp: App {
         // `AppSettings.init` already set the capture level before this point.
         _logStore = StateObject(wrappedValue: LogStore())
         Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.isDev ? "dev" : "stable"))")
+        // Surface a crash / unclean exit from the previous run, off the launch path.
+        Task.detached(priority: .utility) { CrashReporter.reportPreviousRunIfNeeded() }
     }
 
     var body: some Scene {

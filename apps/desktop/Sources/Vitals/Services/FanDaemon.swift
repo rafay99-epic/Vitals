@@ -24,10 +24,15 @@ enum FanControl {
     static let daemonPlistPath = "/Library/LaunchDaemons/\(label).plist"
 
     static func loadCommands() -> [FanCommand] {
-        guard let data = try? Data(contentsOf: stateURL),
-              let commands = try? JSONDecoder().decode([FanCommand].self, from: data)
-        else { return [] }
-        return commands
+        // No file yet = no manual commands set; that's normal, not an error.
+        guard let data = try? Data(contentsOf: stateURL) else { return [] }
+        do {
+            return try JSONDecoder().decode([FanCommand].self, from: data)
+        } catch {
+            // Runs in the daemon's apply loop, so log once, not every tick.
+            Log.noticeOnce(.fan, key: "fandaemon-decode", "couldn't decode saved fan commands — fans stay on automatic", error: error)
+            return []
+        }
     }
 
     static func writeCommands(_ commands: [FanCommand]) throws {

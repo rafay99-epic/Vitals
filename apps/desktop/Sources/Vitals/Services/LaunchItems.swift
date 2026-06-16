@@ -205,7 +205,7 @@ enum LaunchItemScanner {
             process.waitUntilExit()
             return String(data: data, encoding: .utf8) ?? ""
         } catch {
-            Log.debug(.app, "login-items helper process failed to run — \(error.localizedDescription)")
+            Log.debug(.app, "login-items helper process failed to run", error: error)
             return ""
         }
     }

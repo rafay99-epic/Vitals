@@ -137,7 +137,13 @@ final class AppSettings: ObservableObject {
     /// User-defined threshold alerts, stored as JSON. Separate from the tuned
     /// overheat/thermal built-ins above.
     @Published var alertRules: [AlertRule] {
-        didSet { defaults.set(try? JSONEncoder().encode(alertRules), forKey: "alertRules") }
+        didSet {
+            do {
+                defaults.set(try JSONEncoder().encode(alertRules), forKey: "alertRules")
+            } catch {
+                Log.error(.settings, "couldn't encode alert rules — they won't persist", error: error)
+            }
+        }
     }
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     /// Developer/diagnostic logging floor — distinct from `loggingEnabled` (which
@@ -402,10 +408,13 @@ final class AppSettings: ObservableObject {
     }
 
     private static func loadAlertRules(_ defaults: UserDefaults) -> [AlertRule] {
-        guard let data = defaults.data(forKey: "alertRules"),
-              let rules = try? JSONDecoder().decode([AlertRule].self, from: data)
-        else { return [] }
-        return rules
+        guard let data = defaults.data(forKey: "alertRules") else { return [] }
+        do {
+            return try JSONDecoder().decode([AlertRule].self, from: data)
+        } catch {
+            Log.notice(.settings, "couldn't decode saved alert rules — resetting to none", error: error)
+            return []
+        }
     }
 
     /// Hidden tabs, filtered so Dashboard can never end up hidden even if a
@@ -459,7 +468,7 @@ final class AppSettings: ObservableObject {
             }
             loginItemError = nil
         } catch {
-            Log.error(.settings, "login item \(launchAtLogin ? "register" : "unregister") failed — \(error.localizedDescription)")
+            Log.error(.settings, "login item \(launchAtLogin ? "register" : "unregister") failed", error: error)
             loginItemError = error.localizedDescription
             syncingLoginItem = true
             launchAtLogin = SMAppService.mainApp.status == .enabled

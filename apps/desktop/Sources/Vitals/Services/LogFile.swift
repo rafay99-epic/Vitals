@@ -39,6 +39,19 @@ final class LogFile {
         queue.async { [weak self] in self?.write(line) }
     }
 
+    /// Writes an entry and blocks until it (and anything already queued) is on
+    /// disk. Used by the clean-shutdown marker and the exception handler, where
+    /// the process is about to die and the async queue would never drain.
+    func appendSync(_ entry: Log.Entry) {
+        guard let line = try? Self.encoder.encode(entry) else { return }
+        queue.sync { self.write(line) }
+    }
+
+    /// Blocks until every queued write has landed. Called before the app exits.
+    func flush() {
+        queue.sync {}
+    }
+
     private func write(_ jsonLine: Data) {
         guard let handle = openHandleIfNeeded() else { return }
         var data = jsonLine

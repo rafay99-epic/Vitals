@@ -342,7 +342,7 @@ enum DiskCleaner {
                     result.freedBytes += size
                     result.removedItems += 1
                 } catch {
-                    Log.notice(.cleanup, "couldn't remove \(url.lastPathComponent) — \(error.localizedDescription)")
+                    Log.notice(.cleanup, "couldn't remove \(url.lastPathComponent)", error: error)
                     result.failures.append(.init(url: url, size: size, reason: error.localizedDescription))
                 }
             }

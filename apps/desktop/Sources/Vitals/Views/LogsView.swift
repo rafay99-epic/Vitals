@@ -3,18 +3,24 @@ import AppKit
 
 /// The in-app log console — a developer/diagnostics surface in the app's own
 /// design language, not a terminal. Reads the live `LogStore` ring, filters by
-/// level / category / search text, and shows newest-first. Display-only: it
-/// never mutates anything but its own filter state and the in-memory view.
+/// level / category / search, and presents entries **grouped by day**, newest
+/// first, each row showing time, level, category, message, source (file:line)
+/// and any error detail. Display-only: it never mutates anything but its own
+/// filter state and the in-memory view.
 ///
 /// Hidden by default (see `AppSettings` default `hiddenTabs`); a user or support
 /// session turns the "Logs" tab on in Settings → Tabs.
 struct LogsView: View {
     @EnvironmentObject private var store: LogStore
+    // Injected on ContentView, so available here for the problem-report header.
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
     let isActive: Bool
 
     @State private var minLevel: LogLevel = .debug
     @State private var category: LogCategory?
     @State private var search = ""
+    @State private var reporting = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,9 +29,12 @@ struct LogsView: View {
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $reporting) {
+            ProblemReportView(model: model, settings: settings)
+        }
     }
 
-    // MARK: Filtering
+    // MARK: Filtering + day grouping
 
     /// Newest-first, with the level floor, category, and search text applied.
     private var filtered: [Log.Entry] {
@@ -33,8 +42,21 @@ struct LogsView: View {
         return store.entries.reversed().filter { entry in
             entry.level >= minLevel
                 && (category == nil || entry.category == category)
-                && (needle.isEmpty || entry.message.lowercased().contains(needle))
+                && (needle.isEmpty || entry.message.lowercased().contains(needle)
+                    || entry.source.file.lowercased().contains(needle))
         }
+    }
+
+    /// Filtered entries grouped under day headings, newest day first.
+    private var days: [(key: String, entries: [Log.Entry])] {
+        var order: [String] = []
+        var byDay: [String: [Log.Entry]] = [:]
+        for entry in filtered {
+            let day = Self.dayLabel(for: entry.time)
+            if byDay[day] == nil { order.append(day); byDay[day] = [] }
+            byDay[day]?.append(entry)
+        }
+        return order.map { ($0, byDay[$0] ?? []) }
     }
 
     // MARK: Control bar
@@ -48,6 +70,13 @@ struct LogsView: View {
             Text("\(filtered.count) \(filtered.count == 1 ? "line" : "lines")")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
+            Button {
+                reporting = true
+            } label: {
+                Label("Report…", systemImage: "envelope.badge")
+            }
+            .controlSize(.small)
+            .help("Email these logs to the developer")
             Button("Clear") { store.clear() }
                 .controlSize(.small)
             Button("Reveal") {
@@ -154,18 +183,43 @@ struct LogsView: View {
             }
         } else {
             // List is lazy, so a couple thousand rows stay cheap to scroll.
-            List(filtered) { entry in
-                LogRow(entry: entry)
-                    .listRowInsets(EdgeInsets(top: 3, leading: 14, bottom: 3, trailing: 14))
-                    .listRowSeparator(.hidden)
+            List {
+                ForEach(days, id: \.key) { day in
+                    Section {
+                        ForEach(day.entries) { entry in
+                            LogRow(entry: entry)
+                                .listRowInsets(EdgeInsets(top: 3, leading: 14, bottom: 3, trailing: 14))
+                                .listRowSeparator(.hidden)
+                        }
+                    } header: {
+                        Text(day.key)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .listStyle(.plain)
             .textSelection(.enabled)
         }
     }
+
+    /// "Today" / "Yesterday" / "Monday, June 16, 2026" for a day heading.
+    static func dayLabel(for date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        return Self.dayFormatter.string(from: date)
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d, yyyy"
+        return formatter
+    }()
 }
 
-/// One console line: time, a coloured level badge, the category, and the message.
+/// One console line: time, a coloured level badge, the category, the message,
+/// the originating source, and — when present — the structured error detail.
 private struct LogRow: View {
     let entry: Log.Entry
 
@@ -186,11 +240,27 @@ private struct LogRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 78, alignment: .leading)
 
-            Text(entry.message)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.message)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let error = entry.error {
+                    Text(error.inline)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.orange.opacity(0.9))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Text("\(entry.source.file):\(entry.source.line)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 130, alignment: .trailing)
+                .lineLimit(1)
+                .truncationMode(.head)
         }
         .padding(.vertical, 1)
     }

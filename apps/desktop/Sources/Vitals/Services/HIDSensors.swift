@@ -14,6 +14,9 @@ final class HIDSensors {
 
     init() {
         guard let client = IOHIDEventSystemClientCreate(kCFAllocatorDefault) else {
+            // The whole temperature subsystem is unavailable — explains an empty
+            // Temperatures section in a support report. One-time at startup.
+            Log.noticeOnce(.sensors, key: "hid-client-create", "couldn't create the HID event-system client — no temperature sensors will be read")
             self.client = nil
             return
         }

@@ -108,4 +108,21 @@ int vitals_socpower_sample(void *_Nonnull handle, VitalsSoCPower *_Nonnull out);
 // Releases the subscription and any retained samples.
 void vitals_socpower_destroy(void *_Nullable handle);
 
+// ---------------------------------------------------------------------------
+// Crash capture. Installs handlers for the fatal signals (SIGSEGV, SIGABRT,
+// SIGILL, SIGTRAP, SIGFPE, SIGBUS). Implemented in C because a signal handler
+// must be async-signal-safe — it can only call a small allow-list of functions
+// (open/write/backtrace_symbols_fd), which rules out Swift String/JSON/malloc.
+//
+// On a fatal signal the handler appends a plain-text crash block (a marker line
+// naming the signal, then the symbolicated backtrace) to `log_path`, restores
+// the default disposition, and re-raises so the OS still produces its own crash
+// report. The block is intentionally NOT JSON — the in-app console skips it, but
+// it travels in the emailed log so the backtrace reaches the developer. On the
+// next launch Swift scans for the marker and surfaces a readable fault entry.
+//
+// `log_path` is copied internally; pass the resolved vitals.log path. Call once,
+// only from the GUI process (never the fan daemon or a CLI invocation).
+void vitals_install_crash_handlers(const char *_Nonnull log_path);
+
 #endif

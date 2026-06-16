@@ -31,8 +31,13 @@ enum DataHome {
     /// second run does nothing.
     static func prepare() {
         let fm = FileManager.default
-        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? fm.createDirectory(at: exportsDirectory, withIntermediateDirectories: true)
+        do {
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            try fm.createDirectory(at: exportsDirectory, withIntermediateDirectories: true)
+        } catch {
+            // Cascades: with no data home, history/log/export writes all fail.
+            Log.error(.app, "couldn't create data home at \(directory.path)", error: error)
+        }
         migrateLegacyLog(fm)
     }
 

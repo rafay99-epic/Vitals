@@ -54,7 +54,7 @@ final class FanController: ObservableObject {
             try FanControl.writeCommands(commands)
             lastError = nil
         } catch {
-            Log.error(.fan, "couldn't save fan settings — \(error.localizedDescription)")
+            Log.error(.fan, "couldn't save fan settings", error: error)
             lastError = "Couldn't save fan settings: \(error.localizedDescription)"
         }
     }
@@ -120,7 +120,7 @@ final class FanController: ObservableObject {
                 lastError = error.message
             }
         } catch {
-            Log.error(.fan, "fan helper operation failed — \(error.localizedDescription)")
+            Log.error(.fan, "fan helper operation failed", error: error)
             lastError = error.localizedDescription
         }
     }

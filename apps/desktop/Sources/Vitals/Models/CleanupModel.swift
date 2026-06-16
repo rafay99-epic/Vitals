@@ -114,7 +114,7 @@ final class CleanupModel: ObservableObject {
                         lastError = error.message
                     }
                 } catch {
-                    Log.error(.cleanup, "privileged cache clean failed — \(error.localizedDescription)")
+                    Log.error(.cleanup, "privileged cache clean failed", error: error)
                     lastError = error.localizedDescription
                 }
             }
@@ -139,7 +139,7 @@ final class CleanupModel: ObservableObject {
                         lastError = error.message
                     }
                 } catch {
-                    Log.error(.cleanup, "privileged system clean failed — \(error.localizedDescription)")
+                    Log.error(.cleanup, "privileged system clean failed", error: error)
                     lastError = error.localizedDescription
                 }
             }

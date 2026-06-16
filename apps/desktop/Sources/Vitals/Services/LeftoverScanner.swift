@@ -355,7 +355,12 @@ enum LeftoverScanner {
         let out = Pipe()
         process.standardOutput = out
         process.standardError = Pipe()
-        guard (try? process.run()) != nil else { return [] }
+        do {
+            try process.run()
+        } catch {
+            Log.notice(.uninstall, "couldn't launch brew to list casks — cask leftovers may be under-reported", error: error)
+            return []
+        }
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return [] }
         let data = out.fileHandleForReading.readDataToEndOfFile()

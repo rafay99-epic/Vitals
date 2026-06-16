@@ -32,11 +32,18 @@ final class SMC {
 
     init?() {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
-        guard service != 0 else { return nil }
+        guard service != 0 else {
+            Log.noticeOnce(.smc, key: "smc-no-service", "AppleSMC service not found — fan readings and control are unavailable")
+            return nil
+        }
         defer { IOObjectRelease(service) }
 
         var conn: io_connect_t = 0
-        guard IOServiceOpen(service, mach_task_self_, 0, &conn) == kIOReturnSuccess else { return nil }
+        let result = IOServiceOpen(service, mach_task_self_, 0, &conn)
+        guard result == kIOReturnSuccess else {
+            Log.noticeOnce(.smc, key: "smc-open-failed", "couldn't open the AppleSMC connection (IOServiceOpen \(result)) — no fan readings")
+            return nil
+        }
         connection = conn
     }
 

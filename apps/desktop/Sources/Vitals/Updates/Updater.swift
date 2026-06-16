@@ -130,7 +130,7 @@ final class Updater: ObservableObject {
                 status = .upToDate
             }
         } catch {
-            Log.error(.updater, "update check failed — \(error.localizedDescription)")
+            Log.error(.updater, "update check failed", error: error)
             status = .failed(error.localizedDescription)
         }
     }
@@ -156,10 +156,14 @@ final class Updater: ObservableObject {
             let relauncher = Process()
             relauncher.executableURL = URL(fileURLWithPath: "/bin/zsh")
             relauncher.arguments = ["-c", "sleep 1; /usr/bin/open '\(Self.installPath)'"]
-            try? relauncher.run()
+            do {
+                try relauncher.run()
+            } catch {
+                Log.error(.updater, "couldn't launch the relauncher after install — the app will quit without reopening", error: error)
+            }
             NSApp.terminate(nil)
         } catch {
-            Log.error(.updater, "download/install failed — \(error.localizedDescription)")
+            Log.error(.updater, "download/install failed", error: error)
             status = .failed(error.localizedDescription)
         }
     }

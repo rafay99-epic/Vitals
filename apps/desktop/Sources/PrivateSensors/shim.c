@@ -183,3 +183,68 @@ void vitals_socpower_destroy(void *handle) {
     if (h->subscription) CFRelease(h->subscription);
     free(h);
 }
+
+// ---------------------------------------------------------------------------
+// Crash capture (see PrivateSensors.h). Async-signal-safe: the handler only
+// touches a fixed path buffer, a fixed frame buffer, and the open/write/
+// backtrace_symbols_fd allow-list — no malloc, no stdio, no locks.
+// ---------------------------------------------------------------------------
+
+#include <signal.h>
+#include <execinfo.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+static char  vitals_crash_log_path[1024];
+static void *vitals_crash_frames[128];
+
+static const char *vitals_signal_name(int sig) {
+    switch (sig) {
+        case SIGSEGV: return "SIGSEGV";
+        case SIGABRT: return "SIGABRT";
+        case SIGILL:  return "SIGILL";
+        case SIGTRAP: return "SIGTRAP";
+        case SIGFPE:  return "SIGFPE";
+        case SIGBUS:  return "SIGBUS";
+        default:      return "SIGNAL";
+    }
+}
+
+static void vitals_write_str(int fd, const char *s) {
+    size_t len = 0;
+    while (s[len] != '\0') len++;
+    if (len > 0) { ssize_t r = write(fd, s, len); (void)r; }
+}
+
+static void vitals_crash_handler(int sig) {
+    int fd = open(vitals_crash_log_path, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (fd >= 0) {
+        vitals_write_str(fd, "\n===== VITALS-SIGNAL-CRASH ");
+        vitals_write_str(fd, vitals_signal_name(sig));
+        vitals_write_str(fd, " =====\n");
+        int n = backtrace(vitals_crash_frames, 128);
+        backtrace_symbols_fd(vitals_crash_frames, n, fd);
+        vitals_write_str(fd, "===== END-CRASH =====\n");
+        close(fd);
+    }
+    // Restore the default disposition and re-raise so the OS still records it.
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+void vitals_install_crash_handlers(const char *log_path) {
+    strncpy(vitals_crash_log_path, log_path, sizeof(vitals_crash_log_path) - 1);
+    vitals_crash_log_path[sizeof(vitals_crash_log_path) - 1] = '\0';
+
+    int sigs[] = { SIGSEGV, SIGABRT, SIGILL, SIGTRAP, SIGFPE, SIGBUS };
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = vitals_crash_handler;
+    sigemptyset(&sa.sa_mask);
+    // RESETHAND: after we re-raise, the default handler runs. NODEFER: allow a
+    // fault inside the handler to terminate rather than deadlock.
+    sa.sa_flags = SA_RESETHAND | SA_NODEFER;
+    for (size_t i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++) {
+        sigaction(sigs[i], &sa, NULL);
+    }
+}

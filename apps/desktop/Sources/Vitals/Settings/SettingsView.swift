@@ -737,6 +737,7 @@ private struct AlertRuleRow: View {
 
 private struct DataPane: View {
     @EnvironmentObject private var settings: AppSettings
+    @State private var reporting = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -766,6 +767,7 @@ private struct DataPane: View {
                 }
                 settingsRow("Log file") {
                     HStack(spacing: 8) {
+                        Button("Report a Problem…") { reporting = true }
                         Button("Reveal") {
                             NSWorkspace.shared.activateFileViewerSelecting([DataHome.logFile])
                         }
@@ -777,6 +779,11 @@ private struct DataPane: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .sheet(isPresented: $reporting) {
+            // The Settings window has no VitalsModel in scope, so the report uses
+            // the static hardware/version header (model: nil).
+            ProblemReportView(model: nil, settings: settings)
         }
     }
 
@@ -814,7 +821,12 @@ private struct DataPane: View {
         let destination = exports.appendingPathComponent(
             "vitals-history-\(Self.exportStampFormatter.string(from: Date())).csv")
         try? FileManager.default.removeItem(at: destination)
-        guard (try? FileManager.default.copyItem(at: HistoryLogger.fileURL, to: destination)) != nil else { return }
+        do {
+            try FileManager.default.copyItem(at: HistoryLogger.fileURL, to: destination)
+        } catch {
+            Log.notice(.history, "history CSV export failed", error: error)
+            return
+        }
         NSWorkspace.shared.activateFileViewerSelecting([destination])
     }
 }

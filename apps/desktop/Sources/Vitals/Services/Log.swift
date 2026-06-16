@@ -103,21 +103,73 @@ enum LogCategory: String, CaseIterable, Identifiable, Codable {
 ///   1. **Unified logging** (`os.Logger`) — always, when the level passes. Near
 ///      free, integrates with Console.app and the `log` CLI.
 ///   2. **A rotating file** (`LogFile`, `~/.vitals/vitals.log`) so the
-///      diagnostic snapshot can attach the recent tail with no extra tooling.
+///      problem-report flow can attach the recent tail with no extra tooling.
 ///   3. **An in-memory sink** (set by `LogStore`) that feeds the in-app console.
 ///
 /// Honesty over decoration applies to errors too: a swallowed failure leaves no
 /// trace, so the services route their `catch`/`try?` failures here instead.
+///
+/// Every entry is **structured**: a per-launch `session` id (so one run's lines
+/// group together in a shared report), the originating `source` (file/function/
+/// line, captured automatically), and — when an `Error` is passed — its type,
+/// domain, code and underlying cause. The whole entry is `Codable`, persisted as
+/// one JSON object per line.
 enum Log {
+    /// Where a line came from, captured automatically from the call site.
+    struct Source: Codable, Equatable {
+        let file: String       // just the file name, e.g. "Updater.swift"
+        let function: String
+        let line: Int
+    }
+
+    /// A failure's machine-readable details, extracted from any `Error`. This is
+    /// the difference between "junior" logging (a localized sentence) and a real
+    /// record: the domain + code survive localisation and pinpoint the failure.
+    struct ErrorInfo: Codable, Equatable {
+        let type: String        // the Swift type, e.g. "URLError"
+        let domain: String      // NSError domain
+        let code: Int           // NSError code
+        let description: String  // localizedDescription
+        let underlying: String?  // the chained NSUnderlyingError, if any
+
+        init(_ error: Error) {
+            let ns = error as NSError
+            type = String(describing: Swift.type(of: error))
+            domain = ns.domain
+            code = ns.code
+            description = error.localizedDescription
+            if let cause = ns.userInfo[NSUnderlyingErrorKey] as? NSError {
+                underlying = "\(cause.localizedDescription) [\(cause.domain) \(cause.code)]"
+            } else {
+                underlying = nil
+            }
+        }
+
+        /// One-line tail for the os.Logger string and console rows.
+        var inline: String {
+            var text = "\(type)(\(domain) \(code)): \(description)"
+            if let underlying { text += " ← \(underlying)" }
+            return text
+        }
+    }
+
     /// One captured line. `Codable` so `LogFile` can persist it as JSONL and the
     /// console can read it back.
     struct Entry: Identifiable, Codable, Equatable {
         let id: UUID
         let time: Date
+        let session: String
         let level: LogLevel
         let category: LogCategory
         let message: String
+        let source: Source
+        let error: ErrorInfo?
     }
+
+    /// A short id for this process launch. Every entry carries it, so when a user
+    /// emails their log it's obvious which lines belong to the run that went
+    /// wrong — and the previous-run crash check can tell sessions apart.
+    static let session = String(UUID().uuidString.prefix(8))
 
     // MARK: Configuration (thread-safe)
 
@@ -133,6 +185,9 @@ enum Log {
         state.withLock { $0.minimumLevel = minimumLevel }
     }
 
+    /// The current capture floor — lets hot-path callers skip work entirely.
+    static var minimumLevel: LogLevel { state.withLock { $0.minimumLevel } }
+
     /// Registers (or clears) the live in-memory consumer — `LogStore` plugs the
     /// console in here. Held weakly by the closure the caller passes.
     static func setSink(_ sink: ((Entry) -> Void)?) {
@@ -141,23 +196,93 @@ enum Log {
 
     // MARK: Emit
 
-    static func debug(_ category: LogCategory, _ message: @autoclosure () -> String) { emit(.debug, category, message()) }
-    static func info(_ category: LogCategory, _ message: @autoclosure () -> String) { emit(.info, category, message()) }
-    static func notice(_ category: LogCategory, _ message: @autoclosure () -> String) { emit(.notice, category, message()) }
-    static func error(_ category: LogCategory, _ message: @autoclosure () -> String) { emit(.error, category, message()) }
-    static func fault(_ category: LogCategory, _ message: @autoclosure () -> String) { emit(.fault, category, message()) }
+    static func debug(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+                      file: String = #fileID, function: String = #function, line: Int = #line) {
+        emit(.debug, category, message(), error, file, function, line)
+    }
+    static func info(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+                     file: String = #fileID, function: String = #function, line: Int = #line) {
+        emit(.info, category, message(), error, file, function, line)
+    }
+    static func notice(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+                       file: String = #fileID, function: String = #function, line: Int = #line) {
+        emit(.notice, category, message(), error, file, function, line)
+    }
+    static func error(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+                      file: String = #fileID, function: String = #function, line: Int = #line) {
+        emit(.error, category, message(), error, file, function, line)
+    }
+    static func fault(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+                      file: String = #fileID, function: String = #function, line: Int = #line) {
+        emit(.fault, category, message(), error, file, function, line)
+    }
 
-    private static func emit(_ level: LogLevel, _ category: LogCategory, _ message: @autoclosure () -> String) {
+    // MARK: Emit once (hot-path)
+
+    /// Logs only the first time a given `key` is seen this launch. For failures
+    /// that recur every sample tick (a missing sensor subsystem, the fan daemon's
+    /// apply loop) — the first occurrence explains the symptom; the next thousand
+    /// would just flood. Same call site, captured automatically.
+    static func noticeOnce(_ category: LogCategory, key: String, _ message: @autoclosure () -> String, error: Error? = nil,
+                           file: String = #fileID, function: String = #function, line: Int = #line) {
+        guard firstTime(key) else { return }
+        emit(.notice, category, message(), error, file, function, line)
+    }
+    static func debugOnce(_ category: LogCategory, key: String, _ message: @autoclosure () -> String, error: Error? = nil,
+                          file: String = #fileID, function: String = #function, line: Int = #line) {
+        guard firstTime(key) else { return }
+        emit(.debug, category, message(), error, file, function, line)
+    }
+    static func errorOnce(_ category: LogCategory, key: String, _ message: @autoclosure () -> String, error: Error? = nil,
+                          file: String = #fileID, function: String = #function, line: Int = #line) {
+        guard firstTime(key) else { return }
+        emit(.error, category, message(), error, file, function, line)
+    }
+
+    private static let firedKeys = OSAllocatedUnfairLock(initialState: Set<String>())
+    private static func firstTime(_ key: String) -> Bool {
+        firedKeys.withLock { keys in
+            guard !keys.contains(key) else { return false }
+            keys.insert(key)
+            return true
+        }
+    }
+
+    private static func emit(_ level: LogLevel, _ category: LogCategory, _ message: @autoclosure () -> String,
+                             _ error: Error?, _ file: String, _ function: String, _ line: Int) {
         let (minimum, sink) = state.withLock { ($0.minimumLevel, $0.sink) }
         // The whole point of the level guard: bail before building the string.
         guard minimum != .off, level >= minimum else { return }
 
         let text = message()
-        loggers[category]?.log(level: level.osType, "\(text, privacy: .public)")
+        let source = Source(file: shortName(file), function: function, line: line)
+        let info = error.map(ErrorInfo.init)
 
-        let entry = Entry(id: UUID(), time: Date(), level: level, category: category, message: text)
+        let suffix = info.map { " | \($0.inline)" } ?? ""
+        loggers[category]?.log(level: level.osType, "[\(session)] \(text)\(suffix) (\(source.file):\(line))")
+
+        let entry = Entry(id: UUID(), time: Date(), session: session, level: level,
+                          category: category, message: text, source: source, error: info)
         LogFile.shared.append(entry)
         sink?(entry)
+    }
+
+    /// Force-writes a fault entry **synchronously**, bypassing the level filter —
+    /// for the crash path, where the process is about to die so nothing may be
+    /// dropped and the async file queue would never drain. See `CrashReporter`.
+    static func writeFaultSync(_ category: LogCategory, _ message: String,
+                               file: String = #fileID, function: String = #function, line: Int = #line) {
+        let source = Source(file: shortName(file), function: function, line: line)
+        loggers[category]?.log(level: .fault, "[\(session)] \(message)")
+        let entry = Entry(id: UUID(), time: Date(), session: session, level: .fault,
+                          category: category, message: message, source: source, error: nil)
+        LogFile.shared.appendSync(entry)
+        state.withLock { $0.sink }?(entry)
+    }
+
+    /// `#fileID` is "ModuleName/Dir/File.swift"; we only want "File.swift".
+    private static func shortName(_ fileID: String) -> String {
+        String(fileID.split(separator: "/").last ?? Substring(fileID))
     }
 
     // MARK: Unified-logging backends

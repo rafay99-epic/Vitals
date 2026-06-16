@@ -27,9 +27,18 @@ final class LoginItemsModel: ObservableObject {
 
     func setDisabled(_ disabled: Bool, _ item: LaunchItem) async {
         if item.disableNeedsAdmin {
-            guard let (script, prompt) = LaunchItemScanner.adminScript(for: .disable(disabled), item: item),
-                  (try? await PrivilegedShell.runAsAdmin(script, prompt: prompt)) != nil
-            else { return }
+            guard let (script, prompt) = LaunchItemScanner.adminScript(for: .disable(disabled), item: item) else { return }
+            do {
+                try await PrivilegedShell.runAsAdmin(script, prompt: prompt)
+            } catch let error as PrivilegedShell.AdminError {
+                if !error.cancelled {
+                    Log.error(.app, "couldn't \(disabled ? "disable" : "enable") login item \(item.plistPath.lastPathComponent)", error: error)
+                }
+                return
+            } catch {
+                Log.error(.app, "couldn't \(disabled ? "disable" : "enable") login item \(item.plistPath.lastPathComponent)", error: error)
+                return
+            }
         } else {
             await Task.detached { LaunchItemScanner.directDisable(disabled, item: item) }.value
         }
@@ -42,8 +51,18 @@ final class LoginItemsModel: ObservableObject {
         let removed: Bool
         if item.removeNeedsAdmin {
             guard let (script, prompt) = LaunchItemScanner.adminScript(for: .remove, item: item) else { return }
-            removed = (try? await PrivilegedShell.runAsAdmin(script, prompt: prompt)) != nil
-                && !FileManager.default.fileExists(atPath: item.plistPath.path)
+            do {
+                try await PrivilegedShell.runAsAdmin(script, prompt: prompt)
+                removed = !FileManager.default.fileExists(atPath: item.plistPath.path)
+            } catch let error as PrivilegedShell.AdminError {
+                if !error.cancelled {
+                    Log.error(.app, "couldn't remove login item \(item.plistPath.lastPathComponent)", error: error)
+                }
+                removed = false
+            } catch {
+                Log.error(.app, "couldn't remove login item \(item.plistPath.lastPathComponent)", error: error)
+                removed = false
+            }
         } else {
             removed = await Task.detached { LaunchItemScanner.trashUserAgent(item: item) }.value
         }

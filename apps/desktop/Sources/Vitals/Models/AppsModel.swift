@@ -258,7 +258,7 @@ final class AppsModel: ObservableObject {
                         combined.errorMessage = error.message
                     }
                 } catch {
-                    Log.error(.uninstall, "privileged leftover removal failed — \(error.localizedDescription)")
+                    Log.error(.uninstall, "privileged leftover removal failed", error: error)
                     combined.errorMessage = error.localizedDescription
                 }
             }
