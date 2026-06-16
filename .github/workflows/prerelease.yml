@@ -6,7 +6,7 @@ name: Pre-release (Dev)
 #   2. a rolling `dev` tag — always the newest Dev build; the stable download URL
 #      the Homebrew cask (rafay99-epic/apps/vitals-dev) points at.
 # The Dev app's updater tracks the newest pre-release. Stable (main →
-# release.yml) is untouched.
+# ci.yml's release job) is untouched.
 #
 # Gated by tests: a broken branch publishes nothing.
 on:

@@ -58,17 +58,19 @@ struct ConfigStoreTests {
 
     @Test func settingsSurviveADefaultsWipe() {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
-        let name = "vitals.test.cfg.durability"
 
         // Session 1: the user customizes, and it mirrors to the config file.
-        let firstSuite = freshSuite(name)
+        let firstSuite = freshSuite("vitals.test.cfg.durability.1")
         let first = AppSettings(defaults: firstSuite, configURL: url)
         first.refreshInterval = 5.0
         first.hiddenTabs = []  // "show every tab"
         ConfigStore.save(firstSuite, keys: AppSettings.persistedKeys, to: url)
 
-        // An update wipes UserDefaults — but the config file in ~/.vitals survives.
-        let secondSuite = freshSuite(name)
+        // An update wipes UserDefaults — modeled as a brand-new, empty suite — but
+        // the config file in ~/.vitals survives and rebuilds the settings. (Two
+        // distinct suites, never one shared instance: a shared store + parallel
+        // removePersistentDomain was a CI-only flake.)
+        let secondSuite = freshSuite("vitals.test.cfg.durability.2")
         let second = AppSettings(defaults: secondSuite, configURL: url)
         #expect(second.refreshInterval == 5.0)
         #expect(second.hiddenTabs.isEmpty)  // the user's "all tabs" choice came back

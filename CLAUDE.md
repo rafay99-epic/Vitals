@@ -37,10 +37,13 @@ License: **GPL-3.0**.
 
 ## Versioning & releases
 
-- Version = `0.<total commit count on main>`, computed in `release.yml` and `build.sh`
+- Version = `0.<total commit count on main>`, computed in `ci.yml` and `build.sh`
   (`VITALS_VERSION` env overrides). Currently shipping v0.19.
-- Every push to main touching `apps/desktop/**` publishes a GitHub Release (DMG) —
-  **gated by a test job**; if tests or lint fail, nothing publishes.
+- Every push to main touching `apps/desktop/**` publishes a GitHub Release (DMG) from a
+  **single pipeline** (`ci.yml`): the publish job `needs:` build, which `needs:` test +
+  lint, so if any of test/lint/build fail the release is skipped — nothing is built or
+  published. The release runs the **same** `swift test` everything else gates on (there is
+  no separate Release workflow with its own test run that could disagree).
 - The version must never go backwards (the updater compares numerically). Never switch
   to path-filtered commit counting — after the monorepo rename it would regress.
 - Website + app updater both rely on `releases/latest/download/Vitals.dmg` — never
@@ -49,7 +52,7 @@ License: **GPL-3.0**.
 ### Build channels (Stable + Dev)
 
 - `VITALS_CHANNEL` (read by `build.sh` + `make-dmg.sh`) selects the channel; **default
-  `stable`**, so `release.yml` is unaffected. `dev` builds **`Vitals Dev.app`** /
+  `stable`**, so `ci.yml`'s release path is unaffected. `dev` builds **`Vitals Dev.app`** /
   **`Vitals-Dev.dmg`** with bundle id `…vitals.dev`, a purple+`DEV` icon, version
   `…-dev`, a baked `VitalsBuildInfo` (`branch@sha`), and a `VitalsBuildNumber`
   (`VITALS_BUILD`, the CI run number). The two install side by side and run at once —
@@ -58,7 +61,7 @@ License: **GPL-3.0**.
   `Channel.current` (reads the `VitalsChannel` Info.plist key), `FanControl.label` /
   `supportDir` (so Dev's fan helper + `/Library/Application Support/Vitals Dev` are
   isolated), and `Updater.installPath` (= `Bundle.main.bundlePath`).
-- **Two release feeds.** Stable → `release.yml` (push to main) publishes a normal
+- **Two release feeds.** Stable → `ci.yml` (push to main) publishes a normal
   release (`Vitals.dmg`, marked latest). Dev → `prerelease.yml` (push to any non-main
   branch) publishes a **per-branch pre-release** (`dev-<branch>`) carrying
   `Vitals-Dev.dmg`; both are test-gated. The release **title must contain `build <n>`**

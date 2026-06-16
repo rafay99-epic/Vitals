@@ -7,9 +7,13 @@ import Foundation
 /// acceleration is off.
 @MainActor
 struct GPUAccelerationSettingsTests {
-    private func freshSettings() -> AppSettings {
-        let suite = UserDefaults(suiteName: "vitals.test.gpuaccel")!
-        suite.removePersistentDomain(forName: "vitals.test.gpuaccel")
+    // A unique suite per test (keyed to the calling test's name) so parallel
+    // tests never share a UserDefaults store and wipe each other — the cause of
+    // a CI-only flake. `#function` resolves at the call site to the test method.
+    private func freshSettings(_ id: String = #function) -> AppSettings {
+        let name = "vitals.test.gpuaccel.\(id)"
+        let suite = UserDefaults(suiteName: name)!
+        suite.removePersistentDomain(forName: name)
         return AppSettings(defaults: suite, configURL: nil)
     }
 

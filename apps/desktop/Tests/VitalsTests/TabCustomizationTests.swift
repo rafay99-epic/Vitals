@@ -8,8 +8,12 @@ import Foundation
 /// tab (new ones are appended).
 @MainActor
 struct TabCustomizationTests {
-    private func freshSettings(_ configure: (UserDefaults) -> Void = { _ in }) -> AppSettings {
-        let name = "vitals.test.tabs"
+    // A unique suite per test (keyed to the calling test's name) so parallel
+    // tests never share a UserDefaults store and wipe each other — the cause of
+    // a CI-only flake. `#function` resolves at the call site to the test method.
+    private func freshSettings(_ id: String = #function,
+                               configure: (UserDefaults) -> Void = { _ in }) -> AppSettings {
+        let name = "vitals.test.tabs.\(id)"
         let suite = UserDefaults(suiteName: name)!
         suite.removePersistentDomain(forName: name)
         configure(suite)
