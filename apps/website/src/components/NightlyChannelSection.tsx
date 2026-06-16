@@ -1,5 +1,5 @@
 import CommandBox from './CommandBox'
-import { BREW_INSTALL_NIGHTLY, RELEASES_URL } from '../lib/links'
+import { BREW_INSTALL_NIGHTLY, DOWNLOAD_URL_NIGHTLY, RELEASES_URL } from '../lib/links'
 import type { LatestPrerelease } from '../lib/useLatestPrerelease'
 
 const AMBER = '#FF9F0A'
@@ -29,7 +29,9 @@ function NightlyHeartbeat({ size = 14 }: { size?: number }) {
 /// Nightly app icon. Leads with the Homebrew command (same as Stable), with the
 /// .dmg as a quiet fallback. It blends in instead of competing with the download above.
 export default function NightlyChannelSection({ prerelease }: { prerelease: LatestPrerelease | null }) {
-  const dmgUrl = prerelease?.dmgUrl ?? null
+  // Prefer the live feed's exact asset URL; fall back to the canonical rolling
+  // `nightly` download so the link works even before the feed loads.
+  const dmgUrl = prerelease?.dmgUrl ?? DOWNLOAD_URL_NIGHTLY
   const meta = [
     prerelease?.buildNumber != null ? `Build ${prerelease.buildNumber}` : null,
     prerelease?.sizeMB ?? null,
@@ -83,11 +85,10 @@ export default function NightlyChannelSection({ prerelease }: { prerelease: Late
               }}
             >
               <a
-                href={dmgUrl ?? RELEASES_URL}
-                {...(dmgUrl ? {} : { target: '_blank', rel: 'noreferrer' })}
+                href={dmgUrl}
                 style={{ color: 'rgba(235,235,245,0.62)', textDecoration: 'none' }}
               >
-                {dmgUrl ? 'Download .dmg' : 'Browse nightly builds'}
+                Download .dmg
               </a>
               <Dot />
               <a href={RELEASES_URL} target="_blank" rel="noreferrer" style={{ color: 'rgba(235,235,245,0.62)', textDecoration: 'none' }}>

@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test'
-import { BREW_INSTALL, BREW_INSTALL_NIGHTLY, BREW_TAP, DOWNLOAD_URL, RELEASES_URL, REPO, REPO_URL } from './links'
+import { BREW_INSTALL, BREW_INSTALL_NIGHTLY, BREW_TAP, DOWNLOAD_URL, DOWNLOAD_URL_NIGHTLY, RELEASES_URL, REPO, REPO_URL } from './links'
 
-// The download button must keep pointing at the rolling "latest" asset —
-// this is the contract with the release pipeline.
-test('download URL always serves the newest DMG', () => {
+// The download buttons must keep pointing at their rolling tags — this is the
+// contract with the release pipeline. Stable → /latest; Nightly → the `nightly` tag.
+test('download URLs always serve the newest DMGs', () => {
   expect(DOWNLOAD_URL).toBe(`https://github.com/${REPO}/releases/latest/download/Vitals.dmg`)
+  expect(DOWNLOAD_URL_NIGHTLY).toBe(`https://github.com/${REPO}/releases/download/nightly/Vitals-Nightly.dmg`)
 })
 
 // The Homebrew casks: Stable installs `vitals`, Nightly installs `vitals-nightly`
