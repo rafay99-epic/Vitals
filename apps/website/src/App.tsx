@@ -2,6 +2,8 @@ import Nav from './components/Nav'
 import Hero from './components/Hero'
 import Dashboard from './components/Dashboard'
 import Sensors from './components/Sensors'
+import Monitoring from './components/Monitoring'
+import Glance from './components/Glance'
 import Philosophy from './components/Philosophy'
 import Honesty from './components/Honesty'
 import FanControl from './components/FanControl'
@@ -41,6 +43,12 @@ export default function App() {
         </Reveal>
         <Reveal>
           <Sensors vitals={vitals} />
+        </Reveal>
+        <Reveal>
+          <Monitoring />
+        </Reveal>
+        <Reveal>
+          <Glance />
         </Reveal>
         <Reveal>
           <Philosophy />
