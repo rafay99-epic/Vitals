@@ -182,6 +182,7 @@ final class VitalsModel: ObservableObject {
             let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses)
             guard !Task.isCancelled else { return }
             self.apply(snapshot)
+            Log.debug(.sampler, "sampled \(snapshot.readings.count) sensors, \(snapshot.fans.count) fans")
             self.sensorsStalled = false
             self.isSampling = false
         }

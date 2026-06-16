@@ -18,11 +18,9 @@ struct TabCustomizationTests {
 
     @Test func defaultsToEveryTabInOrder() {
         let settings = freshSettings()
-        // Every tab is present in the order, even the ones hidden by default.
         #expect(settings.tabOrder == AppTab.allCases)
-        // The developer Logs tab ships hidden — it's the only default-hidden tab.
-        #expect(settings.hiddenTabs == [.logs])
-        #expect(settings.visibleTabs == AppTab.allCases.filter { $0 != .logs })
+        #expect(settings.visibleTabs == AppTab.allCases)
+        #expect(settings.hiddenTabs.isEmpty)
     }
 
     @Test func hidingRemovesFromBarButKeepsOrder() {

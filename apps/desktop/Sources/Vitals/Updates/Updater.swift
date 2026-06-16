@@ -112,6 +112,7 @@ final class Updater: ObservableObject {
     func check(userInitiated: Bool) async {
         guard !isBusy else { return }
         status = .checking
+        Log.debug(.updater, "checking for updates (userInitiated: \(userInitiated))")
         do {
             let release = try await Self.fetchLatestRelease()
             lastChecked = Date()
@@ -148,9 +149,11 @@ final class Updater: ObservableObject {
     func downloadAndInstall() async {
         guard case .available(let release) = status else { return }
         status = .downloading
+        Log.notice(.updater, "downloading update \(release.displayVersion)")
         do {
             let dmg = try await Self.download(release)
             status = .installing
+            Log.notice(.updater, "installing update \(release.displayVersion)")
             try await Self.install(dmgAt: dmg)
             // Hand off to the freshly installed copy and exit this one.
             let relauncher = Process()

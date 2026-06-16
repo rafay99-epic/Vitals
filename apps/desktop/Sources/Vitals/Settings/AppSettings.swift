@@ -313,10 +313,7 @@ final class AppSettings: ObservableObject {
             "confirmBeforeQuittingProcess": false,
             "tabDisplayMode": TabDisplayMode.expanding.rawValue,
             "tabSize": TabSize.medium.rawValue,
-            // The developer Logs tab ships hidden — users opt into it in
-            // Settings → Tabs. (Only applies to fresh installs / users who never
-            // customized tab visibility; their stored value wins otherwise.)
-            "hiddenTabs": AppTab.logs.rawValue,
+            "hiddenTabs": "",
             "tabOrder": AppTab.allCases.map(\.rawValue).joined(separator: ","),
         ])
 

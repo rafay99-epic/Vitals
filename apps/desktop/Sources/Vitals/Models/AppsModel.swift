@@ -143,6 +143,7 @@ final class AppsModel: ObservableObject {
         let targets = selectedApps
         guard !targets.isEmpty, !isPreparingUninstall else { return }
         isPreparingUninstall = true
+        Log.debug(.uninstall, "preparing uninstall for \(targets.count) app(s)")
         Task {
             let casksList = await Task.detached(priority: .userInitiated) {
                 LeftoverScanner.installedCaskTokens()

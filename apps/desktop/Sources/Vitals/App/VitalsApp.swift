@@ -82,6 +82,19 @@ struct VitalsApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
 
+        // The developer log console — its own window (opened from Settings →
+        // Developer), not a main-window tab. Needs the shared model/settings for
+        // the problem-report header and the live log store.
+        Window("Vitals Log Console", id: "logConsole") {
+            LogsView()
+                .environmentObject(model)
+                .environmentObject(settings)
+                .environmentObject(logStore)
+                .frame(minWidth: 760, minHeight: 480)
+        }
+        .defaultSize(width: 940, height: 620)
+        .defaultPosition(.center)
+
         // The menu-bar item is a custom NSStatusItem managed by `MenuBarController`
         // (created in init), not a MenuBarExtra scene — see that type for why.
     }

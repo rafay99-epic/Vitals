@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// A sheet for sending the developer a problem report: the user explains what
-/// happened, and Vitals attaches the diagnostic log to a pre-addressed email in
-/// their Mail app. They review and send it themselves — the logs only leave the
-/// machine when they press Send (the privacy heads-up says so).
+/// A sheet for emailing the developer a problem report: the user explains what
+/// happened, and Vitals opens a pre-addressed mail draft (with a compact
+/// diagnostic summary in the body) and reveals the full log in Finder to attach.
+/// They review and send it themselves — nothing leaves the machine until they do.
 struct ProblemReportView: View {
-    /// Provided by the Logs tab (full live snapshot); nil from Settings (static
+    /// Provided by the console (full live snapshot); nil from Settings (static
     /// header). See `ProblemReport.diagnosticHeader`.
     var model: VitalsModel?
     var settings: AppSettings?
@@ -13,16 +13,8 @@ struct ProblemReportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var detail = ""
     @State private var sending = false
-    @State private var fallback: Fallback?
+    @State private var showNoMailHandler = false
     @State private var errorMessage: String?
-
-    /// Captured when there's no Mail account, so the alert's actions can copy +
-    /// reveal what would have been sent.
-    private struct Fallback: Identifiable {
-        let id = UUID()
-        let header: String
-        let attachment: URL?
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -42,7 +34,7 @@ struct ProblemReportView: View {
             }
 
             Label {
-                Text("Your diagnostic log is attached. It includes app activity and file paths from your Mac (which contain your username). Nothing is sent until you press Send in Mail.")
+                Text("Your mail app opens with a pre-filled message and the log is revealed in Finder to attach. The log includes app activity and file paths from your Mac (which contain your username). Nothing is sent until you press Send.")
             } icon: {
                 Image(systemName: "lock.shield")
             }
@@ -64,7 +56,7 @@ struct ProblemReportView: View {
                     if sending {
                         ProgressView().controlSize(.small)
                     } else {
-                        Text("Compose Email")
+                        Text("Email the Developer")
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -74,16 +66,14 @@ struct ProblemReportView: View {
         }
         .padding(18)
         .frame(width: 460)
-        .alert("Couldn't open Mail", isPresented: Binding(get: { fallback != nil }, set: { if !$0 { fallback = nil } })) {
-            Button("Copy & Reveal Log") {
-                if let fallback {
-                    ProblemReport.copyAndReveal(description: detail, header: fallback.header, attachment: fallback.attachment)
-                }
+        .alert("No mail app found", isPresented: $showNoMailHandler) {
+            Button("Copy Report") {
+                ProblemReport.copyBody(description: detail, model: model, settings: settings)
                 dismiss()
             }
-            Button("Cancel", role: .cancel) { fallback = nil }
+            Button("Cancel", role: .cancel) { showNoMailHandler = false }
         } message: {
-            Text("No email account is set up in Mail. Vitals copied your report to the clipboard and can reveal the log file so you can send it to \(ProblemReport.recipient) yourself.")
+            Text("This Mac has no default mail app set up. Vitals revealed the log in Finder and can copy the report text so you can send it to \(ProblemReport.recipient) however you like.")
         }
         .alert("Couldn't build the report", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) { errorMessage = nil }
@@ -102,7 +92,7 @@ struct ProblemReportView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Report a Problem")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Send the developer your logs so the issue can be diagnosed.")
+                Text("Email the developer your logs so the issue can be diagnosed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -112,15 +102,12 @@ struct ProblemReportView: View {
     private func send() async {
         sending = true
         defer { sending = false }
-        let outcome = await ProblemReport.compose(
-            description: detail,
-            header: ProblemReport.diagnosticHeader(model: model, settings: settings)
-        )
+        let outcome = await ProblemReport.send(description: detail, model: model, settings: settings)
         switch outcome {
-        case .composed:
+        case .opened:
             dismiss()
-        case .noMailAccount(let attachment):
-            fallback = Fallback(header: ProblemReport.diagnosticHeader(model: model, settings: settings), attachment: attachment)
+        case .noMailHandler:
+            showNoMailHandler = true
         case .failed(let message):
             errorMessage = message
         }

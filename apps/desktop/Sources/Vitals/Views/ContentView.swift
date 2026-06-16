@@ -57,8 +57,6 @@ struct ContentView: View {
                     .tabVisibility(section == .cleanup)
                 StorageView(model: storageModel, isActive: section == .storage)
                     .tabVisibility(section == .storage)
-                LogsView(isActive: section == .logs)
-                    .tabVisibility(section == .logs)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Swap tabs instantly — never cross-fade. Fading a translucent tab

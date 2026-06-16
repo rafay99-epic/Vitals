@@ -44,6 +44,7 @@ final class CleanupModel: ObservableObject {
         guard !isCleaning else { return }
         self.depth = depth
         hasRun = true
+        Log.debug(.cleanup, "cleanup scan started (\(depth))")
         scanTask?.cancel()
         isScanning = true
         // Drop any selection that no longer exists at this depth.
@@ -77,6 +78,7 @@ final class CleanupModel: ObservableObject {
         guard !targets.isEmpty, !isCleaning else { return }
         let userTargets = targets.filter { !$0.kind.requiresAdmin }
         let systemTargets = targets.filter { $0.kind.requiresAdmin }
+        Log.debug(.cleanup, "clean started: \(userTargets.count) user, \(systemTargets.count) system categories")
         let currentDepth = depth
         isCleaning = true
         lastError = nil

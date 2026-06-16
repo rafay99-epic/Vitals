@@ -65,6 +65,24 @@ enum LogExport {
         return out
     }
 
+    /// The last `limit` error/fault entries as short one-liners, for the mail
+    /// body. Blocking (reads + parses) — call off the main thread.
+    static func recentIssues(limit: Int) -> [String] {
+        let raw = [DataHome.logPrevious, DataHome.logFile]
+            .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+        var issues: [String] = []
+        for line in raw.split(separator: "\n") {
+            guard let data = line.data(using: .utf8),
+                  let entry = try? decoder.decode(Log.Entry.self, from: data),
+                  entry.level >= .error else { continue }
+            var text = "\(clock.string(from: entry.time)) \(entry.level.badge) \(entry.category.title): \(entry.message)"
+            if let error = entry.error { text += " — \(error.inline)" }
+            issues.append(text)
+        }
+        return Array(issues.suffix(limit))
+    }
+
     private static func line(for entry: Log.Entry) -> String {
         var text = "\(clock.string(from: entry.time))  \(entry.level.badge)  "
         text += entry.category.title.padding(toLength: 10, withPad: " ", startingAt: 0)

@@ -8,14 +8,13 @@ import AppKit
 /// and any error detail. Display-only: it never mutates anything but its own
 /// filter state and the in-memory view.
 ///
-/// Hidden by default (see `AppSettings` default `hiddenTabs`); a user or support
-/// session turns the "Logs" tab on in Settings → Tabs.
+/// Not a main-window tab — it's a developer tool, so it lives in its own
+/// window opened from Settings → Developer ("Open Log Console").
 struct LogsView: View {
     @EnvironmentObject private var store: LogStore
-    // Injected on ContentView, so available here for the problem-report header.
+    // Injected on the console window, used for the problem-report header.
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
-    let isActive: Bool
 
     @State private var minLevel: LogLevel = .debug
     @State private var category: LogCategory?
