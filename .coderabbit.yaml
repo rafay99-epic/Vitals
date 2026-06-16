@@ -1,0 +1,134 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit review config for Vitals. A lot of this code is drafted by an AI
+# coding agent and squash-merged by the maintainer, so CodeRabbit's real job here
+# is to be the independent reviewer of the project's hard invariants — the rules
+# in CLAUDE.md that a generic reviewer wouldn't know. The path_instructions below
+# encode those; keep them in sync with CLAUDE.md.
+language: "en-US"
+early_access: true
+
+# Cross-cutting guidance applied to every review and chat.
+tone_instructions: >-
+  Be concise and direct; skip nitpicks already enforced by SwiftLint/ESLint.
+  This is a native macOS app (Swift/SwiftUI) + a React/Vite/Tailwind site + a
+  thin Convex backend, licensed GPL-3.0. Weight feedback toward: (1) safety of
+  any code that WRITES to the user's system, (2) honesty of displayed values
+  (never fake/smooth/invent a reading; empty means "Empty"/"Nothing found"),
+  (3) the layering rule (Services are UI-free; Models @MainActor publish; Views
+  only display), and (4) native feel. Flag any commit message, PR body, or app
+  credit that adds AI/Claude attribution (e.g. "Co-Authored-By", "Generated with
+  Claude") — the project forbids it. The Mole project credit (GPL) and the
+  GPL-3.0 license headers must never be removed.
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  review_details: true
+  sequence_diagrams: true
+  poem: true
+  # Attach agent-ready prompts to findings so the coding agent that drafts changes
+  # can act on them directly.
+  enable_prompt_for_ai_agents: true
+  auto_review:
+    enabled: true
+    drafts: true
+  path_instructions:
+    # --- Safety-critical writers (maximum scrutiny) -------------------------
+    - path: "apps/desktop/Sources/Vitals/Services/AppUninstaller.swift"
+      instructions: >-
+        Writes to the user's system. Every removed path must be re-validated in
+        systemRemovalScript (allowlisted root, no "..", never under /System,
+        basename not com.apple.*) — flag anything that deletes a path without
+        going through that validation. User-domain leftovers (~/Library, dotfiles)
+        must go to the Trash (recoverable); system-domain leftovers are removed
+        permanently as root via PrivilegedShell ONLY after explicit confirmation.
+        System extensions are detected and surfaced for manual removal, never
+        force-deleted. Never touch Vitals itself or com.apple.* bundles. There are
+        tests locking this behavior — changes must keep them valid.
+    - path: "apps/desktop/Sources/Vitals/Services/DiskCleaner.swift"
+      instructions: >-
+        Cleanup may delete ONLY regenerable data (caches/logs/trash). Quick depth
+        is user-domain only and must never offer Apple system caches or crash
+        reports (shouldOfferCache/shouldOfferLog are test-locked). Deep/system
+        deletes must be built from systemCleanScript's fixed allowlisted roots +
+        -mtime age gates — never a UI-supplied path, never a bare path, never under
+        /System. Flag any delete that isn't both age-gated and rooted.
+    - path: "apps/desktop/Sources/Vitals/Services/LeftoverScanner.swift"
+      instructions: >-
+        Leftover scanning is user-domain only. Bundle ids must validate as
+        reverse-DNS (isValidBundleID) before any path is touched, and system
+        name-matches require a distinctive (>=5-char, non-generic) name. Never
+        match com.apple.* or Vitals itself.
+    - path: "apps/desktop/Sources/Vitals/Services/FanController.swift"
+      instructions: >-
+        Fan control is a privileged WRITE. Clamp to the fan's rated RPM range,
+        require admin auth, and keep macOS thermal safety underneath (never let the
+        app override thermal limits). Escalation goes through PrivilegedShell.
+    - path: "apps/desktop/Sources/Vitals/Services/{FanDaemon,PrivilegedShell}.swift"
+      instructions: >-
+        The only places the app escalates to root. PrivilegedShell.runAsAdmin is
+        the single escalation primitive (osascript "with administrator
+        privileges"). FanDaemon is a separate root helper by design. Scrutinize any
+        new escalation path, any string interpolation into a privileged shell
+        command, and any widening of what runs as root.
+    # --- Layers & correctness ----------------------------------------------
+    - path: "apps/desktop/Sources/Vitals/Services/**"
+      instructions: >-
+        Services talk to hardware/system and must know nothing about UI (no SwiftUI
+        imports, no view types). All sensor sampling runs OFF the main thread (via
+        SensorSampler, an actor). Cached system handles like machHost exist because
+        mach_host_self() leaks a port right per call — don't reintroduce per-call
+        allocations.
+    - path: "apps/desktop/Sources/Vitals/Models/**"
+      instructions: >-
+        Models are @MainActor ObservableObjects that poll and publish; they must
+        not block the main thread. Never fake, smooth, or invent a reading — a
+        missing/absent value is a dash, never a fabricated number. Long tasks use
+        [weak self] and models cancel work in deinit.
+    - path: "apps/desktop/Sources/Vitals/Views/**"
+      instructions: >-
+        Views display only. Window geometry must never change from navigation:
+        no NavigationSplitView, no window toolbar items, no system title bar (tabs
+        switch content, not layout). Grids use fixed column counts
+        (GridItem(.flexible())), never .adaptive. Swift Charts mount via the
+        Deferred wrapper. Follow the design language in CLAUDE.md (capsule tabs,
+        card radius/fills, monospaced numeric text, .switch toggles).
+    - path: "apps/desktop/Sources/Vitals/Widgets/**"
+      instructions: >-
+        Desktop widgets are app-owned floating NSPanels (NOT WidgetKit) bound to
+        the SHARED VitalsModel/AppSettings — they must not start their own polling.
+    # --- Website -----------------------------------------------------------
+    - path: "apps/website/src/**"
+      instructions: >-
+        Mobile-first responsive: breakpoint-dependent styles live in Tailwind
+        classes, never inline styles (inline styles defeat media queries). Repo/
+        download/company URLs come only from lib/links.ts. Mock data must be coded
+        components in the app's design language and must never invent fake numbers.
+        Assert no horizontal overflow at 390/1440px.
+    - path: "apps/website/src/routes/{privacy,terms}.tsx"
+      instructions: >-
+        Legal pages must match reality. The privacy policy must disclose every data
+        flow (e.g. Vercel Web Analytics) BEFORE it ships; flag any new tracking/
+        network call not reflected here. Terms must keep the Mole (GPL) credit.
+    # --- Backend -----------------------------------------------------------
+    - path: "convex/**"
+      instructions: >-
+        Deliberately a thin live proxy — NO database, schema, tables, caching, or
+        cron. Do not introduce them. Use object-form Convex function syntax with
+        argument + return validators; keep the GitHub fetch/parse in
+        convex/lib/github.ts (one parser shared with the website fallback). Read the
+        guidelines in convex/_generated/ai/guidelines.md.
+    # --- Release / CI ------------------------------------------------------
+    - path: ".github/workflows/**"
+      instructions: >-
+        The release is gated: nothing publishes unless test + lint + build pass.
+        The version is 0.<commit count on main> and must never go backwards — never
+        switch to path-filtered commit counting. Never rename the published
+        Vitals.dmg asset (the website and updater depend on
+        releases/latest/download/Vitals.dmg).
+
+chat:
+  auto_reply: false
