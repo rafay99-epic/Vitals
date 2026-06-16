@@ -81,9 +81,23 @@ enum DataHome {
         guard !Channel.current.isDev else { return }
         let legacyDir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Vitals", isDirectory: true)
+        guard fm.fileExists(atPath: legacyDir.path) else { return }
+
+        // The only data that ever lived here was the readings CSV.
         let moves = [("history.csv", historyFile), ("history-previous.csv", historyPrevious)]
-        for (name, new) in moves {
-            move(fm, from: legacyDir.appendingPathComponent(name), to: new)
+        let migrated = moves.reduce(0) { count, item in
+            count + (move(fm, from: legacyDir.appendingPathComponent(item.0), to: item.1) ? 1 : 0)
+        }
+        if migrated > 0 {
+            Log.notice(.history, "migrated \(migrated) file(s) from ~/Library/Application Support/Vitals")
+        }
+
+        // Tidy up: once the legacy folder holds nothing but cruft (a stray
+        // .DS_Store), remove the husk so it doesn't linger. If any real file
+        // remains — something we didn't expect — leave it strictly alone.
+        if let leftovers = try? fm.contentsOfDirectory(atPath: legacyDir.path),
+           leftovers.allSatisfy({ $0 == ".DS_Store" }) {
+            try? fm.removeItem(at: legacyDir)
         }
     }
 
@@ -105,9 +119,17 @@ enum DataHome {
     }
 
     /// Moves `old` to `new` only when `old` exists and `new` doesn't — so a
-    /// half-finished migration never clobbers newer data.
-    private static func move(_ fm: FileManager, from old: URL, to new: URL) {
-        guard fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) else { return }
-        try? fm.moveItem(at: old, to: new)
+    /// half-finished migration never clobbers newer data. Returns whether it
+    /// actually moved anything.
+    @discardableResult
+    private static func move(_ fm: FileManager, from old: URL, to new: URL) -> Bool {
+        guard fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) else { return false }
+        do {
+            try fm.moveItem(at: old, to: new)
+            return true
+        } catch {
+            Log.notice(.app, "couldn't migrate \(old.lastPathComponent) into the data home", error: error)
+            return false
+        }
     }
 }
