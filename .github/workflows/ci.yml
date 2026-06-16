@@ -1,10 +1,16 @@
 name: CI
 
-# Desktop-app CI. The website has its own workflow (website.yml); each app
-# triggers only on its own paths.
+# Desktop-app CI **and** release, in one pipeline so the build users receive is
+# the exact one that passed every check. Tests + lint + build are a single gate:
+# on `main` the release is published only after all three pass; on PRs the DMG is
+# packaged as a downloadable artifact instead. The website has its own workflow
+# (website.yml); each app triggers only on its own paths.
 #
-# Gating: tests and lint run first; the release build only happens after
-# both pass, and the PR's DMG package only after the build.
+# Why one workflow and not a separate Release workflow: two independent workflows
+# each run their own `swift test`, and a flaky test can pass in one while failing
+# the other — which once shipped a release while CI was red. Here there is a
+# single test run that the publish step depends on, so a red test can never reach
+# users' auto-updater.
 on:
   push:
     branches: [main]
@@ -15,6 +21,12 @@ on:
     paths:
       - "apps/desktop/**"
       - ".github/workflows/ci.yml"
+
+# PRs cancel superseded runs; main never cancels, so pushes serialize and two
+# releases can't race to publish the same version.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -50,9 +62,10 @@ jobs:
       - name: Build release
         run: swift build -c release
 
+  # PR only: verify the DMG actually packages, and upload it as an artifact so a
+  # reviewer can install the change. No publish.
   package:
     name: Package DMG
-    # On main, the Release workflow builds and publishes the DMG instead.
     if: github.event_name == 'pull_request'
     runs-on: macos-26
     needs: build
@@ -67,6 +80,39 @@ jobs:
         with:
           name: Vitals-dmg
           path: apps/desktop/build/Vitals.dmg
+
+  # main only: publish the GitHub Release (version = commit count). `needs: build`
+  # chains through test + lint + build, so if any of them fail this job is skipped
+  # and nothing is built or published — users must never auto-update onto a build
+  # that didn't pass.
+  release:
+    name: Build and publish release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history — the version is the commit count
+
+      - name: Compute version
+        run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build app and installer
+        run: |
+          export VITALS_VERSION="$VERSION"
+          ./build.sh
+          ./make-dmg.sh
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" build/Vitals.dmg \
+            --title "Vitals $VERSION" \
+            --generate-notes
 # Dependency checking is handled by Dependabot (.github/dependabot.yml) and
 # Dependabot security alerts — dependency-review-action needs GitHub Advanced
 # Security, which isn't available on private personal repos.
