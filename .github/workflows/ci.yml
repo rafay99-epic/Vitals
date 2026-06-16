@@ -1,10 +1,12 @@
 name: CI
 
 # Desktop-app CI **and** release, in one pipeline so the build users receive is
-# the exact one that passed every check. Tests + lint + build are a single gate:
-# on `main` the release is published only after all three pass; on PRs the DMG is
-# packaged as a downloadable artifact instead. The website has its own workflow
-# (website.yml); each app triggers only on its own paths.
+# the exact one that passed every check. Test + lint are the gate: on `main` the
+# release builds + publishes only after both pass; on PRs the DMG builds +
+# uploads as an artifact instead. The release-config compile happens inside those
+# build steps (build.sh), so there's no separate build job recompiling the same
+# thing on its own runner. The website has its own workflow (website.yml); each
+# app triggers only on its own paths.
 #
 # Why one workflow and not a separate Release workflow: two independent workflows
 # each run their own `swift test`, and a flaky test can pass in one while failing
@@ -53,22 +55,15 @@ jobs:
       - name: Lint
         run: swiftlint --reporter github-actions-logging
 
-  build:
-    name: Build (macOS)
-    runs-on: macos-26
-    needs: [test, lint]
-    steps:
-      - uses: actions/checkout@v6
-      - name: Build release
-        run: swift build -c release
-
-  # PR only: verify the DMG actually packages, and upload it as an artifact so a
-  # reviewer can install the change. No publish.
+  # PR only: build + package the DMG (this IS the release-config build check —
+  # build.sh does a universal `swift build -c release`, so a separate build job
+  # would just compile the same thing again on another runner) and upload it as
+  # an artifact so a reviewer can install the change. No publish.
   package:
-    name: Package DMG
+    name: Build & package DMG
     if: github.event_name == 'pull_request'
     runs-on: macos-26
-    needs: build
+    needs: [test, lint]
     steps:
       - uses: actions/checkout@v6
       - name: Build app and installer
@@ -81,15 +76,17 @@ jobs:
           name: Vitals-dmg
           path: apps/desktop/build/Vitals.dmg
 
-  # main only: publish the GitHub Release (version = commit count). `needs: build`
-  # chains through test + lint + build, so if any of them fail this job is skipped
-  # and nothing is built or published — users must never auto-update onto a build
-  # that didn't pass.
+  # main only: build + publish the GitHub Release (version = commit count).
+  # `needs: [test, lint]` gates it, and build.sh below is the release-config
+  # build — if tests or lint fail, this job is skipped and nothing is built or
+  # published, so users never auto-update onto a build that didn't pass. A red
+  # build.sh here fails the job before `gh release create` runs, so a broken
+  # compile can't publish either.
   release:
     name: Build and publish release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: macos-26
-    needs: build
+    needs: [test, lint]
     permissions:
       contents: write
     steps:
