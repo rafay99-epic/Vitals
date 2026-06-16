@@ -82,9 +82,10 @@ enum ProblemReport {
             lines.append("Please attach the file just revealed in Finder (\(reportName)) — it has the full log.")
         }
         var body = lines.joined(separator: "\n")
-        // mailto: URLs are length-limited in practice; keep the body bounded and
-        // let the attached report carry the full detail.
-        if body.count > 1800 { body = String(body.prefix(1800)) + "\n…(truncated — see the attached log)" }
+        // mailto: URLs are length-limited in practice (~2000 chars), and
+        // percent-encoding inflates the body well beyond its character count —
+        // so cap conservatively and let the attached report carry the detail.
+        if body.count > 1200 { body = String(body.prefix(1200)) + "\n…(truncated — see the attached log)" }
         return body
     }
 

@@ -10,7 +10,7 @@ struct GPUAccelerationSettingsTests {
     private func freshSettings() -> AppSettings {
         let suite = UserDefaults(suiteName: "vitals.test.gpuaccel")!
         suite.removePersistentDomain(forName: "vitals.test.gpuaccel")
-        return AppSettings(defaults: suite)
+        return AppSettings(defaults: suite, configURL: nil)
     }
 
     @Test func shipsLeanByDefault() {

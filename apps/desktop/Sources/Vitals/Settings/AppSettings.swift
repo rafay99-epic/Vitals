@@ -269,12 +269,16 @@ final class AppSettings: ObservableObject {
     @Published private(set) var loginItemError: String?
 
     private let defaults: UserDefaults
+    /// Where settings are mirrored for durability. nil disables the mirror —
+    /// used by tests so they never touch the real `~/.vitals/config.json`.
+    private let configURL: URL?
     private var syncingLoginItem = false
     private var activeObservers: [NSObjectProtocol] = []
+    private var cancellables = Set<AnyCancellable>()
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        defaults.register(defaults: [
+    /// The defaults registered at launch. Extracted to a static so `ConfigStore`
+    /// can derive the full set of persisted keys from one source — no drift.
+    static let registeredDefaults: [String: Any] = [
             "refreshInterval": 2.0,
             "temperatureUnit": TemperatureUnit.celsius.rawValue,
             "historyMinutes": 10,
@@ -319,7 +323,23 @@ final class AppSettings: ObservableObject {
             // value always wins.
             "hiddenTabs": AppTab.defaultHidden.map(\.rawValue).joined(separator: ","),
             "tabOrder": AppTab.defaultOrder.map(\.rawValue).joined(separator: ","),
-        ])
+    ]
+
+    /// Every UserDefaults key Vitals owns: the registered ones, plus the two
+    /// stored outside registration (the menu-bar metric set and the alert rules).
+    /// `ConfigStore` mirrors exactly these to `config.json`. A new setting is
+    /// covered automatically if it has a registered default; otherwise add it.
+    static var persistedKeys: [String] {
+        Array(registeredDefaults.keys) + ["menuBarMetrics", "alertRules"]
+    }
+
+    init(defaults: UserDefaults = .standard, configURL: URL? = ConfigStore.fileURL) {
+        self.defaults = defaults
+        self.configURL = configURL
+        // Restore the durable config into UserDefaults before anything is read,
+        // so settings survive a reinstall / cask upgrade that wiped the defaults.
+        let restored = configURL.map { ConfigStore.restore(into: defaults, from: $0) } ?? 0
+        defaults.register(defaults: Self.registeredDefaults)
 
         refreshInterval = defaults.double(forKey: "refreshInterval")
         unit = TemperatureUnit(rawValue: defaults.string(forKey: "temperatureUnit") ?? "") ?? .celsius
@@ -376,11 +396,54 @@ final class AppSettings: ObservableObject {
             center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.appActive = false }
             },
+            // On quit, flush any settings still inside the debounce window, so a
+            // change made in the last second before quitting isn't lost.
+            center.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.flushConfig() }
+            },
         ]
 
         // didSet doesn't fire during init, so push the stored level into the
         // logger by hand — done last, once every stored property exists.
         Log.configure(minimumLevel: diagnosticLogLevel)
+        if restored > 0 {
+            Log.notice(.settings, "restored \(restored) settings from config.json")
+        }
+
+        // Mirror every change to the durable config file, debounced so a burst of
+        // edits writes once. `save` skips unchanged content, so focus-driven
+        // republishes (appActive) don't churn the file. Off-main: it's file I/O.
+        objectWillChange
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] in self?.saveConfig() }
+            .store(in: &cancellables)
+        // Ensure the file exists from the first launch, even with no edits.
+        saveConfig()
+    }
+
+    /// The bytes of the last config we wrote, so an unchanged save (e.g. the
+    /// republish that fires on every window-focus change) is a cheap in-memory
+    /// comparison rather than a disk read + write.
+    private var lastConfigData: Data?
+
+    /// Mirrors the current settings to `config.json` off the main thread, but
+    /// only when the persisted content actually changed.
+    private func saveConfig() {
+        guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
+              data != lastConfigData else { return }
+        lastConfigData = data
+        DispatchQueue.global(qos: .utility).async {
+            ConfigStore.write(data, to: configURL)
+        }
+    }
+
+    /// Writes the config synchronously — used on app termination so the last
+    /// edits land even if they happened inside the save debounce window.
+    private func flushConfig() {
+        guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
+              data != lastConfigData else { return }
+        lastConfigData = data
+        ConfigStore.write(data, to: configURL)
     }
 
     deinit {

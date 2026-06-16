@@ -34,14 +34,14 @@ export default function Privacy() {
         </List>
         <P>
           <Strong>None of this leaves your machine.</Strong> Readings exist in the App's memory while it runs. If you enable
-          logging, readings are appended to a CSV file stored at <Strong>~/.vitals/history.csv</Strong> on your Mac — a file you can
+          logging, readings are appended to a CSV file stored at <Strong>~/.vitals/history/history.csv</Strong> on your Mac — a file you can
           open, export, or delete at any time. The App never uploads this file anywhere.
         </P>
       </Section>
 
       <Section title="2. Diagnostic logs">
         <P>
-          To help diagnose problems, the App keeps a developer diagnostic log at <Strong>~/.vitals/vitals.log</Strong> on your Mac.
+          To help diagnose problems, the App keeps a developer diagnostic log at <Strong>~/.vitals/logs/vitals.log</Strong> on your Mac.
           You control how much it records (Off, Errors, Normal, or Verbose) in Settings → Developer, and you can read it in the
           App's Log Console or reveal the file in Finder. Unlike the readings log above, this records what the App's own code is
           doing — events, errors with their technical details, and, if the App ever crashes, a record of the crash so the problem
@@ -72,8 +72,9 @@ export default function Privacy() {
       <Section title="4. Settings stored on your device">
         <P>
           Your preferences (refresh interval, temperature unit, theme, alert thresholds, and similar) are stored in macOS user
-          defaults on your machine. If you enable fan control, your chosen fan settings are written to{' '}
-          <Strong>/Library/Application Support/Vitals/fan-state.json</Strong> so the helper can apply them. Both are local files
+          defaults on your machine and mirrored to a readable JSON file at <Strong>~/.vitals/config/config.json</Strong>, so your
+          setup survives an update or reinstall. If you enable fan control, your chosen fan settings are written to{' '}
+          <Strong>/Library/Application Support/Vitals/fan-state.json</Strong> so the helper can apply them. These are local files
           under your control and are removed when you uninstall the App and its helper.
         </P>
       </Section>

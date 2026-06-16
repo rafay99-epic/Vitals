@@ -13,7 +13,7 @@ struct AlertEvent: Identifiable {
 /// Best-effort: a failed write is silently dropped (an alert log is not critical
 /// data), and parsing skips any malformed line.
 enum AlertLog {
-    static var fileURL: URL { DataHome.directory.appendingPathComponent("alerts.log") }
+    static var fileURL: URL { DataHome.alertsFile }
 
     static func record(message: String, at time: Date) {
         let line = isoFormatter.string(from: time) + "\t"

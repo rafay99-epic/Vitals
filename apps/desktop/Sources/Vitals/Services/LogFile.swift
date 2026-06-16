@@ -33,18 +33,23 @@ final class LogFile {
         return decoder
     }()
 
-    /// Queues one entry for persistence. Returns at once.
+    /// Queues one entry for persistence. Returns at once — the JSON encode runs
+    /// on the serial queue, not the (sometimes main) calling thread.
     func append(_ entry: Log.Entry) {
-        guard let line = try? Self.encoder.encode(entry) else { return }
-        queue.async { [weak self] in self?.write(line) }
+        queue.async { [weak self] in
+            guard let self, let line = try? Self.encoder.encode(entry) else { return }
+            self.write(line)
+        }
     }
 
     /// Writes an entry and blocks until it (and anything already queued) is on
     /// disk. Used by the clean-shutdown marker and the exception handler, where
     /// the process is about to die and the async queue would never drain.
     func appendSync(_ entry: Log.Entry) {
-        guard let line = try? Self.encoder.encode(entry) else { return }
-        queue.sync { self.write(line) }
+        queue.sync {
+            guard let line = try? Self.encoder.encode(entry) else { return }
+            self.write(line)
+        }
     }
 
     /// Blocks until every queued write has landed. Called before the app exits.
@@ -75,7 +80,7 @@ final class LogFile {
         if let handle { return handle }
         let fm = FileManager.default
         do {
-            try fm.createDirectory(at: DataHome.directory, withIntermediateDirectories: true)
+            try fm.createDirectory(at: DataHome.logsDirectory, withIntermediateDirectories: true)
             if let size = fileSizeBytes, size > Self.maximumBytes {
                 let archived = DataHome.logPrevious
                 try? fm.removeItem(at: archived)

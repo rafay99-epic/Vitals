@@ -89,7 +89,12 @@ enum AppUninstaller {
         process.arguments = ["delete", bundleID]
         process.standardOutput = Pipe()
         process.standardError = Pipe()
-        try? process.run()
+        do {
+            try process.run()
+        } catch {
+            Log.notice(.uninstall, "couldn't clear the preferences domain \(bundleID)", error: error)
+            return
+        }
         process.waitUntilExit()
     }
 

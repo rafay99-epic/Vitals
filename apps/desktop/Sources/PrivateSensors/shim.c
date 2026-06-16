@@ -185,9 +185,16 @@ void vitals_socpower_destroy(void *handle) {
 }
 
 // ---------------------------------------------------------------------------
-// Crash capture (see PrivateSensors.h). Async-signal-safe: the handler only
-// touches a fixed path buffer, a fixed frame buffer, and the open/write/
-// backtrace_symbols_fd allow-list — no malloc, no stdio, no locks.
+// Crash capture (see PrivateSensors.h). Strictly async-signal-safe: the handler
+// only calls open/write/close, backtrace(), and raise() — all on POSIX's
+// async-signal-safe list — over fixed buffers, with no malloc, stdio, or locks.
+//
+// It deliberately does NOT call backtrace_symbols_fd: that symbolicates via
+// dladdr(), which takes the dyld lock and can malloc — so a crash that already
+// holds those (a libmalloc abort from heap corruption, or a fault inside dyld)
+// would deadlock the handler and the process would hang instead of dying. We
+// write the raw return addresses instead, and re-raise to SIG_DFL so the OS
+// crash reporter produces the fully symbolicated report regardless.
 // ---------------------------------------------------------------------------
 
 #include <signal.h>
@@ -216,14 +223,32 @@ static void vitals_write_str(int fd, const char *s) {
     if (len > 0) { ssize_t r = write(fd, s, len); (void)r; }
 }
 
+// Writes a pointer as "0x" + 16 hex digits + newline, using only write() — no
+// snprintf (which is not guaranteed async-signal-safe).
+static void vitals_write_addr(int fd, unsigned long value) {
+    static const char hex[] = "0123456789abcdef";
+    char buf[19];
+    buf[0] = '0';
+    buf[1] = 'x';
+    for (int i = 0; i < 16; i++) {
+        buf[2 + i] = hex[(value >> ((15 - i) * 4)) & 0xf];
+    }
+    buf[18] = '\n';
+    ssize_t r = write(fd, buf, sizeof(buf));
+    (void)r;
+}
+
 static void vitals_crash_handler(int sig) {
     int fd = open(vitals_crash_log_path, O_WRONLY | O_APPEND | O_CREAT, 0644);
     if (fd >= 0) {
         vitals_write_str(fd, "\n===== VITALS-SIGNAL-CRASH ");
         vitals_write_str(fd, vitals_signal_name(sig));
         vitals_write_str(fd, " =====\n");
+        vitals_write_str(fd, "return addresses (symbolicate with the OS crash report):\n");
         int n = backtrace(vitals_crash_frames, 128);
-        backtrace_symbols_fd(vitals_crash_frames, n, fd);
+        for (int i = 0; i < n; i++) {
+            vitals_write_addr(fd, (unsigned long)vitals_crash_frames[i]);
+        }
         vitals_write_str(fd, "===== END-CRASH =====\n");
         close(fd);
     }

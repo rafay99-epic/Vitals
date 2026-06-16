@@ -22,7 +22,7 @@ enum CrashReporter {
     static let cleanShutdownMessage = "session ended cleanly"
 
     private static let signalMarker = "===== VITALS-SIGNAL-CRASH"
-    private static var ackFile: URL { DataHome.directory.appendingPathComponent("crash-ack") }
+    private static var ackFile: URL { DataHome.crashAckFile }
 
     /// Arms the signal + exception handlers. Call once, early in launch (after
     /// `DataHome.prepare()` so the log directory exists).
