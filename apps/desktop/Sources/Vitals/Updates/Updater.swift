@@ -242,11 +242,13 @@ final class Updater: ObservableObject {
         return decoder
     }
 
-    /// Build a `Release` from an API payload, preferring this channel's DMG.
+    /// Build a `Release` from an API payload, matching **exactly** this channel's
+    /// DMG. No fallback to an arbitrary `.dmg`: the Nightly feed must ignore a
+    /// leftover Stable/Dev asset (e.g. an old `Vitals-Dev.dmg` pre-release), or it
+    /// would offer a cross-channel build. Returns nil if the channel's asset isn't
+    /// present (Dev has none and never reaches here).
     nonisolated private static func release(from api: APIRelease) -> Release? {
-        let asset = assetName.flatMap { name in api.assets.first { $0.name == name } }
-            ?? api.assets.first { $0.name.hasSuffix(".dmg") }
-        guard let asset else { return nil }
+        guard let assetName, let asset = api.assets.first(where: { $0.name == assetName }) else { return nil }
         let version = api.tagName.hasPrefix("v") ? String(api.tagName.dropFirst()) : api.tagName
         return Release(version: version, tag: api.tagName, assetURL: asset.url,
                        assetName: asset.name, buildNumber: buildNumber(in: api.name))
