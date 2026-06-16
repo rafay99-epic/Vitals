@@ -104,7 +104,13 @@ enum LaunchItemScanner {
     static func trashUserAgent(item: LaunchItem) -> Bool {
         guard item.kind == .userAgent, item.isActionable else { return false }
         run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(item.label)"])
-        return (try? FileManager.default.trashItem(at: item.plistPath, resultingItemURL: nil)) != nil
+        do {
+            try FileManager.default.trashItem(at: item.plistPath, resultingItemURL: nil)
+            return true
+        } catch {
+            Log.error(.app, "couldn't trash login item \(item.plistPath.lastPathComponent)", error: error)
+            return false
+        }
     }
 
     /// Builds a root script for a system-domain disable/remove, re-validating the

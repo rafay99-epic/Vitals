@@ -76,11 +76,16 @@ enum FanDaemon {
 
     private static func apply(using smc: SMC) {
         for command in FanControl.loadCommands() {
-            switch command.mode {
-            case .manual:
-                _ = try? smc.setFanTarget(command.fan, rpm: command.rpm)
-            case .auto:
-                try? smc.setFanAutomatic(command.fan)
+            do {
+                switch command.mode {
+                case .manual: _ = try smc.setFanTarget(command.fan, rpm: command.rpm)
+                case .auto:   try smc.setFanAutomatic(command.fan)
+                }
+            } catch {
+                // Runs every loop tick — log once per fan so a persistent SMC
+                // write failure surfaces without flooding.
+                Log.noticeOnce(.fan, key: "fandaemon-apply-\(command.fan)",
+                               "fan \(command.fan): SMC write failed — manual curve isn't being applied", error: error)
             }
         }
     }

@@ -396,6 +396,11 @@ final class AppSettings: ObservableObject {
             center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.appActive = false }
             },
+            // On quit, flush any settings still inside the debounce window, so a
+            // change made in the last second before quitting isn't lost.
+            center.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.flushConfig() }
+            },
         ]
 
         // didSet doesn't fire during init, so push the stored level into the
@@ -416,13 +421,29 @@ final class AppSettings: ObservableObject {
         saveConfig()
     }
 
-    /// Writes the current settings to `config.json` off the main thread.
+    /// The bytes of the last config we wrote, so an unchanged save (e.g. the
+    /// republish that fires on every window-focus change) is a cheap in-memory
+    /// comparison rather than a disk read + write.
+    private var lastConfigData: Data?
+
+    /// Mirrors the current settings to `config.json` off the main thread, but
+    /// only when the persisted content actually changed.
     private func saveConfig() {
-        guard let configURL else { return }
-        let defaults = self.defaults
+        guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
+              data != lastConfigData else { return }
+        lastConfigData = data
         DispatchQueue.global(qos: .utility).async {
-            ConfigStore.save(defaults, keys: Self.persistedKeys, to: configURL)
+            ConfigStore.write(data, to: configURL)
         }
+    }
+
+    /// Writes the config synchronously — used on app termination so the last
+    /// edits land even if they happened inside the save debounce window.
+    private func flushConfig() {
+        guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
+              data != lastConfigData else { return }
+        lastConfigData = data
+        ConfigStore.write(data, to: configURL)
     }
 
     deinit {

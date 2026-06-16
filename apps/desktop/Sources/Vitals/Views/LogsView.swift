@@ -22,10 +22,15 @@ struct LogsView: View {
     @State private var reporting = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            controlBar
+        // Compute the filtered, grouped entries once per render — `days` builds
+        // the filtered list internally, so deriving the count and the empty
+        // check from it avoids re-filtering up to 2000 entries two more times.
+        let groups = days
+        let total = groups.reduce(0) { $0 + $1.entries.count }
+        return VStack(spacing: 0) {
+            controlBar(count: total)
             Divider().opacity(0.5)
-            content
+            content(groups: groups)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $reporting) {
@@ -60,13 +65,13 @@ struct LogsView: View {
 
     // MARK: Control bar
 
-    private var controlBar: some View {
+    private func controlBar(count: Int) -> some View {
         HStack(spacing: 10) {
             levelMenu
             categoryMenu
             searchField
             Spacer(minLength: 8)
-            Text("\(filtered.count) \(filtered.count == 1 ? "line" : "lines")")
+            Text("\(count) \(count == 1 ? "line" : "lines")")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             Button {
@@ -167,8 +172,8 @@ struct LogsView: View {
     // MARK: Content
 
     @ViewBuilder
-    private var content: some View {
-        if filtered.isEmpty {
+    private func content(groups: [(key: String, entries: [Log.Entry])]) -> some View {
+        if groups.isEmpty {
             ScrollView {
                 EmptyStateView(
                     symbol: store.entries.isEmpty ? "text.alignleft" : "line.3.horizontal.decrease.circle",
@@ -183,7 +188,7 @@ struct LogsView: View {
         } else {
             // List is lazy, so a couple thousand rows stay cheap to scroll.
             List {
-                ForEach(days, id: \.key) { day in
+                ForEach(groups, id: \.key) { day in
                     Section {
                         ForEach(day.entries) { entry in
                             LogRow(entry: entry)

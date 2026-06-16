@@ -15,6 +15,10 @@ final class LogStore: ObservableObject {
     /// Caps memory for a long-running session; the on-disk file keeps the longer
     /// tail. ~2k lines is plenty to scroll and cheap to filter.
     private let maxEntries = 2_000
+    /// Trim in batches: `removeFirst` shifts the whole array (O(n)), so we let it
+    /// grow a little past the cap and then drop a chunk — amortizing the cost to
+    /// roughly O(1) per appended line instead of O(n) on every line at the cap.
+    private let trimSlack = 256
 
     init() {
         // Seed from disk off the main thread, then register for live entries.
@@ -34,9 +38,12 @@ final class LogStore: ObservableObject {
 
     private func append(_ entry: Log.Entry) {
         entries.append(entry)
-        trim()
+        if entries.count > maxEntries + trimSlack {
+            entries.removeFirst(entries.count - maxEntries)
+        }
     }
 
+    /// One-time trim after seeding from disk.
     private func trim() {
         if entries.count > maxEntries {
             entries.removeFirst(entries.count - maxEntries)

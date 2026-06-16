@@ -18,10 +18,11 @@ enum ConfigStore {
     /// so e.g. alert rules are legible rather than an opaque blob.
     private static let jsonDataKeys: Set<String> = ["alertRules"]
 
-    /// Reads `keys` from `defaults` and writes them as pretty JSON. Skips the
-    /// write when the content is unchanged, so incidental republishes (window
-    /// focus, etc.) don't churn the file.
-    static func save(_ defaults: UserDefaults, keys: [String], to url: URL = fileURL) {
+    /// Serializes `keys` from `defaults` to pretty, key-sorted JSON. Pure — no
+    /// I/O — so the caller can compare it against the last write in memory and
+    /// skip the disk entirely when nothing changed (`.sortedKeys` makes the bytes
+    /// stable for that compare). Returns nil if there's nothing valid to encode.
+    static func serialize(_ defaults: UserDefaults, keys: [String]) -> Data? {
         var dict: [String: Any] = [:]
         for key in keys {
             if jsonDataKeys.contains(key) {
@@ -33,17 +34,24 @@ enum ConfigStore {
                 dict[key] = value
             }
         }
-        guard JSONSerialization.isValidJSONObject(dict),
-              let out = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
-        else { return }
-        if let existing = try? Data(contentsOf: url), existing == out { return }  // nothing changed
+        guard JSONSerialization.isValidJSONObject(dict) else { return nil }
+        return try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
+    }
 
+    /// Writes serialized config bytes to `url` atomically.
+    static func write(_ data: Data, to url: URL) {
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try out.write(to: url, options: .atomic)
+            try data.write(to: url, options: .atomic)
         } catch {
             Log.notice(.settings, "couldn't write settings config", error: error)
         }
+    }
+
+    /// Convenience: serialize and write in one step (used by tests).
+    static func save(_ defaults: UserDefaults, keys: [String], to url: URL = fileURL) {
+        guard let data = serialize(defaults, keys: keys) else { return }
+        write(data, to: url)
     }
 
     /// If the config file exists, pushes its values back into `defaults`. Returns
