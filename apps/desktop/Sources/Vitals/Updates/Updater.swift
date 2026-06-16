@@ -187,6 +187,7 @@ final class Updater: ObservableObject {
         let tagName: String
         let name: String?
         let prerelease: Bool?
+        let draft: Bool?
         let assets: [Asset]
     }
 
@@ -205,11 +206,13 @@ final class Updater: ObservableObject {
     }
 
     nonisolated private static func fetchLatestPrerelease() async throws -> Release? {
-        // The list is newest-first; take the first pre-release carrying a Nightly DMG.
+        // The list is newest-first; take the first published pre-release carrying
+        // a Nightly DMG. Skip drafts — they're visible to maintainers but aren't
+        // released, and the backend (convex/lib/github.ts) excludes them too.
         let endpoint = "https://api.github.com/repos/\(repository)/releases?per_page=30"
         guard let data = try await get(endpoint) else { return nil }
         let releases = try jsonDecoder().decode([APIRelease].self, from: data)
-        for api in releases where (api.prerelease ?? false) {
+        for api in releases where (api.prerelease ?? false) && !(api.draft ?? false) {
             if let release = release(from: api) { return release }
         }
         return nil  // no Nightly pre-release published yet

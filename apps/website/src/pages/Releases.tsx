@@ -395,8 +395,8 @@ const nightlyButton: CSSProperties = {
   textDecoration: 'none',
   padding: '8px 14px',
   borderRadius: 9,
-  background: 'rgba(191,90,242,0.1)',
-  border: '1px solid rgba(191,90,242,0.32)',
+  background: 'rgba(255,159,10,0.12)',
+  border: '1px solid rgba(255,159,10,0.35)',
   flexShrink: 0,
 }
 const ghostButton: CSSProperties = {

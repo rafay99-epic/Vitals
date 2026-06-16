@@ -16,8 +16,9 @@ on:
       - ".github/workflows/nightly.yml"
   workflow_dispatch:
 
+# Read-only by default — only the publish job below is granted contents: write.
 permissions:
-  contents: write
+  contents: read
 
 # One in-flight nightly build; a newer push supersedes an older one. Run numbers
 # still increase strictly, so build ordering is never disturbed.
@@ -35,6 +36,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Run tests
         run: swift test
       - name: Install SwiftLint
@@ -46,6 +49,9 @@ jobs:
     name: Build and publish Nightly pre-release
     runs-on: macos-26
     needs: test
+    # Only this job writes releases (least privilege; the test job stays read-only).
+    permissions:
+      contents: write
     # Only the canonical repo publishes — a fork building its own `nightly`
     # branch must not push to (or fail against) these releases.
     if: github.repository == 'rafay99-epic/Vitals'
@@ -53,6 +59,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # full history — the version is the commit count
+          persist-credentials: false # we publish via gh, never git push
 
       - name: Compute identity
         run: |
