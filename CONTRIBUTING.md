@@ -45,10 +45,20 @@ settings) so you can test without touching a real install.
 
 ## Branch & PR workflow
 
-- **Never commit directly to `main`.** `main` is production — releases are cut
-  from it automatically. Direct pushes are blocked.
-- Branch from `main` (`fix/...`, `feat/...`, `chore/...`), push, and open a
-  **pull request**. Opening it as a **draft** while you iterate is encouraged.
+Vitals runs three channels: **Stable** (`main`), **Nightly** (the `nightly`
+integration branch, published as an auto-updating pre-release for testers), and
+**Dev** (your local `./dev.sh` build — never published).
+
+- **Branch from `nightly`, and open your PR against `nightly`** (`fix/...`,
+  `feat/...`, `chore/...`). That's the integration line — `nightly` is the
+  default branch, so new PRs target it automatically. Opening the PR as a
+  **draft** while you iterate is encouraged.
+- **Never commit directly to `main`.** `main` is Stable: the maintainer promotes
+  `nightly → main` (squash) on a weekly cadence, and that push cuts the Stable
+  release. Direct pushes to `main` are blocked.
+- Use `./dev.sh` to build and run your change locally as **Vitals Dev** while you
+  work — no release needed. Once your PR merges to `nightly`, CI publishes a
+  Nightly build automatically.
 - Keep a PR focused on one thing. Update docs when behavior changes.
 - The maintainer **squash-merges** PRs, so your branch's individual commits are
   collapsed — a clear PR title and description matter most.

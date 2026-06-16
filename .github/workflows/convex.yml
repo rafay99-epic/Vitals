@@ -9,6 +9,10 @@ name: Convex
 # Requires a repo secret CONVEX_DEPLOY_KEY: a *production* deploy key (Convex
 # dashboard → Project → Settings → Deploy keys). The GITHUB_TOKEN that lifts the
 # GitHub rate limit is a separate Convex *env var* on the deployment, not here.
+#
+# Deploys track `main` (Stable) ONLY — do NOT add `nightly` here. The website's
+# "latest Nightly" section reads the GitHub feed live at runtime, so a nightly
+# build needs no production redeploy.
 on:
   push:
     branches: [main]

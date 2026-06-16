@@ -897,24 +897,31 @@ private struct UpdatesPane: View {
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
-                SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Button("Check for Updates") {
-                            Task { await updater.check(userInitiated: true) }
-                        }
-                        .disabled(updater.isBusy)
-                        if case .available(let release) = updater.status {
-                            Button("Install \(Channel.current.displayName) \(release.displayVersion)") {
-                                Task { await updater.downloadAndInstall() }
+                if Channel.current.updatesEnabled {
+                    SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Button("Check for Updates") {
+                                Task { await updater.check(userInitiated: true) }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .disabled(updater.isBusy)
+                            if case .available(let release) = updater.status {
+                                Button("Install \(Channel.current.displayName) \(release.displayVersion)") {
+                                    Task { await updater.downloadAndInstall() }
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
                         }
+                        .controlSize(.small)
+                        Text(updateStatusLine)
+                            .font(.caption)
+                            .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     }
-                    .controlSize(.small)
-                    Text(updateStatusLine)
+                } else {
+                    Text("Dev builds don't auto-update — rebuild with ./dev.sh to change versions.")
                         .font(.caption)
-                        .foregroundStyle(updateStatusIsError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -928,8 +935,8 @@ private struct UpdatesPane: View {
     private var updateStatusLine: String {
         switch updater.status {
         case .idle:
-            return Channel.current.isDev
-                ? "Dev tracks the newest pre-release build on GitHub."
+            return Channel.current.isPrerelease
+                ? "Nightly tracks the newest pre-release build on GitHub."
                 : "Updates install from this project's GitHub releases."
         case .checking:
             return "Checking for updates…"
@@ -971,7 +978,7 @@ private struct AboutPane: View {
         } else {
             line = "Version \(Updater.currentVersion) (build \(build))"
         }
-        // Dev builds stamp the exact branch@sha so you know what's running.
+        // Nightly and Dev builds stamp the exact branch@sha so you know what's running.
         if let info = Channel.buildInfo { line += " · \(info)" }
         return line
     }

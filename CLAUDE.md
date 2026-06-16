@@ -19,8 +19,12 @@ License: **GPL-3.0**.
 
 ## Workflow rules (user's explicit requirements — do not violate)
 
-- **Every feature on its own branch from main** → push → **draft PR**. The user
-  squash-merges. Never commit features directly to main.
+- **`nightly` is the integration branch; `main` is Stable.** Every feature on its
+  own branch **from `nightly`** → push → **draft PR into `nightly`**. The user
+  squash-merges. The user promotes **`nightly → main` (squash) weekly**, which cuts
+  the Stable release. Never commit features directly to `main` or `nightly`; `main`
+  moves only via the weekly promotion (so don't hand-commit to it — it would diverge
+  from `nightly` and conflict the next squash).
 - **No Claude attribution anywhere**: no `Co-Authored-By`, no "Generated with Claude"
   in commits, PR bodies, or app credits. The app is credited to Syntax Lab Technology /
   Abdul Rafay (rafay99.com).
@@ -37,8 +41,12 @@ License: **GPL-3.0**.
 
 ## Versioning & releases
 
-- Version = `0.<total commit count on main>`, computed in `ci.yml` and `build.sh`
-  (`VITALS_VERSION` env overrides). Currently shipping v0.19.
+- **Two independent version systems, one per feed.** Stable version =
+  `0.<total commit count on main>`, computed in `ci.yml` and `build.sh`
+  (`VITALS_VERSION` env overrides). Nightly orders strictly by `VitalsBuildNumber`
+  (= the CI run number, never resets), with a cosmetic `0.<count on nightly>-nightly`
+  version string — so the weekly squash divergence between `nightly`/`main` can't
+  perturb Nightly ordering. Dev has no feed.
 - Every push to main touching `apps/desktop/**` publishes a GitHub Release (DMG) from a
   **single pipeline** (`ci.yml`): the publish job `needs:` build, which `needs:` test +
   lint, so if any of test/lint/build fail the release is skipped — nothing is built or
@@ -49,27 +57,39 @@ License: **GPL-3.0**.
 - Website + app updater both rely on `releases/latest/download/Vitals.dmg` — never
   rename the DMG asset.
 
-### Build channels (Stable + Dev)
+### Build channels (Stable + Nightly + Dev)
 
 - `VITALS_CHANNEL` (read by `build.sh` + `make-dmg.sh`) selects the channel; **default
-  `stable`**, so `ci.yml`'s release path is unaffected. `dev` builds **`Vitals Dev.app`** /
-  **`Vitals-Dev.dmg`** with bundle id `…vitals.dev`, a purple+`DEV` icon, version
-  `…-dev`, a baked `VitalsBuildInfo` (`branch@sha`), and a `VitalsBuildNumber`
-  (`VITALS_BUILD`, the CI run number). The two install side by side and run at once —
-  the single-instance guard keys off `Bundle.main.bundleIdentifier`.
-- Everything channel-specific derives at runtime from the bundle, not hardcoded:
-  `Channel.current` (reads the `VitalsChannel` Info.plist key), `FanControl.label` /
-  `supportDir` (so Dev's fan helper + `/Library/Application Support/Vitals Dev` are
-  isolated), and `Updater.installPath` (= `Bundle.main.bundlePath`).
-- **Two release feeds.** Stable → `ci.yml` (push to main) publishes a normal
-  release (`Vitals.dmg`, marked latest). Dev → `prerelease.yml` (push to any non-main
-  branch) publishes a **per-branch pre-release** (`dev-<branch>`) carrying
-  `Vitals-Dev.dmg`; both are test-gated. The release **title must contain `build <n>`**
-  — the Dev updater parses it. The Dev updater (`fetchLatestPrerelease`) tracks the
-  **newest pre-release** and orders builds by `VitalsBuildNumber` (Stable still orders
-  by version). The release DMG must contain `<CFBundleName>.app` (`Updater.bundleInImage`).
-- **`./dev.sh`** builds the current branch as Dev and installs+launches it locally next
-  to Stable (build number 0, so it'll offer to pull the published pre-release).
+  `stable`**, so `ci.yml`'s release path is unaffected. The three channels:
+  - **`stable`** → `Vitals.app` / `Vitals.dmg`, bundle `…vitals`, data `~/.vitals`,
+    red icon, clean numeric version. Cask `vitals`.
+  - **`nightly`** → `Vitals Nightly.app` / `Vitals-Nightly.dmg`, bundle `…vitals.nightly`,
+    data `~/.vitals-nightly`, amber+`NIGHTLY` icon, version `…-nightly`, baked
+    `VitalsBuildInfo` (`branch@sha`) + `VitalsBuildNumber` (`VITALS_BUILD`, CI run number).
+    Cask `vitals-nightly`.
+  - **`dev`** → `Vitals Dev.app`, bundle `…vitals.dev`, data `~/.vitals-dev`, purple+`DEV`
+    icon, version `…-dev`. **Local only — never publishes a DMG (`make-dmg.sh` errors on
+    `dev`) and its updater is disabled** (`Channel.updatesEnabled == false`).
+  All install side by side and run at once — the single-instance guard keys off
+  `Bundle.main.bundleIdentifier`.
+- Everything channel-specific derives at runtime from the bundle via named `Channel`
+  properties, not hardcoded `isDev` checks: `Channel.current` (reads the `VitalsChannel`
+  Info.plist key), `displayName` / `badge` / `assetName` / `dataDirSuffix` / `isPrerelease`
+  / `updatesEnabled` / `ordersByBuildNumber`; plus `FanControl.label` / `supportDir` (so
+  each channel's fan helper + `/Library/Application Support/<displayName>` are isolated)
+  and `Updater.installPath` (= `Bundle.main.bundlePath`).
+- **Two release feeds (Dev publishes nothing).** Stable → `ci.yml` (push to `main`)
+  publishes a normal release (`Vitals.dmg`, marked latest, ordered by version). Nightly →
+  `nightly.yml` (push to the `nightly` branch) refreshes a **single rolling `nightly`
+  pre-release** carrying `Vitals-Nightly.dmg`, fork-guarded by `github.repository ==`;
+  both are test-gated. The release **title must contain `build <n>`** — the Nightly updater
+  (`Updater.buildNumber`) and the website's `convex/lib/github.ts` parse it. The Nightly
+  updater (`fetchLatestPrerelease`) tracks the **newest pre-release** and orders by
+  `VitalsBuildNumber`. The release DMG must contain `<CFBundleName>.app`
+  (`Updater.bundleInImage`).
+- **`./dev.sh`** builds the current branch as Dev (local, no updater). **`./nightly.sh`**
+  builds it as Nightly locally next to Stable (build number 0, so it'll offer to pull the
+  published Nightly).
 
 ## Commands
 

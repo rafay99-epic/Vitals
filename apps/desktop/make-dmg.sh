@@ -1,21 +1,33 @@
 #!/bin/zsh
 # Packages the built app into a polished drag-to-install disk image.
-#   VITALS_CHANNEL=stable (default) → build/Vitals.dmg     (Vitals.app)
-#   VITALS_CHANNEL=dev              → build/Vitals-Dev.dmg  ("Vitals Dev.app")
-# Runs ./build.sh first if the app is missing.
+#   VITALS_CHANNEL=stable (default) → build/Vitals.dmg         (Vitals.app)
+#   VITALS_CHANNEL=nightly          → build/Vitals-Nightly.dmg ("Vitals Nightly.app")
+# Dev is local-only and publishes no DMG (use ./dev.sh). Runs ./build.sh first
+# if the app is missing.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 CHANNEL="${VITALS_CHANNEL:-stable}"
-if [[ "$CHANNEL" == "dev" ]]; then
-  APP_NAME="Vitals Dev"
-  VOLUME="Vitals Dev"
-  OUT_DMG="build/Vitals-Dev.dmg"
-else
-  APP_NAME="Vitals"
-  VOLUME="Vitals"
-  OUT_DMG="build/Vitals.dmg"
-fi
+case "$CHANNEL" in
+  stable)
+    APP_NAME="Vitals"
+    VOLUME="Vitals"
+    OUT_DMG="build/Vitals.dmg"
+    ;;
+  nightly)
+    APP_NAME="Vitals Nightly"
+    VOLUME="Vitals Nightly"
+    OUT_DMG="build/Vitals-Nightly.dmg"
+    ;;
+  dev)
+    echo "Dev is local-only and publishes no DMG — use ./dev.sh instead." >&2
+    exit 1
+    ;;
+  *)
+    echo "VITALS_CHANNEL must be 'stable' or 'nightly' (got '$CHANNEL')" >&2
+    exit 1
+    ;;
+esac
 
 APP="build/$APP_NAME.app"
 [ -d "$APP" ] || VITALS_CHANNEL="$CHANNEL" ./build.sh

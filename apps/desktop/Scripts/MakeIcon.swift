@@ -4,13 +4,25 @@
 import AppKit
 
 let outputPath = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "icon.png"
-// Second arg picks the channel: "dev" recolors the heartbeat and stamps a DEV
-// badge so the Dock instantly distinguishes it from Stable.
+// Second arg picks the channel: "nightly" and "dev" recolor the heartbeat and
+// stamp a badge so the Dock instantly distinguishes them from Stable.
 let channel = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "stable"
-let isDev = channel == "dev"
-let accent = isDev
-    ? NSColor(calibratedRed: 0xbf / 255.0, green: 0x5a / 255.0, blue: 0xf2 / 255.0, alpha: 1)  // purple
-    : NSColor(calibratedRed: 0xff / 255.0, green: 0x45 / 255.0, blue: 0x3a / 255.0, alpha: 1)  // red
+func rgb(_ r: Int, _ g: Int, _ b: Int) -> NSColor {
+    NSColor(calibratedRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: 1)
+}
+let accent: NSColor
+let badgeLabel: String?
+switch channel {
+case "nightly":
+    accent = rgb(0xff, 0x9f, 0x0a)  // amber
+    badgeLabel = "NIGHTLY"
+case "dev":
+    accent = rgb(0xbf, 0x5a, 0xf2)  // purple
+    badgeLabel = "DEV"
+default:
+    accent = rgb(0xff, 0x45, 0x3a)  // red
+    badgeLabel = nil
+}
 let size = 1024
 
 guard let rep = NSBitmapImageRep(
@@ -78,10 +90,11 @@ line.lineJoinStyle = .round
 accent.setStroke()
 line.stroke()
 
-// DEV badge: a pill near the bottom of the squircle, below the heartbeat.
-if isDev {
-    let label = "DEV" as NSString
-    let font = NSFont.systemFont(ofSize: 118, weight: .heavy)
+// Channel badge: a pill near the bottom of the squircle, below the heartbeat.
+// Longer labels (NIGHTLY) shrink so they don't overflow the squircle.
+if let badgeLabel {
+    let label = badgeLabel as NSString
+    let font = NSFont.systemFont(ofSize: badgeLabel.count > 3 ? 84 : 118, weight: .heavy)
     let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
     let textSize = label.size(withAttributes: textAttrs)
     let padX: CGFloat = 56, padY: CGFloat = 22

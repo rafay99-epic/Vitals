@@ -2,7 +2,8 @@
 build/
 .swiftpm/
 
-# Dev-channel app icon — generated locally on the first `./dev.sh`, not shipped.
+# Nightly/Dev app icons — generated locally on first build, not shipped.
+apps/desktop/Resources/AppIcon-Nightly.icns
 apps/desktop/Resources/AppIcon-Dev.icns
 .DS_Store
 node_modules/
@@ -19,6 +20,3 @@ AGENTS.md
 .agents/
 skills-lock.json
 convex/_generated/ai/
-
-# Dev-channel app icon — generated locally, not shipped.
-apps/desktop/Resources/AppIcon-Dev.icns

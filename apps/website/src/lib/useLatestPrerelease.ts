@@ -6,8 +6,8 @@ import { convexEnabled } from './convex'
 
 export type { LatestPrerelease }
 
-/// Convex-backed: call the proxy action once on mount for the newest Dev
-/// pre-release (the `Vitals-Dev.dmg` feed).
+/// Convex-backed: call the proxy action once on mount for the newest Nightly
+/// pre-release (the `Vitals-Nightly.dmg` feed).
 function useLatestPrereleaseFromConvex(): LatestPrerelease | null {
   const latest = useAction(api.releases.latestPrerelease)
   const [release, setRelease] = useState<LatestPrerelease | null>(null)
@@ -41,7 +41,7 @@ function useLatestPrereleaseFromGitHub(): LatestPrerelease | null {
   return release
 }
 
-/// Newest Dev pre-release (build number, branch, DMG link, size) for the Dev
+/// Newest Nightly pre-release (build number, DMG link, size) for the Nightly
 /// channel section. Bound once at module load to the right source.
 export const useLatestPrerelease = convexEnabled
   ? useLatestPrereleaseFromConvex

@@ -9,7 +9,7 @@ import Honesty from './components/Honesty'
 import FanControl from './components/FanControl'
 import Manage from './components/Manage'
 import DownloadSection from './components/DownloadSection'
-import DevChannelSection from './components/DevChannelSection'
+import NightlyChannelSection from './components/NightlyChannelSection'
 import Footer from './components/Footer'
 import Reveal from './components/Reveal'
 import { Grain } from './components/Atmosphere'
@@ -65,7 +65,7 @@ export default function App() {
         {/* Download + Dev are the CTAs — always visible, never a reveal delay
             (people deep-link straight to #download). */}
         <DownloadSection release={release} />
-        <DevChannelSection prerelease={prerelease} />
+        <NightlyChannelSection prerelease={prerelease} />
         <Footer />
       </div>
       <Grain />

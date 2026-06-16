@@ -1,27 +1,36 @@
 #!/bin/zsh
 # Builds the app from scratch. Usage: ./build.sh
-#   VITALS_CHANNEL=stable (default) → Vitals.app          com.syntaxlabtechnology.vitals
-#   VITALS_CHANNEL=dev              → "Vitals Dev.app"     com.syntaxlabtechnology.vitals.dev
-# The two channels install side by side (different bundle id + name + data +
-# icon); Dev never auto-updates. CI builds Stable (no env var set).
+#   VITALS_CHANNEL=stable (default) → Vitals.app           com.syntaxlabtechnology.vitals
+#   VITALS_CHANNEL=nightly          → "Vitals Nightly.app" com.syntaxlabtechnology.vitals.nightly
+#   VITALS_CHANNEL=dev              → "Vitals Dev.app"      com.syntaxlabtechnology.vitals.dev
+# The channels install side by side (different bundle id + name + data + icon).
+# Stable + Nightly auto-update from GitHub releases; Dev never does. CI builds
+# Stable (ci.yml, no env var); nightly.yml builds Nightly.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 CHANNEL="${VITALS_CHANNEL:-stable}"
-if [[ "$CHANNEL" != "stable" && "$CHANNEL" != "dev" ]]; then
-  echo "VITALS_CHANNEL must be 'stable' or 'dev' (got '$CHANNEL')" >&2
-  exit 1
-fi
-
-if [[ "$CHANNEL" == "dev" ]]; then
-  APP_NAME="Vitals Dev"
-  BUNDLE_ID="com.syntaxlabtechnology.vitals.dev"
-  ICON_CACHE="Resources/AppIcon-Dev.icns"
-else
-  APP_NAME="Vitals"
-  BUNDLE_ID="com.syntaxlabtechnology.vitals"
-  ICON_CACHE="Resources/AppIcon.icns"
-fi
+case "$CHANNEL" in
+  stable)
+    APP_NAME="Vitals"
+    BUNDLE_ID="com.syntaxlabtechnology.vitals"
+    ICON_CACHE="Resources/AppIcon.icns"
+    ;;
+  nightly)
+    APP_NAME="Vitals Nightly"
+    BUNDLE_ID="com.syntaxlabtechnology.vitals.nightly"
+    ICON_CACHE="Resources/AppIcon-Nightly.icns"
+    ;;
+  dev)
+    APP_NAME="Vitals Dev"
+    BUNDLE_ID="com.syntaxlabtechnology.vitals.dev"
+    ICON_CACHE="Resources/AppIcon-Dev.icns"
+    ;;
+  *)
+    echo "VITALS_CHANNEL must be 'stable', 'nightly', or 'dev' (got '$CHANNEL')" >&2
+    exit 1
+    ;;
+esac
 
 echo "Compiling universal (arm64 + x86_64)…  [channel: $CHANNEL]"
 # Universal so the app can launch on an Intel Mac far enough to show its
@@ -37,14 +46,15 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 PB=/usr/libexec/PlistBuddy
 # Version is 0.<total commit count> — 10 commits → 0.10. CI passes
-# VITALS_VERSION; local builds compute it from the repo. Dev appends -dev and
-# stamps the exact branch@sha so the About screen shows what's running.
+# VITALS_VERSION; local builds compute it from the repo. Nightly and Dev append
+# a channel suffix (-nightly / -dev) and stamp the exact branch@sha so the About
+# screen shows what's running. Stable ships a clean numeric version.
 COMMIT_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 VERSION="${VITALS_VERSION:-0.$COMMIT_COUNT}"
-if [[ "$CHANNEL" == "dev" ]]; then
+if [[ "$CHANNEL" != "stable" ]]; then
   BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
   SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "?")
-  VERSION="$VERSION-dev"
+  VERSION="$VERSION-$CHANNEL"
   "$PB" -c "Add :VitalsBuildInfo string $BRANCH@$SHA" "$APP/Contents/Info.plist" 2>/dev/null \
     || "$PB" -c "Set :VitalsBuildInfo $BRANCH@$SHA" "$APP/Contents/Info.plist"
 fi
@@ -55,7 +65,7 @@ fi
 "$PB" -c "Add :CFBundleDisplayName string $APP_NAME" "$APP/Contents/Info.plist" 2>/dev/null \
   || "$PB" -c "Set :CFBundleDisplayName $APP_NAME" "$APP/Contents/Info.plist"
 "$PB" -c "Set :VitalsChannel $CHANNEL" "$APP/Contents/Info.plist"
-# Monotonic build number (CI run number) — orders Dev pre-releases for the
+# Monotonic build number (CI run number) — orders Nightly pre-releases for the
 # updater. Absent/0 for local builds.
 if [ -n "${VITALS_BUILD:-}" ]; then
   "$PB" -c "Add :VitalsBuildNumber string $VITALS_BUILD" "$APP/Contents/Info.plist" 2>/dev/null \

@@ -36,10 +36,12 @@ export interface LatestRelease {
   sizeMB: string | null
 }
 
-/// The latest Dev pre-release (a GitHub *prerelease* carrying a `Vitals-Dev.dmg`
-/// asset) as the marketing site consumes it. `branch`/`buildNumber` are parsed
-/// from the release name `Vitals Dev · <branch> · build <n>`; any field is null
-/// when it can't be read honestly.
+/// The latest Nightly pre-release (a GitHub *prerelease* carrying a
+/// `Vitals-Nightly.dmg` asset) as the marketing site consumes it. `buildNumber`
+/// is parsed from the release name `Vitals Nightly · build <n>`; `branch` is
+/// parsed only from legacy `Vitals Dev · <branch> · build <n>` titles and is
+/// null for new Nightly releases. Any field is null when it can't be read
+/// honestly.
 export type LatestPrerelease = {
   tag: string
   name: string
@@ -114,7 +116,7 @@ export async function fetchLatestRelease(opts: FetchOptions = {}): Promise<Lates
 /// `options.page` defaulting to 1). Resolves to a newest-first array of
 /// `ReleaseSummary`, or `null` on any failure (network error, non-2xx, non-array
 /// body) so the caller can show an error state. Drafts and tag-less releases are
-/// filtered out; prereleases (Dev builds) are KEPT and flagged via `prerelease`.
+/// filtered out; prereleases (Nightly builds) are KEPT and flagged via `prerelease`.
 export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSummary[] | null> {
   try {
     const page = opts.page ?? 1
@@ -144,17 +146,20 @@ export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSum
   }
 }
 
-/// The exact asset name a Dev pre-release ships. A release may carry both
-/// `Vitals.dmg` and `Vitals-Dev.dmg`, so we match this name exactly (never
-/// `.endsWith('.dmg')`).
-const DEV_DMG_NAME = 'Vitals-Dev.dmg'
+/// The exact asset name a Nightly pre-release ships. A release may carry both
+/// `Vitals.dmg` and `Vitals-Nightly.dmg`, so we match this name exactly (never
+/// `.endsWith('.dmg')`). Hard cut: old `Vitals-Dev.dmg` assets are intentionally
+/// ignored.
+const NIGHTLY_DMG_NAME = 'Vitals-Nightly.dmg'
 
-/// Fetches the latest Dev *pre-release* — the inverse of the public fetchers,
+/// Fetches the latest Nightly *pre-release* — the inverse of the public fetchers,
 /// which deliberately drop prereleases. Scans the (newest-first) release list
 /// and returns the FIRST non-draft prerelease carrying an asset named exactly
-/// `Vitals-Dev.dmg`, parsing `branch`/`buildNumber` from its name
-/// `Vitals Dev · <branch> · build <n>`. Returns `null` on any failure or when no
-/// matching prerelease exists, so the site degrades gracefully (never throws).
+/// `Vitals-Nightly.dmg`, parsing `buildNumber` from its name
+/// `Vitals Nightly · build <n>`. `branch` is parsed only from legacy
+/// `Vitals Dev · <branch> · build <n>` titles (null for new Nightly releases).
+/// Returns `null` on any failure or when no matching prerelease exists, so the
+/// site degrades gracefully (never throws).
 export async function fetchLatestPrerelease(options: FetchOptions = {}): Promise<LatestPrerelease | null> {
   try {
     const json = await githubGet('releases?per_page=30', options)
@@ -162,13 +167,13 @@ export async function fetchLatestPrerelease(options: FetchOptions = {}): Promise
 
     for (const raw of json as GitHubReleasePayload[]) {
       if (!raw.prerelease || raw.draft || !raw.tag_name) continue
-      const dmg = raw.assets?.find((a) => a.name === DEV_DMG_NAME)
+      const dmg = raw.assets?.find((a) => a.name === NIGHTLY_DMG_NAME)
       if (!dmg) continue
 
       const name = raw.name && raw.name.length > 0 ? raw.name : raw.tag_name
       const buildMatch = name.match(/build (\d+)/)
       const buildNumber = buildMatch ? Number(buildMatch[1]) : null
-      const branchMatch = name.match(/^Vitals Dev · (.+?) · build \d+/)
+      const branchMatch = name.match(/^Vitals (?:Dev|Nightly) · (.+?) · build \d+/)
       const branch = branchMatch ? branchMatch[1] : null
 
       return {
