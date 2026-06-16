@@ -44,4 +44,29 @@ enum AppTab: String, CaseIterable, Identifiable {
     /// The Dashboard is the app's home and can never be hidden — it guarantees
     /// the window always has somewhere to land.
     var canHide: Bool { self != .dashboard }
+
+    // MARK: Default navigation
+
+    /// What the nav bar shows on a fresh install: a deliberately small,
+    /// monitoring-first set. Vitals' soul is a hardware monitor, so the default
+    /// foregrounds the live vitals (Dashboard), what's driving them (Processes),
+    /// their trend (History), battery health, and disk — five items, like
+    /// Activity Monitor. Following Hick's law and progressive disclosure, the
+    /// deep-dive and management tabs start hidden and are one switch away in
+    /// Settings → Tabs.
+    static let defaultVisible: [AppTab] = [.dashboard, .processes, .history, .battery, .storage]
+
+    /// The full default order: the visible set first, then the hidden tabs
+    /// grouped by concern — monitoring deep-dives (GPU, Health), then the
+    /// management tools (Applications, Login Items, Cleanup). Contains every tab,
+    /// so a fresh install starts from a complete, intentional order.
+    static let defaultOrder: [AppTab] = [
+        .dashboard, .processes, .history, .battery, .storage,   // shown
+        .gpu, .health,                                          // monitoring deep-dives
+        .applications, .loginItems, .cleanup,                   // management tools
+    ]
+
+    /// Hidden on a fresh install — everything not in `defaultVisible`, in
+    /// `defaultOrder` order.
+    static var defaultHidden: [AppTab] { defaultOrder.filter { !defaultVisible.contains($0) } }
 }

@@ -313,8 +313,12 @@ final class AppSettings: ObservableObject {
             "confirmBeforeQuittingProcess": false,
             "tabDisplayMode": TabDisplayMode.expanding.rawValue,
             "tabSize": TabSize.medium.rawValue,
-            "hiddenTabs": "",
-            "tabOrder": AppTab.allCases.map(\.rawValue).joined(separator: ","),
+            // Ship a small, monitoring-first nav bar; deep-dive and management
+            // tabs start hidden (see AppTab.defaultVisible). Applies to fresh
+            // installs and anyone who never customized their tabs; a stored
+            // value always wins.
+            "hiddenTabs": AppTab.defaultHidden.map(\.rawValue).joined(separator: ","),
+            "tabOrder": AppTab.defaultOrder.map(\.rawValue).joined(separator: ","),
         ])
 
         refreshInterval = defaults.double(forKey: "refreshInterval")
