@@ -5,7 +5,7 @@ import { useTitle } from '../lib/useTitle'
 export default function Terms() {
   useTitle('Terms & Conditions — Vitals')
   return (
-    <LegalLayout title="Terms & Conditions" updated="June 12, 2026">
+    <LegalLayout title="Terms & Conditions" updated="June 16, 2026">
       <Section title="1. Agreement to these terms">
         <P>
           These Terms &amp; Conditions ("Terms") govern your use of the <Strong>Vitals</Strong> macOS application (the "App"), its
@@ -24,8 +24,8 @@ export default function Terms() {
         <P>
           Vitals is a hardware-monitoring utility for Apple Silicon Macs. It reads temperature sensors, fan speeds, CPU usage,
           memory statistics, battery condition, and related system information, and displays them in a dashboard and the macOS menu
-          bar. It can optionally log readings to a CSV file on your machine and, where you explicitly enable it, control fan speeds
-          within manufacturer-rated ranges.
+          bar. It can optionally log readings to a CSV file on your machine, keeps a local diagnostic log to aid troubleshooting,
+          and, where you explicitly enable it, controls fan speeds within manufacturer-rated ranges.
         </P>
         <P>
           The App is provided <Strong>free of charge</Strong> and is <Strong>free software</Strong>: its source code is publicly
@@ -86,7 +86,17 @@ export default function Terms() {
         </P>
       </Section>
 
-      <Section title="6. Acceptable use">
+      <Section title="6. Diagnostics and problem reports">
+        <P>
+          The App keeps a local diagnostic log on your Mac to aid troubleshooting, and includes an optional <Strong>"Report a
+          Problem"</Strong> feature that can open your own email program with that log so you may send it to the developer. This is
+          entirely under your control: the App has no server and transmits nothing on its own — a report is sent only when you review
+          and send it yourself, and you are responsible for what you choose to include. What the log contains and how a report you
+          send is handled are set out in our Privacy Policy.
+        </P>
+      </Section>
+
+      <Section title="7. Acceptable use">
         <List>
           <Item>You may not use the Services for any unlawful purpose or in violation of any applicable regulation.</Item>
           <Item>
@@ -100,7 +110,7 @@ export default function Terms() {
         </List>
       </Section>
 
-      <Section title="7. Intellectual property">
+      <Section title="8. Intellectual property">
         <P>
           The Vitals name, logo, website design, and application design are the property of {COMPANY}. The publication of source
           code does not grant any right to use our names or marks except as needed for truthful attribution. All third-party marks
@@ -109,7 +119,7 @@ export default function Terms() {
         </P>
       </Section>
 
-      <Section title="8. Third-party services">
+      <Section title="9. Third-party services">
         <P>
           Downloads and update checks are served through GitHub Releases, and this website queries the GitHub API to display the
           latest version. Your use of GitHub is subject to{' '}
@@ -118,7 +128,7 @@ export default function Terms() {
         </P>
       </Section>
 
-      <Section title="9. Disclaimer of warranties">
+      <Section title="10. Disclaimer of warranties">
         <P>
           THE SERVICES ARE PROVIDED <Strong>"AS IS" AND "AS AVAILABLE"</Strong>, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
           INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AND
@@ -128,7 +138,7 @@ export default function Terms() {
         </P>
       </Section>
 
-      <Section title="10. Limitation of liability">
+      <Section title="11. Limitation of liability">
         <P>
           TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL {COMPANY.toUpperCase()}, ITS DEVELOPER, OR
           CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES — INCLUDING
@@ -143,7 +153,7 @@ export default function Terms() {
         </P>
       </Section>
 
-      <Section title="11. Indemnification">
+      <Section title="12. Indemnification">
         <P>
           You agree to indemnify and hold harmless {COMPANY} and its developer from any claims, damages, liabilities, and expenses
           (including reasonable legal fees) arising from your misuse of the Services, your violation of these Terms, or your
@@ -151,15 +161,15 @@ export default function Terms() {
         </P>
       </Section>
 
-      <Section title="12. Termination">
+      <Section title="13. Termination">
         <P>
           You may stop using the Services at any time by uninstalling the App (and removing the fan-control helper from within the
           App first, which restores automatic cooling). We may discontinue the Services, or any part of them, at any time without
-          notice. Sections 3, 7, and 9–11 survive termination.
+          notice. Sections 3, 8, and 10–12 survive termination.
         </P>
       </Section>
 
-      <Section title="13. Changes to these terms">
+      <Section title="14. Changes to these terms">
         <P>
           We may revise these Terms from time to time. The "Last updated" date at the top reflects the latest revision, and the
           current version is always available on this page. Continued use of the Services after changes take effect constitutes
@@ -167,14 +177,14 @@ export default function Terms() {
         </P>
       </Section>
 
-      <Section title="14. Governing law">
+      <Section title="15. Governing law">
         <P>
           These Terms are governed by the laws of the jurisdiction in which {COMPANY} is established, without regard to
           conflict-of-law principles. Any dispute shall be brought exclusively in the courts of that jurisdiction.
         </P>
       </Section>
 
-      <Section title="15. Contact">
+      <Section title="16. Contact">
         <P>
           Questions about these Terms can be raised via <ExtLink href={DEVELOPER_URL}>rafay99.com</ExtLink> or by opening an issue
           on the <ExtLink href={REPO_URL}>GitHub repository</ExtLink>.
