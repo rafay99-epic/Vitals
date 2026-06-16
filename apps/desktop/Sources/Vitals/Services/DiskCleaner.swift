@@ -20,12 +20,16 @@ struct CleanupCategory: Identifiable {
         // Quick (user domain, no admin)
         case xcode
         case devCaches
+        case deviceSupport
+        case browserCaches
+        case deviceFirmware
         case homebrew
         case appCaches
         case logs
         case trash
         // Deep, user domain (no admin)
         case recentItems
+        case deviceBackups
         // Deep, system (admin, age-gated)
         case systemCaches
         case systemLogs
@@ -43,10 +47,22 @@ struct CleanupCategory: Identifiable {
             }
         }
 
+        /// Irreversible removal of data that isn't merely regenerable cache —
+        /// an iOS device backup may be the only copy of a phone. These are never
+        /// auto-anything: off by default and gated behind a second, explicit
+        /// confirmation that names exactly what will be destroyed.
+        var isDestructive: Bool {
+            switch self {
+            case .deviceBackups: return true
+            default: return false
+            }
+        }
+
         /// The shallowest depth at which this category is offered.
         var minimumDepth: CleanDepth {
             switch self {
-            case .xcode, .devCaches, .homebrew, .appCaches, .logs, .trash: return .quick
+            case .xcode, .devCaches, .deviceSupport, .browserCaches, .deviceFirmware,
+                 .homebrew, .appCaches, .logs, .trash: return .quick
             default: return .deep
             }
         }
@@ -55,6 +71,10 @@ struct CleanupCategory: Identifiable {
             switch self {
             case .xcode: return "Xcode derived data"
             case .devCaches: return "Developer caches"
+            case .deviceSupport: return "Device support files"
+            case .browserCaches: return "Browser caches"
+            case .deviceFirmware: return "Device firmware"
+            case .deviceBackups: return "iOS device backups"
             case .homebrew: return "Homebrew cache"
             case .appCaches: return "App caches"
             case .logs: return "Logs"
@@ -71,7 +91,11 @@ struct CleanupCategory: Identifiable {
         var detail: String {
             switch self {
             case .xcode: return "Build products Xcode recreates on the next build"
-            case .devCaches: return "npm, bun, yarn, pip, cargo, Gradle, CocoaPods, uv, pnpm, Deno caches"
+            case .devCaches: return "npm, yarn, pnpm, bun, pip, Poetry, cargo, Go, Gradle, Maven, CocoaPods, SwiftPM, Docker, Playwright, JetBrains and more"
+            case .deviceSupport: return "Xcode device-support symbols and simulator caches, re-downloaded on demand"
+            case .browserCaches: return "Chrome, Brave, Edge, Arc, Firefox and other browser caches (history, cookies and logins are kept)"
+            case .deviceFirmware: return "Cached iPhone/iPad/iPod firmware (.ipsw) older than 14 days, re-downloadable"
+            case .deviceBackups: return "Permanently deletes local iPhone/iPad backups — make sure you have another copy"
             case .homebrew: return "Downloaded bottles and old formula versions"
             case .appCaches: return "Per-app caches in ~/Library/Caches (Apple system caches are kept)"
             case .logs: return "App logs in ~/Library/Logs"
@@ -89,6 +113,10 @@ struct CleanupCategory: Identifiable {
             switch self {
             case .xcode: return "hammer"
             case .devCaches: return "shippingbox"
+            case .deviceSupport: return "iphone.gen3"
+            case .browserCaches: return "safari"
+            case .deviceFirmware: return "cpu"
+            case .deviceBackups: return "externaldrive.badge.icloud"
             case .homebrew: return "mug"
             case .appCaches: return "internaldrive"
             case .logs: return "doc.text"
@@ -121,6 +149,8 @@ enum DiskCleaner {
     static let crashReportAgeDays = 7
     static let tempAgeDays = 3
     static let gpuCacheAgeDays = 1
+    /// Cached device firmware is kept this long before it's offered (Mole's gate).
+    static let firmwareAgeDays = 14
 
     // MARK: Quick-mode protection rules (kept strict)
 
@@ -174,19 +204,57 @@ enum DiskCleaner {
                 library.appendingPathComponent("Developer/Xcode/DerivedData"),
             ]), sizeBytes: 0),
             .init(kind: .devCaches, items: existing([
+                // JavaScript / Node
                 home.appendingPathComponent(".npm/_cacache"),
                 home.appendingPathComponent(".bun/install/cache"),
                 library.appendingPathComponent("Caches/Yarn"),
-                library.appendingPathComponent("Caches/pip"),
-                library.appendingPathComponent("Caches/CocoaPods"),
-                library.appendingPathComponent("Caches/go-build"),
-                home.appendingPathComponent(".cargo/registry/cache"),
-                home.appendingPathComponent(".gradle/caches"),
-                home.appendingPathComponent(".cache/uv"),
-                home.appendingPathComponent(".cache/node/corepack"),
+                home.appendingPathComponent(".cache/yarn"),
+                home.appendingPathComponent(".yarn/berry/cache"),
                 home.appendingPathComponent(".pnpm-store"),
+                home.appendingPathComponent(".cache/node/corepack"),
                 home.appendingPathComponent(".deno"),
+                home.appendingPathComponent(".cache/electron"),
+                home.appendingPathComponent(".cache/electron-builder"),
+                home.appendingPathComponent(".cache/node-gyp"),
+                library.appendingPathComponent("Caches/node-gyp"),
+                library.appendingPathComponent("Caches/ms-playwright"),
+                home.appendingPathComponent(".cache/ms-playwright"),
+                // Python
+                library.appendingPathComponent("Caches/pip"),
+                home.appendingPathComponent(".cache/pip"),
+                home.appendingPathComponent(".cache/uv"),
+                home.appendingPathComponent(".cache/pypoetry"),
+                home.appendingPathComponent(".cache/pre-commit"),
+                // Rust / Go
+                home.appendingPathComponent(".cargo/registry/cache"),
+                library.appendingPathComponent("Caches/go-build"),
+                home.appendingPathComponent("go/pkg/mod/cache/download"),
+                // JVM
+                home.appendingPathComponent(".gradle/caches"),
+                home.appendingPathComponent(".m2/repository"),
+                home.appendingPathComponent(".ivy2/cache"),
+                home.appendingPathComponent(".sbt/boot"),
+                // Apple / mobile
+                library.appendingPathComponent("Caches/CocoaPods"),
+                library.appendingPathComponent("Caches/org.swift.swiftpm"),
+                home.appendingPathComponent(".pub-cache"),
+                home.appendingPathComponent(".android/cache"),
+                home.appendingPathComponent(".android/build-cache"),
+                // Ruby / containers / IDEs
+                home.appendingPathComponent(".bundle/cache"),
+                home.appendingPathComponent(".docker/buildx"),
+                library.appendingPathComponent("Caches/JetBrains"),
             ]), sizeBytes: 0),
+            .init(kind: .deviceSupport, items: existing([
+                library.appendingPathComponent("Developer/Xcode/iOS DeviceSupport"),
+                library.appendingPathComponent("Developer/Xcode/watchOS DeviceSupport"),
+                library.appendingPathComponent("Developer/Xcode/tvOS DeviceSupport"),
+                library.appendingPathComponent("Developer/Xcode/macOS DeviceSupport"),
+                library.appendingPathComponent("Developer/Xcode/xrOS DeviceSupport"),
+                library.appendingPathComponent("Developer/CoreSimulator/Caches"),
+            ]), sizeBytes: 0),
+            .init(kind: .browserCaches, items: browserCacheDirs(home: home), sizeBytes: 0),
+            .init(kind: .deviceFirmware, items: iosFirmwareFiles(home: home), sizeBytes: 0),
             .init(kind: .homebrew, items: existing([
                 library.appendingPathComponent("Caches/Homebrew"),
             ]), sizeBytes: 0),
@@ -210,7 +278,55 @@ enum DiskCleaner {
             .flatMap { ["com.apple.LSSharedFileList.\($0).sfl2", "com.apple.LSSharedFileList.\($0).sfl"] }
             .map { shared.appendingPathComponent($0) }
             .filter { fm.fileExists(atPath: $0.path) }
-        return [.init(kind: .recentItems, items: recentLists, sizeBytes: 0)]
+
+        // iOS device backups — reported like Mole, but offered for opt-in
+        // removal too (off by default, second confirmation). Each backup folder
+        // under MobileSync/Backup is a separate item so a stale one can go
+        // without taking a current one.
+        let backupRoot = fm.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/MobileSync/Backup")
+        let backups = ((try? fm.contentsOfDirectory(at: backupRoot, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? [])
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+
+        return [
+            .init(kind: .recentItems, items: recentLists, sizeBytes: 0),
+            .init(kind: .deviceBackups, items: backups, sizeBytes: 0),
+        ]
+    }
+
+    /// Cached iOS/iPadOS/iPod firmware images (`.ipsw`) older than the firmware
+    /// retention window. Re-downloadable, so safe to clear (Mole clears these
+    /// too). Fixed iTunes "Software Updates" roots only.
+    static func iosFirmwareFiles(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
+        let roots = ["iPhone Software Updates", "iPad Software Updates", "iPod Software Updates"]
+            .map { home.appendingPathComponent("Library/iTunes/\($0)") }
+        return eligibleFiles(roots, extensions: ["ipsw"], olderThan: firmwareAgeDays, recursive: false)
+            .map(\.url)
+    }
+
+    /// The number of Time Machine local snapshots on the boot volume. macOS
+    /// manages these automatically (purging them under disk pressure); Mole and
+    /// Vitals only report the count — there's no honest byte figure to show.
+    /// Returns nil if Time Machine isn't configured or `tmutil` is unavailable.
+    static func localSnapshotCount() -> Int? {
+        let tmutil = "/usr/bin/tmutil"
+        guard FileManager.default.isExecutableFile(atPath: tmutil) else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tmutil)
+        process.arguments = ["listlocalsnapshots", "/"]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = Pipe()
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let count = text.split(separator: "\n").filter { $0.contains("com.apple.TimeMachine.") }.count
+        return count > 0 ? count : nil
     }
 
     private static func deepSystemCategories() -> [CleanupCategory] {
@@ -311,6 +427,53 @@ enum DiskCleaner {
                 }
             }
         }
+        return dirs
+    }
+
+    /// Browser cache directories across the Chromium family and Firefox. Only
+    /// ever returns *cache* subfolders — `Cache`, `Code Cache`, GPU/shader
+    /// caches, and the Service Worker cache stores — built from a fixed list, so
+    /// it can never reach a profile's `Cookies`, `History`, `Bookmarks` or
+    /// `Login Data` (those live as siblings and are deliberately left alone).
+    /// All regenerable: the browser refills them on next use.
+    static func browserCacheDirs(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
+        let fm = FileManager.default
+        let appSupport = home.appendingPathComponent("Library/Application Support")
+        let caches = home.appendingPathComponent("Library/Caches")
+
+        // Chromium-family install roots (each contains profile folders).
+        let chromiumRoots = [
+            "Google/Chrome", "Google/Chrome Beta", "Google/Chrome Canary",
+            "BraveSoftware/Brave-Browser", "Microsoft Edge", "Chromium",
+            "Vivaldi", "com.operasoftware.Opera", "Arc/User Data",
+        ].map { appSupport.appendingPathComponent($0) }
+
+        // Per-profile subfolders that hold only regenerable cache data.
+        let profileCacheSubdirs = [
+            "Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache",
+            "GrShaderCache", "ShaderCache",
+            "Service Worker/CacheStorage", "Service Worker/ScriptCache",
+        ]
+
+        func directorySubentries(of url: URL) -> [URL] {
+            guard fm.fileExists(atPath: url.path) else { return [] }
+            return ((try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [])) ?? [])
+                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+        }
+
+        var dirs: [URL] = []
+        for root in chromiumRoots {
+            // The root itself and each profile under it can hold a cache.
+            for profile in [root] + directorySubentries(of: root) {
+                for sub in profileCacheSubdirs {
+                    let dir = profile.appendingPathComponent(sub)
+                    if fm.fileExists(atPath: dir.path) { dirs.append(dir) }
+                }
+            }
+        }
+        // Firefox keeps its cache under ~/Library/Caches, not Application Support.
+        let firefox = caches.appendingPathComponent("Firefox")
+        if fm.fileExists(atPath: firefox.path) { dirs.append(firefox) }
         return dirs
     }
 

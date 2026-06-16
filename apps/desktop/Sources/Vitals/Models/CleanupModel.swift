@@ -18,11 +18,20 @@ final class CleanupModel: ObservableObject {
     @Published var selected: Set<CleanupCategory.Kind> = []
     @Published private(set) var lastResult: DiskCleaner.CleanResult?
     @Published private(set) var lastError: String?
+    /// Time Machine local snapshots on the boot volume — reported, not deletable
+    /// (macOS manages them and there's no honest byte size). nil when none / TM off.
+    @Published private(set) var localSnapshots: Int?
 
     private var scanTask: Task<Void, Never>?
 
     var selectedCategories: [CleanupCategory] {
         categories.filter { selected.contains($0.kind) }
+    }
+
+    /// Selected categories whose removal is irreversible (e.g. device backups) —
+    /// surfaced for a second, explicit confirmation before anything is deleted.
+    var selectedDestructiveCategories: [CleanupCategory] {
+        selectedCategories.filter { $0.kind.isDestructive && $0.sizeBytes > 0 }
     }
 
     var selectedBytes: UInt64 {
@@ -64,6 +73,8 @@ final class CleanupModel: ObservableObject {
                 scanned[index] = measured
                 categories = scanned
             }
+            // Report-only: Time Machine local snapshots (no deletion, no fake size).
+            localSnapshots = await Task.detached(priority: .utility) { DiskCleaner.localSnapshotCount() }.value
             isScanning = false
         }
     }
