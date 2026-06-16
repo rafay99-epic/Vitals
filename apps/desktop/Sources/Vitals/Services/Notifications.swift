@@ -13,7 +13,13 @@ final class NotificationManager {
     func requestAuthorizationIfNeeded() {
         guard Self.supported, !requestedAuthorization else { return }
         requestedAuthorization = true
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error {
+                Log.notice(.app, "notification authorization request failed", error: error)
+            } else if !granted {
+                Log.notice(.app, "the user has not granted notification permission — alerts won't show")
+            }
+        }
     }
 
     func send(title: String, body: String, id: String) {
@@ -23,6 +29,8 @@ final class NotificationManager {
         content.body = body
         content.sound = .default
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { Log.notice(.app, "couldn't post notification \"\(id)\"", error: error) }
+        }
     }
 }

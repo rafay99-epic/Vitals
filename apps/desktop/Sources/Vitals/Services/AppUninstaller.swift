@@ -62,6 +62,7 @@ enum AppUninstaller {
                 outcome.trashed.append(app.id)
                 outcome.freedBytes += sizes[app.id] ?? 0
             } catch {
+                Log.notice(.uninstall, "bundle trash failed for \(app.id.lastPathComponent), will try admin path", error: error)
                 outcome.failedBundles.append(app.id)
             }
         }
@@ -71,6 +72,7 @@ enum AppUninstaller {
                 outcome.trashed.append(url)
                 outcome.freedBytes += sizes[url] ?? 0
             } catch {
+                Log.notice(.uninstall, "couldn't trash leftover \(url.lastPathComponent)", error: error)
                 outcome.failures.append((url, error.localizedDescription))
             }
         }
@@ -101,7 +103,12 @@ enum AppUninstaller {
         process.arguments = ["uninstall", "--cask", cask]
         process.standardOutput = Pipe()
         process.standardError = Pipe()
-        guard (try? process.run()) != nil else { return false }
+        do {
+            try process.run()
+        } catch {
+            Log.notice(.uninstall, "couldn't launch brew to uninstall cask \(cask)", error: error)
+            return false
+        }
         process.waitUntilExit()
         return process.terminationStatus == 0
     }

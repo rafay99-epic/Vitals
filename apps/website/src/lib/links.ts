@@ -12,3 +12,5 @@ export const BREW_INSTALL_DEV = `brew install --cask ${BREW_TAP}/vitals-dev`
 export const COMPANY = 'Syntax Lab Technology'
 export const DEVELOPER = 'Abdul Rafay'
 export const DEVELOPER_URL = 'https://rafay99.com'
+// Where the in-app "Report a Problem" flow sends diagnostic logs (user-initiated).
+export const SUPPORT_EMAIL = '99marafay@gmail.com'

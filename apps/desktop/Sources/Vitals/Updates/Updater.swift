@@ -112,10 +112,12 @@ final class Updater: ObservableObject {
     func check(userInitiated: Bool) async {
         guard !isBusy else { return }
         status = .checking
+        Log.debug(.updater, "checking for updates (userInitiated: \(userInitiated))")
         do {
             let release = try await Self.fetchLatestRelease()
             lastChecked = Date()
             if let release, Self.isNewer(release) {
+                Log.notice(.updater, "update available: \(release.displayVersion) (current \(Self.currentVersion))")
                 status = .available(release)
                 if !userInitiated, notifiedVersion != release.tag + "#\(release.buildNumber)" {
                     notifiedVersion = release.tag + "#\(release.buildNumber)"
@@ -129,6 +131,7 @@ final class Updater: ObservableObject {
                 status = .upToDate
             }
         } catch {
+            Log.error(.updater, "update check failed", error: error)
             status = .failed(error.localizedDescription)
         }
     }
@@ -146,17 +149,24 @@ final class Updater: ObservableObject {
     func downloadAndInstall() async {
         guard case .available(let release) = status else { return }
         status = .downloading
+        Log.notice(.updater, "downloading update \(release.displayVersion)")
         do {
             let dmg = try await Self.download(release)
             status = .installing
+            Log.notice(.updater, "installing update \(release.displayVersion)")
             try await Self.install(dmgAt: dmg)
             // Hand off to the freshly installed copy and exit this one.
             let relauncher = Process()
             relauncher.executableURL = URL(fileURLWithPath: "/bin/zsh")
             relauncher.arguments = ["-c", "sleep 1; /usr/bin/open '\(Self.installPath)'"]
-            try? relauncher.run()
+            do {
+                try relauncher.run()
+            } catch {
+                Log.error(.updater, "couldn't launch the relauncher after install — the app will quit without reopening", error: error)
+            }
             NSApp.terminate(nil)
         } catch {
+            Log.error(.updater, "download/install failed", error: error)
             status = .failed(error.localizedDescription)
         }
     }

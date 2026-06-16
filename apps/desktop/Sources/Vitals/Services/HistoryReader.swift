@@ -122,7 +122,13 @@ enum HistoryExport {
         guard fm.fileExists(atPath: DataHome.historyFile.path) else { return nil }
         guard let destination = prepareDestination(extension: "csv") else { return nil }
         try? fm.removeItem(at: destination)
-        return (try? fm.copyItem(at: DataHome.historyFile, to: destination)) != nil ? destination : nil
+        do {
+            try fm.copyItem(at: DataHome.historyFile, to: destination)
+            return destination
+        } catch {
+            Log.notice(.history, "history CSV export failed", error: error)
+            return nil
+        }
     }
 
     /// Parses the whole log and writes it as a JSON array; nil if empty.
@@ -132,11 +138,14 @@ enum HistoryExport {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(samples),
-              let destination = prepareDestination(extension: "json"),
-              (try? data.write(to: destination)) != nil
-        else { return nil }
-        return destination
+        guard let destination = prepareDestination(extension: "json") else { return nil }
+        do {
+            try encoder.encode(samples).write(to: destination)
+            return destination
+        } catch {
+            Log.notice(.history, "history JSON export failed", error: error)
+            return nil
+        }
     }
 
     private static func prepareDestination(extension ext: String) -> URL? {

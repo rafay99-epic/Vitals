@@ -143,6 +143,7 @@ final class AppsModel: ObservableObject {
         let targets = selectedApps
         guard !targets.isEmpty, !isPreparingUninstall else { return }
         isPreparingUninstall = true
+        Log.debug(.uninstall, "preparing uninstall for \(targets.count) app(s)")
         Task {
             let casksList = await Task.detached(priority: .userInitiated) {
                 LeftoverScanner.installedCaskTokens()
@@ -253,13 +254,18 @@ final class AppsModel: ObservableObject {
                     combined.systemRemoved = systemPaths.count
                     combined.freedBytes += systemBytes
                 } catch let error as PrivilegedShell.AdminError {
-                    if !error.cancelled { combined.errorMessage = error.message }
+                    if !error.cancelled {
+                        Log.error(.uninstall, "privileged leftover removal failed — \(error.message)")
+                        combined.errorMessage = error.message
+                    }
                 } catch {
+                    Log.error(.uninstall, "privileged leftover removal failed", error: error)
                     combined.errorMessage = error.localizedDescription
                 }
             }
 
             lastOutcome = combined
+            Log.notice(.uninstall, "uninstall finished: \(combined.trashed.count) trashed, \(combined.systemRemoved) system, \(ByteCountFormatter.string(fromByteCount: Int64(combined.freedBytes), countStyle: .file)) freed")
             refresh()
         }
     }

@@ -28,11 +28,13 @@ final class FanController: ObservableObject {
 
     func setTarget(fan: Int, rpm: Int) {
         guard isInstalled else { return }
+        Log.debug(.fan, "set fan \(fan) → manual \(rpm) rpm")
         update(fan: fan, command: FanCommand(fan: fan, mode: .manual, rpm: Double(rpm)))
     }
 
     func setAuto(fan: Int) {
         guard isInstalled else { return }
+        Log.debug(.fan, "set fan \(fan) → automatic")
         update(fan: fan, command: FanCommand(fan: fan, mode: .auto, rpm: 0))
     }
 
@@ -54,6 +56,7 @@ final class FanController: ObservableObject {
             try FanControl.writeCommands(commands)
             lastError = nil
         } catch {
+            Log.error(.fan, "couldn't save fan settings", error: error)
             lastError = "Couldn't save fan settings: \(error.localizedDescription)"
         }
     }
@@ -61,6 +64,7 @@ final class FanController: ObservableObject {
     // MARK: - Install / remove (one password each)
 
     func install() async {
+        Log.notice(.fan, "installing fan-control helper")
         guard let executable = Bundle.main.executableURL?.path else {
             lastError = "Could not locate the Vitals executable."
             return
@@ -91,6 +95,7 @@ final class FanController: ObservableObject {
     }
 
     func remove(fanCount: Int) async {
+        Log.notice(.fan, "removing fan-control helper")
         // Restore automatic control before tearing the helper down.
         setAllAuto(fanCount: fanCount)
         try? await Task.sleep(for: .seconds(1))
@@ -114,8 +119,12 @@ final class FanController: ObservableObject {
         do {
             try await body()
         } catch let error as PrivilegedShell.AdminError {
-            if !error.cancelled { lastError = error.message }
+            if !error.cancelled {
+                Log.error(.fan, "fan helper operation failed — \(error.message)")
+                lastError = error.message
+            }
         } catch {
+            Log.error(.fan, "fan helper operation failed", error: error)
             lastError = error.localizedDescription
         }
     }

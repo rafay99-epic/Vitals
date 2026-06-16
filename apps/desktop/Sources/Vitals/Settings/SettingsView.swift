@@ -6,7 +6,7 @@ import UserNotifications
 /// card sections with tinted icon tiles, switch toggles.
 struct SettingsView: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case general, alerts, data, updates, about
+        case general, alerts, data, updates, developer, about
         var id: String { rawValue }
 
         var title: String {
@@ -15,6 +15,7 @@ struct SettingsView: View {
             case .alerts: return "Alerts"
             case .data: return "Data"
             case .updates: return "Updates"
+            case .developer: return "Developer"
             case .about: return "About"
             }
         }
@@ -25,6 +26,7 @@ struct SettingsView: View {
             case .alerts: return "bell.badge"
             case .data: return "doc.text"
             case .updates: return "arrow.down.circle"
+            case .developer: return "ant"
             case .about: return "info.circle"
             }
         }
@@ -46,6 +48,7 @@ struct SettingsView: View {
                     case .alerts: AlertsPane()
                     case .data: DataPane()
                     case .updates: UpdatesPane()
+                    case .developer: DeveloperPane()
                     case .about: AboutPane()
                     }
                 }
@@ -789,8 +792,76 @@ private struct DataPane: View {
         let destination = exports.appendingPathComponent(
             "vitals-history-\(Self.exportStampFormatter.string(from: Date())).csv")
         try? FileManager.default.removeItem(at: destination)
-        guard (try? FileManager.default.copyItem(at: HistoryLogger.fileURL, to: destination)) != nil else { return }
+        do {
+            try FileManager.default.copyItem(at: HistoryLogger.fileURL, to: destination)
+        } catch {
+            Log.notice(.history, "history CSV export failed", error: error)
+            return
+        }
         NSWorkspace.shared.activateFileViewerSelecting([destination])
+    }
+}
+
+// MARK: - Developer
+
+/// The developer/diagnostics home: the capture level, the log file, the
+/// full-window log console, and the problem-report flow. Kept out of the main
+/// navigation — this is a developer tool, not something a normal user needs.
+private struct DeveloperPane: View {
+    @EnvironmentObject private var settings: AppSettings
+    @Environment(\.openWindow) private var openWindow
+    @State private var reporting = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            SettingsCard(title: "Diagnostic logging", symbol: "ant", tint: .teal) {
+                settingsRow("Level") {
+                    Picker("", selection: $settings.diagnosticLogLevel) {
+                        ForEach(LogLevel.settingChoices) { Text($0.settingLabel).tag($0) }
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                settingsRow("Console") {
+                    Button("Open Log Console") { openWindow(id: "logConsole") }
+                        .controlSize(.small)
+                }
+                settingsRow("Log file") {
+                    HStack(spacing: 8) {
+                        Button("Reveal") {
+                            NSWorkspace.shared.activateFileViewerSelecting([DataHome.logFile])
+                        }
+                        .disabled(!diagnosticLogExists)
+                    }
+                    .controlSize(.small)
+                }
+                Text("Records what the app's services are doing — separate from the readings log under Data. **Errors** logs only failures; **Normal** adds key events; **Verbose** traces everything (noisier). Written to \(folderDisplayPath)/vitals.log. Open the console to read it live.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsCard(title: "Report a problem", symbol: "envelope.badge", tint: .blue) {
+                settingsRow("Bug report") {
+                    Button("Email the Developer…") { reporting = true }
+                        .controlSize(.small)
+                }
+                Text("Opens your mail app with a pre-filled message to the developer and reveals the log so you can attach it. Crashes from a previous run show up in the log automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .sheet(isPresented: $reporting) {
+            // The Settings window has no VitalsModel in scope, so the report uses
+            // the static hardware/version header (model: nil).
+            ProblemReportView(model: nil, settings: settings)
+        }
+    }
+
+    private var diagnosticLogExists: Bool {
+        FileManager.default.fileExists(atPath: DataHome.logFile.path)
+    }
+
+    private var folderDisplayPath: String {
+        (DataHome.directory.path as NSString).abbreviatingWithTildeInPath
     }
 }
 

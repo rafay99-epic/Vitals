@@ -137,9 +137,25 @@ final class AppSettings: ObservableObject {
     /// User-defined threshold alerts, stored as JSON. Separate from the tuned
     /// overheat/thermal built-ins above.
     @Published var alertRules: [AlertRule] {
-        didSet { defaults.set(try? JSONEncoder().encode(alertRules), forKey: "alertRules") }
+        didSet {
+            do {
+                defaults.set(try JSONEncoder().encode(alertRules), forKey: "alertRules")
+            } catch {
+                Log.error(.settings, "couldn't encode alert rules — they won't persist", error: error)
+            }
+        }
     }
     @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
+    /// Developer/diagnostic logging floor — distinct from `loggingEnabled` (which
+    /// is the user-facing metric history CSV). Drives `Log.minimumLevel`: `.off`
+    /// captures nothing, `.notice` (default) captures meaningful events + errors,
+    /// `.debug` is verbose. See `Log`.
+    @Published var diagnosticLogLevel: LogLevel {
+        didSet {
+            defaults.set(diagnosticLogLevel.rawValue, forKey: "diagnosticLogLevel")
+            Log.configure(minimumLevel: diagnosticLogLevel)
+        }
+    }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     /// Master switch for GPU-driven rendering: Liquid Glass and every animation.
     /// On by default, but turning it off drops the app to opaque classic cards
@@ -276,6 +292,10 @@ final class AppSettings: ObservableObject {
             // collection unless asked), which also keeps the History view empty
             // until the user turns logging on.
             "loggingEnabled": false,
+            // Capture meaningful events + all errors out of the box (negligible
+            // cost), but nothing chatty. The Logs tab that views them ships
+            // hidden (see "hiddenTabs"); logging happens regardless.
+            "diagnosticLogLevel": LogLevel.notice.rawValue,
             "autoUpdateCheck": true,
             "gpuAcceleration": true,
             // Ships off: the app is lean (opaque cards) by default; glass is opt-in.
@@ -309,6 +329,7 @@ final class AppSettings: ObservableObject {
         notifyThermal = defaults.bool(forKey: "notifyThermal")
         alertRules = AppSettings.loadAlertRules(defaults)
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
+        diagnosticLogLevel = LogLevel(rawValue: defaults.integer(forKey: "diagnosticLogLevel")) ?? .notice
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
         gpuAcceleration = defaults.bool(forKey: "gpuAcceleration")
         liquidGlass = defaults.bool(forKey: "liquidGlass")
@@ -352,6 +373,10 @@ final class AppSettings: ObservableObject {
                 MainActor.assumeIsolated { self?.appActive = false }
             },
         ]
+
+        // didSet doesn't fire during init, so push the stored level into the
+        // logger by hand — done last, once every stored property exists.
+        Log.configure(minimumLevel: diagnosticLogLevel)
     }
 
     deinit {
@@ -380,10 +405,13 @@ final class AppSettings: ObservableObject {
     }
 
     private static func loadAlertRules(_ defaults: UserDefaults) -> [AlertRule] {
-        guard let data = defaults.data(forKey: "alertRules"),
-              let rules = try? JSONDecoder().decode([AlertRule].self, from: data)
-        else { return [] }
-        return rules
+        guard let data = defaults.data(forKey: "alertRules") else { return [] }
+        do {
+            return try JSONDecoder().decode([AlertRule].self, from: data)
+        } catch {
+            Log.notice(.settings, "couldn't decode saved alert rules — resetting to none", error: error)
+            return []
+        }
     }
 
     /// Hidden tabs, filtered so Dashboard can never end up hidden even if a
@@ -437,6 +465,7 @@ final class AppSettings: ObservableObject {
             }
             loginItemError = nil
         } catch {
+            Log.error(.settings, "login item \(launchAtLogin ? "register" : "unregister") failed", error: error)
             loginItemError = error.localizedDescription
             syncingLoginItem = true
             launchAtLogin = SMAppService.mainApp.status == .enabled

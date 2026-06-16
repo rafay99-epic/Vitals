@@ -182,6 +182,7 @@ final class VitalsModel: ObservableObject {
             let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses)
             guard !Task.isCancelled else { return }
             self.apply(snapshot)
+            Log.debug(.sampler, "sampled \(snapshot.readings.count) sensors, \(snapshot.fans.count) fans")
             self.sensorsStalled = false
             self.isSampling = false
         }
@@ -190,6 +191,10 @@ final class VitalsModel: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(Self.sampleTimeout * 1_000_000_000))
             guard let self, self.isSampling else { return }  // already finished → nothing to do
             work.cancel()
+            // Log only on the transition into a stall, not every stalled tick.
+            if !self.sensorsStalled {
+                Log.notice(.sampler, "a sensor sample exceeded \(Self.sampleTimeout)s and was cancelled — readings may pause")
+            }
             self.sensorsStalled = true
             self.isSampling = false
         }

@@ -122,4 +122,10 @@ final class MenuBarHostingView: NSHostingView<AnyView> {
 /// implicitly.)
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Records a clean shutdown so the next launch can tell a graceful quit from
+    /// a crash or a kill (see `CrashReporter`).
+    func applicationWillTerminate(_ notification: Notification) {
+        CrashReporter.markCleanShutdown()
+    }
 }

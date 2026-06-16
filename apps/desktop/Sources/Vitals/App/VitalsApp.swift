@@ -11,10 +11,13 @@ struct VitalsApp: App {
     @StateObject private var fanControl: FanController
     @StateObject private var widgets: WidgetManager
     @StateObject private var menuBar: MenuBarController
+    @StateObject private var logStore: LogStore
 
     init() {
         // Create the data home and migrate any legacy log before logging starts.
         DataHome.prepare()
+        // Arm crash capture before anything else can fault.
+        CrashReporter.install()
         let settings = AppSettings()
         let model = VitalsModel(settings: settings)
         let updater = Updater()
@@ -31,6 +34,12 @@ struct VitalsApp: App {
         _widgets = StateObject(wrappedValue: WidgetManager(model: model, settings: settings))
         // The menu-bar status item hosts a live, compositor-animated label.
         _menuBar = StateObject(wrappedValue: MenuBarController(model: model, settings: settings, fanControl: fanControl))
+        // Diagnostic log store: seeds from vitals.log and feeds the Logs tab.
+        // `AppSettings.init` already set the capture level before this point.
+        _logStore = StateObject(wrappedValue: LogStore())
+        Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.isDev ? "dev" : "stable"))")
+        // Surface a crash / unclean exit from the previous run, off the launch path.
+        Task.detached(priority: .utility) { CrashReporter.reportPreviousRunIfNeeded() }
     }
 
     var body: some Scene {
@@ -43,6 +52,7 @@ struct VitalsApp: App {
                 .environmentObject(settings)
                 .environmentObject(updater)
                 .environmentObject(fanControl)
+                .environmentObject(logStore)
                 .environment(\.animationsEnabled, settings.animationsEnabled)
         }
         .defaultSize(width: 1100, height: 760)
@@ -70,6 +80,19 @@ struct VitalsApp: App {
             HelpView()
         }
         .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        // The developer log console — its own window (opened from Settings →
+        // Developer), not a main-window tab. Needs the shared model/settings for
+        // the problem-report header and the live log store.
+        Window("Vitals Log Console", id: "logConsole") {
+            LogsView()
+                .environmentObject(model)
+                .environmentObject(settings)
+                .environmentObject(logStore)
+                .frame(minWidth: 760, minHeight: 480)
+        }
+        .defaultSize(width: 940, height: 620)
         .defaultPosition(.center)
 
         // The menu-bar item is a custom NSStatusItem managed by `MenuBarController`

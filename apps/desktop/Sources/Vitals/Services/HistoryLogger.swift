@@ -93,6 +93,7 @@ final class HistoryLogger {
             self.handle = handle
             return handle
         } catch {
+            Log.error(.history, "couldn't open history log for writing", error: error)
             return nil
         }
     }

@@ -88,6 +88,7 @@ final class StorageModel: ObservableObject {
         guard !isBusy else { return }
         self.includeHidden = includeHidden
         hasRun = true
+        Log.debug(.storage, "storage analysis started (includeHidden: \(includeHidden))")
         refreshAccess()
         volume = StorageAnalyzer.volumeUsage()
         scanCategories()
