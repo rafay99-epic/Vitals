@@ -45,13 +45,41 @@ bun run test:e2e         # browser checks against the built site
 
 The website dev server: `cd apps/website && bun run dev`.
 
+For the **desktop app** (macOS, from `apps/desktop`):
+
+```sh
+swift build      # compile
+swift test       # run the test suite
+./dev.sh         # build + run "Vitals Dev" locally — your sandbox, never published
+./nightly.sh     # build + run "Vitals Nightly" locally (the pre-release channel)
+```
+
 Desktop-app docs (architecture, sensors, fan control, release pipeline) live in [`apps/desktop/README.md`](apps/desktop/README.md).
 
-## CI / releases
+## Release channels
 
-- `CI` and `Release` workflows run on `apps/desktop/**` changes; every app change on `main` publishes a GitHub Release (version = commit count) with the DMG.
-- `Website` workflow runs on `apps/website/**` changes (bun + turbo on Ubuntu).
-- The website + README lead with `brew install --cask rafay99-epic/apps/vitals` (the [`homebrew-apps`](https://github.com/rafay99-epic/homebrew-apps) tap); the direct DMG via `releases/latest/download/Vitals.dmg` is the fallback. The cask tracks `:latest`, so new releases flow automatically.
+Vitals ships in three channels that install **side by side** — separate apps, icons, settings, and data:
+
+| Channel | Install | Source branch | Updates from |
+| --- | --- | --- | --- |
+| **Stable** | `brew install --cask rafay99-epic/apps/vitals` | `main` | the latest GitHub release |
+| **Nightly** | `brew install --cask rafay99-epic/apps/vitals-nightly` | `nightly` | the newest pre-release |
+| **Dev** | build locally — `./dev.sh` | any feature branch | — (no updater) |
+
+- **`main` is Stable** — a curated release, cut by promoting `nightly → main` (squash) roughly weekly. Each push to `main` publishes a full GitHub Release (`Vitals.dmg`, version `0.<commit count>`), ordered by version.
+- **`nightly` is the integration branch** — every merge auto-publishes a rolling `nightly` pre-release (`Vitals-Nightly.dmg`, ordered by CI build number) that Nightly users auto-update from.
+- **Dev is local-only** — `./dev.sh` builds *Vitals Dev*; it is never published and has no updater. Break it all you like.
+
+The casks come from the [`homebrew-apps`](https://github.com/rafay99-epic/homebrew-apps) tap; direct `.dmg` downloads are the fallback (`releases/latest/download/Vitals.dmg` for Stable, `releases/download/nightly/Vitals-Nightly.dmg` for Nightly).
+
+## Contributing
+
+1. **Branch from `nightly`** (`feat/…`, `fix/…`, `chore/…`) and open your **pull request against `nightly`** — it's the default branch, so PRs target it automatically. Draft while you iterate.
+2. **`main` is protected — PRs or pushes straight to `main` are rejected.** Stable only moves via the maintainer's weekly `nightly → main` promotion, so don't target it.
+3. Build and run your change locally with **`./dev.sh`** (installs *Vitals Dev* next to your real app — no release needed).
+4. CI runs `swift test` + SwiftLint + a packaged build on every PR (the website and Convex have their own checks). A maintainer reviews and **squash-merges**; merging to `nightly` publishes a Nightly build automatically.
+
+Full guide: **[CONTRIBUTING.md](CONTRIBUTING.md)**. Behavior standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Security reports: [SECURITY.md](SECURITY.md).
 
 ## License
 
