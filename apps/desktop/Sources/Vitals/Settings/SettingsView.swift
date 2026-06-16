@@ -755,11 +755,28 @@ private struct DataPane: View {
                     .controlSize(.small)
                     .disabled(!logFileExists)
                 }
-                Text("One line every 10 seconds while Vitals runs (\(logSizeText)). Stored in \(folderDisplayPath); Export saves a timestamped copy to \(folderDisplayPath)/exports. Open the CSV in Numbers or Excel.")
+                Text("One line every 10 seconds while Vitals runs (\(logSizeText)). Stored in \(folderDisplayPath)/history; Export saves a timestamped copy to \(folderDisplayPath)/exports. Open the CSV in Numbers or Excel.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsCard(title: "Settings backup", symbol: "gearshape.2", tint: .blue) {
+                settingsRow("Config file") {
+                    Button("Reveal") {
+                        NSWorkspace.shared.activateFileViewerSelecting([DataHome.configFile])
+                    }
+                    .controlSize(.small)
+                    .disabled(!configExists)
+                }
+                Text("Your preferences are mirrored to \(folderDisplayPath)/config/config.json and restored automatically — so an update or reinstall keeps your setup. It's plain JSON: read it, back it up, or copy it to another Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var configExists: Bool {
+        FileManager.default.fileExists(atPath: DataHome.configFile.path)
     }
 
     private var logFileExists: Bool {
@@ -834,7 +851,7 @@ private struct DeveloperPane: View {
                     }
                     .controlSize(.small)
                 }
-                Text("Records what the app's services are doing — separate from the readings log under Data. **Errors** logs only failures; **Normal** adds key events; **Verbose** traces everything (noisier). Written to \(folderDisplayPath)/vitals.log. Open the console to read it live.")
+                Text("Records what the app's services are doing — separate from the readings log under Data. **Errors** logs only failures; **Normal** adds key events; **Verbose** traces everything (noisier). Written to \(folderDisplayPath)/logs/vitals.log. Open the console to read it live.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

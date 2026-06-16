@@ -75,7 +75,7 @@ final class LogFile {
         if let handle { return handle }
         let fm = FileManager.default
         do {
-            try fm.createDirectory(at: DataHome.directory, withIntermediateDirectories: true)
+            try fm.createDirectory(at: DataHome.logsDirectory, withIntermediateDirectories: true)
             if let size = fileSizeBytes, size > Self.maximumBytes {
                 let archived = DataHome.logPrevious
                 try? fm.removeItem(at: archived)

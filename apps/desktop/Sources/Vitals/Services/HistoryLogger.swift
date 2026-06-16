@@ -4,7 +4,7 @@ import Foundation
 /// temperature trends survive restarts. Writes at most one line every 10
 /// seconds (~5 MB per month of continuous running).
 final class HistoryLogger {
-    static var directory: URL { DataHome.directory }
+    static var directory: URL { DataHome.historyDirectory }
     static var fileURL: URL { DataHome.historyFile }
 
     private static let header = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"

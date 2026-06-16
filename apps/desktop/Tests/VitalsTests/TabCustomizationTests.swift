@@ -13,7 +13,7 @@ struct TabCustomizationTests {
         let suite = UserDefaults(suiteName: name)!
         suite.removePersistentDomain(forName: name)
         configure(suite)
-        return AppSettings(defaults: suite)
+        return AppSettings(defaults: suite, configURL: nil)
     }
 
     @Test func defaultsToSmallMonitoringFirstNav() {
