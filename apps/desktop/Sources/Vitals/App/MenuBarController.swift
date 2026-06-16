@@ -53,16 +53,23 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         button.target = self
         button.action = #selector(togglePopover)
 
-        let label = MenuBarLabelView(onWidth: { [weak item] width in
-            // Size the status item to the live content (the label is fixed-size,
-            // so this fires only when the readout's width actually changes).
-            item?.length = max(width.rounded(.up), 1)
-        })
-        .environmentObject(model)
-        .environmentObject(settings)
+        let label = MenuBarLabelView()
+            .environmentObject(model)
+            .environmentObject(settings)
 
         let host = MenuBarHostingView(rootView: AnyView(label))
+        // Report a real intrinsic size so `intrinsicContentSize` reflects the
+        // label's ideal width — the *unconstrained* footprint, independent of the
+        // button's current width. That independence is the whole point: the old
+        // GeometryReader measured a width the button width already clamped, so a
+        // value that grew a digit ("4%" → "47%") could never widen the item back
+        // and the row truncated to "4…" permanently (issues #45, #50).
+        host.sizingOptions = [.intrinsicContentSize]
         host.translatesAutoresizingMaskIntoConstraints = false
+        host.onIntrinsicSizeChange = { [weak self, weak item, weak host] in
+            guard let self, let item, let host else { return }
+            self.resize(item: item, toFit: host)
+        }
         button.addSubview(host)
         NSLayoutConstraint.activate([
             host.leadingAnchor.constraint(equalTo: button.leadingAnchor),
@@ -71,6 +78,26 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
             host.bottomAnchor.constraint(equalTo: button.bottomAnchor),
         ])
         statusItem = item
+        resize(item: item, toFit: host)
+    }
+
+    /// Slack (pt) added on top of the label's ideal width. Sub-pixel rounding on
+    /// fractional-scaled displays ("More Space", external monitors) can otherwise
+    /// shave the trailing glyph by a pixel and trip a truncation ellipsis; a
+    /// couple of points of headroom makes the readout scale-independent.
+    private static let widthSlack: CGFloat = 2
+
+    /// Size the status item to the label's ideal width, read off the hosting
+    /// view's `intrinsicContentSize`. Deferred to the next runloop so it reads the
+    /// post-update layout and never resizes the button mid-layout pass; guarded so
+    /// an unchanged width doesn't churn the status bar.
+    private func resize(item: NSStatusItem, toFit host: NSView) {
+        DispatchQueue.main.async {
+            let ideal = host.intrinsicContentSize.width
+            guard ideal > 0 else { return }          // not laid out yet
+            let target = (ideal + Self.widthSlack).rounded(.up)
+            if abs(item.length - target) > 0.5 { item.length = target }
+        }
     }
 
     private func remove() {
@@ -111,7 +138,17 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
 /// through to the status-item button (the label is display-only) and toggle the
 /// dropdown.
 final class MenuBarHostingView: NSHostingView<AnyView> {
+    /// Fires whenever the live label's ideal size changes (a value gains or loses
+    /// a digit, or the chosen metrics change) so the controller can re-fit the
+    /// status item to the new intrinsic width.
+    var onIntrinsicSizeChange: (() -> Void)?
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        onIntrinsicSizeChange?()
+    }
 
     required init(rootView: AnyView) { super.init(rootView: rootView) }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }

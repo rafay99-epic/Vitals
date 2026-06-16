@@ -7,11 +7,14 @@ import AppKit
 /// driven at the display's own refresh rate (smooth on 120 Hz ProMotion), costs
 /// no per-frame CPU, and renders as vectors (crisp at any display scale).
 ///
-/// `onWidth` reports the content width so the controller can size the status item.
+/// The status item is sized to this label's **intrinsic** width by the
+/// controller (`MenuBarController.resize`), read off the hosting view — not from
+/// an in-band measurement. `.fixedSize()` therefore matters: it pins the label to
+/// its ideal footprint so that intrinsic width is stable and complete (issues
+/// #45, #50).
 struct MenuBarLabelView: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
-    var onWidth: (CGFloat) -> Void = { _ in }
 
     private var metrics: [MenuBarMetric] {
         MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)
@@ -22,14 +25,11 @@ struct MenuBarLabelView: View {
 
     var body: some View {
         content
+            // Ideal size first: the row never compresses, so its glyphs can't
+            // truncate. The controller then sizes the status item to this ideal.
             .fixedSize()
             .padding(.horizontal, 3)
-            // Measure *after* the padding so the reported width is the label's
-            // true footprint. Measuring before it under-sized the status item by
-            // 6 pt; NSHostingView then forced the row into that too-narrow width
-            // and a short value like "6%" wrapped to two lines (issue #45).
             .frame(maxHeight: .infinity)            // fill the bar height, center vertically
-            .background(WidthReporter(onWidth: onWidth))
             // labelColor resolves against the menu bar's appearance, so the
             // readout stays legible whether the bar is light or dark.
             .foregroundStyle(Color(nsColor: .labelColor))
@@ -47,19 +47,6 @@ struct MenuBarLabelView: View {
                 .joined(separator: " · "))
                 .monospacedDigit()
                 .lineLimit(1)
-        }
-    }
-}
-
-/// Reports the measured content width back to the controller (which sizes the
-/// status item to it).
-private struct WidthReporter: View {
-    let onWidth: (CGFloat) -> Void
-    var body: some View {
-        GeometryReader { geo in
-            Color.clear
-                .onAppear { onWidth(geo.size.width) }
-                .onChange(of: geo.size.width) { _, width in onWidth(width) }
         }
     }
 }
