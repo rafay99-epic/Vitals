@@ -367,7 +367,7 @@ private struct UninstallConfirmationSheet: View {
                     "exclamationmark.triangle", .orange)
             }
             if !staged.casks.isEmpty {
-                noteLabel("Homebrew apps are removed with brew uninstall --cask.", "mug", .secondary)
+                noteLabel("Homebrew apps are removed with brew uninstall --cask --zap (also clears their config & data).", "mug", .secondary)
             }
 
             ScrollView {

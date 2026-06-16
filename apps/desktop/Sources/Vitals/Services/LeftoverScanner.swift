@@ -131,6 +131,7 @@ enum LeftoverScanner {
 
         for variant in nameVariants(appName) {
             add("Application Support/\(variant)", .appSupport, under: library)
+            add("Application Support/CrashReporter/\(variant)", .crashReports, under: library)
             add("Caches/\(variant)", .caches, under: library)
             add("Logs/\(variant)", .logs, under: library)
             add("Preferences/\(variant)", .preferences, under: library)
@@ -168,12 +169,21 @@ enum LeftoverScanner {
             add("Saved Application State/\(bundleID).savedState", .savedState, under: library)
             add("Containers/\(bundleID)", .containers, under: library)
             add("WebKit/\(bundleID)", .webData, under: library)
+            // Sandboxed apps store their WebKit data one level down, keyed by id.
+            add("WebKit/com.apple.WebKit.WebContent/\(bundleID)", .webData, under: library)
             add("HTTPStorages/\(bundleID)", .webData, under: library)
             add("HTTPStorages/\(bundleID).binarycookies", .webData, under: library)
             add("Cookies/\(bundleID).binarycookies", .webData, under: library)
             add("Application Scripts/\(bundleID)", .scripts, under: library)
             add("Autosave Information/\(bundleID)", .savedState, under: library)
             add("SyncedPreferences/\(bundleID).plist", .preferences, under: library)
+            add("SyncedPreferences/ByHost/\(bundleID).plist", .preferences, under: library)
+            // Input methods install a helper .app keyed by id.
+            add("Input Methods/\(bundleID).app", .plugins, under: library)
+            // Resumable downloads the app queued through NSURLSession.
+            add("Caches/com.apple.nsurlsessiond/Downloads/\(bundleID)", .caches, under: library)
+            // The app's "recent items" list (sandbox-shared file list).
+            add("Application Support/com.apple.sharedfilelist/\(bundleID).sfl4", .preferences, under: library)
         }
         return candidates
     }
@@ -226,6 +236,95 @@ enum LeftoverScanner {
         return candidates
     }
 
+    /// Vendor-nested locations: many apps file their data under a brand folder,
+    /// e.g. `~/Library/Application Support/Google/Chrome`, not under the app
+    /// name directly. We derive the vendor from the bundle id's middle component
+    /// ("com.**google**.Chrome") and probe only the *product* subfolder beneath
+    /// it — never the shared vendor root, which other apps use too.
+    static func vendorNestedCandidates(bundleID: String?, appName: String, home: URL) -> [(URL, Leftover.Category)] {
+        guard let bundleID, isValidBundleID(bundleID) else { return [] }
+        let parts = bundleID.split(separator: ".").map(String.init)
+        guard parts.count >= 3 else { return [] }
+        let vendorRaw = parts[1]
+        guard vendorRaw.count >= 3 else { return [] }  // "io", "co" are too broad
+        let vendors = Set([vendorRaw, vendorRaw.capitalized])
+        // Products an app files under a vendor folder: the bundle id's last
+        // component ("com.google.**Chrome**" → "Chrome"), the last word of the
+        // display name, and the usual name variants.
+        var productSet = Set(nameVariants(appName))
+        if let last = parts.last, last.count >= 2 { productSet.insert(last) }
+        if let lastWord = appName.split(separator: " ").last, lastWord.count >= 2 {
+            productSet.insert(String(lastWord))
+        }
+        let products = productSet.filter { $0.count >= 2 }
+        guard !products.isEmpty else { return [] }
+
+        let library = home.appendingPathComponent("Library", isDirectory: true)
+        var candidates: [(URL, Leftover.Category)] = []
+        for vendor in vendors {
+            for product in products {
+                let pairs: [(String, Leftover.Category)] = [
+                    ("Application Support/\(vendor)/\(product)", .appSupport),
+                    ("Caches/\(vendor)/\(product)", .caches),
+                    ("Logs/\(vendor)/\(product)", .logs),
+                ]
+                for (relative, category) in pairs {
+                    candidates.append((library.appendingPathComponent(relative), category))
+                }
+            }
+        }
+        return candidates
+    }
+
+    // MARK: Embedded helpers
+
+    /// Two ids belong to the same vendor when their first two reverse-DNS
+    /// components match ("com.foo.app" and "com.foo.app.helper" → yes;
+    /// "com.foo.app" and "org.sparkle-project.Sparkle" → no).
+    private static func sharesVendor(_ a: String, _ b: String) -> Bool {
+        let pa = a.split(separator: ".").prefix(2)
+        let pb = b.split(separator: ".").prefix(2)
+        return pa.count == 2 && pa == pb
+    }
+
+    /// Bundle identifiers of helpers shipped *inside* the app — login-item
+    /// helpers, XPC services, app extensions, system extensions. An app's
+    /// leftovers often live under a helper's id ("com.foo.app.helper"), not the
+    /// main id, so we harvest these and probe their per-user/system locations
+    /// too. Each id is validated as reverse-DNS and must share `mainBundleID`'s
+    /// vendor namespace — this excludes embedded *shared* third-party frameworks
+    /// (Sparkle, Sentry…) whose caches other apps also use. `Contents/Frameworks`
+    /// is deliberately not scanned for the same reason. Read-only.
+    static func helperBundleIDs(appURL: URL, mainBundleID: String) -> [String] {
+        guard isValidBundleID(mainBundleID) else { return [] }
+        let contents = appURL.appendingPathComponent("Contents", isDirectory: true)
+        // Where macOS apps embed their *own* helper bundles (not shared libs).
+        let searchDirs = [
+            "Library/LoginItems", "XPCServices", "PlugIns",
+            "Library/LaunchServices", "Library/SystemExtensions",
+        ]
+        var ids: [String] = []
+        var seen = Set<String>()
+        for dir in searchDirs {
+            for entry in entries(of: contents.appendingPathComponent(dir)) {
+                // Nested bundle layouts vary: .app/.appex/.xpc use Contents/Info.plist,
+                // some plug-ins use a flat Info.plist.
+                for plist in ["Contents/Info.plist", "Info.plist", "Resources/Info.plist"] {
+                    let url = entry.appendingPathComponent(plist)
+                    guard let dict = NSDictionary(contentsOf: url),
+                          let id = dict["CFBundleIdentifier"] as? String,
+                          isValidBundleID(id), !isAppleName(id),
+                          id != mainBundleID, sharesVendor(id, mainBundleID),
+                          seen.insert(id).inserted
+                    else { continue }
+                    ids.append(id)
+                    break
+                }
+            }
+        }
+        return ids
+    }
+
     // MARK: Scan
 
     private static func entries(of url: URL) -> [URL] {
@@ -238,28 +337,63 @@ enum LeftoverScanner {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
         var found: [Leftover] = []
-        var seen = Set<URL>()
+        var seen = Set<String>()
 
         func consider(_ url: URL, _ category: Leftover.Category, _ domain: Leftover.Domain) {
             let standardized = url.standardizedFileURL
             // Universal guards — never touch the sealed system volume or Vitals.
             guard !standardized.path.hasPrefix("/System") else { return }
-            guard fm.fileExists(atPath: standardized.path), seen.insert(standardized).inserted else { return }
+            guard fm.fileExists(atPath: standardized.path) else { return }
+            // Dedup by the *canonical* path, not the requested one: name and
+            // vendor variants differ only by case ("vitalse2e"/"Vitalse2E"), and
+            // on a case-insensitive volume those are the same file — counting it
+            // twice would over-report the leftover size. canonicalPath resolves
+            // case and symlinks; fall back to the standardized path if absent.
+            let key = (try? standardized.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath) ?? standardized.path
+            guard seen.insert(key).inserted else { return }
             found.append(Leftover(id: standardized, category: category, domain: domain,
                                   sizeBytes: AppInventory.directorySize(standardized)))
         }
 
+        // Probe the main app by name + id, plus the vendor-nested product
+        // folders an app may file its data under.
         for (url, category) in userCandidates(bundleID: bundleID, appName: appName, home: home) {
             consider(url, category, .user)
         }
         for (url, category) in systemCandidates(bundleID: bundleID, appName: appName) {
             consider(url, category, .system)
         }
+        for (url, category) in vendorNestedCandidates(bundleID: bundleID, appName: appName, home: home) {
+            consider(url, category, .user)
+        }
 
         let validBundle = bundleID.flatMap { isValidBundleID($0) ? $0 : nil }
 
+        // Helpers shipped inside the bundle leave their own per-id files behind.
+        // Probe their bundle-id locations (no name matching — helper names are
+        // generic), and fold them into the dynamic id-keyed finds below.
+        let helperIDs: [String]
+        if let appURL, let validBundle {
+            helperIDs = helperBundleIDs(appURL: appURL, mainBundleID: validBundle)
+        } else {
+            helperIDs = []
+        }
+        for helper in helperIDs where helper != validBundle {
+            for (url, category) in userCandidates(bundleID: helper, appName: "", home: home) {
+                consider(url, category, .user)
+            }
+            for (url, category) in systemCandidates(bundleID: helper, appName: "") {
+                consider(url, category, .system)
+            }
+        }
+
+        // Every reverse-DNS id this app owns — main bundle and embedded helpers.
+        let allBundleIDs = ([validBundle].compactMap { $0 } + helperIDs).reduce(into: [String]()) {
+            if !$0.contains($1) { $0.append($1) }
+        }
+
         // Dynamic user-domain finds that need directory enumeration.
-        if let bundleID = validBundle {
+        for bundleID in allBundleIDs {
             for url in entries(of: home.appendingPathComponent("Library/LaunchAgents"))
             where startsWithBundleBoundary(url.lastPathComponent, bundleID) {
                 consider(url, .launchAgents, .user)
@@ -296,8 +430,8 @@ enum LeftoverScanner {
             }
         }
 
-        // Dynamic system-domain finds.
-        if let bundleID = validBundle {
+        // Dynamic system-domain finds, for the main id and every helper id.
+        for bundleID in allBundleIDs {
             for base in ["/Library/LaunchAgents", "/Library/LaunchDaemons"] {
                 for url in entries(of: URL(fileURLWithPath: base))
                 where url.pathExtension == "plist"
