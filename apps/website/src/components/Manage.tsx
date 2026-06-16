@@ -2,11 +2,13 @@ const mono = "ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace"
 
 const CHIPS = [
   'Activity Monitor-style tabs · ⌘1 ⌘2 ⌘3',
-  'One window, one instance',
+  'Stable + Dev build channels, side by side',
   'Built-in Help · ⌘?',
   'Adjustable Liquid Glass frosting',
   'Uninstall goes to the Trash — always recoverable',
   'System apps are never touched',
+  'Settings survive updates — mirrored to ~/.vitals/config',
+  'A readable data home: history, logs, exports',
 ]
 
 // MARK: window chrome shared by both mocks — the app's real header: traffic
@@ -271,6 +273,80 @@ function CleanupMock() {
   )
 }
 
+// MARK: Login Items mock
+
+const MOCK_LOGIN = [
+  { name: 'Rectangle', detail: 'com.knollsoft.Rectangle', group: 'Yours', on: true, toggleable: true },
+  { name: 'Postgres', detail: 'homebrew.mxcl.postgresql', group: 'Yours', on: false, toggleable: true },
+  { name: 'Karabiner', detail: 'org.pqrs.karabiner', group: 'Yours', on: true, toggleable: true },
+  { name: 'iCloud', detail: 'com.apple.bird', group: 'System', on: true, toggleable: false },
+]
+
+function LoginItemsMock() {
+  return (
+    <WindowFrame active="Applications">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>18 login items</div>
+          <div style={{ fontSize: 10.5, color: 'rgba(235,235,245,0.5)' }}>7 yours · 11 system — read freely, toggle carefully</div>
+        </div>
+      </div>
+      <div style={{ borderRadius: 10, background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        {MOCK_LOGIN.map((item, index) => (
+          <div
+            key={item.name}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 9,
+              padding: '9px 11px',
+              borderTop: index > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 500 }}>{item.name}</span>
+                {item.group === 'System' && (
+                  <span style={{ fontSize: 8.5, fontWeight: 600, color: 'rgba(235,235,245,0.55)', background: 'rgba(255,255,255,0.08)', padding: '1px 5px', borderRadius: 100 }}>System</span>
+                )}
+              </div>
+              <div style={{ fontSize: 9.5, color: 'rgba(235,235,245,0.38)' }}>{item.detail}</div>
+            </div>
+            {item.toggleable ? (
+              <span
+                style={{
+                  width: 30,
+                  height: 18,
+                  borderRadius: 100,
+                  background: item.on ? '#32D74B' : 'rgba(255,255,255,0.16)',
+                  position: 'relative',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ position: 'absolute', top: 2, left: item.on ? 14 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff' }} />
+              </span>
+            ) : (
+              <span style={{ fontSize: 9.5, color: 'rgba(235,235,245,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="5" y="11" width="14" height="10" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+                Reveal
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#34D85F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2l8 4v5c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V6z" />
+        </svg>
+        <span style={{ fontSize: 9.5, color: 'rgba(235,235,245,0.45)' }}>Only your own non-Apple agents can be switched off — reversibly. System items are read-only.</span>
+      </div>
+    </WindowFrame>
+  )
+}
+
 // MARK: Section
 
 /// The new app-management features, recreated as live components in the
@@ -326,6 +402,24 @@ export default function Manage() {
               Only data your apps rebuild automatically. Documents and settings are never on the menu.
             </p>
           </div>
+        </div>
+
+        {/* Login Items */}
+        <div className="grid grid-cols-1 lg:grid-cols-[0.8fr_1.2fr] gap-8 lg:gap-12" style={{ alignItems: 'center', marginBottom: 56 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: '#34D85F', marginBottom: 12 }}>LOGIN ITEMS</div>
+            <h3 className="text-[26px] md:text-[32px]" style={{ fontWeight: 660, letterSpacing: '-0.03em', margin: '0 0 14px', lineHeight: 1.12 }}>
+              See what launches at startup.
+            </h3>
+            <p style={{ fontSize: 15.5, lineHeight: 1.55, color: 'rgba(235,235,245,0.6)', margin: '0 0 12px' }}>
+              Everything that starts with your Mac, in one list. Switch off your own startup agents reversibly — disabling stops them now and keeps them off
+              at login.
+            </p>
+            <p style={{ fontSize: 15.5, lineHeight: 1.55, color: 'rgba(235,235,245,0.6)', margin: 0 }}>
+              System and Apple items are read-only — Vitals will reveal them in Finder, but never touch what the OS depends on.
+            </p>
+          </div>
+          <LoginItemsMock />
         </div>
 
         {/* Polish chips */}

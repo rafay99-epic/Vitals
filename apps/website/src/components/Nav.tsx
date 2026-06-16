@@ -33,8 +33,9 @@ export default function Nav() {
           <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Vitals</span>
         </div>
         <div className="hidden md:flex" style={{ flex: 1, alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-          <a href="#philosophy" style={link}>Philosophy</a>
           <a href="#sensors" style={link}>Sensors</a>
+          <a href="#monitor" style={link}>Monitor</a>
+          <a href="#glance" style={link}>Glance</a>
           <a href="#manage" style={link}>Manage</a>
           <a href="#download" style={link}>Download</a>
         </div>
