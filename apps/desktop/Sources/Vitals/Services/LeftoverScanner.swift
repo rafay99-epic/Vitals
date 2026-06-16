@@ -337,13 +337,20 @@ enum LeftoverScanner {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
         var found: [Leftover] = []
-        var seen = Set<URL>()
+        var seen = Set<String>()
 
         func consider(_ url: URL, _ category: Leftover.Category, _ domain: Leftover.Domain) {
             let standardized = url.standardizedFileURL
             // Universal guards — never touch the sealed system volume or Vitals.
             guard !standardized.path.hasPrefix("/System") else { return }
-            guard fm.fileExists(atPath: standardized.path), seen.insert(standardized).inserted else { return }
+            guard fm.fileExists(atPath: standardized.path) else { return }
+            // Dedup by the *canonical* path, not the requested one: name and
+            // vendor variants differ only by case ("vitalse2e"/"Vitalse2E"), and
+            // on a case-insensitive volume those are the same file — counting it
+            // twice would over-report the leftover size. canonicalPath resolves
+            // case and symlinks; fall back to the standardized path if absent.
+            let key = (try? standardized.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath) ?? standardized.path
+            guard seen.insert(key).inserted else { return }
             found.append(Leftover(id: standardized, category: category, domain: domain,
                                   sizeBytes: AppInventory.directorySize(standardized)))
         }
