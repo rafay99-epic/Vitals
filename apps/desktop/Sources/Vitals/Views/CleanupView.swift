@@ -154,7 +154,7 @@ struct CleanupView: View {
             symbol: "sparkles",
             tint: .orange,
             title: "Free up space safely",
-            message: "Vitals only finds regenerable junk — caches, logs, the Trash. Quick stays in your home folder; Deep also clears age-gated system files with one admin prompt. Auto-scan is in Settings.",
+            message: "Vitals only finds regenerable junk — developer and browser caches, app caches, logs, and the Trash. Browser history, cookies and logins are never touched. Quick stays in your home folder; Deep also clears age-gated system files with one admin prompt. Auto-scan is in Settings.",
             hints: [
                 .init(symbol: "shippingbox", label: "Caches"),
                 .init(symbol: "doc.text", label: "Logs"),
@@ -252,6 +252,8 @@ private extension CleanupCategory.Kind {
         switch self {
         case .xcode: return .blue
         case .devCaches: return .orange
+        case .deviceSupport: return .cyan
+        case .browserCaches: return .green
         case .homebrew: return .yellow
         case .appCaches: return .purple
         case .logs: return .teal

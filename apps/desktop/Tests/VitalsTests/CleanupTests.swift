@@ -180,6 +180,56 @@ struct DiskCleanerTests {
     }
 }
 
+/// Browser-cache cleaning must clear only regenerable cache folders — never a
+/// profile's cookies, history, bookmarks or saved logins.
+struct BrowserCacheTests {
+    @Test func clearsOnlyCacheFoldersNeverProfileData() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("VitalsBrowserTest-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: home) }
+
+        let profile = home.appendingPathComponent("Library/Application Support/Google/Chrome/Default")
+        // Cache folders that SHOULD be offered.
+        for sub in ["Cache", "Code Cache", "GPUCache", "Service Worker/CacheStorage"] {
+            try fm.createDirectory(at: profile.appendingPathComponent(sub), withIntermediateDirectories: true)
+        }
+        // Profile data that must NEVER be offered (siblings of the caches).
+        for data in ["Cookies", "History", "Bookmarks", "Login Data", "Web Data"] {
+            try fm.createDirectory(at: profile.appendingPathComponent(data), withIntermediateDirectories: true)
+        }
+
+        // The temp dir is a symlink (/var → /private/var); enumeration resolves
+        // it, so compare on resolved paths.
+        let dirs = DiskCleaner.browserCacheDirs(home: home)
+        let paths = dirs.map { $0.resolvingSymlinksInPath().path }
+        func resolved(_ sub: String) -> String {
+            profile.appendingPathComponent(sub).resolvingSymlinksInPath().path
+        }
+        #expect(paths.contains(resolved("Cache")))
+        #expect(paths.contains(resolved("Code Cache")))
+        #expect(paths.contains(resolved("Service Worker/CacheStorage")))
+        // The crucial guarantee: nothing that isn't a cache.
+        for path in paths {
+            let last = (path as NSString).lastPathComponent
+            #expect(last.contains("Cache") || last == "CacheStorage" || last == "ScriptCache" || last == "Firefox",
+                    "non-cache path offered: \(path)")
+            #expect(!path.contains("/Cookies"))
+            #expect(!path.contains("/History"))
+            #expect(!path.contains("/Bookmarks"))
+            #expect(!path.contains("/Login Data"))
+        }
+    }
+
+    @Test func quickScanOffersBrowserAndDeviceCategories() {
+        let kinds = Set(DiskCleaner.scan(depth: .quick).map(\.kind))
+        #expect(kinds.contains(.browserCaches))
+        #expect(kinds.contains(.deviceSupport))
+        // Both are user-domain — no admin in Quick.
+        #expect(!CleanupCategory.Kind.browserCaches.requiresAdmin)
+        #expect(!CleanupCategory.Kind.deviceSupport.requiresAdmin)
+    }
+}
+
 /// Deep clean reaches system files as root, so the generated script must stay
 /// auditable: only allowlisted roots, always age-gated, never the sealed system
 /// volume or a bare path. Quick mode must never surface an admin category.
