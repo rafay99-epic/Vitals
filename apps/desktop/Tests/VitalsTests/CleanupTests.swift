@@ -86,6 +86,47 @@ struct LeftoverScannerTests {
         #expect(paths.contains("/Users/test/Library/Containers/com.example.app"))
         #expect(paths.contains("/Users/test/Library/Saved Application State/com.example.app.savedState"))
     }
+
+    /// The broadened catalog (matching Mole) must still build only confined,
+    /// id-keyed paths — never a shared system folder.
+    @Test func broadenedLocationsAreProbed() {
+        let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let paths = LeftoverScanner.candidatePaths(bundleID: "com.example.app", appName: "Example", home: home)
+            .map { $0.0.path }
+        #expect(paths.contains("/Users/test/Library/Caches/com.apple.nsurlsessiond/Downloads/com.example.app"))
+        #expect(paths.contains("/Users/test/Library/Application Support/com.apple.sharedfilelist/com.example.app.sfl4"))
+        #expect(paths.contains("/Users/test/Library/WebKit/com.apple.WebKit.WebContent/com.example.app"))
+        #expect(paths.contains("/Users/test/Library/Input Methods/com.example.app.app"))
+        #expect(paths.contains("/Users/test/Library/Application Support/CrashReporter/Example"))
+        // Even these Apple-namespaced container paths end in the app's own id,
+        // so they stay inside the home folder and target only this app.
+        for p in paths { #expect(p.hasPrefix("/Users/test/")) }
+    }
+
+    /// Vendor-nested probing targets the *product* subfolder under a brand, not
+    /// the shared vendor root (which other apps use), and stays in the home.
+    @Test func vendorNestedTargetsProductNotVendorRoot() {
+        let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let paths = LeftoverScanner.vendorNestedCandidates(
+            bundleID: "com.google.Chrome", appName: "Google Chrome", home: home
+        ).map { $0.0.path }
+        #expect(paths.contains("/Users/test/Library/Application Support/Google/Chrome"))
+        // Never the bare vendor folder — that would nuke other Google apps' data.
+        #expect(!paths.contains("/Users/test/Library/Application Support/Google"))
+        #expect(!paths.contains("/Users/test/Library/Caches/Google"))
+        for p in paths {
+            #expect(p.hasPrefix("/Users/test/Library/"), "escaped: \(p)")
+            let tail = p.replacingOccurrences(of: "/Users/test/Library/", with: "")
+            #expect(tail.split(separator: "/").count >= 3, "not a product subfolder: \(p)")
+        }
+    }
+
+    @Test func vendorNestedNeedsThreePartID() {
+        let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        // Two-part ids have no vendor component to nest under.
+        #expect(LeftoverScanner.vendorNestedCandidates(bundleID: "com.slack", appName: "Slack", home: home).isEmpty)
+        #expect(LeftoverScanner.vendorNestedCandidates(bundleID: nil, appName: "Slack", home: home).isEmpty)
+    }
 }
 
 /// The complete uninstall reaches system-domain files and removes them as root,
@@ -150,6 +191,35 @@ struct UninstallSystemTests {
         #expect(script.contains("rm -rf '/Applications/AlDente.app'"))
         #expect(!script.contains("loose-file.txt"))
         #expect(!script.contains("/System"))
+    }
+
+    /// Embedded helpers that share the app's vendor namespace are harvested;
+    /// embedded *shared* third-party frameworks (whose data other apps use) are
+    /// not — getting this wrong would delete another app's files.
+    @Test func helperHarvestingStaysInVendorNamespace() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("VitalsHelperTest-\(UUID().uuidString)")
+        let app = root.appendingPathComponent("Example.app")
+        defer { try? fm.removeItem(at: root) }
+
+        func writeHelper(_ relative: String, id: String) throws {
+            let dir = app.appendingPathComponent("Contents/\(relative)/Contents")
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let plist = ["CFBundleIdentifier": id]
+            try (plist as NSDictionary).write(to: dir.appendingPathComponent("Info.plist"))
+        }
+        try writeHelper("Library/LoginItems/Updater.app", id: "com.example.app.updater")  // same vendor → kept
+        try writeHelper("XPCServices/Net.xpc", id: "com.example.app.net")                  // same vendor → kept
+        try writeHelper("PlugIns/Share.appex", id: "org.sparkle-project.Sparkle")          // shared lib → dropped
+        try writeHelper("Library/LoginItems/Apple.app", id: "com.apple.something")          // Apple → dropped
+
+        let ids = LeftoverScanner.helperBundleIDs(appURL: app, mainBundleID: "com.example.app")
+        #expect(Set(ids) == ["com.example.app.updater", "com.example.app.net"])
+    }
+
+    @Test func helperHarvestingNeedsValidMainID() {
+        let app = URL(fileURLWithPath: "/Applications/Whatever.app")
+        #expect(LeftoverScanner.helperBundleIDs(appURL: app, mainBundleID: "nodots").isEmpty)
     }
 
     @Test func homebrewCaskMatchesNormalizedName() {

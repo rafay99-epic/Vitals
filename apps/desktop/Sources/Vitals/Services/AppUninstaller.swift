@@ -98,14 +98,16 @@ enum AppUninstaller {
         process.waitUntilExit()
     }
 
-    /// Runs `brew uninstall --cask <token>` as the user. Returns true on
-    /// success. The token is validated to brew's lowercase-alnum-hyphen shape.
+    /// Runs `brew uninstall --cask --zap <token>` as the user. Returns true on
+    /// success. `--zap` also removes the config and data files the cask's own
+    /// `zap` stanza declares (Mole-style thoroughness, but brew-curated). The
+    /// token is validated to brew's lowercase-alnum-hyphen shape.
     static func homebrewUninstall(cask: String) -> Bool {
         guard let brew = brewExecutable(),
               cask.range(of: "^[a-z0-9][a-z0-9-]*$", options: .regularExpression) != nil else { return false }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: brew)
-        process.arguments = ["uninstall", "--cask", cask]
+        process.arguments = ["uninstall", "--cask", "--zap", cask]
         process.standardOutput = Pipe()
         process.standardError = Pipe()
         do {
