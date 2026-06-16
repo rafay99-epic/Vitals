@@ -12,6 +12,7 @@ struct CleanupView: View {
     /// Persisted so the chosen depth sticks across launches.
     @AppStorage("cleanupDepth") private var depth: CleanDepth = .quick
     @State private var confirming = false
+    @State private var confirmingDestructive = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,6 +28,9 @@ struct CleanupView: View {
                     }
                 }
                 .padding(20)
+            }
+            if let count = model.localSnapshots, model.hasRun {
+                snapshotNote(count)
             }
             Divider()
                 .opacity(0.5)
@@ -46,9 +50,26 @@ struct CleanupView: View {
             isPresented: $confirming,
             titleVisibility: .visible
         ) {
-            Button(model.selectionNeedsAdmin ? "Deep Clean" : "Clean", role: .destructive) { model.clean() }
+            // Anything irreversible gets a second, explicit confirmation that
+            // names exactly what will be destroyed; otherwise clean straight away.
+            Button(model.selectionNeedsAdmin ? "Deep Clean" : "Clean", role: .destructive) {
+                if model.selectedDestructiveCategories.isEmpty {
+                    model.clean()
+                } else {
+                    confirmingDestructive = true
+                }
+            }
         } message: {
             Text(confirmationMessage)
+        }
+        .confirmationDialog(
+            destructiveTitle,
+            isPresented: $confirmingDestructive,
+            titleVisibility: .visible
+        ) {
+            Button("Permanently Delete", role: .destructive) { model.clean() }
+        } message: {
+            Text(destructiveMessage)
         }
         .alert(
             "Cleanup finished",
@@ -83,6 +104,18 @@ struct CleanupView: View {
             lines += " System files need your administrator password; only files older than the retention window are removed."
         }
         return lines
+    }
+
+    private var destructiveTitle: String {
+        let size = formatBytes(model.selectedDestructiveCategories.reduce(0) { $0 + $1.sizeBytes })
+        return "Permanently delete \(size)?"
+    }
+
+    private var destructiveMessage: String {
+        let names = model.selectedDestructiveCategories
+            .map { "\($0.kind.title) (\(formatBytes($0.sizeBytes)))" }
+            .joined(separator: ", ")
+        return "This permanently deletes \(names). It is not regenerable and can't be recovered — make sure you have another copy. This can't be undone."
     }
 
     // MARK: Hero
@@ -154,7 +187,7 @@ struct CleanupView: View {
             symbol: "sparkles",
             tint: .orange,
             title: "Free up space safely",
-            message: "Vitals only finds regenerable junk — developer and browser caches, app caches, logs, and the Trash. Browser history, cookies and logins are never touched. Quick stays in your home folder; Deep also clears age-gated system files with one admin prompt. Auto-scan is in Settings.",
+            message: "Vitals finds regenerable junk — developer and browser caches, app caches, logs, device firmware, and the Trash. Browser history, cookies and logins are never touched. Quick stays in your home folder; Deep adds age-gated system files (one admin prompt) and, only if you choose, iOS backups — those need a second confirmation. Auto-scan is in Settings.",
             hints: [
                 .init(symbol: "shippingbox", label: "Caches"),
                 .init(symbol: "doc.text", label: "Logs"),
@@ -203,18 +236,28 @@ struct CleanupView: View {
         }
     }
 
+    // MARK: Snapshot note (report-only)
+
+    private func snapshotNote(_ count: Int) -> some View {
+        Label(
+            "\(count) Time Machine local snapshot\(count == 1 ? "" : "s") on this disk — macOS frees these automatically under disk pressure. Review with “tmutil listlocalsnapshots /”.",
+            systemImage: "clock.arrow.2.circlepath"
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .fixedSize(horizontal: false, vertical: true)
+        .help("Reported like Mole. Vitals doesn't delete snapshots — the system manages them.")
+    }
+
     // MARK: Footer
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Label(
-                model.selectionNeedsAdmin
-                    ? "System files removed with your permission — only old, regenerable data."
-                    : "Only regenerable data — documents and settings are never touched.",
-                systemImage: model.selectionNeedsAdmin ? "lock.shield" : "checkmark.shield"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            Label(footerNote, systemImage: footerSymbol)
+                .font(.caption)
+                .foregroundStyle(model.selectedDestructiveCategories.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.red))
             Spacer()
             if !model.selected.isEmpty {
                 Text("\(model.selected.count) selected")
@@ -238,6 +281,20 @@ struct CleanupView: View {
         .padding(.vertical, 12)
     }
 
+    private var footerNote: String {
+        if !model.selectedDestructiveCategories.isEmpty {
+            return "Includes permanent, non-recoverable items — you'll confirm again before they're deleted."
+        }
+        return model.selectionNeedsAdmin
+            ? "System files removed with your permission — only old, regenerable data."
+            : "Only regenerable data — documents and settings are never touched."
+    }
+
+    private var footerSymbol: String {
+        if !model.selectedDestructiveCategories.isEmpty { return "exclamationmark.triangle.fill" }
+        return model.selectionNeedsAdmin ? "lock.shield" : "checkmark.shield"
+    }
+
     private var cleanButtonTitle: String {
         if model.selectedBytes == 0 { return "Clean" }
         let size = formatBytes(model.selectedBytes)
@@ -254,6 +311,8 @@ private extension CleanupCategory.Kind {
         case .devCaches: return .orange
         case .deviceSupport: return .cyan
         case .browserCaches: return .green
+        case .deviceFirmware: return .indigo
+        case .deviceBackups: return .red
         case .homebrew: return .yellow
         case .appCaches: return .purple
         case .logs: return .teal
@@ -301,6 +360,14 @@ private struct CategoryCard: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .help("Removing these needs administrator rights")
+                    }
+                    if category.kind.isDestructive {
+                        Text("PERMANENT")
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(.red.opacity(0.16)))
+                            .foregroundStyle(.red)
+                            .help("Not regenerable — deleted permanently and can't be recovered")
                     }
                     Spacer()
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")

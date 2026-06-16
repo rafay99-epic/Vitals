@@ -230,6 +230,53 @@ struct BrowserCacheTests {
     }
 }
 
+/// Device firmware / backup cleaning matches Mole: firmware caches are safe and
+/// age-gated; iOS backups are opt-in, off by default, and flagged irreversible.
+struct DeviceCleanupTests {
+    @Test func firmwareIsAgeGatedAndExtensionScoped() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("VitalsFirmwareTest-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: home) }
+        let dir = home.appendingPathComponent("Library/iTunes/iPhone Software Updates")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        func write(_ name: String, ageDays: Int) throws {
+            let url = dir.appendingPathComponent(name)
+            try Data("x".utf8).write(to: url)
+            let date = Date().addingTimeInterval(-Double(ageDays) * 86_400)
+            try fm.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        }
+        try write("old.ipsw", ageDays: 30)      // eligible
+        try write("recent.ipsw", ageDays: 2)    // too new
+        try write("notes.txt", ageDays: 30)     // wrong extension
+
+        let names = Set(DiskCleaner.iosFirmwareFiles(home: home).map(\.lastPathComponent))
+        #expect(names == ["old.ipsw"])
+    }
+
+    @Test func deviceBackupsAreDeepDestructiveAndUserDomain() {
+        let kind = CleanupCategory.Kind.deviceBackups
+        #expect(kind.isDestructive)
+        #expect(!kind.requiresAdmin)             // backups are user-owned, no admin
+        #expect(kind.minimumDepth == .deep)
+        // Only Deep surfaces it, and it's never auto-selected (selection starts empty).
+        #expect(!Set(DiskCleaner.scan(depth: .quick).map(\.kind)).contains(.deviceBackups))
+        #expect(Set(DiskCleaner.scan(depth: .deep).map(\.kind)).contains(.deviceBackups))
+    }
+
+    @Test func firmwareIsQuickSafeAndNotDestructive() {
+        let kind = CleanupCategory.Kind.deviceFirmware
+        #expect(!kind.isDestructive)
+        #expect(!kind.requiresAdmin)
+        #expect(Set(DiskCleaner.scan(depth: .quick).map(\.kind)).contains(.deviceFirmware))
+    }
+
+    @Test func onlyDeviceBackupsIsDestructive() {
+        let destructive = CleanupCategory.Kind.allCases.filter(\.isDestructive)
+        #expect(destructive == [.deviceBackups])
+    }
+}
+
 /// Deep clean reaches system files as root, so the generated script must stay
 /// auditable: only allowlisted roots, always age-gated, never the sealed system
 /// volume or a bare path. Quick mode must never surface an admin category.
