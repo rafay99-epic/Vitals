@@ -8,7 +8,7 @@ import { REPO_URL } from '../lib/links'
 /// index) — React allows it, TS's CSSProperties doesn't, so widen the type.
 type Style = CSSProperties & Record<string, string | number>
 
-const PURPLE = '#bf5af2'
+const AMBER = '#FF9F0A'
 
 /// The `/releases` page: every published version of Vitals, newest first, from
 /// the backend's paged release list (with a direct-GitHub fallback). Rows expand
@@ -22,7 +22,7 @@ export default function Releases() {
     <LegalLayout title="Releases">
       <p style={{ fontSize: 15, lineHeight: 1.6, color: 'rgba(235,235,245,0.62)', margin: '0 0 32px' }}>
         Every published version of Vitals, newest first. Stable releases auto-update themselves;{' '}
-        <span style={{ color: PURPLE }}>pre-releases</span> are unsigned Dev builds. Expand any row to read its notes.
+        <span style={{ color: AMBER }}>pre-releases</span> are unsigned Nightly builds. Expand any row to read its notes.
       </p>
 
       {status === 'loading' ? (
@@ -125,11 +125,11 @@ function ReleaseRow({ release, index }: { release: ReleaseSummary; index: number
                     fontSize: 10,
                     fontWeight: 800,
                     letterSpacing: '0.06em',
-                    color: PURPLE,
+                    color: AMBER,
                     padding: '2px 7px',
                     borderRadius: 999,
-                    background: 'rgba(191,90,242,0.13)',
-                    border: '1px solid rgba(191,90,242,0.35)',
+                    background: 'rgba(255,159,10,0.13)',
+                    border: '1px solid rgba(255,159,10,0.35)',
                   }}
                 >
                   PRE-RELEASE
@@ -143,8 +143,8 @@ function ReleaseRow({ release, index }: { release: ReleaseSummary; index: number
         </button>
 
         {release.dmgUrl ? (
-          <a href={release.dmgUrl} style={release.prerelease ? devButton : primaryButton}>
-            <DownloadGlyph tint={release.prerelease ? PURPLE : '#fff'} />
+          <a href={release.dmgUrl} style={release.prerelease ? nightlyButton : primaryButton}>
+            <DownloadGlyph tint={release.prerelease ? AMBER : '#fff'} />
             Download
           </a>
         ) : null}
@@ -238,7 +238,7 @@ function renderInline(text: string, key: string): ReactNode[] {
 }
 
 /// Block-level: headings, bullet lists, paragraphs. Just enough to render
-/// GitHub's auto-generated notes and our Dev-build notes cleanly.
+/// GitHub's auto-generated notes and our Nightly-build notes cleanly.
 function ReleaseNotes({ body }: { body: string }) {
   const text = (body ?? '').trim()
   if (!text) {
@@ -385,13 +385,13 @@ const primaryButton: CSSProperties = {
   boxShadow: '0 4px 14px rgba(10,132,255,0.35), inset 0 1px 0 rgba(255,255,255,0.22)',
   flexShrink: 0,
 }
-const devButton: CSSProperties = {
+const nightlyButton: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 7,
   fontSize: 13,
   fontWeight: 560,
-  color: PURPLE,
+  color: AMBER,
   textDecoration: 'none',
   padding: '8px 14px',
   borderRadius: 9,

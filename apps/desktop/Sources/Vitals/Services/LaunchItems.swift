@@ -60,11 +60,12 @@ enum LaunchItemScanner {
         items += parseDir(URL(fileURLWithPath: "/Library/LaunchDaemons"), kind: .systemDaemon)
 
         // Never list or touch Vitals itself or its own helpers (safety rule) —
-        // both the Stable and Dev namespaces, and anything launching from a
-        // Vitals app bundle.
+        // every channel's namespace (the bundle-id prefix covers Stable, Nightly,
+        // and Dev), and anything launching from a Vitals app bundle.
         items.removeAll { item in
             item.label.hasPrefix("com.syntaxlabtechnology.vitals")
                 || (item.program?.contains("/Vitals.app/") ?? false)
+                || (item.program?.contains("/Vitals Nightly.app/") ?? false)
                 || (item.program?.contains("/Vitals Dev.app/") ?? false)
         }
 

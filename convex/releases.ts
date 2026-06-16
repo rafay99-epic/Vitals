@@ -65,10 +65,10 @@ export const latest = action({
   },
 })
 
-/// The latest Dev *pre-release* (a GitHub prerelease carrying a `Vitals-Dev.dmg`
-/// asset), or null if it can't be read — the inverse of `latest`, which drops
-/// prereleases. Shares the global rate limiter; returns null on limit/failure so
-/// the marketing site degrades gracefully.
+/// The latest Nightly *pre-release* (a GitHub prerelease carrying a
+/// `Vitals-Nightly.dmg` asset), or null if it can't be read — the inverse of
+/// `latest`, which drops prereleases. Shares the global rate limiter; returns
+/// null on limit/failure so the marketing site degrades gracefully.
 export const latestPrerelease = action({
   args: {},
   returns: v.union(

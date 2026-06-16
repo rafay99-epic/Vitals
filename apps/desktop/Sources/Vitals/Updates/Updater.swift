@@ -26,7 +26,7 @@ final class Updater: ObservableObject {
         /// (e.g. Stable releases, which order by version instead).
         var buildNumber: Int = 0
 
-        /// What to show the user: the version, plus the build number for Dev.
+        /// What to show the user: the version, plus the build number for Nightly.
         var displayVersion: String {
             buildNumber > 0 ? "\(version) (build \(buildNumber))" : version
         }
@@ -39,15 +39,16 @@ final class Updater: ObservableObject {
 
     nonisolated static let repository = "rafay99-epic/Vitals"
     nonisolated static let currentVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
-    /// This build's CI build number (`VitalsBuildNumber`), used to order Dev
-    /// pre-releases. 0 for local builds — so a local Dev build always sees the
+    /// This build's CI build number (`VitalsBuildNumber`), used to order Nightly
+    /// pre-releases. 0 for local builds — so a local Nightly build always sees the
     /// published pre-release as newer and can pull the official one.
     nonisolated static let currentBuildNumber = Int(Bundle.main.infoDictionary?["VitalsBuildNumber"] as? String ?? "") ?? 0
     /// Replace the actual running bundle (wherever it lives), not a hardcoded
     /// path — so an app launched from a non-standard location updates in place.
     nonisolated private static let installPath = Bundle.main.bundlePath
-    /// The DMG asset this channel installs, and the app bundle inside it.
-    nonisolated static var assetName: String { Channel.current.isDev ? "Vitals-Dev.dmg" : "Vitals.dmg" }
+    /// The DMG asset this channel installs (nil for Dev, which never publishes),
+    /// and the app bundle inside it.
+    nonisolated static var assetName: String? { Channel.current.assetName }
     nonisolated static var bundleInImage: String { "\(Channel.current.displayName).app" }
 
     @Published private(set) var status: Status = .idle
@@ -68,8 +69,10 @@ final class Updater: ObservableObject {
 
     /// Checks at launch, every 6 hours, and when the user returns to the app
     /// (throttled), while the automatic toggle is on. Each channel tracks its
-    /// own feed: Stable → the latest release, Dev → the latest pre-release.
+    /// own feed: Stable → the latest release, Nightly → the latest pre-release.
+    /// Dev has no feed, so this is a no-op there.
     func startAutomaticChecks(settings: AppSettings) {
+        guard Channel.current.updatesEnabled else { return }
         settings.$autoUpdateCheck
             .removeDuplicates()
             .sink { [weak self] enabled in
@@ -110,6 +113,7 @@ final class Updater: ObservableObject {
     }
 
     func check(userInitiated: Bool) async {
+        guard Channel.current.updatesEnabled else { status = .idle; return }
         guard !isBusy else { return }
         status = .checking
         Log.debug(.updater, "checking for updates (userInitiated: \(userInitiated))")
@@ -137,12 +141,14 @@ final class Updater: ObservableObject {
     }
 
     /// Is `release` newer than what's installed? Stable compares the numeric
-    /// version; Dev compares the monotonic CI build number (the pre-release feed
-    /// reuses tags, so the version string alone can't order builds).
+    /// version; Nightly compares the monotonic CI build number (the pre-release
+    /// feed reuses its tag, so the version string alone can't order builds). Dev
+    /// never updates.
     nonisolated static func isNewer(_ release: Release) -> Bool {
         switch Channel.current {
-        case .stable: return isVersion(release.version, newerThan: currentVersion)
-        case .dev:    return release.buildNumber > currentBuildNumber
+        case .stable:  return isVersion(release.version, newerThan: currentVersion)
+        case .nightly: return release.buildNumber > currentBuildNumber
+        case .dev:     return false
         }
     }
 
@@ -184,10 +190,11 @@ final class Updater: ObservableObject {
         let assets: [Asset]
     }
 
-    /// Stable tracks the latest published release; Dev tracks the newest
-    /// pre-release across all branches (the feed `prerelease.yml` publishes).
+    /// Stable tracks the latest published release; Nightly tracks the newest
+    /// pre-release (the feed `nightly.yml` publishes). Dev has no feed.
     nonisolated static func fetchLatestRelease() async throws -> Release? {
-        Channel.current.isDev ? try await fetchLatestPrerelease() : try await fetchStableRelease()
+        guard Channel.current.updatesEnabled else { return nil }
+        return Channel.current.isPrerelease ? try await fetchLatestPrerelease() : try await fetchStableRelease()
     }
 
     nonisolated private static func fetchStableRelease() async throws -> Release? {
@@ -198,14 +205,14 @@ final class Updater: ObservableObject {
     }
 
     nonisolated private static func fetchLatestPrerelease() async throws -> Release? {
-        // The list is newest-first; take the first pre-release carrying a Dev DMG.
+        // The list is newest-first; take the first pre-release carrying a Nightly DMG.
         let endpoint = "https://api.github.com/repos/\(repository)/releases?per_page=30"
         guard let data = try await get(endpoint) else { return nil }
         let releases = try jsonDecoder().decode([APIRelease].self, from: data)
         for api in releases where (api.prerelease ?? false) {
             if let release = release(from: api) { return release }
         }
-        return nil  // no Dev pre-release published yet
+        return nil  // no Nightly pre-release published yet
     }
 
     /// Shared GET with auth + status handling. Returns nil for a 404 "nothing
@@ -237,7 +244,7 @@ final class Updater: ObservableObject {
 
     /// Build a `Release` from an API payload, preferring this channel's DMG.
     nonisolated private static func release(from api: APIRelease) -> Release? {
-        let asset = api.assets.first { $0.name == assetName }
+        let asset = assetName.flatMap { name in api.assets.first { $0.name == name } }
             ?? api.assets.first { $0.name.hasSuffix(".dmg") }
         guard let asset else { return nil }
         let version = api.tagName.hasPrefix("v") ? String(api.tagName.dropFirst()) : api.tagName
@@ -246,7 +253,7 @@ final class Updater: ObservableObject {
     }
 
     /// Parse the monotonic build number out of a release name like
-    /// "Vitals Dev · feature/x · build 42". 0 when absent.
+    /// "Vitals Nightly · build 42". 0 when absent.
     nonisolated static func buildNumber(in name: String?) -> Int {
         guard let name,
               let range = name.range(of: #"build (\d+)"#, options: .regularExpression) else { return 0 }

@@ -2,7 +2,7 @@ const mono = "ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace"
 
 const CHIPS = [
   'Activity Monitor-style tabs · ⌘1 ⌘2 ⌘3',
-  'Stable + Dev build channels, side by side',
+  'Stable + Nightly build channels, side by side',
   'Built-in Help · ⌘?',
   'Adjustable Liquid Glass frosting',
   'Uninstall goes to the Trash — always recoverable',

@@ -1,0 +1,91 @@
+name: Nightly
+
+# The Nightly channel's feed. Every push to the `nightly` integration branch
+# builds the Nightly app and refreshes a single rolling `nightly` GitHub
+# *pre-release* carrying Vitals-Nightly.dmg — the feed the Nightly app's updater
+# and the Homebrew cask (rafay99-epic/apps/vitals-nightly) track. Stable (main →
+# ci.yml's release job) is untouched; Dev publishes nothing.
+#
+# Gated by tests: a broken push publishes nothing. Publishing is guarded to the
+# canonical repo so a fork's `nightly` branch can't try (and fail) to publish.
+on:
+  push:
+    branches: [nightly]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/nightly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One in-flight nightly build; a newer push supersedes an older one. Run numbers
+# still increase strictly, so build ordering is never disturbed.
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/desktop
+
+jobs:
+  test:
+    name: Test before nightly
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run tests
+        run: swift test
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --reporter github-actions-logging
+
+  nightly:
+    name: Build and publish Nightly pre-release
+    runs-on: macos-26
+    needs: test
+    # Only the canonical repo publishes — a fork building its own `nightly`
+    # branch must not push to (or fail against) these releases.
+    if: github.repository == 'rafay99-epic/Vitals'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history — the version is the commit count
+
+      - name: Compute identity
+        run: |
+          echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+          echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          # Monotonic CI run number — the updater orders Nightly builds by this.
+          echo "BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
+      - name: Build Nightly app and installer
+        run: |
+          export VITALS_CHANNEL=nightly
+          export VITALS_VERSION="$VERSION"
+          export VITALS_BUILD="$BUILD"
+          ./make-dmg.sh
+
+      - name: Refresh the rolling "nightly" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A single fixed `nightly` tag that always holds the newest Nightly DMG —
+          # GitHub has no /latest/ URL for pre-releases, so the updater and the
+          # Homebrew cask (rafay99-epic/apps/vitals-nightly) need this stable pointer.
+          # The title MUST contain "build <n>" — the updater (Updater.buildNumber)
+          # and the website's convex lib parse it to order builds.
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+          gh release create nightly build/Vitals-Nightly.dmg \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Vitals Nightly · build $BUILD" \
+            --notes "Nightly build from the \`nightly\` branch @ \`$SHA\` (build $BUILD, version $VERSION-nightly).
+
+          **Install:** \`brew install --cask rafay99-epic/apps/vitals-nightly\`, or download \`Vitals-Nightly.dmg\` below and drag to Applications.
+
+          Installs as **Vitals Nightly** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Nightly auto-updates from this feed.
+
+          ⚠️ Unsigned pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."

@@ -12,10 +12,10 @@ brew install --cask rafay99-epic/apps/vitals
 
 Recommended — installs to `/Applications` and opens with **no macOS security prompt**. Vitals updates itself after that. Requires macOS 15+, Apple Silicon.
 
-Living on the edge? The **Dev channel** installs alongside it as a separate app (own icon + settings):
+Living on the edge? The **Nightly channel** installs alongside Stable as a separate app (own icon + settings) and auto-updates from the newest pre-release:
 
 ```sh
-brew install --cask rafay99-epic/apps/vitals-dev
+brew install --cask rafay99-epic/apps/vitals-nightly
 ```
 
 Prefer a direct download? Grab the **[.dmg](https://github.com/rafay99-epic/Vitals/releases/latest/download/Vitals.dmg)** — it isn't notarized (no paid Apple Developer account), so **right-click → Open** the first time to get past Gatekeeper. Homebrew is the smoother path.

@@ -37,7 +37,7 @@ struct VitalsApp: App {
         // Diagnostic log store: seeds from vitals.log and feeds the Logs tab.
         // `AppSettings.init` already set the capture level before this point.
         _logStore = StateObject(wrappedValue: LogStore())
-        Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.isDev ? "dev" : "stable"))")
+        Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.rawValue))")
         // Surface a crash / unclean exit from the previous run, off the launch path.
         Task.detached(priority: .utility) { CrashReporter.reportPreviousRunIfNeeded() }
     }

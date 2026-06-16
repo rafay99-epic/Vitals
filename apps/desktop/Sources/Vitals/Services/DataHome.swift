@@ -1,9 +1,9 @@
 import Foundation
 
 /// The single on-disk home for everything Vitals writes. Lives in a hidden
-/// folder in the user's home (`~/.vitals`, or `~/.vitals-dev` for the Dev build)
-/// so the two channels never share data and everything sits in one predictable
-/// place.
+/// folder in the user's home (`~/.vitals`, or `~/.vitals-nightly` / `~/.vitals-dev`
+/// for those channels) so the channels never share data and everything sits in
+/// one predictable place.
 ///
 /// Organised into a small set of self-describing subfolders so the home is
 /// legible at a glance — open `~/.vitals` and the structure explains itself:
@@ -19,11 +19,10 @@ import Foundation
 /// helper's privileged `/Library/Application Support/Vitals…` directory is a
 /// separate, root-owned concern and is untouched by this.
 enum DataHome {
-    /// `~/.vitals` (Stable) or `~/.vitals-dev` (Dev). Resolved once.
+    /// `~/.vitals` (Stable), `~/.vitals-nightly`, or `~/.vitals-dev`. Resolved once.
     static let directory: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let name = Channel.current.isDev ? ".vitals-dev" : ".vitals"
-        return home.appendingPathComponent(name, isDirectory: true)
+        return home.appendingPathComponent(Channel.current.dataDirSuffix, isDirectory: true)
     }()
 
     // MARK: Subfolders
@@ -75,10 +74,10 @@ enum DataHome {
     }
 
     /// The history CSV used to live in `~/Library/Application Support/Vitals/` and
-    /// wasn't channel-isolated, so only Stable claims it; the throwaway Dev build
-    /// starts fresh. Moves on the same volume, so it's an instant rename.
+    /// wasn't channel-isolated, so only Stable claims it; the Nightly and Dev
+    /// builds start fresh. Moves on the same volume, so it's an instant rename.
     private static func migrateLegacyAppSupport(_ fm: FileManager) {
-        guard !Channel.current.isDev else { return }
+        guard Channel.current == .stable else { return }
         let legacyDir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Vitals", isDirectory: true)
         guard fm.fileExists(atPath: legacyDir.path) else { return }
