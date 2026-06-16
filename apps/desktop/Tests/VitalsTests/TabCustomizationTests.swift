@@ -16,11 +16,17 @@ struct TabCustomizationTests {
         return AppSettings(defaults: suite)
     }
 
-    @Test func defaultsToEveryTabInOrder() {
+    @Test func defaultsToSmallMonitoringFirstNav() {
         let settings = freshSettings()
-        #expect(settings.tabOrder == AppTab.allCases)
-        #expect(settings.visibleTabs == AppTab.allCases)
-        #expect(settings.hiddenTabs.isEmpty)
+        // The full order contains every tab (so nothing is unreachable)…
+        #expect(settings.tabOrder == AppTab.defaultOrder)
+        #expect(Set(settings.tabOrder) == Set(AppTab.allCases))
+        // …but only the small monitoring-first set is shown by default.
+        #expect(settings.visibleTabs == AppTab.defaultVisible)
+        #expect(settings.hiddenTabs == Set(AppTab.defaultHidden))
+        // The deep-dive / management tabs start hidden, the Dashboard never does.
+        #expect(settings.hiddenTabs.contains(.cleanup))
+        #expect(!settings.hiddenTabs.contains(.dashboard))
     }
 
     @Test func hidingRemovesFromBarButKeepsOrder() {
@@ -46,7 +52,8 @@ struct TabCustomizationTests {
 
     @Test func reorderingFollowsThroughToVisibleTabs() {
         let settings = freshSettings()
+        // Swapping the first two (both visible by default) puts the second first.
         settings.tabOrder.swapAt(0, 1)
-        #expect(settings.visibleTabs.first == AppTab.allCases[1])
+        #expect(settings.visibleTabs.first == AppTab.defaultOrder[1])
     }
 }

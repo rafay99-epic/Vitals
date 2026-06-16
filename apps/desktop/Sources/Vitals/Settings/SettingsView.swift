@@ -220,7 +220,7 @@ private struct TabsCard: View {
                 ForEach(Array(settings.tabOrder.enumerated()), id: \.element) { index, tab in
                     TabReorderRow(tab: tab, index: index)
                 }
-                Text("Reorder with the arrows and switch off tabs you don't need. The Dashboard always stays, and ⌘1–9 follow this order.")
+                Text("Vitals starts with a few core tabs. Switch on the ones you want — GPU, Health, Applications, Login Items, Cleanup — and reorder with the arrows. The Dashboard always stays, and ⌘1–9 follow this order.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
