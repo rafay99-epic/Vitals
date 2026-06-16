@@ -23,12 +23,16 @@ struct MenuBarLabelView: View {
     var body: some View {
         content
             .fixedSize()
+            .padding(.horizontal, 3)
+            // Measure *after* the padding so the reported width is the label's
+            // true footprint. Measuring before it under-sized the status item by
+            // 6 pt; NSHostingView then forced the row into that too-narrow width
+            // and a short value like "6%" wrapped to two lines (issue #45).
             .frame(maxHeight: .infinity)            // fill the bar height, center vertically
             .background(WidthReporter(onWidth: onWidth))
             // labelColor resolves against the menu bar's appearance, so the
             // readout stays legible whether the bar is light or dark.
             .foregroundStyle(Color(nsColor: .labelColor))
-            .padding(.horizontal, 3)
     }
 
     @ViewBuilder
@@ -42,6 +46,7 @@ struct MenuBarLabelView: View {
             Text(metrics.map { "\($0.shortLabel) \(menuBarValue($0, model: model, settings: settings))" }
                 .joined(separator: " · "))
                 .monospacedDigit()
+                .lineLimit(1)
         }
     }
 }
@@ -94,6 +99,7 @@ private struct MenuBarRow: View {
                                   animate: animate, fanFraction: fanFraction)
                     Text(menuBarValue(metric, model: model, settings: settings))
                         .monospacedDigit()
+                        .lineLimit(1)   // a short value must stay on one line, never wrap (issue #45)
                 }
             }
         }
