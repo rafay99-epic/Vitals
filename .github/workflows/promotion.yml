@@ -1,0 +1,49 @@
+name: Promotion
+
+# Weekly Saturday job that opens (or refreshes) a draft `nightly → main` PR
+# summarizing every squash-merge queued for the next Stable cut, grouped by
+# the `area:*` labels labeler.yml applies. CLAUDE.md: `main` moves only via
+# the user's weekly nightly → main (squash) promotion — this workflow
+# prepares that PR; the user reviews + squash-merges. The squash is what
+# ci.yml's release job builds the Stable DMG from.
+#
+# This workflow only writes the PR description; it never merges. Cron is UTC
+# and can be delayed under heavy GitHub load, so workflow_dispatch is also
+# available for catch-up + manual runs.
+on:
+  schedule:
+    # Saturday 15:00 PKT = 10:00 UTC. PKT is UTC+5 with no DST, so this is
+    # fixed year-round and the user's local "3 PM Saturday" never drifts.
+    - cron: "0 10 * * 6"
+  workflow_dispatch:
+
+# Read-only by default — only the promote job gets the write scope it needs.
+permissions:
+  contents: read
+
+# Two of these must never race — overlapping runs would fight over the same
+# PR body. Queue rather than cancel so a manual dispatch during the cron
+# window doesn't drop work.
+concurrency:
+  group: promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Open or refresh nightly → main PR
+    runs-on: ubuntu-latest
+    # Forks have no `nightly`/`main` pair worth promoting and the auto token
+    # can't write to the upstream repo anyway.
+    if: github.repository == 'rafay99-epic/Vitals'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history — the script walks every commit in main..nightly
+          ref: nightly # always diff against nightly's tip regardless of dispatch ref
+      - name: Open or refresh the promotion PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/promotion.sh
