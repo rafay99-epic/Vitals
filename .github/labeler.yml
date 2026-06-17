@@ -1,0 +1,33 @@
+# Path-based PR labels. Mirrors the path filters in the CI workflows so the
+# label on a PR matches which workflow(s) will run for it.
+#
+# Consumed by .github/workflows/labeler.yml (actions/labeler@v5).
+
+"area:desktop":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/desktop/**"
+
+"area:website":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/website/**"
+
+"area:backend":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "convex/**"
+
+"area:ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/labeler.yml"
+          - ".github/dependabot.yml"
+
+"area:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+          - "LICENSE"

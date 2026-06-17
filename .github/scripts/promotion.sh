@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+#
+# Open or refresh the weekly `nightly → main` Stable promotion PR.
+#
+# Invoked from .github/workflows/promotion.yml every Saturday and on manual
+# workflow_dispatch. This script NEVER merges — squash-merging (or closing)
+# the PR is entirely the user's call. CLAUDE.md: `main` moves only via the
+# user's weekly `nightly → main` (squash) promotion, which cuts the Stable
+# release; ci.yml's release job is what builds + publishes the DMG once the
+# squash lands on main.
+#
+# The PR body lists every squash-merged commit in `main..nightly`, grouped
+# by the `area:*` label the labeler workflow applies — so the same tag
+# system governs both feature PRs and the rolled-up promotion PR.
+#
+# Requires: gh, jq, git. GH_TOKEN env var with `pull-requests: write` scope.
+# Assumes the workspace is checked out at `nightly` with full history.
+
+set -euo pipefail
+
+# Which token are we using? GitHub's auto-issued GITHUB_TOKEN starts with
+# `ghs_`; user PATs start with `ghp_` (classic) or `github_pat_` (fine-
+# grained). We log the kind — NEVER the value — so a misconfigured
+# PROMOTION_TOKEN secret is obvious in the run log instead of silently
+# falling back to the blocked default token.
+case "${GH_TOKEN:-}" in
+  ghs_*)        echo "::warning::Using default GITHUB_TOKEN — the PROMOTION_TOKEN repo secret isn't set, so 'gh pr create' will fail unless Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests' is enabled." ;;
+  ghp_*)        echo "Using classic PAT (PROMOTION_TOKEN)." ;;
+  github_pat_*) echo "Using fine-grained PAT (PROMOTION_TOKEN)." ;;
+  "")           echo "::error::GH_TOKEN is empty."; exit 1 ;;
+  *)            echo "::warning::Using token of unknown shape — gh may reject it." ;;
+esac
+
+git fetch origin main:refs/remotes/origin/main --quiet
+
+AHEAD=$(git rev-list --count origin/main..HEAD)
+if [ "$AHEAD" -eq 0 ]; then
+  echo "::notice::nightly is at main — nothing to promote."
+  exit 0
+fi
+echo "$AHEAD commits ahead of main."
+
+# Squash-merged PRs end every subject with `(#NN)`. `--reverse` so oldest
+# lands first in the body, matching the order they were merged into nightly.
+mapfile -t PR_NUMS < <(
+  git log --reverse --format='%s' origin/main..HEAD \
+    | grep -oE '\(#[0-9]+\)$' \
+    | tr -d '()#' || true
+)
+
+# Anything without a `(#NN)` suffix bypassed the PR flow — surface it.
+mapfile -t DIRECT < <(
+  git log --reverse --format='%h  %s' origin/main..HEAD \
+    | grep -vE '\(#[0-9]+\)$' || true
+)
+
+# Buckets mirror .github/labeler.yml. An unknown area:* drops into
+# uncategorized rather than being silently dropped.
+declare -A BUCKETS=( [desktop]="" [website]="" [backend]="" [ci]="" [docs]="" [uncategorized]="" )
+declare -A COUNTS=(  [desktop]=0  [website]=0  [backend]=0  [ci]=0  [docs]=0  [uncategorized]=0  )
+TOTAL=0
+
+for n in "${PR_NUMS[@]:-}"; do
+  [ -z "$n" ] && continue
+  data=$(gh pr view "$n" --json title,author,labels 2>/dev/null) \
+    || { echo "skip #$n (gh pr view failed)"; continue; }
+  title=$(jq -r '.title' <<< "$data")
+  author=$(jq -r '.author.login // "ghost"' <<< "$data")
+  areas=$(jq -r '.labels[].name' <<< "$data" | grep '^area:' | sed 's/^area://' || true)
+
+  line="- #${n} ${title} — @${author}"
+
+  if [ -z "$areas" ]; then
+    BUCKETS[uncategorized]+="${line}"$'\n'
+    COUNTS[uncategorized]=$((COUNTS[uncategorized] + 1))
+  else
+    while IFS= read -r area; do
+      [ -z "$area" ] && continue
+      if [ -n "${BUCKETS[$area]+x}" ]; then
+        BUCKETS[$area]+="${line}"$'\n'
+        COUNTS[$area]=$((COUNTS[$area] + 1))
+      else
+        BUCKETS[uncategorized]+="${line} _(area: ${area})_"$'\n'
+        COUNTS[uncategorized]=$((COUNTS[uncategorized] + 1))
+      fi
+    done <<< "$areas"
+  fi
+  TOTAL=$((TOTAL + 1))
+done
+
+TODAY=$(date -u +%Y-%m-%d)
+BODY_FILE=$(mktemp)
+{
+  echo "## Stable promotion — week of ${TODAY}"
+  echo
+  echo "${TOTAL} PR$([ "$TOTAL" -eq 1 ] || echo s) queued from \`nightly\` since the last Stable cut."
+  echo
+  echo "Squash-merging this PR cuts the next Stable release: \`ci.yml\`'s release job builds the DMG and publishes \`v0.<commit count on main>\` (the version never goes backwards — CLAUDE.md)."
+  echo
+
+  emit_section() {
+    local label="$1" key="$2"
+    local count=${COUNTS[$key]}
+    [ "$count" -eq 0 ] && return
+    echo "### ${label} (${count})"
+    echo
+    printf '%s' "${BUCKETS[$key]}"
+    echo
+  }
+
+  emit_section "Desktop"       desktop
+  emit_section "Website"       website
+  emit_section "Backend"       backend
+  emit_section "CI"            ci
+  emit_section "Docs"          docs
+  emit_section "Uncategorized" uncategorized
+
+  if [ "${#DIRECT[@]}" -gt 0 ] && [ -n "${DIRECT[0]:-}" ]; then
+    echo "### Direct commits to \`nightly\` (${#DIRECT[@]})"
+    echo
+    echo "Bypassed the PR flow — CLAUDE.md says to avoid this; surfaced here as a safety net."
+    echo
+    echo '```'
+    printf '%s\n' "${DIRECT[@]}"
+    echo '```'
+    echo
+  fi
+
+  echo "---"
+  echo "_Auto-generated by [\`.github/workflows/promotion.yml\`](.github/workflows/promotion.yml). Refreshes every Saturday 15:00 PKT (10:00 UTC) and on manual dispatch._"
+} > "$BODY_FILE"
+
+EXISTING=$(gh pr list --base main --head nightly --state open --json number --jq '.[0].number // empty')
+if [ -n "$EXISTING" ]; then
+  echo "::notice::Refreshing existing PR #${EXISTING}"
+  gh pr edit "$EXISTING" --body-file "$BODY_FILE"
+else
+  echo "::notice::Opening new draft PR"
+  gh pr create --draft \
+    --base main --head nightly \
+    --title "Stable release · ${TODAY}" \
+    --body-file "$BODY_FILE"
+fi

@@ -8,18 +8,12 @@
 language: "en-US"
 early_access: true
 
-# Cross-cutting guidance applied to every review and chat.
+# Cross-cutting guidance applied to every review and chat. CodeRabbit caps this
+# field at 250 chars — keep it tight; per-area rules live in path_instructions.
 tone_instructions: >-
-  Be concise and direct; skip nitpicks already enforced by SwiftLint/ESLint.
-  This is a native macOS app (Swift/SwiftUI) + a React/Vite/Tailwind site + a
-  thin Convex backend, licensed GPL-3.0. Weight feedback toward: (1) safety of
-  any code that WRITES to the user's system, (2) honesty of displayed values
-  (never fake/smooth/invent a reading; empty means "Empty"/"Nothing found"),
-  (3) the layering rule (Services are UI-free; Models @MainActor publish; Views
-  only display), and (4) native feel. Flag any commit message, PR body, or app
-  credit that adds AI/Claude attribution (e.g. "Co-Authored-By", "Generated with
-  Claude") — the project forbids it. The Mole project credit (GPL) and the
-  GPL-3.0 license headers must never be removed.
+  Be concise; skip nitpicks SwiftLint/ESLint already catches. Prioritize: safety
+  of system writes, value honesty (never fake a reading), Services/Models/Views
+  layering, native feel. Flag any AI/Claude attribution. Keep Mole + GPL credits.
 
 reviews:
   profile: "chill"

@@ -41,7 +41,7 @@ struct ContentView: View {
                     .tabVisibility(section == .dashboard)
                 GPUView(isActive: section == .gpu)
                     .tabVisibility(section == .gpu)
-                BatteryView()
+                BatteryView(isActive: section == .battery)
                     .tabVisibility(section == .battery)
                 HealthView()
                     .tabVisibility(section == .health)

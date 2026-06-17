@@ -26,12 +26,59 @@ struct BatterySnapshot {
     let amperage: Double?
     /// Apple's service condition — "Normal" or "Service Recommended".
     let condition: String
+    /// The attached power adapter (USB-C PD / MagSafe), or nil on battery.
+    let adapter: AdapterInfo?
 
     /// Apple reports "Service Recommended" off the battery's own permanent-fault
     /// flag, not a capacity threshold — so we read the flag rather than inventing
     /// a cutoff. Pure and testable.
     static func condition(permanentFailureStatus: Int?) -> String {
         (permanentFailureStatus ?? 0) == 0 ? "Normal" : "Service Recommended"
+    }
+}
+
+/// The attached power adapter, read from `AppleSmartBattery`'s `AdapterDetails`
+/// dictionary. `watts` is the charger's rated figure; `deliveredWatts` is the
+/// live USB-C PD draw (negotiated V × A) — what it's actually pushing right now.
+struct AdapterInfo {
+    /// Rated/advertised wattage (`AdapterDetails["Watts"]`).
+    let watts: Int?
+    /// Negotiated voltage in volts.
+    let voltage: Double?
+    /// Negotiated current in amps.
+    let amperage: Double?
+    /// Live power being delivered (V × A) — the real PD draw this moment.
+    let deliveredWatts: Double?
+    /// Adapter name/description when the charger reports one.
+    let name: String?
+    let isWireless: Bool
+
+    /// Parse the `AdapterDetails` dict. Returns nil when no adapter is attached
+    /// (the dict is absent or empty — i.e. running on battery). Every field is
+    /// optional: chargers report wildly different subsets, and an absent key is
+    /// reported as "unknown", never a fabricated number. Pure, for testing.
+    static func parse(from details: [String: Any]?) -> AdapterInfo? {
+        guard let details, !details.isEmpty else { return nil }
+        let watts = details["Watts"] as? Int
+        let milliVolts = details["Voltage"] as? Int
+        let milliAmps = details["Current"] as? Int
+        // On battery, macOS still leaves a stub dict like {"FamilyCode": 0} — no
+        // real power figures. Require at least one to treat a charger as attached,
+        // so a stub never shows a content-less "Connected" adapter card.
+        guard watts != nil || milliVolts != nil || milliAmps != nil else { return nil }
+        var delivered: Double?
+        if let milliVolts, let milliAmps {
+            delivered = Double(milliVolts) * Double(milliAmps) / 1_000_000
+        }
+        let rawName = (details["Name"] as? String) ?? (details["Description"] as? String)
+        return AdapterInfo(
+            watts: watts,
+            voltage: milliVolts.map { Double($0) / 1000 },
+            amperage: milliAmps.map { Double($0) / 1000 },
+            deliveredWatts: delivered,
+            name: (rawName?.isEmpty == false) ? rawName : nil,
+            isWireless: details["IsWireless"] as? Bool ?? false
+        )
     }
 }
 
@@ -103,7 +150,8 @@ enum Battery {
             temperature: temperature,
             voltage: voltage.map { Double($0) / 1000 },
             amperage: amperage.map { Double($0) / 1000 },
-            condition: BatterySnapshot.condition(permanentFailureStatus: int("PermanentFailureStatus"))
+            condition: BatterySnapshot.condition(permanentFailureStatus: int("PermanentFailureStatus")),
+            adapter: AdapterInfo.parse(from: props["AdapterDetails"] as? [String: Any])
         )
     }
 }

@@ -19,12 +19,14 @@ License: **GPL-3.0**.
 
 ## Workflow rules (user's explicit requirements — do not violate)
 
-- **`nightly` is the integration branch; `main` is Stable.** Every feature on its
-  own branch **from `nightly`** → push → **draft PR into `nightly`**. The user
-  squash-merges. The user promotes **`nightly → main` (squash) weekly**, which cuts
-  the Stable release. Never commit features directly to `main` or `nightly`; `main`
-  moves only via the weekly promotion (so don't hand-commit to it — it would diverge
-  from `nightly` and conflict the next squash).
+- **`nightly` is the integration + default branch; `main` is protected Stable.** Every
+  feature on its own branch **from `nightly`** → push → **draft PR into `nightly`** (the
+  default branch, so PRs target it automatically). The user squash-merges. **`main` is
+  branch-protected — PRs or pushes straight to `main` are rejected**; it moves only via
+  the user's **weekly `nightly → main` (squash) promotion**, which cuts the Stable
+  release. Never hand-commit to `main` (it would diverge from `nightly` and conflict the
+  next squash) or directly to `nightly`. Outside/fork PRs get CI checks only — they never
+  publish (publishing needs write access a fork PR can't have).
 - **No Claude attribution anywhere**: no `Co-Authored-By`, no "Generated with Claude"
   in commits, PR bodies, or app credits. The app is credited to Syntax Lab Technology /
   Abdul Rafay (rafay99.com).

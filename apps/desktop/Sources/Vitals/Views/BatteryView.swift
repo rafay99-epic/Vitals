@@ -1,17 +1,30 @@
 import SwiftUI
+import Charts
 
 /// The Battery tab: the full health picture System Settings keeps hidden —
-/// real capacity against design, cycle count, condition, and live voltage /
-/// current / power / temperature straight from the pack's own gauge. Every
-/// figure is a direct AppleSmartBattery reading; a machine with no battery says
-/// so rather than showing zeros.
+/// real capacity against design, cycle count, condition, the charge trend over
+/// time, the live USB-C / MagSafe adapter negotiation, and voltage / current /
+/// power / temperature straight from the pack's own gauge. Every figure is a
+/// direct AppleSmartBattery reading; a machine with no battery says so rather
+/// than showing zeros.
 struct BatteryView: View {
     @EnvironmentObject private var model: VitalsModel
+    /// True only while the Battery tab is visible — gates the history chart so it
+    /// doesn't rebuild marks every tick while mounted in the background (mirrors GPUView).
+    let isActive: Bool
 
     var body: some View {
         MetricScroll {
             if let battery = model.battery {
                 BatteryHeroCard(battery: battery)
+                if let adapter = battery.adapter {
+                    BatteryAdapterCard(adapter: adapter)
+                }
+                // Gate the scan on isActive too (mirrors GPUView) so a backgrounded
+                // mounted tab doesn't walk chartHistory every tick.
+                if isActive, model.chartHistory.contains(where: { $0.batteryPercent != nil }) {
+                    BatteryHistoryCard()
+                }
                 BatteryHealthCard(battery: battery)
                 BatteryDetailCard(battery: battery)
             } else {
@@ -73,6 +86,100 @@ private struct BatteryHeroCard: View {
 
     private func timeText(_ minutes: Int) -> String {
         minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
+    }
+}
+
+// MARK: - Power adapter (USB-C PD / MagSafe)
+
+private struct BatteryAdapterCard: View {
+    let adapter: AdapterInfo
+
+    var body: some View {
+        SectionCard(title: "Power adapter", symbol: "powerplug.fill") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(heroValue)
+                        .font(.system(size: 32, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .numericTransition()
+                    Text(adapter.deliveredWatts != nil ? "delivering" : "rated")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if let name = adapter.name {
+                        Label(name, systemImage: adapter.isWireless ? "wave.3.right" : "powerplug")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else if adapter.isWireless {
+                        Label("Wireless", systemImage: "wave.3.right")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !rows.isEmpty {
+                    Divider()
+                    MetricRowGrid(rows: rows)
+                }
+            }
+        }
+    }
+
+    /// The live delivered watts when the charger reports them — even ~0 W when
+    /// the battery is full (honest, like a stopped fan reading 0 rpm), so the
+    /// "delivering" label always matches the number. Falls back to the rated
+    /// figure (labelled "rated"), then "Connected". Never a fabricated number.
+    private var heroValue: String {
+        if let delivered = adapter.deliveredWatts {
+            return String(format: "%.1f W", delivered)
+        }
+        if let watts = adapter.watts { return "\(watts) W" }
+        return "Connected"
+    }
+
+    private var rows: [MetricRow] {
+        var rows: [MetricRow] = []
+        // Show the rated cap alongside the live draw — they diverge as the battery fills.
+        if adapter.deliveredWatts != nil, let watts = adapter.watts {
+            rows.append(MetricRow(symbol: "bolt.fill", label: "Rated power", value: "\(watts) W"))
+        }
+        if let voltage = adapter.voltage {
+            rows.append(MetricRow(symbol: "waveform", label: "Voltage", value: String(format: "%.1f V", voltage)))
+        }
+        if let amperage = adapter.amperage {
+            rows.append(MetricRow(symbol: "arrow.left.arrow.right", label: "Current", value: String(format: "%.2f A", amperage)))
+        }
+        return rows
+    }
+}
+
+// MARK: - Charge history
+
+private struct BatteryHistoryCard: View {
+    @EnvironmentObject private var model: VitalsModel
+
+    var body: some View {
+        SectionCard(title: "Charge history", symbol: "chart.xyaxis.line") {
+            // Only inserted by BatteryView while the tab is active, so the chart
+            // never rebuilds marks in the background (see GPUView). Deferred keeps
+            // the 50–150 ms first-layout cost off the tab-switch animation.
+            Deferred { chart }.frame(height: 150)
+        }
+    }
+
+    private var chart: some View {
+        Chart(model.chartHistory) { sample in
+            if let percent = sample.batteryPercent {
+                AreaMark(x: .value("Time", sample.time), y: .value("Charge", percent))
+                    .foregroundStyle(LinearGradient(colors: [.green.opacity(0.35), .green.opacity(0.02)],
+                                                    startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.catmullRom)
+                LineMark(x: .value("Time", sample.time), y: .value("Charge", percent))
+                    .foregroundStyle(.green)
+                    .interpolationMethod(.catmullRom)
+            }
+        }
+        .chartYScale(domain: 0...100)
+        .chartYAxisLabel("%")
     }
 }
 
