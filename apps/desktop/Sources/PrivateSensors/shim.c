@@ -185,6 +185,70 @@ void vitals_socpower_destroy(void *handle) {
 }
 
 // ---------------------------------------------------------------------------
+// NVMe SSD SMART read (see PrivateSensors.h). Uses Apple's own NVMe SMART
+// user-client interface; all IOKit/CF lifetimes are owned here.
+// ---------------------------------------------------------------------------
+
+#include <IOKit/IOKitLib.h>
+#include <IOKit/IOKitKeys.h>
+#include <IOKit/IOCFPlugIn.h>
+#include <IOKit/storage/nvme/NVMeSMARTLibExternal.h>
+
+int vitals_nvme_smart_read(VitalsDiskSMART *out) {
+    memset(out, 0, sizeof(*out));
+
+    // Match by the public "NVMe SMART Capable" property rather than a device
+    // class, so this isn't tied to a particular controller (Apple Silicon
+    // publishes it on an IOEmbeddedNVMeBlockDevice). No match → no SMART here.
+    CFMutableDictionaryRef sub = CFDictionaryCreateMutable(
+        kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    if (!sub) return 0;
+    CFDictionarySetValue(sub, CFSTR(kIOPropertyNVMeSMARTCapableKey), kCFBooleanTrue);
+    CFMutableDictionaryRef match = CFDictionaryCreateMutable(
+        kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    if (!match) { CFRelease(sub); return 0; }
+    CFDictionarySetValue(match, CFSTR(kIOPropertyMatchKey), sub);
+    CFRelease(sub);
+
+    io_service_t svc = IOServiceGetMatchingService(kIOMainPortDefault, match); // consumes `match`
+    if (svc == IO_OBJECT_NULL) return 0;
+
+    IOCFPlugInInterface **plugin = NULL;
+    SInt32 score = 0;
+    kern_return_t kr = IOCreatePlugInInterfaceForService(
+        svc, kIONVMeSMARTUserClientTypeID, kIOCFPlugInInterfaceID, &plugin, &score);
+    IOObjectRelease(svc);
+    if (kr != KERN_SUCCESS || !plugin) return 0;
+
+    IONVMeSMARTInterface **smart = NULL;
+    HRESULT qr = (*plugin)->QueryInterface(plugin, CFUUIDGetUUIDBytes(kIONVMeSMARTInterfaceID), (LPVOID *)&smart);
+    if (qr != 0 || !smart) { IODestroyPlugInInterface(plugin); return 0; }
+
+    NVMeSMARTData d;
+    memset(&d, 0, sizeof(d));
+    IOReturn rr = (*smart)->SMARTReadData(smart, &d);
+    int ok = (rr == kIOReturnSuccess);
+    if (ok) {
+        out->valid                    = 1;
+        out->critical_warning         = d.CRITICAL_WARNING;
+        out->temperature_k            = d.TEMPERATURE;
+        out->available_spare          = d.AVAILABLE_SPARE;
+        out->available_spare_threshold = d.AVAILABLE_SPARE_THRESHOLD;
+        out->percentage_used          = d.PERCENTAGE_USED;
+        out->data_units_written       = d.DATA_UNITS_WRITTEN[0]; // low 64 bits
+        out->data_units_read          = d.DATA_UNITS_READ[0];
+        out->power_cycles             = d.POWER_CYCLES[0];
+        out->power_on_hours           = d.POWER_ON_HOURS[0];
+        out->unsafe_shutdowns         = d.UNSAFE_SHUTDOWNS[0];
+        out->media_errors             = d.MEDIA_ERRORS[0];
+    }
+
+    (*smart)->Release(smart);
+    IODestroyPlugInInterface(plugin);
+    return ok;
+}
+
+// ---------------------------------------------------------------------------
 // Crash capture (see PrivateSensors.h). Strictly async-signal-safe: the handler
 // only calls open/write/close, backtrace(), and raise() — all on POSIX's
 // async-signal-safe list — over fixed buffers, with no malloc, stdio, or locks.

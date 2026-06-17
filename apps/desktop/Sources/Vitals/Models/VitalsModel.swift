@@ -42,6 +42,9 @@ final class VitalsModel: ObservableObject {
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
     @Published private(set) var battery: BatterySnapshot?
+    /// The internal SSD's SMART health (wear, endurance, power-on hours…). Nil
+    /// on a Mac/VM that doesn't expose SMART, or for the first tick or two.
+    @Published private(set) var diskHealth: DiskHealthSnapshot?
     /// Live SoC power draw (CPU/GPU/ANE rails). Nil until the second sample —
     /// power is an energy delta and needs a prior reading — and on the rare
     /// machine where IOReport is unavailable.
@@ -215,6 +218,7 @@ final class VitalsModel: ObservableObject {
         memory = snapshot.memory
         topProcesses = snapshot.topProcesses
         battery = snapshot.battery
+        diskHealth = snapshot.diskHealth
         gpu = snapshot.gpu
         if let power = snapshot.power { self.power = power }
         hasLoaded = true

@@ -45,6 +45,8 @@ struct ContentView: View {
                     .tabVisibility(section == .battery)
                 HealthView()
                     .tabVisibility(section == .health)
+                DiskView()
+                    .tabVisibility(section == .disk)
                 HistoryView(isActive: section == .history)
                     .tabVisibility(section == .history)
                 ProcessesView(model: processesModel, isActive: section == .processes)
@@ -329,6 +331,13 @@ struct DashboardView: View {
                 subtitle: model.battery.map { "\(Int($0.percent))%" }
             ) {
                 BatteryContent()
+            }
+            CollapsibleCard(
+                title: "SSD",
+                symbol: DiskContent.symbol(for: model.diskHealth),
+                subtitle: model.diskHealth.map { "\($0.percentUsed)% used" }
+            ) {
+                DiskContent()
             }
             footer
         }
