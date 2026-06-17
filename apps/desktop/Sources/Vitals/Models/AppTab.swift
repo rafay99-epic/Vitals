@@ -8,12 +8,13 @@ import Foundation
 /// tab's visible position (⌘1 = leftmost), assigned in the header from the
 /// ordered, unhidden list — so a shortcut always matches what the eye sees.
 enum AppTab: String, CaseIterable, Identifiable {
-    case dashboard, gpu, battery, health, disk, history, processes, applications, loginItems, cleanup, storage
+    case dashboard, cpu, gpu, battery, health, disk, history, processes, applications, loginItems, cleanup, storage
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: return "Dashboard"
+        case .cpu: return "CPU"
         case .gpu: return "GPU"
         case .battery: return "Battery"
         case .health: return "Health"
@@ -30,6 +31,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .dashboard: return "gauge.with.dots.needle.50percent"
+        case .cpu: return "cpu"
         case .gpu: return "cpu.fill"
         case .battery: return "battery.100percent"
         case .health: return "waveform.path.ecg"
@@ -64,7 +66,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     /// so a fresh install starts from a complete, intentional order.
     static let defaultOrder: [AppTab] = [
         .dashboard, .processes, .history, .battery, .storage,   // shown
-        .gpu, .health, .disk,                                   // monitoring deep-dives
+        .cpu, .gpu, .health, .disk,                             // monitoring deep-dives
         .applications, .loginItems, .cleanup,                   // management tools
     ]
 

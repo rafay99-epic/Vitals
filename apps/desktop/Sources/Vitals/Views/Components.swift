@@ -253,6 +253,50 @@ func wattsText(_ watts: Double) -> String {
     watts < 10 ? String(format: "%.2f W", watts) : String(format: "%.1f W", watts)
 }
 
+/// The three SoC power rails (CPU / GPU / Neural Engine) as tiles plus the
+/// total-package row — the one power-card body, shared by every power card
+/// (Dashboard, Health, and the GPU tab) so they can't drift.
+struct PowerRails: View {
+    let power: PowerSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                PowerTile(title: "CPU", watts: power.cpuWatts, symbol: "cpu", tint: .blue)
+                PowerTile(title: "GPU", watts: power.gpuWatts, symbol: "cpu.fill", tint: .purple)
+                PowerTile(title: "Neural Engine", watts: power.aneWatts, symbol: "brain", tint: .pink)
+            }
+            HStack {
+                Text("Total package").font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Text(wattsText(power.total))
+                    .font(.system(.body, design: .rounded, weight: .semibold))
+                    .monospacedDigit()
+                    .numericTransition()
+            }
+        }
+    }
+}
+
+/// A labelled utilisation meter (label · bar · %), used for the CPU P/E split on
+/// the Dashboard CPU card and per-cluster/per-core on the CPU tab — one meter
+/// component so they can't drift.
+struct ClusterMeter: View {
+    let label: String
+    let percent: Double
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label).font(.caption).foregroundStyle(.secondary).frame(width: 82, alignment: .leading)
+            utilizationBar(fraction: percent / 100, tint: tint)
+            Text(String(format: "%.0f%%", percent))
+                .font(.caption).monospacedDigit().numericTransition()
+                .frame(width: 38, alignment: .trailing)
+        }
+    }
+}
+
 extension View {
     func cardBackground() -> some View {
         modifier(CardBackground())

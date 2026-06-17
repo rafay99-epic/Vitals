@@ -482,10 +482,18 @@ final class AppSettings: ObservableObject {
     }
 
     /// Hidden tabs, filtered so Dashboard can never end up hidden even if a
-    /// stale or hand-edited value lists it.
+    /// stale or hand-edited value lists it. A tab introduced in a newer version
+    /// than the user's saved layout won't appear in their stored order; mirror
+    /// `loadTabOrder`'s append-missing rule by defaulting any such tab that ships
+    /// hidden (`defaultHidden`) to hidden — otherwise a new deep-dive would barge
+    /// into an upgrading user's nav bar uninvited.
     private static func loadHiddenTabs(_ defaults: UserDefaults) -> Set<AppTab> {
         let raw = defaults.string(forKey: "hiddenTabs") ?? ""
-        return Set(raw.split(separator: ",").compactMap { AppTab(rawValue: String($0)) }.filter(\.canHide))
+        var hidden = Set(raw.split(separator: ",").compactMap { AppTab(rawValue: String($0)) }.filter(\.canHide))
+        let known = Set((defaults.string(forKey: "tabOrder") ?? "")
+            .split(separator: ",").compactMap { AppTab(rawValue: String($0)) })
+        for tab in AppTab.defaultHidden where !known.contains(tab) { hidden.insert(tab) }
+        return hidden
     }
 
     /// The saved order, then any tabs missing from it appended in their natural

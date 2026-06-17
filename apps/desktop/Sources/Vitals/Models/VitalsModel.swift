@@ -23,6 +23,7 @@ final class VitalsModel: ObservableObject {
         let memoryUsed: Double  // bytes
         let swapUsed: Double    // bytes
         let batteryPercent: Double?  // charge %, nil when no battery
+        let totalWatts: Double?      // SoC package power, nil until the 2nd sample
     }
 
     @Published private(set) var cpuSensors: [Sensor] = []
@@ -38,6 +39,11 @@ final class VitalsModel: ObservableObject {
     /// pixels, and Swift Charts rebuild cost scales with mark count.
     @Published private(set) var chartHistory: [Sample] = []
     @Published private(set) var cpuUsage: Double = 0
+    /// Per-cluster CPU utilisation (Apple Silicon). Nil when there's no trusted
+    /// P/E split — `cpuUsage` (the blended figure) still applies.
+    @Published private(set) var cpuClusters: (performance: Double, efficiency: Double)?
+    /// Per-core utilisation for the CPU tab's deep view. Empty without a trusted split.
+    @Published private(set) var cpuPerCore: [CoreUsage] = []
     @Published private(set) var memory: MemorySnapshot?
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
@@ -214,7 +220,15 @@ final class VitalsModel: ObservableObject {
         fans = snapshot.fans
         hasSMC = snapshot.hasSMC
         thermalState = ProcessInfo.processInfo.thermalState
-        if let usage = snapshot.cpuUsage { cpuUsage = usage }
+        if let usage = snapshot.cpuUsage {
+            cpuUsage = usage.overall
+            if let performance = usage.performance, let efficiency = usage.efficiency {
+                cpuClusters = (performance: performance, efficiency: efficiency)
+            } else {
+                cpuClusters = nil
+            }
+            cpuPerCore = usage.perCore
+        }
         memory = snapshot.memory
         topProcesses = snapshot.topProcesses
         battery = snapshot.battery
@@ -238,7 +252,10 @@ final class VitalsModel: ObservableObject {
                 usage: cpuUsage,
                 memoryUsed: Double(memory?.used ?? 0),
                 swapUsed: Double(memory?.swapUsed ?? 0),
-                batteryPercent: battery?.percent
+                batteryPercent: battery?.percent,
+                // The fresh tick's reading (not the sticky `self.power`), so a
+                // missed IOReport sample is an honest gap, not a flat-held value.
+                totalWatts: snapshot.power?.total
             ))
             trimHistory()
 

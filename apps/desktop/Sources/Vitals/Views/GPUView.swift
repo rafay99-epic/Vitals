@@ -210,16 +210,7 @@ private struct GPUPowerCard: View {
     var body: some View {
         SectionCard(title: "Power", symbol: "bolt.fill") {
             if let power = model.power {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        PowerTile(title: "GPU", watts: power.gpuWatts, symbol: "cpu.fill", tint: .purple)
-                        PowerTile(title: "Neural Engine", watts: power.aneWatts, symbol: "brain", tint: .pink)
-                        PowerTile(title: "CPU", watts: power.cpuWatts, symbol: "cpu", tint: .blue)
-                    }
-                    Text("Live draw of each SoC rail. The Neural Engine sits near zero until Core ML or vision work runs — Vitals reports what it reads, never an assumed maximum.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                PowerRails(power: power)
             } else {
                 Text("Power readings unavailable on this Mac.")
                     .foregroundStyle(.secondary)
@@ -230,7 +221,8 @@ private struct GPUPowerCard: View {
 }
 
 /// A small fraction-filled bar in the card language, used for the GPU meters.
-private func utilizationBar(fraction: Double, tint: Color) -> some View {
+// Shared meter fill, reused by the CPU card's P/E split.
+func utilizationBar(fraction: Double, tint: Color) -> some View {
     GeometryReader { geometry in
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.secondary.opacity(0.15))

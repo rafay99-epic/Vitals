@@ -410,6 +410,27 @@ struct BatteryContent: View {
     }
 }
 
+/// SoC power at a glance on the Dashboard — total package draw plus the CPU /
+/// GPU / Neural Engine rails. Reuses the shared `PowerTile`; shows an honest
+/// note until the first energy delta lands (or when IOReport is unavailable),
+/// never a fake 0 W.
+struct PowerCard: View {
+    @EnvironmentObject private var model: VitalsModel
+
+    var body: some View {
+        SectionCard(title: "Power", symbol: "bolt.fill") {
+            if let power = model.power {
+                PowerRails(power: power)
+            } else {
+                Text("Power readings appear in a moment — or aren't available on this Mac.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            }
+        }
+    }
+}
+
 /// SSD health at a glance. Wrapper-free so it can sit inside a CollapsibleCard
 /// on the Dashboard, mirroring `BatteryContent`. Every figure is a real SMART
 /// counter; an unavailable drive says so rather than showing zeros.

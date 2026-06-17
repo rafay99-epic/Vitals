@@ -39,6 +39,8 @@ struct ContentView: View {
             ZStack {
                 DashboardView()
                     .tabVisibility(section == .dashboard)
+                CPUView()
+                    .tabVisibility(section == .cpu)
                 GPUView(isActive: section == .gpu)
                     .tabVisibility(section == .gpu)
                 BatteryView(isActive: section == .battery)
@@ -318,6 +320,7 @@ struct DashboardView: View {
                 MemoryCard()
                 FanCard()
             }
+            PowerCard()
             CollapsibleCard(
                 title: "Top processes",
                 symbol: "list.bullet.rectangle",
