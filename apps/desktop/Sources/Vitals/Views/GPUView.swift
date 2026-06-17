@@ -230,7 +230,8 @@ private struct GPUPowerCard: View {
 }
 
 /// A small fraction-filled bar in the card language, used for the GPU meters.
-private func utilizationBar(fraction: Double, tint: Color) -> some View {
+// Shared meter fill, reused by the CPU card's P/E split.
+func utilizationBar(fraction: Double, tint: Color) -> some View {
     GeometryReader { geometry in
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.secondary.opacity(0.15))

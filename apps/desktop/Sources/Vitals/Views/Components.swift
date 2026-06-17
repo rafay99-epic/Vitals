@@ -253,6 +253,32 @@ func wattsText(_ watts: Double) -> String {
     watts < 10 ? String(format: "%.2f W", watts) : String(format: "%.1f W", watts)
 }
 
+/// The three SoC power rails (CPU / GPU / Neural Engine) as tiles plus the
+/// total-package row — shared by the Dashboard power card and the Health tab's
+/// SoC-power card so the two can't drift. (The GPU tab's power card is
+/// deliberately different: GPU-first, no total, with its own caption.)
+struct PowerRails: View {
+    let power: PowerSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                PowerTile(title: "CPU", watts: power.cpuWatts, symbol: "cpu", tint: .blue)
+                PowerTile(title: "GPU", watts: power.gpuWatts, symbol: "cpu.fill", tint: .purple)
+                PowerTile(title: "Neural Engine", watts: power.aneWatts, symbol: "brain", tint: .pink)
+            }
+            HStack {
+                Text("Total package").font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Text(wattsText(power.total))
+                    .font(.system(.body, design: .rounded, weight: .semibold))
+                    .monospacedDigit()
+                    .numericTransition()
+            }
+        }
+    }
+}
+
 extension View {
     func cardBackground() -> some View {
         modifier(CardBackground())

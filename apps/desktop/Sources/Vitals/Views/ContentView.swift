@@ -318,6 +318,7 @@ struct DashboardView: View {
                 MemoryCard()
                 FanCard()
             }
+            PowerCard()
             CollapsibleCard(
                 title: "Top processes",
                 symbol: "list.bullet.rectangle",

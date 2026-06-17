@@ -6,13 +6,55 @@ import Darwin
 /// for the lifetime of the process. Acquire the port once instead.
 private let machHost: host_t = mach_host_self()
 
-/// Overall CPU utilisation, computed from the delta of per-core tick counters
-/// between consecutive samples.
+/// Reads an integer `sysctlbyname` value (e.g. `hw.perflevel0.logicalcpu`),
+/// sized from the kernel so it's correct whether the value is 32- or 64-bit.
+/// nil when the name is absent (e.g. Intel has no `hw.perflevel*`).
+func sysctlInt(_ name: String) -> Int? {
+    var size = 0
+    guard sysctlbyname(name, nil, &size, nil, 0) == 0 else { return nil }
+    if size == MemoryLayout<Int32>.size {
+        var value: Int32 = 0
+        guard sysctlbyname(name, &value, &size, nil, 0) == 0 else { return nil }
+        return Int(value)
+    } else if size == MemoryLayout<Int64>.size {
+        var value: Int64 = 0
+        guard sysctlbyname(name, &value, &size, nil, 0) == 0 else { return nil }
+        return Int(value)
+    }
+    return nil
+}
+
+/// CPU utilisation split by core cluster. `overall` is always present; the
+/// per-cluster figures are nil when the Performance/Efficiency layout can't be
+/// trusted (Intel, or the perflevel core counts don't reconcile with the array
+/// we sampled) — then the UI shows the honest blended number, never a
+/// fabricated split.
+struct CPUUsage {
+    let overall: Double
+    let performance: Double?
+    let efficiency: Double?
+}
+
+/// Overall + per-cluster CPU utilisation, from the delta of per-core tick
+/// counters between consecutive samples.
 final class CPUUsageSampler {
     private var previousTicks: [[UInt32]] = []
 
-    /// Returns total CPU usage in 0...100, or nil on the first call.
-    func sample() -> Double? {
+    /// Apple Silicon orders `host_processor_info` as **[E-cores][P-cores]**: the
+    /// first `hw.perflevel1.logicalcpu` indices are Efficiency cores, the last
+    /// `hw.perflevel0.logicalcpu` are Performance (verified on hardware — a
+    /// default-QoS load saturates exactly the trailing indices). Resolved once;
+    /// nil unless there's a clean two-level split.
+    static let clusters: (performance: Range<Int>, efficiency: Range<Int>)? = {
+        guard sysctlInt("hw.nperflevels") == 2,
+              let performance = sysctlInt("hw.perflevel0.logicalcpu"), performance > 0,
+              let efficiency = sysctlInt("hw.perflevel1.logicalcpu"), efficiency > 0
+        else { return nil }
+        return (performance: efficiency..<(efficiency + performance), efficiency: 0..<efficiency)
+    }()
+
+    /// Returns CPU usage (overall + clusters), or nil on the first call / error.
+    func sample() -> CPUUsage? {
         var coreCount: natural_t = 0
         var info: processor_info_array_t?
         var infoCount: mach_msg_type_number_t = 0
@@ -34,18 +76,41 @@ final class CPUUsageSampler {
         }
         defer { previousTicks = ticks }
         guard previousTicks.count == ticks.count else { return nil }
+        return Self.clusterUsage(ticks: ticks, previous: previousTicks, clusters: Self.clusters)
+    }
 
-        var busy: Double = 0
-        var total: Double = 0
-        for (now, before) in zip(ticks, previousTicks) {
-            for state in 0..<Int(CPU_STATE_MAX) {
-                let delta = Double(now[state] &- before[state])
-                total += delta
-                if state != Int(CPU_STATE_IDLE) { busy += delta }
+    /// Pure: per-core tick arrays → overall + per-cluster busy %. The split is
+    /// only filled when the cluster ranges partition `[0, core count)` exactly
+    /// (contiguous, no gaps/overflow) — otherwise just `overall`, so a bad
+    /// mapping degrades to the honest blended number. For testing.
+    static func clusterUsage(ticks: [[UInt32]], previous: [[UInt32]],
+                             clusters: (performance: Range<Int>, efficiency: Range<Int>)?) -> CPUUsage? {
+        // Self-defend the precondition the caller also checks: equal-length,
+        // aligned per-core arrays. Mismatched input → nil rather than a crash.
+        guard previous.count == ticks.count else { return nil }
+        func usage(_ indices: Range<Int>) -> Double? {
+            var busy = 0.0, total = 0.0
+            for core in indices {
+                for state in 0..<Int(CPU_STATE_MAX) {
+                    let delta = Double(ticks[core][state] &- previous[core][state])
+                    total += delta
+                    if state != Int(CPU_STATE_IDLE) { busy += delta }
+                }
             }
+            return total > 0 ? busy / total * 100 : nil
         }
-        guard total > 0 else { return nil }
-        return busy / total * 100
+        guard let overall = usage(0..<ticks.count) else { return nil }
+
+        var performance: Double?, efficiency: Double?
+        // The ranges must exactly tile [0, count): E = [0, nE), P = [nE, count).
+        if let clusters,
+           clusters.efficiency.lowerBound == 0,
+           clusters.efficiency.upperBound == clusters.performance.lowerBound,
+           clusters.performance.upperBound == ticks.count {
+            performance = usage(clusters.performance)
+            efficiency = usage(clusters.efficiency)
+        }
+        return CPUUsage(overall: overall, performance: performance, efficiency: efficiency)
     }
 }
 

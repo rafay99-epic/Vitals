@@ -9,7 +9,7 @@ actor SensorSampler {
         let readings: [HIDSensors.Reading]
         let fans: [SMC.Fan]
         let hasSMC: Bool
-        let cpuUsage: Double?
+        let cpuUsage: CPUUsage?
         let memory: MemorySnapshot?
         let topProcesses: [ProcessSampler.Process]
         let battery: BatterySnapshot?

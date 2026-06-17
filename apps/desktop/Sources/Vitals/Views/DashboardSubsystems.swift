@@ -72,6 +72,15 @@ struct CPUCard: View {
                 Spacer(minLength: 0)
             }
 
+            // Apple Silicon: split the blended load into Performance vs
+            // Efficiency cores. Hidden when there's no trusted split.
+            if let clusters = model.cpuClusters {
+                VStack(alignment: .leading, spacing: 7) {
+                    clusterMeter("Performance", clusters.performance, tint: .accentColor)
+                    clusterMeter("Efficiency", clusters.efficiency, tint: .teal)
+                }
+            }
+
             if !model.cpuSensors.isEmpty {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showCores.toggle() }
@@ -95,6 +104,16 @@ struct CPUCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .cardBackground()
+    }
+
+    private func clusterMeter(_ label: String, _ percent: Double, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Text(label).font(.caption).foregroundStyle(.secondary).frame(width: 82, alignment: .leading)
+            utilizationBar(fraction: percent / 100, tint: tint)
+            Text(String(format: "%.0f%%", percent))
+                .font(.caption).monospacedDigit().numericTransition()
+                .frame(width: 38, alignment: .trailing)
+        }
     }
 
     private func summaryStat(_ label: String, _ value: String, note: String? = nil) -> some View {

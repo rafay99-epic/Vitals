@@ -12,7 +12,7 @@ struct PerformanceHistoryCard: View {
     @Namespace private var indicator
 
     enum Metric: String, CaseIterable, Identifiable {
-        case temp, cpu, gpu, memory
+        case temp, cpu, gpu, memory, power
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -20,6 +20,7 @@ struct PerformanceHistoryCard: View {
             case .cpu: return "CPU"
             case .gpu: return "GPU"
             case .memory: return "Memory"
+            case .power: return "Power"
             }
         }
         var symbol: String {
@@ -28,13 +29,20 @@ struct PerformanceHistoryCard: View {
             case .cpu: return "gauge.with.dots.needle.50percent"
             case .gpu: return "cpu.fill"
             case .memory: return "memorychip"
+            case .power: return "bolt.fill"
             }
         }
     }
 
-    /// GPU only when this Mac exposes one.
+    /// GPU/Power only when this Mac exposes a reading for them.
     private var available: [Metric] {
-        Metric.allCases.filter { $0 != .gpu || model.gpu != nil }
+        Metric.allCases.filter { metric in
+            switch metric {
+            case .gpu: return model.gpu != nil
+            case .power: return model.power != nil
+            default: return true
+            }
+        }
     }
 
     var body: some View {
@@ -150,6 +158,12 @@ struct PerformanceHistoryCard: View {
                     .foregroundStyle(by: .value("Series", "Swap"))
                     .interpolationMethod(.catmullRom)
             }
+        case .power:
+            ForEach(model.chartHistory) { sample in
+                if let watts = sample.totalWatts {
+                    areaLine(sample.time, watts, .yellow)
+                }
+            }
         }
     }
 
@@ -177,6 +191,8 @@ struct PerformanceHistoryCard: View {
         case .memory:
             Text(String(format: "Memory %.2f GB", gigabytes(sample.memoryUsed)))
             Text(String(format: "Swap %.2f GB", gigabytes(sample.swapUsed)))
+        case .power:
+            Text("Power \(wattsText(sample.totalWatts ?? 0))")
         }
     }
 
@@ -190,7 +206,7 @@ struct PerformanceHistoryCard: View {
         switch metric {
         case .temp: return (["CPU average", "Hottest core"], [.orange, .red.opacity(0.7)])
         case .memory: return (["Memory", "Swap"], [.indigo, .orange])
-        case .cpu, .gpu: return ([], [])
+        case .cpu, .gpu, .power: return ([], [])
         }
     }
 
@@ -199,6 +215,7 @@ struct PerformanceHistoryCard: View {
         case .temp: return settings.unit.symbol
         case .cpu, .gpu: return "%"
         case .memory: return "GB"
+        case .power: return "W"
         }
     }
 
@@ -206,6 +223,9 @@ struct PerformanceHistoryCard: View {
         switch metric {
         case .cpu, .gpu:
             return 0...100
+        case .power:
+            let watts = model.chartHistory.compactMap { $0.totalWatts }
+            return 0...max((watts.max() ?? 1) * 1.15, 1)
         case .memory:
             return 0...max(gigabytes(model.memory?.total ?? 1), 1)
         case .temp:
