@@ -18,6 +18,19 @@
 
 set -euo pipefail
 
+# Which token are we using? GitHub's auto-issued GITHUB_TOKEN starts with
+# `ghs_`; user PATs start with `ghp_` (classic) or `github_pat_` (fine-
+# grained). We log the kind — NEVER the value — so a misconfigured
+# PROMOTION_TOKEN secret is obvious in the run log instead of silently
+# falling back to the blocked default token.
+case "${GH_TOKEN:-}" in
+  ghs_*)        echo "::warning::Using default GITHUB_TOKEN — the PROMOTION_TOKEN repo secret isn't set, so 'gh pr create' will fail unless Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests' is enabled." ;;
+  ghp_*)        echo "Using classic PAT (PROMOTION_TOKEN)." ;;
+  github_pat_*) echo "Using fine-grained PAT (PROMOTION_TOKEN)." ;;
+  "")           echo "::error::GH_TOKEN is empty."; exit 1 ;;
+  *)            echo "::warning::Using token of unknown shape — gh may reject it." ;;
+esac
+
 git fetch origin main:refs/remotes/origin/main --quiet
 
 AHEAD=$(git rev-list --count origin/main..HEAD)
