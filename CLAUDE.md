@@ -19,9 +19,9 @@ License: **GPL-3.0**.
 
 ## Workflow rules (user's explicit requirements — do not violate)
 
-- **`nightly` is the integration + default branch; `main` is protected Stable.** Every
-  feature on its own branch **from `nightly`** → push → **draft PR into `nightly`** (the
-  default branch, so PRs target it automatically). The user squash-merges. **`main` is
+- **`nightly` is the integration branch; `main` is the default + protected Stable branch.** Every
+  feature on its own branch **from `nightly`** → push → **draft PR into `nightly`** (the repo
+  default is `main`, so switch the PR base to `nightly` when opening it). The user squash-merges. **`main` is
   branch-protected — PRs or pushes straight to `main` are rejected**; it moves only via
   the user's **weekly `nightly → main` (squash) promotion**, which cuts the Stable
   release. Never hand-commit to `main` (it would diverge from `nightly` and conflict the
