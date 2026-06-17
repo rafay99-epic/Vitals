@@ -109,6 +109,38 @@ int vitals_socpower_sample(void *_Nonnull handle, VitalsSoCPower *_Nonnull out);
 void vitals_socpower_destroy(void *_Nullable handle);
 
 // ---------------------------------------------------------------------------
+// NVMe SSD SMART (the drive's Health Information log), via the IOKit NVMe SMART
+// user client. The interface, UUIDs and data struct come from Apple's own SDK
+// header (NVMeSMARTLibExternal.h), so the layout is exact — no guessing. The
+// read is read-only and needs no root. The device is found by the public
+// "NVMe SMART Capable" IORegistry property (class-agnostic, as Apple's header
+// recommends), so it degrades honestly to `valid == 0` on a Mac/VM that doesn't
+// expose it. All CoreFoundation/IOKit ownership stays in C; Swift sees only
+// plain scalars. The 128-bit NVMe counters are returned as their low 64 bits
+// (the real magnitude for these fields). One data unit = 512000 bytes.
+// ---------------------------------------------------------------------------
+
+typedef struct {
+    int      valid;                     // 1 when the SMART log was read
+    uint8_t  critical_warning;          // bitfield; 0 = healthy
+    uint16_t temperature_k;             // composite temperature, in Kelvin
+    uint8_t  available_spare;           // % remaining
+    uint8_t  available_spare_threshold; // % at which the drive warns
+    uint8_t  percentage_used;           // wear — the drive's own estimate (0–100+)
+    uint64_t data_units_written;        // × 512000 = total bytes written (endurance)
+    uint64_t data_units_read;
+    uint64_t power_cycles;
+    uint64_t power_on_hours;
+    uint64_t unsafe_shutdowns;
+    uint64_t media_errors;
+} VitalsDiskSMART;
+
+// Reads the internal SSD's SMART health log. Returns 1 and fills `out` on
+// success, 0 otherwise (no SMART-capable device, or the read failed). Cheap
+// (a single user-client call), but call infrequently — SMART changes over days.
+int vitals_nvme_smart_read(VitalsDiskSMART *_Nonnull out);
+
+// ---------------------------------------------------------------------------
 // Crash capture. Installs handlers for the fatal signals (SIGSEGV, SIGABRT,
 // SIGILL, SIGTRAP, SIGFPE, SIGBUS). Implemented in C because a signal handler
 // must be async-signal-safe — it can only call a small allow-list of functions
