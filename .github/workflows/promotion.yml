@@ -12,7 +12,9 @@ name: Promotion
 # available for catch-up + manual runs.
 on:
   schedule:
-    - cron: "0 9 * * 6" # Saturday 09:00 UTC
+    # Saturday 15:00 PKT = 10:00 UTC. PKT is UTC+5 with no DST, so this is
+    # fixed year-round and the user's local "3 PM Saturday" never drifts.
+    - cron: "0 10 * * 6"
   workflow_dispatch:
 
 # Read-only by default — only the promote job gets the write scope it needs.
