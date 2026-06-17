@@ -11,9 +11,9 @@ early_access: true
 # Cross-cutting guidance applied to every review and chat. CodeRabbit caps this
 # field at 250 chars — keep it tight; per-area rules live in path_instructions.
 tone_instructions: >-
-  Be concise; skip nitpicks SwiftLint/ESLint already catches. Prioritize: safety
-  of system writes, value honesty (never fake a reading), Services/Models/Views
-  layering, native feel. Flag any AI/Claude attribution. Keep Mole + GPL credits.
+  Be concise; skip nitpicks linters already catch. Prioritize: safe system
+  writes, value honesty (never fake readings), Services/Models/Views layering,
+  native feel. Flag AI/Claude attribution; keep Mole + GPL credits.
 
 reviews:
   profile: "chill"

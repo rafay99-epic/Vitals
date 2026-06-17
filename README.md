@@ -74,7 +74,7 @@ The casks come from the [`homebrew-apps`](https://github.com/rafay99-epic/homebr
 
 ## Contributing
 
-1. **Branch from `nightly`** (`feat/…`, `fix/…`, `chore/…`) and open your **pull request against `nightly`** — it's the default branch, so PRs target it automatically. Draft while you iterate.
+1. **Branch from `nightly`** (`feat/…`, `fix/…`, `chore/…`) and open your **pull request against `nightly`**. The repo's default branch is `main` (Stable), so when you open the PR, **switch the base from `main` to `nightly`**. Draft while you iterate.
 2. **`main` is protected — PRs or pushes straight to `main` are rejected.** Stable only moves via the maintainer's weekly `nightly → main` promotion, so don't target it.
 3. Build and run your change locally with **`./dev.sh`** (installs *Vitals Dev* next to your real app — no release needed).
 4. CI runs `swift test` + SwiftLint + a packaged build on every PR (the website and Convex have their own checks). A maintainer reviews and **squash-merges**; merging to `nightly` publishes a Nightly build automatically.
