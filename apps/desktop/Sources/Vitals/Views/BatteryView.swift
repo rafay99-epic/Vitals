@@ -20,8 +20,10 @@ struct BatteryView: View {
                 if let adapter = battery.adapter {
                     BatteryAdapterCard(adapter: adapter)
                 }
-                if model.chartHistory.contains(where: { $0.batteryPercent != nil }) {
-                    BatteryHistoryCard(isActive: isActive)
+                // Gate the scan on isActive too (mirrors GPUView) so a backgrounded
+                // mounted tab doesn't walk chartHistory every tick.
+                if isActive, model.chartHistory.contains(where: { $0.batteryPercent != nil }) {
+                    BatteryHistoryCard()
                 }
                 BatteryHealthCard(battery: battery)
                 BatteryDetailCard(battery: battery)
@@ -122,10 +124,12 @@ private struct BatteryAdapterCard: View {
         }
     }
 
-    /// Live delivered watts when the charger reports them; otherwise its rated
-    /// figure; otherwise just "Connected" — never a fabricated number.
+    /// The live delivered watts when the charger reports them — even ~0 W when
+    /// the battery is full (honest, like a stopped fan reading 0 rpm), so the
+    /// "delivering" label always matches the number. Falls back to the rated
+    /// figure (labelled "rated"), then "Connected". Never a fabricated number.
     private var heroValue: String {
-        if let delivered = adapter.deliveredWatts, delivered > 0.05 {
+        if let delivered = adapter.deliveredWatts {
             return String(format: "%.1f W", delivered)
         }
         if let watts = adapter.watts { return "\(watts) W" }
@@ -152,16 +156,13 @@ private struct BatteryAdapterCard: View {
 
 private struct BatteryHistoryCard: View {
     @EnvironmentObject private var model: VitalsModel
-    let isActive: Bool
 
     var body: some View {
         SectionCard(title: "Charge history", symbol: "chart.xyaxis.line") {
-            // Only build the chart while this tab is showing — see GPUView.
-            if isActive {
-                Deferred { chart }.frame(height: 150)
-            } else {
-                Color.clear.frame(height: 150)
-            }
+            // Only inserted by BatteryView while the tab is active, so the chart
+            // never rebuilds marks in the background (see GPUView). Deferred keeps
+            // the 50–150 ms first-layout cost off the tab-switch animation.
+            Deferred { chart }.frame(height: 150)
         }
     }
 
