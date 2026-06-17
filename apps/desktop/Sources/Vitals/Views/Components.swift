@@ -254,9 +254,8 @@ func wattsText(_ watts: Double) -> String {
 }
 
 /// The three SoC power rails (CPU / GPU / Neural Engine) as tiles plus the
-/// total-package row — shared by the Dashboard power card and the Health tab's
-/// SoC-power card so the two can't drift. (The GPU tab's power card is
-/// deliberately different: GPU-first, no total, with its own caption.)
+/// total-package row — the one power-card body, shared by every power card
+/// (Dashboard, Health, and the GPU tab) so they can't drift.
 struct PowerRails: View {
     let power: PowerSnapshot
 
@@ -275,6 +274,25 @@ struct PowerRails: View {
                     .monospacedDigit()
                     .numericTransition()
             }
+        }
+    }
+}
+
+/// A labelled utilisation meter (label · bar · %), used for the CPU P/E split on
+/// the Dashboard CPU card and per-cluster/per-core on the CPU tab — one meter
+/// component so they can't drift.
+struct ClusterMeter: View {
+    let label: String
+    let percent: Double
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label).font(.caption).foregroundStyle(.secondary).frame(width: 82, alignment: .leading)
+            utilizationBar(fraction: percent / 100, tint: tint)
+            Text(String(format: "%.0f%%", percent))
+                .font(.caption).monospacedDigit().numericTransition()
+                .frame(width: 38, alignment: .trailing)
         }
     }
 }

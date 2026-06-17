@@ -29,10 +29,21 @@ func sysctlInt(_ name: String) -> Int? {
 /// trusted (Intel, or the perflevel core counts don't reconcile with the array
 /// we sampled) — then the UI shows the honest blended number, never a
 /// fabricated split.
+/// One logical core's utilisation, tagged with its cluster. The `id` is the
+/// `host_processor_info` logical-core index.
+struct CoreUsage: Identifiable {
+    let id: Int
+    let percent: Double
+    let isPerformance: Bool
+}
+
 struct CPUUsage {
     let overall: Double
     let performance: Double?
     let efficiency: Double?
+    /// Per-core utilisation, index-ordered. Empty unless there's a trusted P/E
+    /// split (so the CPU tab never labels cores it can't place).
+    let perCore: [CoreUsage]
 }
 
 /// Overall + per-cluster CPU utilisation, from the delta of per-core tick
@@ -102,6 +113,7 @@ final class CPUUsageSampler {
         guard let overall = usage(0..<ticks.count) else { return nil }
 
         var performance: Double?, efficiency: Double?
+        var perCore: [CoreUsage] = []
         // The ranges must exactly tile [0, count): E = [0, nE), P = [nE, count).
         if let clusters,
            clusters.efficiency.lowerBound == 0,
@@ -109,8 +121,13 @@ final class CPUUsageSampler {
            clusters.performance.upperBound == ticks.count {
             performance = usage(clusters.performance)
             efficiency = usage(clusters.efficiency)
+            perCore = (0..<ticks.count).map { index in
+                CoreUsage(id: index,
+                          percent: usage(index..<(index + 1)) ?? 0,
+                          isPerformance: clusters.performance.contains(index))
+            }
         }
-        return CPUUsage(overall: overall, performance: performance, efficiency: efficiency)
+        return CPUUsage(overall: overall, performance: performance, efficiency: efficiency, perCore: perCore)
     }
 }
 

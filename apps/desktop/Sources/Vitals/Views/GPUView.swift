@@ -210,16 +210,7 @@ private struct GPUPowerCard: View {
     var body: some View {
         SectionCard(title: "Power", symbol: "bolt.fill") {
             if let power = model.power {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        PowerTile(title: "GPU", watts: power.gpuWatts, symbol: "cpu.fill", tint: .purple)
-                        PowerTile(title: "Neural Engine", watts: power.aneWatts, symbol: "brain", tint: .pink)
-                        PowerTile(title: "CPU", watts: power.cpuWatts, symbol: "cpu", tint: .blue)
-                    }
-                    Text("Live draw of each SoC rail. The Neural Engine sits near zero until Core ML or vision work runs — Vitals reports what it reads, never an assumed maximum.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                PowerRails(power: power)
             } else {
                 Text("Power readings unavailable on this Mac.")
                     .foregroundStyle(.secondary)

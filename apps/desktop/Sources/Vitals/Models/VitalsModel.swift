@@ -42,6 +42,8 @@ final class VitalsModel: ObservableObject {
     /// Per-cluster CPU utilisation (Apple Silicon). Nil when there's no trusted
     /// P/E split — `cpuUsage` (the blended figure) still applies.
     @Published private(set) var cpuClusters: (performance: Double, efficiency: Double)?
+    /// Per-core utilisation for the CPU tab's deep view. Empty without a trusted split.
+    @Published private(set) var cpuPerCore: [CoreUsage] = []
     @Published private(set) var memory: MemorySnapshot?
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
@@ -225,6 +227,7 @@ final class VitalsModel: ObservableObject {
             } else {
                 cpuClusters = nil
             }
+            cpuPerCore = usage.perCore
         }
         memory = snapshot.memory
         topProcesses = snapshot.topProcesses

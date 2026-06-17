@@ -76,8 +76,8 @@ struct CPUCard: View {
             // Efficiency cores. Hidden when there's no trusted split.
             if let clusters = model.cpuClusters {
                 VStack(alignment: .leading, spacing: 7) {
-                    clusterMeter("Performance", clusters.performance, tint: .accentColor)
-                    clusterMeter("Efficiency", clusters.efficiency, tint: .teal)
+                    ClusterMeter(label: "Performance", percent: clusters.performance, tint: .accentColor)
+                    ClusterMeter(label: "Efficiency", percent: clusters.efficiency, tint: .teal)
                 }
             }
 
@@ -97,23 +97,13 @@ struct CPUCard: View {
                 }
                 .buttonStyle(.plain)
 
-                if showCores { dieGrid }
+                if showCores { CoreTempGrid(sensors: model.cpuSensors) }
             }
         }
         // Match the paired card's height in the row (see SectionCard).
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .cardBackground()
-    }
-
-    private func clusterMeter(_ label: String, _ percent: Double, tint: Color) -> some View {
-        HStack(spacing: 10) {
-            Text(label).font(.caption).foregroundStyle(.secondary).frame(width: 82, alignment: .leading)
-            utilizationBar(fraction: percent / 100, tint: tint)
-            Text(String(format: "%.0f%%", percent))
-                .font(.caption).monospacedDigit().numericTransition()
-                .frame(width: 38, alignment: .trailing)
-        }
     }
 
     private func summaryStat(_ label: String, _ value: String, note: String? = nil) -> some View {
@@ -129,35 +119,4 @@ struct CPUCard: View {
         }
     }
 
-    private var dieGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
-                ForEach(model.cpuSensors) { sensor in
-                    DieCell(sensor: sensor)
-                }
-            }
-            dieLegend
-        }
-    }
-
-    @ViewBuilder
-    private var dieLegend: some View {
-        let temps = model.cpuSensors.map(\.celsius)
-        if let coolest = temps.min(), let hottest = temps.max() {
-            HStack(spacing: 12) {
-                Text("Coolest \(settings.format(coolest, decimals: 0))")
-                Text("Hottest \(settings.format(hottest, decimals: 0))")
-                Spacer()
-                Capsule()
-                    .fill(LinearGradient(
-                        colors: [tempGradientColor(40), tempGradientColor(60), tempGradientColor(75), tempGradientColor(90)],
-                        startPoint: .leading, endPoint: .trailing))
-                    .frame(width: 96, height: 5)
-                Text("\(settings.format(40, decimals: 0))–\(settings.format(90, decimals: 0))")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-        }
-    }
 }
