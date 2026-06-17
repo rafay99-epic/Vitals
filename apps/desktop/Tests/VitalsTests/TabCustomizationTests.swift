@@ -54,6 +54,24 @@ struct TabCustomizationTests {
         #expect(settings.tabOrder.count == AppTab.allCases.count)  // nothing duplicated
     }
 
+    @Test func newDeepDiveTabStaysHiddenForUpgradingUser() {
+        // An upgrading user whose saved layout predates a deep-dive tab: both
+        // their stored order and stored hidden set omit it. The new tab must be
+        // appended to the order AND default to hidden (it ships hidden) — never
+        // barge into their nav bar. Simulate with a layout missing `.cpu`.
+        let order = AppTab.allCases.filter { $0 != .cpu }.map(\.rawValue).joined(separator: ",")
+        let hidden = AppTab.defaultHidden.filter { $0 != .cpu }.map(\.rawValue).joined(separator: ",")
+        let settings = freshSettings {
+            $0.set(order, forKey: "tabOrder")
+            $0.set(hidden, forKey: "hiddenTabs")
+        }
+        #expect(settings.tabOrder.contains(.cpu))          // appended, reachable
+        #expect(settings.hiddenTabs.contains(.cpu))         // but hidden by default
+        #expect(!settings.visibleTabs.contains(.cpu))       // so it's off the bar
+        // A tab the user had already chosen to show stays shown (not re-hidden).
+        #expect(settings.visibleTabs.contains(.dashboard))
+    }
+
     @Test func reorderingFollowsThroughToVisibleTabs() {
         let settings = freshSettings()
         // Swapping the first two (both visible by default) puts the second first.

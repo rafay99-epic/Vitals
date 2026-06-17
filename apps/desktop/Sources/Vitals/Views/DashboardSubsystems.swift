@@ -118,5 +118,4 @@ struct CPUCard: View {
             }
         }
     }
-
 }
