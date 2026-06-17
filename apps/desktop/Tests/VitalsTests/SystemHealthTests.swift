@@ -90,3 +90,50 @@ struct BatteryHealthTests {
         """)) == nil)
     }
 }
+
+/// The power-adapter card reads the AppleSmartBattery `AdapterDetails` dict.
+/// Lock the pure parser: live delivered watts = negotiated V×A, every field is
+/// optional, and an absent/empty dict means "on battery" (nil) — never a
+/// fabricated adapter.
+struct AdapterInfoTests {
+    @Test func parsesRealAdapterDict() {
+        let adapter = AdapterInfo.parse(from: [
+            "Watts": 96,
+            "Voltage": 20_000,   // mV
+            "Current": 3_000,    // mA
+            "Description": "USB-C Power Adapter",
+            "IsWireless": false,
+        ])
+        #expect(adapter?.watts == 96)
+        #expect(adapter?.voltage == 20)
+        #expect(adapter?.amperage == 3)
+        #expect(adapter?.deliveredWatts == 60)   // 20 V × 3 A, the live PD draw
+        #expect(adapter?.name == "USB-C Power Adapter")
+        #expect(adapter?.isWireless == false)
+    }
+
+    @Test func nilWhenOnBattery() {
+        #expect(AdapterInfo.parse(from: nil) == nil)
+        #expect(AdapterInfo.parse(from: [:]) == nil)
+        // macOS leaves a stub dict on battery — no power figures means no adapter.
+        #expect(AdapterInfo.parse(from: ["FamilyCode": 0]) == nil)
+    }
+
+    @Test func toleratesMissingKeys() {
+        // A charger reporting only its rating: rated watts present, rest nil —
+        // and no V×A, so no fabricated delivered figure.
+        let adapter = AdapterInfo.parse(from: ["Watts": 30])
+        #expect(adapter != nil)
+        #expect(adapter?.watts == 30)
+        #expect(adapter?.voltage == nil)
+        #expect(adapter?.deliveredWatts == nil)
+        #expect(adapter?.name == nil)
+        #expect(adapter?.isWireless == false)
+    }
+
+    @Test func nameFallsBackToDescriptionAndHonorsWireless() {
+        let adapter = AdapterInfo.parse(from: ["Watts": 15, "Description": "magsafe", "IsWireless": true])
+        #expect(adapter?.name == "magsafe")
+        #expect(adapter?.isWireless == true)
+    }
+}

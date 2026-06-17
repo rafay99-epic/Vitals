@@ -22,6 +22,7 @@ final class VitalsModel: ObservableObject {
         let usage: Double
         let memoryUsed: Double  // bytes
         let swapUsed: Double    // bytes
+        let batteryPercent: Double?  // charge %, nil when no battery
     }
 
     @Published private(set) var cpuSensors: [Sensor] = []
@@ -232,7 +233,8 @@ final class VitalsModel: ObservableObject {
                 gpuUsage: gpu?.utilization,
                 usage: cpuUsage,
                 memoryUsed: Double(memory?.used ?? 0),
-                swapUsed: Double(memory?.swapUsed ?? 0)
+                swapUsed: Double(memory?.swapUsed ?? 0),
+                batteryPercent: battery?.percent
             ))
             trimHistory()
 
