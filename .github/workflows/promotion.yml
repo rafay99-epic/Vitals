@@ -45,5 +45,15 @@ jobs:
           ref: nightly # always diff against nightly's tip regardless of dispatch ref
       - name: Open or refresh the promotion PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Prefer a user PAT (`PROMOTION_TOKEN` secret) when set, fall back to
+          # the default Actions token. GitHub blocks the default token from
+          # `createPullRequest` unless "Allow GitHub Actions to create and
+          # approve pull requests" is enabled in repo Settings → Actions →
+          # General → Workflow permissions. If that toggle is on, the default
+          # token is enough and no secret is needed. If it isn't (or org
+          # policy forbids it), drop a fine-grained PAT scoped to this repo
+          # with Contents: Read + Pull requests: Read & Write into the
+          # PROMOTION_TOKEN secret and the script keeps working — PATs belong
+          # to a user, not Actions, so they bypass the create-PR block.
+          GH_TOKEN: ${{ secrets.PROMOTION_TOKEN || github.token }}
         run: bash .github/scripts/promotion.sh
