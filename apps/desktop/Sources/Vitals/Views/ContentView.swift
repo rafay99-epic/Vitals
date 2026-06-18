@@ -9,6 +9,11 @@ struct ContentView: View {
     @EnvironmentObject private var model: VitalsModel
     @State private var section: AppTab = .dashboard
     @State private var gearHovered = false
+    /// Tabs that have been opened at least once and stay mounted for instant
+    /// switch-back. Seeded with the Dashboard so the home tab is live at launch.
+    /// A tab joins the set the first time it's selected; hidden tabs are pulled
+    /// back out. See the ZStack below for why this is lazy, not all-up-front.
+    @State private var visited: Set<AppTab> = [.dashboard]
     @Environment(\.openWindow) private var openWindow
     @Namespace private var tabIndicator
     // Owned here so the scans survive section switches.
@@ -23,44 +28,69 @@ struct ContentView: View {
             header
             Divider()
                 .opacity(0.5)
-            // Every tab is mounted once and kept alive — switching only toggles
-            // which one is visible. Re-mounting a tab is the expensive step
-            // (NSTableViews, Swift Charts, and especially Liquid Glass surfaces,
-            // which flash dark before they capture the backdrop), so doing it
-            // once up front makes every switch instant and flicker-free. Heavy
-            // *work* (scans, sampling) is gated on `isActive`, not on mount, and
-            // shows a loading state — so mounting stays cheap.
+            // Tabs mount lazily on first visit, then stay alive — switching back
+            // to a visited tab is instant (no re-mount, no Liquid Glass flash),
+            // while tabs that are never opened or hidden in Settings cost
+            // nothing: no layout, no observation, no per-tick re-render. Every
+            // tab observes the shared VitalsModel, which publishes on each sample
+            // tick — mounting all twelve up front meant every tick re-rendered
+            // every tab and every scroll frame laid out every tab, which crushed
+            // the frame rate once charts filled in. Charts are additionally gated
+            // on `isActive` so a kept-alive background tab doesn't rebuild marks.
             //
             // Each tab keeps its own GlassEffectContainer: one container can't
             // wrap all tabs, because it composites every glass descendant into a
             // single layer that ignores the per-tab opacity, bleeding hidden
-            // tabs through. Mounted-once already means each tab's glass is
-            // created a single time and never re-initialized on switch.
+            // tabs through.
             ZStack {
-                DashboardView()
-                    .tabVisibility(section == .dashboard)
-                CPUView()
-                    .tabVisibility(section == .cpu)
-                GPUView(isActive: section == .gpu)
-                    .tabVisibility(section == .gpu)
-                BatteryView(isActive: section == .battery)
-                    .tabVisibility(section == .battery)
-                HealthView()
-                    .tabVisibility(section == .health)
-                DiskView()
-                    .tabVisibility(section == .disk)
-                HistoryView(isActive: section == .history)
-                    .tabVisibility(section == .history)
-                ProcessesView(model: processesModel, isActive: section == .processes)
-                    .tabVisibility(section == .processes)
-                AppsView(model: appsModel, isActive: section == .applications)
-                    .tabVisibility(section == .applications)
-                LoginItemsView(model: loginItemsModel, isActive: section == .loginItems)
-                    .tabVisibility(section == .loginItems)
-                CleanupView(model: cleanupModel, isActive: section == .cleanup)
-                    .tabVisibility(section == .cleanup)
-                StorageView(model: storageModel, isActive: section == .storage)
-                    .tabVisibility(section == .storage)
+                if visited.contains(.dashboard) {
+                    DashboardView(isActive: section == .dashboard)
+                        .tabVisibility(section == .dashboard)
+                }
+                if visited.contains(.cpu) {
+                    CPUView()
+                        .tabVisibility(section == .cpu)
+                }
+                if visited.contains(.gpu) {
+                    GPUView(isActive: section == .gpu)
+                        .tabVisibility(section == .gpu)
+                }
+                if visited.contains(.battery) {
+                    BatteryView(isActive: section == .battery)
+                        .tabVisibility(section == .battery)
+                }
+                if visited.contains(.health) {
+                    HealthView()
+                        .tabVisibility(section == .health)
+                }
+                if visited.contains(.disk) {
+                    DiskView()
+                        .tabVisibility(section == .disk)
+                }
+                if visited.contains(.history) {
+                    HistoryView(isActive: section == .history)
+                        .tabVisibility(section == .history)
+                }
+                if visited.contains(.processes) {
+                    ProcessesView(model: processesModel, isActive: section == .processes)
+                        .tabVisibility(section == .processes)
+                }
+                if visited.contains(.applications) {
+                    AppsView(model: appsModel, isActive: section == .applications)
+                        .tabVisibility(section == .applications)
+                }
+                if visited.contains(.loginItems) {
+                    LoginItemsView(model: loginItemsModel, isActive: section == .loginItems)
+                        .tabVisibility(section == .loginItems)
+                }
+                if visited.contains(.cleanup) {
+                    CleanupView(model: cleanupModel, isActive: section == .cleanup)
+                        .tabVisibility(section == .cleanup)
+                }
+                if visited.contains(.storage) {
+                    StorageView(model: storageModel, isActive: section == .storage)
+                        .tabVisibility(section == .storage)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Swap tabs instantly — never cross-fade. Fading a translucent tab
@@ -80,9 +110,12 @@ struct ContentView: View {
         // closed (menu-bar only).
         .onAppear { model.setMainWindowVisible(true) }
         .onDisappear { model.setMainWindowVisible(false) }
-        // If the user hides the tab they're on, fall back to the Dashboard so
-        // the canvas never shows a tab with no indicator in the bar.
+        // If the user hides a tab they're on, fall back to the Dashboard so
+        // the canvas never shows a tab with no indicator in the bar. Drop hidden
+        // tabs from `visited` too, so a tab disabled in Settings is actually
+        // torn down (no layout/observation) rather than kept alive invisibly.
         .onChange(of: settings.hiddenTabs) { _, hidden in
+            visited.subtract(hidden)
             if hidden.contains(section) { section = .dashboard }
         }
     }
@@ -170,6 +203,7 @@ struct ContentView: View {
         let showLabel = showsLabel(for: item, selected: selected)
         let shortcut = index < 9 ? KeyEquivalent(Character("\(index + 1)")) : nil
         return Button {
+            visited.insert(item)
             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
                 section = item
             }
@@ -262,6 +296,11 @@ private extension View {
 struct DashboardView: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
+    /// True only while the Dashboard is the visible tab. The live history chart
+    /// rebuilds its marks from `chartHistory` on every tick — gating it (and the
+    /// hover lookup) on `isActive` keeps a kept-alive background dashboard from
+    /// paying that cost every sample, mirroring GPU/Battery.
+    let isActive: Bool
 
     var body: some View {
         ScrollView {
@@ -311,7 +350,7 @@ struct DashboardView: View {
         LazyVStack(alignment: .leading, spacing: 16) {
             UpdateBanner()
             DashboardHero()
-            PerformanceHistoryCard()
+            PerformanceHistoryCard(isActive: isActive)
             HStack(alignment: .top, spacing: 16) {
                 CPUCard()
                 GPUCard()

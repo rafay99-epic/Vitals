@@ -459,11 +459,23 @@ struct HoverTooltip<Rows: View>: View {
 }
 
 extension Array where Element == VitalsModel.Sample {
+    /// Closest sample to `time` by binary search — the array is in ascending
+    /// time order (history is appended each tick; chartHistory is an ordered
+    /// downsample). O(log n) instead of the old O(n) `min` scan, which mattered
+    /// because this runs on every hover move over a chart.
     func nearest(to time: Date?) -> VitalsModel.Sample? {
-        guard let time else { return nil }
-        return self.min {
-            abs($0.time.timeIntervalSince(time)) < abs($1.time.timeIntervalSince(time))
+        guard let time, !isEmpty else { return nil }
+        var lo = 0, hi = count - 1
+        if time <= self[lo].time { return self[lo] }
+        if time >= self[hi].time { return self[hi] }
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if self[mid].time < time { lo = mid + 1 } else { hi = mid }
         }
+        // `lo` is the first index whose time >= target; nearest is it or the one before.
+        guard lo > 0 else { return self[lo] }
+        let after = self[lo], before = self[lo - 1]
+        return abs(before.time.timeIntervalSince(time)) <= abs(after.time.timeIntervalSince(time)) ? before : after
     }
 }
 

@@ -192,7 +192,7 @@ final class VitalsModel: ObservableObject {
             let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses)
             guard !Task.isCancelled else { return }
             self.apply(snapshot)
-            self.sensorsStalled = false
+            self.assignIfChanged(&self.sensorsStalled, to: false)
             self.isSampling = false
         }
 
@@ -204,7 +204,7 @@ final class VitalsModel: ObservableObject {
             if !self.sensorsStalled {
                 Log.notice(.sampler, "a sensor sample exceeded \(Self.sampleTimeout)s and was cancelled — readings may pause")
             }
-            self.sensorsStalled = true
+            self.assignIfChanged(&self.sensorsStalled, to: true)
             self.isSampling = false
         }
     }
@@ -214,12 +214,20 @@ final class VitalsModel: ObservableObject {
 
         cpuSensors = classified.filter { $0.kind == .cpu }
             .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
-        gpuTemp = Self.average(of: classified, kind: .gpu)
-        ssdTemp = Self.average(of: classified, kind: .storage)
-        batteryTemp = Self.average(of: classified, kind: .battery)
+        // Gate the cheap, often-stable scalars: `@Published` fires
+        // `objectWillChange` on every assignment regardless of whether the value
+        // actually moved, so reassigning `thermalState` to the same enum each
+        // tick would still invalidate every observing view. Only reassign when
+        // the value genuinely changes — the temperature Double?s drift most
+        // ticks but the compare is trivial, and `thermalState`/`hasSMC`/
+        // `hasLoaded`/`sensorsStalled` barely move, so their observers (Health
+        // tab, Fan card, the loading state) skip re-rendering on a normal tick.
+        assignIfChanged(&gpuTemp, to: Self.average(of: classified, kind: .gpu))
+        assignIfChanged(&ssdTemp, to: Self.average(of: classified, kind: .storage))
+        assignIfChanged(&batteryTemp, to: Self.average(of: classified, kind: .battery))
         fans = snapshot.fans
-        hasSMC = snapshot.hasSMC
-        thermalState = ProcessInfo.processInfo.thermalState
+        assignIfChanged(&hasSMC, to: snapshot.hasSMC)
+        assignIfChanged(&thermalState, to: ProcessInfo.processInfo.thermalState)
         if let usage = snapshot.cpuUsage {
             cpuUsage = usage.overall
             if let performance = usage.performance, let efficiency = usage.efficiency {
@@ -235,7 +243,7 @@ final class VitalsModel: ObservableObject {
         diskHealth = snapshot.diskHealth
         gpu = snapshot.gpu
         if let power = snapshot.power { self.power = power }
-        hasLoaded = true
+        assignIfChanged(&hasLoaded, to: true)
 
         // Custom rules run every tick — disk/battery/process alerts shouldn't
         // depend on temperature sensors being present.
@@ -386,6 +394,18 @@ final class VitalsModel: ObservableObject {
         let values = sensors.filter { $0.kind == kind }.map(\.celsius)
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
+    }
+
+    /// Reassign `target` only when `newValue` differs — `@Published` fires
+    /// `objectWillChange` on every assignment regardless of whether the value
+    /// moved, so this gates the cheap, often-stable Equatable properties
+    /// (`thermalState`, `hasSMC`, `hasLoaded`, `sensorsStalled`, the temperature
+    /// Double?s) so their observers skip re-rendering on a tick where nothing
+    /// actually changed. Generic over `Equatable` so it costs nothing for the
+    /// array/struct properties, which stay ungated.
+    private func assignIfChanged<T: Equatable>(_ target: inout T, to newValue: T) {
+        guard target != newValue else { return }
+        target = newValue
     }
 
     static func classify(_ readings: [HIDSensors.Reading]) -> [Sensor] {
