@@ -7,17 +7,56 @@ func formatBytes(_ bytes: UInt64) -> String {
 
 /// Process-wide icon cache: NSWorkspace lookups are not cheap, and list rows
 /// re-render on every size update — without this, each render refetched every
-/// visible icon.
-@MainActor
+/// App icon loading. The cache lookup is instant; the load itself
+/// (`NSWorkspace.shared.icon(forFile:)`) touches disk + decodes the image, so
+/// it runs off-main via `Task.detached` — a cold cache miss never blocks the
+/// main thread, which is what held the Processes tab's first frame.
 enum AppIconCache {
     private static let cache = NSCache<NSURL, NSImage>()
 
-    static func icon(for url: URL) -> NSImage {
-        if let cached = cache.object(forKey: url as NSURL) { return cached }
+    /// Instant cache check — nil on miss. `NSCache` is thread-safe.
+    static func cached(for url: URL) -> NSImage? {
+        cache.object(forKey: url as NSURL)
+    }
+
+    /// Synchronous icon load — call off-main (`Task.detached`). `NSWorkspace`
+    /// and `NSCache` are both thread-safe, so this needs no actor hop. Stores
+    /// the result so the next `cached(for:)` hits.
+    nonisolated static func loadIcon(for url: URL) -> NSImage {
         let icon = NSWorkspace.shared.icon(forFile: url.path)
         icon.size = NSSize(width: 32, height: 32)
         cache.setObject(icon, forKey: url as NSURL)
         return icon
+    }
+}
+
+/// An app icon that loads off-main on a cache miss and shows a neutral
+/// placeholder meanwhile. Shared by the Processes and Applications tabs so
+/// neither blocks its first frame on `NSWorkspace.shared.icon(forFile:)`.
+struct AppIconView: View {
+    let url: URL
+    let size: CGFloat
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(nsImage: image).resizable()
+            } else {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(.quaternary.opacity(0.4))
+            }
+        }
+        .frame(width: size, height: size)
+        .task(id: url) {
+            if let cached = AppIconCache.cached(for: url) {
+                image = cached
+            } else {
+                image = await Task.detached(priority: .userInitiated) {
+                    AppIconCache.loadIcon(for: url)
+                }.value
+            }
+        }
     }
 }
 
@@ -282,9 +321,7 @@ private struct AppRow: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 15))
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
-                Image(nsImage: AppIconCache.icon(for: app.id))
-                    .resizable()
-                    .frame(width: 30, height: 30)
+                AppIconView(url: app.id, size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
                         Text(app.name)
@@ -423,9 +460,7 @@ private struct UninstallConfirmationSheet: View {
     private func appSection(_ app: InstalledApp) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(nsImage: AppIconCache.icon(for: app.id))
-                    .resizable()
-                    .frame(width: 20, height: 20)
+                AppIconView(url: app.id, size: 20)
                 Text(app.name).fontWeight(.semibold)
                 if staged.casks[app.id] != nil {
                     Text("Homebrew")
