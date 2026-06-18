@@ -12,93 +12,24 @@ struct ContentView: View {
     /// Tabs that have been opened at least once and stay mounted for instant
     /// switch-back. Seeded with the Dashboard so the home tab is live at launch.
     /// A tab joins the set the first time it's selected; hidden tabs are pulled
-    /// back out. See the ZStack below for why this is lazy, not all-up-front.
+    /// back out. See `TabCanvas` below for why this is lazy, not all-up-front.
     @State private var visited: Set<AppTab> = [.dashboard]
     @Environment(\.openWindow) private var openWindow
     @Namespace private var tabIndicator
-    // Owned here so the scans survive section switches.
-    @StateObject private var processesModel = ProcessesModel()
-    @StateObject private var appsModel = AppsModel()
-    @StateObject private var loginItemsModel = LoginItemsModel()
-    @StateObject private var cleanupModel = CleanupModel()
-    @StateObject private var storageModel = StorageModel()
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
                 .opacity(0.5)
-            // Tabs mount lazily on first visit, then stay alive — switching back
-            // to a visited tab is instant (no re-mount, no Liquid Glass flash),
-            // while tabs that are never opened or hidden in Settings cost
-            // nothing: no layout, no observation, no per-tick re-render. Every
-            // tab observes the shared VitalsModel, which publishes on each sample
-            // tick — mounting all twelve up front meant every tick re-rendered
-            // every tab and every scroll frame laid out every tab, which crushed
-            // the frame rate once charts filled in. Charts are additionally gated
-            // on `isActive` so a kept-alive background tab doesn't rebuild marks.
-            //
-            // Each tab keeps its own GlassEffectContainer: one container can't
-            // wrap all tabs, because it composites every glass descendant into a
-            // single layer that ignores the per-tab opacity, bleeding hidden
-            // tabs through.
-            ZStack {
-                if visited.contains(.dashboard) {
-                    DashboardView(isActive: section == .dashboard)
-                        .tabVisibility(section == .dashboard)
-                }
-                if visited.contains(.cpu) {
-                    CPUView()
-                        .tabVisibility(section == .cpu)
-                }
-                if visited.contains(.gpu) {
-                    GPUView(isActive: section == .gpu)
-                        .tabVisibility(section == .gpu)
-                }
-                if visited.contains(.battery) {
-                    BatteryView(isActive: section == .battery)
-                        .tabVisibility(section == .battery)
-                }
-                if visited.contains(.health) {
-                    HealthView()
-                        .tabVisibility(section == .health)
-                }
-                if visited.contains(.disk) {
-                    DiskView()
-                        .tabVisibility(section == .disk)
-                }
-                if visited.contains(.history) {
-                    HistoryView(isActive: section == .history)
-                        .tabVisibility(section == .history)
-                }
-                if visited.contains(.processes) {
-                    ProcessesView(model: processesModel, isActive: section == .processes)
-                        .tabVisibility(section == .processes)
-                }
-                if visited.contains(.applications) {
-                    AppsView(model: appsModel, isActive: section == .applications)
-                        .tabVisibility(section == .applications)
-                }
-                if visited.contains(.loginItems) {
-                    LoginItemsView(model: loginItemsModel, isActive: section == .loginItems)
-                        .tabVisibility(section == .loginItems)
-                }
-                if visited.contains(.cleanup) {
-                    CleanupView(model: cleanupModel, isActive: section == .cleanup)
-                        .tabVisibility(section == .cleanup)
-                }
-                if visited.contains(.storage) {
-                    StorageView(model: storageModel, isActive: section == .storage)
-                        .tabVisibility(section == .storage)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // Swap tabs instantly — never cross-fade. Fading a translucent tab
-            // in over the translucent glass window shows a dark intermediate
-            // before the blur resolves (the "dark then frost" flash). Snapping
-            // composites the incoming tab correctly in one frame. The tab
-            // indicator still springs — it lives in the header, unaffected.
-            .animation(nil, value: section)
+            // The tab canvas owns the per-tab models (Processes, Apps, Cleanup,
+            // etc.) so their `objectWillChange` publications invalidate
+            // `TabCanvas.body` — NOT `ContentView.body`. This is critical: the
+            // nav bar lives in `ContentView.header`, and without this split every
+            // per-tab model publish (e.g. ProcessesModel flipping `hasLoaded`
+            // ~1 ms after the tab opens) would re-evaluate the header mid-spring,
+            // hitching the indicator animation.
+            TabCanvas(section: $section, visited: $visited)
         }
         // The hidden title bar still reserves a safe-area strip; claim it so
         // the header shares the row with the traffic lights instead of
@@ -289,6 +220,90 @@ private extension View {
         opacity(active ? 1 : 0)
             .allowsHitTesting(active)
             .accessibilityHidden(!active)
+    }
+}
+
+/// Owns the per-tab models and the tab ZStack. Split out from `ContentView` so
+/// the per-tab models' `objectWillChange` publications invalidate this view's
+/// body — not `ContentView`'s. The nav bar lives in `ContentView.header`; if
+/// the per-tab models were `@StateObject`s there (as they used to be), every
+/// publish (e.g. `ProcessesModel.hasLoaded` flipping ~1 ms after the tab opens)
+/// would re-evaluate the header mid-spring and hitch the indicator animation.
+/// Here, a publish only re-renders the tab content below the header.
+struct TabCanvas: View {
+    @Binding var section: AppTab
+    @Binding var visited: Set<AppTab>
+    // Owned here so the scans survive section switches.
+    @StateObject private var processesModel = ProcessesModel()
+    @StateObject private var appsModel = AppsModel()
+    @StateObject private var loginItemsModel = LoginItemsModel()
+    @StateObject private var cleanupModel = CleanupModel()
+    @StateObject private var storageModel = StorageModel()
+
+    var body: some View {
+        // Tabs mount lazily on first visit, then stay alive — switching back
+        // to a visited tab is instant (no re-mount, no Liquid Glass flash),
+        // while tabs that are never opened or hidden in Settings cost nothing.
+        // Charts are gated on `isActive` so a kept-alive background tab doesn't
+        // rebuild marks. Each tab keeps its own GlassEffectContainer: one
+        // container can't wrap all tabs (it composites every glass descendant
+        // into a single layer that ignores per-tab opacity).
+        ZStack {
+            if visited.contains(.dashboard) {
+                DashboardView(isActive: section == .dashboard)
+                    .tabVisibility(section == .dashboard)
+            }
+            if visited.contains(.cpu) {
+                CPUView()
+                    .tabVisibility(section == .cpu)
+            }
+            if visited.contains(.gpu) {
+                GPUView(isActive: section == .gpu)
+                    .tabVisibility(section == .gpu)
+            }
+            if visited.contains(.battery) {
+                BatteryView(isActive: section == .battery)
+                    .tabVisibility(section == .battery)
+            }
+            if visited.contains(.health) {
+                HealthView()
+                    .tabVisibility(section == .health)
+            }
+            if visited.contains(.disk) {
+                DiskView()
+                    .tabVisibility(section == .disk)
+            }
+            if visited.contains(.history) {
+                HistoryView(isActive: section == .history)
+                    .tabVisibility(section == .history)
+            }
+            if visited.contains(.processes) {
+                ProcessesView(model: processesModel, isActive: section == .processes)
+                    .tabVisibility(section == .processes)
+            }
+            if visited.contains(.applications) {
+                AppsView(model: appsModel, isActive: section == .applications)
+                    .tabVisibility(section == .applications)
+            }
+            if visited.contains(.loginItems) {
+                LoginItemsView(model: loginItemsModel, isActive: section == .loginItems)
+                    .tabVisibility(section == .loginItems)
+            }
+            if visited.contains(.cleanup) {
+                CleanupView(model: cleanupModel, isActive: section == .cleanup)
+                    .tabVisibility(section == .cleanup)
+            }
+            if visited.contains(.storage) {
+                StorageView(model: storageModel, isActive: section == .storage)
+                    .tabVisibility(section == .storage)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Swap tabs instantly — never cross-fade. Fading a translucent tab in
+        // over the translucent glass window shows a dark intermediate before
+        // the blur resolves. The tab indicator still springs — it lives in the
+        // header, unaffected.
+        .animation(nil, value: section)
     }
 }
 
