@@ -171,7 +171,11 @@ struct ProcessesView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            processList
+            // Deferred so the List's NSTableView first-layout cost (the same
+            // 50–150 ms class as Swift Charts) doesn't block the tab-switch
+            // animation — the switch animates against the loading state, then
+            // the list mounts and fades in.
+            Deferred { processList }
         }
     }
 
@@ -296,26 +300,15 @@ private struct ProcessRow: View {
     }
 }
 
-/// The row's leading icon. App icons load in a `.task` (after layout) rather
-/// than synchronously during the row's body, so arriving on the tab — or
-/// scrolling new rows in — never stalls a frame fetching icons. Cached, so it's
-/// instant after the first lookup.
+/// The row's leading icon. App icons load off-main via `AppIconView` (after
+/// layout) so arriving on the tab — or scrolling new rows in — never stalls a
+/// frame fetching icons. Cached, so it's instant after the first lookup.
 private struct ProcessIcon: View {
     let bundleURL: URL?
-    @State private var image: NSImage?
 
     var body: some View {
         if let bundleURL {
-            ZStack {
-                if let image {
-                    Image(nsImage: image).resizable()
-                } else {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(.quaternary.opacity(0.4))
-                }
-            }
-            .frame(width: 28, height: 28)
-            .task(id: bundleURL) { image = AppIconCache.icon(for: bundleURL) }
+            AppIconView(url: bundleURL, size: 28)
         } else {
             Image(systemName: "terminal")
                 .font(.system(size: 13, weight: .medium))

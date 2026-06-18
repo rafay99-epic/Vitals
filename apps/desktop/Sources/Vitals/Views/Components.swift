@@ -362,10 +362,12 @@ struct WindowBackdrop: ViewModifier {
 // MARK: - Deferred mounting
 
 /// Mounts expensive content (Swift Charts cost 50–150 ms on first layout)
-/// just after the view appears, so window-open and sidebar animations run
-/// against an empty placeholder of the same size instead of paying chart
-/// setup mid-animation. The placeholder is Color.clear — a real view, so
-/// `.task` reliably fires.
+/// just after the view appears, so window-open and tab-switch animations run
+/// against an empty placeholder of the same size instead of paying setup
+/// mid-animation. The placeholder is Color.clear — a real view, so `.task`
+/// reliably fires. The mount itself is **not** animated — it appears instantly
+/// (no `withAnimation`), so it never creates an animation transaction that
+/// could hitch a surrounding spring.
 struct Deferred<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var ready = false
@@ -382,7 +384,7 @@ struct Deferred<Content: View>: View {
             guard !ready else { return }
             // Let the open animation get going before mounting.
             try? await Task.sleep(for: .milliseconds(90))
-            withAnimation(.easeIn(duration: 0.18)) { ready = true }
+            ready = true
         }
     }
 }
@@ -459,11 +461,23 @@ struct HoverTooltip<Rows: View>: View {
 }
 
 extension Array where Element == VitalsModel.Sample {
+    /// Closest sample to `time` by binary search — the array is in ascending
+    /// time order (history is appended each tick; chartHistory is an ordered
+    /// downsample). O(log n) instead of the old O(n) `min` scan, which mattered
+    /// because this runs on every hover move over a chart.
     func nearest(to time: Date?) -> VitalsModel.Sample? {
-        guard let time else { return nil }
-        return self.min {
-            abs($0.time.timeIntervalSince(time)) < abs($1.time.timeIntervalSince(time))
+        guard let time, !isEmpty else { return nil }
+        var lo = 0, hi = count - 1
+        if time <= self[lo].time { return self[lo] }
+        if time >= self[hi].time { return self[hi] }
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if self[mid].time < time { lo = mid + 1 } else { hi = mid }
         }
+        // `lo` is the first index whose time >= target; nearest is it or the one before.
+        guard lo > 0 else { return self[lo] }
+        let after = self[lo], before = self[lo - 1]
+        return abs(before.time.timeIntervalSince(time)) <= abs(after.time.timeIntervalSince(time)) ? before : after
     }
 }
 

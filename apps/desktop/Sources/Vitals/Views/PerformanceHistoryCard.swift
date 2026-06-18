@@ -7,6 +7,13 @@ import Charts
 struct PerformanceHistoryCard: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
+    /// True only while the Dashboard is visible. When false, `chartHistory`
+    /// resolves to empty so the `Chart` builds no marks and — crucially —
+    /// doesn't read `model.chartHistory`/`model.memory`, so it stops
+    /// re-rendering on every sample tick while another tab is up. The `Chart`
+    /// view itself stays mounted (no 50–150 ms re-layout on return); only its
+    /// data goes empty.
+    let isActive: Bool
     @State private var metric: Metric = .temp
     @State private var hoverTime: Date?
     @Namespace private var indicator
@@ -43,6 +50,15 @@ struct PerformanceHistoryCard: View {
             default: return true
             }
         }
+    }
+
+    /// The downsampled series the chart draws — emptied when this tab isn't
+    /// visible so the marks, the y-domain, and the hover lookup all collapse to
+    /// nothing and the chart stops subscribing to per-tick model updates. The
+    /// ternary short-circuits, so `model.chartHistory` is never read while
+    /// inactive (no observation → no re-render).
+    private var chartHistory: [VitalsModel.Sample] {
+        isActive ? model.chartHistory : []
     }
 
     var body: some View {
@@ -100,7 +116,7 @@ struct PerformanceHistoryCard: View {
     private var chart: some View {
         Chart {
             marks
-            if let sample = model.history.nearest(to: hoverTime) {
+            if let sample = chartHistory.nearest(to: hoverTime) {
                 RuleMark(x: .value("Time", sample.time))
                     .foregroundStyle(.secondary.opacity(0.5))
                     .lineStyle(StrokeStyle(lineWidth: 1))
@@ -122,7 +138,7 @@ struct PerformanceHistoryCard: View {
     private var marks: some ChartContent {
         switch metric {
         case .temp:
-            ForEach(model.chartHistory) { sample in
+            ForEach(chartHistory) { sample in
                 LineMark(x: .value("Time", sample.time),
                          y: .value("Temp", settings.display(sample.hottestCPU)),
                          series: .value("Series", "Hottest core"))
@@ -136,17 +152,17 @@ struct PerformanceHistoryCard: View {
                     .lineStyle(StrokeStyle(lineWidth: 2))
             }
         case .cpu:
-            ForEach(model.chartHistory) { sample in
+            ForEach(chartHistory) { sample in
                 areaLine(sample.time, sample.usage, .blue)
             }
         case .gpu:
-            ForEach(model.chartHistory) { sample in
+            ForEach(chartHistory) { sample in
                 if let usage = sample.gpuUsage {
                     areaLine(sample.time, usage, .purple)
                 }
             }
         case .memory:
-            ForEach(model.chartHistory) { sample in
+            ForEach(chartHistory) { sample in
                 LineMark(x: .value("Time", sample.time),
                          y: .value("GB", gigabytes(sample.memoryUsed)),
                          series: .value("Series", "Memory"))
@@ -159,7 +175,7 @@ struct PerformanceHistoryCard: View {
                     .interpolationMethod(.catmullRom)
             }
         case .power:
-            ForEach(model.chartHistory) { sample in
+            ForEach(chartHistory) { sample in
                 if let watts = sample.totalWatts {
                     areaLine(sample.time, watts, .yellow)
                 }
@@ -224,12 +240,15 @@ struct PerformanceHistoryCard: View {
         case .cpu, .gpu:
             return 0...100
         case .power:
-            let watts = model.chartHistory.compactMap { $0.totalWatts }
+            let watts = chartHistory.compactMap { $0.totalWatts }
             return 0...max((watts.max() ?? 1) * 1.15, 1)
         case .memory:
-            return 0...max(gigabytes(model.memory?.total ?? 1), 1)
+            // Only read `model.memory` while active — otherwise the chart would
+            // re-render every tick (memory publishes each sample) for nothing.
+            let total = isActive ? (model.memory?.total ?? 1) : 1
+            return 0...max(gigabytes(total), 1)
         case .temp:
-            let temps = model.chartHistory.flatMap { [$0.averageCPU, $0.hottestCPU] }.map(settings.display)
+            let temps = chartHistory.flatMap { [$0.averageCPU, $0.hottestCPU] }.map(settings.display)
             guard let lo = temps.min(), let hi = temps.max() else { return settings.display(30)...settings.display(90) }
             return (lo - 5)...(hi + 5)
         }
