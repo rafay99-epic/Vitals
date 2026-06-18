@@ -119,6 +119,19 @@ final class AppSettings: ObservableObject {
     @Published var refreshInterval: Double { didSet { defaults.set(refreshInterval, forKey: "refreshInterval") } }
     @Published var unit: TemperatureUnit { didSet { defaults.set(unit.rawValue, forKey: "temperatureUnit") } }
     @Published var historyMinutes: Int { didSet { defaults.set(historyMinutes, forKey: "historyMinutes") } }
+    /// Reduce the sampling cadence while on battery (doubles the interval,
+    /// capped at 5 s) and pause the menu-bar icon animation. On by default — a
+    /// menu-bar monitor shouldn't burn the battery at the same cadence it keeps
+    /// on AC. Low Power Mode floors the cadence at 10 s regardless of this toggle.
+    @Published var reduceOnBattery: Bool { didSet { defaults.set(reduceOnBattery, forKey: "reduceOnBattery") } }
+    /// Whether the Mac is currently on battery (vs. AC). Refreshed once per tick
+    /// by `VitalsModel.updatePowerState`, so the cadence and the menu-bar
+    /// animation gate react within one sample of a plug/unplug. Read-only
+    /// outside this class; the testing seam is `_setPowerStateForTesting`.
+    @Published private(set) var isOnBattery: Bool = PowerState.isOnBattery()
+    /// Whether macOS' Low Power Mode is active. Same refresh path as
+    /// `isOnBattery`; read straight from `ProcessInfo`.
+    @Published private(set) var isLowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
     /// Stored as a comma-joined list of raw values ("" = icon only).
     @Published var menuBarMetrics: Set<MenuBarMetric> {
         didSet {
@@ -179,6 +192,29 @@ final class AppSettings: ObservableObject {
     /// The single flag every view consults before animating. Off when GPU
     /// acceleration is disabled or the app isn't focused.
     var animationsEnabled: Bool { gpuAcceleration && appActive }
+    /// The sampling interval actually in effect — the user's pick, adjusted for
+    /// power state. AC: unchanged. Battery (with `reduceOnBattery`): doubled,
+    /// capped at 5 s. Low Power Mode: floored at 10 s. Never below 0.5 s.
+    /// History capacity still uses the base `refreshInterval`, so the chart's
+    /// time span stays stable when the cadence throttles — only the density
+    /// of points changes.
+    var effectiveRefreshInterval: Double {
+        PowerThrottle.interval(base: refreshInterval,
+                               isOnBattery: isOnBattery,
+                               isLowPowerMode: isLowPowerMode,
+                               reduceOnBattery: reduceOnBattery)
+    }
+    /// Whether the menu-bar icon animation should run. The user opts in via
+    /// `menuBarAnimated` (off by default — the status item isn't GPU-composited,
+    /// so the animation rasterizes every frame on the CPU), and it needs GPU
+    /// acceleration. On battery (with `reduceOnBattery`) or in Low Power Mode it
+    /// pauses, mirroring macOS' own "reduce motion when saving power".
+    var menuBarAnimationEnabled: Bool {
+        menuBarAnimated && gpuAcceleration
+            && !PowerThrottle.suppressAnimation(isOnBattery: isOnBattery,
+                                                isLowPowerMode: isLowPowerMode,
+                                                reduceOnBattery: reduceOnBattery)
+    }
     /// 0 = clearest window backdrop, 1 = most frosted.
     @Published var glassIntensity: Double { didSet { defaults.set(glassIntensity, forKey: "glassIntensity") } }
     /// Whether opening the Storage tab kicks off the disk-walking analysis on
@@ -282,6 +318,10 @@ final class AppSettings: ObservableObject {
             "refreshInterval": 2.0,
             "temperatureUnit": TemperatureUnit.celsius.rawValue,
             "historyMinutes": 10,
+            // On by default: a menu-bar monitor should sip battery, not drain it.
+            // Doubles the sampling interval (capped at 5 s) on battery and pauses
+            // the menu-bar icon animation; Low Power Mode slows to 10 s regardless.
+            "reduceOnBattery": true,
             "showMenuBar": true,
             "menuBarUseIcons": true,
             // Off by default: a live status-item animation rasterizes every
@@ -344,6 +384,7 @@ final class AppSettings: ObservableObject {
         refreshInterval = defaults.double(forKey: "refreshInterval")
         unit = TemperatureUnit(rawValue: defaults.string(forKey: "temperatureUnit") ?? "") ?? .celsius
         historyMinutes = defaults.integer(forKey: "historyMinutes")
+        reduceOnBattery = defaults.bool(forKey: "reduceOnBattery")
         showMenuBar = defaults.bool(forKey: "showMenuBar")
         menuBarMetrics = AppSettings.loadMenuBarMetrics(defaults)
         menuBarUseIcons = defaults.bool(forKey: "menuBarUseIcons")
@@ -455,6 +496,26 @@ final class AppSettings: ObservableObject {
     /// Converts a sensor reading (always stored in °C) to the display unit.
     func display(_ celsius: Double) -> Double {
         unit == .fahrenheit ? celsius * 9 / 5 + 32 : celsius
+    }
+
+    // MARK: Power state
+
+    /// Refreshes `isOnBattery` / `isLowPowerMode` from the system. Called once
+    /// per tick by `VitalsModel`; only reassigns on a real transition so the
+    /// model's restart-on-change sink doesn't fire every tick (a `@Published`
+    /// property publishes on every assignment, even an unchanged one).
+    func updatePowerState() {
+        let onBattery = PowerState.isOnBattery()
+        let lowPower = PowerState.isLowPowerMode()
+        if isOnBattery != onBattery { isOnBattery = onBattery }
+        if isLowPowerMode != lowPower { isLowPowerMode = lowPower }
+    }
+
+    /// Test seam to force a power state without touching IOKit/`ProcessInfo`.
+    /// Underscored to signal it's not part of the app's API.
+    func _setPowerStateForTesting(isOnBattery: Bool, isLowPowerMode: Bool) {
+        self.isOnBattery = isOnBattery
+        self.isLowPowerMode = isLowPowerMode
     }
 
     /// Reads the menu-bar metric set, migrating the pre-v0.20 single `menuBarMode`

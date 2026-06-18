@@ -338,6 +338,36 @@ private struct GeneralPane: View {
                 }
             }
 
+            SettingsCard(title: "Power", symbol: "bolt.fill", tint: .green) {
+                settingsRow("Power source") {
+                    HStack(spacing: 5) {
+                        Image(systemName: settings.isOnBattery ? "battery" : "powercord")
+                            .symbolRenderingMode(.hierarchical)
+                        Text(settings.isOnBattery ? "Battery" : "AC")
+                            .monospacedDigit()
+                    }
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(settings.isOnBattery ? .green : .secondary)
+                }
+                SwitchRow(
+                    label: "Reduce sampling on battery",
+                    caption: "Doubles the sampling interval (capped at 5 s) while on battery, and pauses the menu-bar icon animation. Low Power Mode slows sampling to 10 s regardless.",
+                    isOn: $settings.reduceOnBattery
+                )
+                settingsRow("Sampling rate") {
+                    Text("Every \(settings.effectiveRefreshInterval, format: .number) s")
+                        .font(.system(.callout, design: .rounded, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                if settings.isLowPowerMode {
+                    Label("Low Power Mode is on — Vitals samples every 10 s to match macOS.", systemImage: "leaf.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
             SettingsCard(title: "Appearance", symbol: "paintbrush", tint: .purple) {
                 settingsRow("Theme") {
                     Picker("", selection: $settings.theme) {
@@ -417,7 +447,7 @@ private struct GeneralPane: View {
                     }
                     SwitchRow(
                         label: "Animate icons",
-                        caption: "Gently spins the fan and breathes the rest. Needs GPU acceleration.",
+                        caption: "Gently spins the fan and breathes the rest. Needs GPU acceleration, and pauses on battery (when Reduce sampling is on) or in Low Power Mode.",
                         isOn: $settings.menuBarAnimated
                     )
                     .disabled(!settings.menuBarUseIcons || !settings.gpuAcceleration)
