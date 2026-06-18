@@ -63,12 +63,13 @@ private struct MenuBarRow: View {
     private var warning: Bool {
         model.averageCPUTemp.map { $0 >= settings.warnThreshold } ?? false
     }
-    // Opt-in (off by default): a status item isn't GPU-composited like a window,
-    // so this repeating animation rasterizes every frame on the CPU and runs
-    // continuously while shown — measured ~11% — regardless of app focus. Worth
-    // it only if the user explicitly wants the motion; the numbers stay live
-    // either way.
-    private var animate: Bool { settings.menuBarAnimated && settings.gpuAcceleration }
+    // The animation is gated by `menuBarAnimationEnabled` (user opt-in + GPU
+    // acceleration + not on battery/Low Power Mode). A status item isn't
+    // GPU-composited like a window, so this repeating animation rasterizes every
+    // frame on the CPU and runs continuously while shown — measured ~11% —
+    // regardless of app focus. Worth it only when the user wants the motion and
+    // the Mac isn't saving power; the numbers stay live either way.
+    private var animate: Bool { settings.menuBarAnimationEnabled }
 
     /// 0 when the fan is stopped/unknown, toward 1 near its rated maximum.
     private var fanFraction: Double {

@@ -43,7 +43,14 @@ actor SensorSampler {
     /// part of a tick (a syscall per PID). It's only needed when the window is
     /// open or a process-CPU alert is armed; skipping it idle (menu-bar only)
     /// cuts the tick's cost noticeably.
-    func sample(includeTopProcesses: Bool) -> Snapshot {
+    ///
+    /// `includeGPU` / `includePower` gate the two IOReport samplers. They're
+    /// only read when a surface the user can actually see needs them (the
+    /// window's GPU/Power cards, a GPU widget, or a GPU-usage menu-bar metric or
+    /// alert). When skipped, the snapshot carries nil and `VitalsModel` holds
+    /// the last reading — so reopening the window shows the prior value until
+    /// the next sample refreshes it, never a fabricated zero.
+    func sample(includeTopProcesses: Bool, includeGPU: Bool = true, includePower: Bool = true) -> Snapshot {
         let battery = Battery.read(officialHealth: batteryHealth)
         if battery != nil { refreshBatteryHealthIfStale() }
         refreshDiskHealthIfStale()
@@ -55,8 +62,8 @@ actor SensorSampler {
             memory: MemoryStats.read(),
             topProcesses: includeTopProcesses ? processSampler.sample(top: 5) : [],
             battery: battery,
-            gpu: gpu.sample(),
-            power: power.sample(),
+            gpu: includeGPU ? gpu.sample() : nil,
+            power: includePower ? power.sample() : nil,
             diskHealth: diskHealth
         )
     }

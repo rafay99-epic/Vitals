@@ -416,7 +416,11 @@ struct DashboardView: View {
                 Text("Battery \(settings.format(battery, decimals: 0))")
             }
             Spacer()
-            Text("Updates every \(settings.refreshInterval, format: .number) s")
+            if settings.isOnBattery {
+                Text("on battery")
+                Text("·")
+            }
+            Text("Updates every \(settings.effectiveRefreshInterval, format: .number) s")
         }
         .font(.caption)
         .foregroundStyle(.secondary)
