@@ -265,10 +265,6 @@ struct TabCanvas: View {
                 BatteryView(isActive: section == .battery)
                     .tabVisibility(section == .battery)
             }
-            if visited.contains(.health) {
-                HealthView()
-                    .tabVisibility(section == .health)
-            }
             if visited.contains(.disk) {
                 DiskView()
                     .tabVisibility(section == .disk)
@@ -364,6 +360,7 @@ struct DashboardView: View {
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: 16) {
             UpdateBanner()
+            HealthVerdictCard()
             DashboardHero()
             PerformanceHistoryCard(isActive: isActive)
             HStack(alignment: .top, spacing: 16) {
@@ -425,6 +422,72 @@ struct DashboardView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 4)
+    }
+}
+
+/// The dashboard's headline: one honest "is my Mac struggling right now?"
+/// answer, composed only from readings the model already publishes — macOS's
+/// thermal state (its throttling signal), memory pressure, the hottest CPU
+/// sensor and fan speed. It invents nothing; the verdict is just the worst of
+/// the factors, and the colour never stands in for the number (the tiles and
+/// cards below carry the real values). The trailing action folds in the old
+/// Health tab's diagnostics-copy, so the hub is also the place to grab a
+/// snapshot for a support thread.
+struct HealthVerdictCard: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
+    @State private var copied = false
+
+    private var overall: SystemHealth.Level {
+        var levels: [SystemHealth.Level] = [SystemHealth.thermalLevel(model.thermalState)]
+        if let hottest = model.hottestCPUSensor {
+            levels.append(SystemHealth.temperatureLevel(celsius: hottest.celsius))
+        }
+        if let memory = model.memory {
+            levels.append(SystemHealth.pressureLevel(memory.pressure))
+        }
+        if !model.fans.isEmpty {
+            levels.append(model.fans.map { SystemHealth.fanLevel(rpm: $0.rpm, maxRPM: $0.maxRPM) }.max() ?? .good)
+        }
+        return levels.max() ?? .good
+    }
+
+    private var throttling: Bool { SystemHealth.isThrottling(model.thermalState) }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                Circle().fill(overall.tint.opacity(0.16)).frame(width: 56, height: 56)
+                Image(systemName: throttling ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .font(.system(size: 24, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(overall.tint)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(SystemHealth.headline(level: overall, throttling: throttling))
+                    .font(.system(size: 20, weight: .semibold))
+                Text(throttling
+                     ? "macOS has lowered clocks to protect the machine. Quitting heavy apps will bring it back — check Processes."
+                     : "Vitals is watching temperature, memory pressure and cooling. Nothing needs attention right now.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            Button {
+                DiagnosticSnapshot.copyToPasteboard(model: model, settings: settings)
+                copied = true
+                Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
+            } label: {
+                Label(copied ? "Copied" : "Copy Diagnostics", systemImage: copied ? "checkmark" : "doc.on.clipboard")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Copy a snapshot of every current reading to the clipboard")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .cardBackground()
     }
 }
 

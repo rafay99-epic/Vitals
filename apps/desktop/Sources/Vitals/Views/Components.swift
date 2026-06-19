@@ -123,9 +123,10 @@ struct LoadingStateView: View {
 // MARK: - Tab scaffold
 
 /// A monitoring tab's scrolling canvas, batched into one Liquid Glass pass when
-/// enabled — the shared chrome behind the GPU, Battery and Health tabs, matching
-/// the Dashboard's `LazyVStack` + `GlassEffectContainer` so every surface reads
-/// as one app. Lazy, so off-screen cards cost nothing until scrolled to.
+/// enabled — the shared chrome behind the CPU, GPU, Battery and Drive Health
+/// tabs, matching the Dashboard's `LazyVStack` + `GlassEffectContainer` so every
+/// surface reads as one app. Lazy, so off-screen cards cost nothing until
+/// scrolled to.
 struct MetricScroll<Content: View>: View {
     @EnvironmentObject private var settings: AppSettings
     @ViewBuilder var content: () -> Content
@@ -217,8 +218,8 @@ struct SectionCard<Content: View>: View {
     }
 }
 
-/// A compact power readout tile in the shared card language. Shared by the GPU
-/// and Health tabs.
+/// A compact power readout tile in the shared card language. Shared by the
+/// power cards on the GPU tab and the Dashboard.
 struct PowerTile: View {
     let title: String
     let watts: Double
@@ -255,7 +256,7 @@ func wattsText(_ watts: Double) -> String {
 
 /// The three SoC power rails (CPU / GPU / Neural Engine) as tiles plus the
 /// total-package row — the one power-card body, shared by every power card
-/// (Dashboard, Health, and the GPU tab) so they can't drift.
+/// (Dashboard and the GPU tab) so they can't drift.
 struct PowerRails: View {
     let power: PowerSnapshot
 

@@ -8,7 +8,7 @@ import Foundation
 /// tab's visible position (⌘1 = leftmost), assigned in the header from the
 /// ordered, unhidden list — so a shortcut always matches what the eye sees.
 enum AppTab: String, CaseIterable, Identifiable {
-    case dashboard, cpu, gpu, battery, health, disk, history, processes, applications, loginItems, cleanup, storage
+    case dashboard, cpu, gpu, battery, disk, history, processes, applications, loginItems, cleanup, storage
     var id: String { rawValue }
 
     var title: String {
@@ -17,8 +17,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .cpu: return "CPU"
         case .gpu: return "GPU"
         case .battery: return "Battery"
-        case .health: return "Health"
-        case .disk: return "Disk"
+        case .disk: return "Drive Health"
         case .history: return "History"
         case .processes: return "Processes"
         case .applications: return "Applications"
@@ -34,7 +33,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .cpu: return "cpu"
         case .gpu: return "cpu.fill"
         case .battery: return "battery.100percent"
-        case .health: return "waveform.path.ecg"
         case .disk: return "internaldrive.fill"
         case .history: return "chart.xyaxis.line"
         case .processes: return "list.bullet"
@@ -61,12 +59,12 @@ enum AppTab: String, CaseIterable, Identifiable {
     static let defaultVisible: [AppTab] = [.dashboard, .processes, .history, .battery, .storage]
 
     /// The full default order: the visible set first, then the hidden tabs
-    /// grouped by concern — monitoring deep-dives (GPU, Health), then the
-    /// management tools (Applications, Login Items, Cleanup). Contains every tab,
-    /// so a fresh install starts from a complete, intentional order.
+    /// grouped by concern — monitoring deep-dives (CPU, GPU, Drive Health), then
+    /// the management tools (Applications, Login Items, Cleanup). Contains every
+    /// tab, so a fresh install starts from a complete, intentional order.
     static let defaultOrder: [AppTab] = [
         .dashboard, .processes, .history, .battery, .storage,   // shown
-        .cpu, .gpu, .health, .disk,                             // monitoring deep-dives
+        .cpu, .gpu, .disk,                                      // monitoring deep-dives
         .applications, .loginItems, .cleanup,                   // management tools
     ]
 

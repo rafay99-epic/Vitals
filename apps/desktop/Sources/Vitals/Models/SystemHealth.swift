@@ -4,9 +4,10 @@ import SwiftUI
 /// An honest "is my Mac struggling right now?" read, composed only from numbers
 /// the model already publishes: macOS's own thermal state (which *is* its
 /// throttling signal), memory pressure, the hottest CPU sensor and fan speed.
-/// It invents nothing — every factor the Health tab shows points back at a real
-/// reading, and the colour bands here only tint a value that's displayed beside
-/// them. The classification is pure so it can be unit-tested.
+/// It invents nothing — every factor behind the Dashboard's health verdict
+/// points back at a real reading, and the colour bands here only tint a value
+/// that's displayed beside them. The classification is pure so it can be
+/// unit-tested.
 enum SystemHealth {
     /// Four bands mirroring `ProcessInfo.ThermalState`, so thermal pressure maps
     /// across without loss.

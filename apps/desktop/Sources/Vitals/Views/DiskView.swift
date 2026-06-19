@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Shared mapping from a drive's wear severity to a gauge colour, so the Disk
-/// tab and the Dashboard SSD card can never drift apart (and a flagged drive
-/// shows orange/red, not green).
+/// Shared mapping from a drive's wear severity to a gauge colour, so the Drive
+/// Health tab and the Dashboard SSD card can never drift apart (and a flagged
+/// drive shows orange/red, not green).
 func diskWearTint(_ level: DiskHealthSnapshot.WearLevel) -> Color {
     switch level {
     case .normal:   return .green
@@ -11,11 +11,11 @@ func diskWearTint(_ level: DiskHealthSnapshot.WearLevel) -> Color {
     }
 }
 
-/// The Disk tab: the internal SSD's health, straight from its own NVMe SMART
-/// log — wear, lifetime data written, power-on time, cycles, unsafe shutdowns,
-/// spare blocks and temperature. Every figure is a counter the drive reports;
-/// nothing is estimated or invented. A Mac (or VM) that doesn't expose SMART
-/// says so rather than showing a fake "100% healthy".
+/// The Drive Health tab: the internal SSD's health, straight from its own NVMe
+/// SMART log — wear, lifetime data written, power-on time, cycles, unsafe
+/// shutdowns, spare blocks and temperature. Every figure is a counter the drive
+/// reports; nothing is estimated or invented. A Mac (or VM) that doesn't expose
+/// SMART says so rather than showing a fake "100% healthy".
 struct DiskView: View {
     @EnvironmentObject private var model: VitalsModel
 
