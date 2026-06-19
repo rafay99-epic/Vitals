@@ -210,6 +210,8 @@ final class VitalsModel: ObservableObject {
     }
 
     deinit {
+        timer?.invalidate()
+        timer = nil
         sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 
@@ -239,10 +241,13 @@ final class VitalsModel: ObservableObject {
         start()
     }
 
-    /// Restarts the timer only while awake — a cadence-relevant setting change
-    /// made while asleep must not resume sampling until the Mac wakes.
+    /// Restarts the timer only while awake **and already running** — a cadence-
+    /// relevant setting change made while asleep must not resume sampling until
+    /// the Mac wakes, and the `timer != nil` guard blocks a re-entrant call
+    /// during the first `start()` (where `tick()` runs before `self.timer` is
+    /// assigned) from scheduling a second, leaked timer.
     private func restartTimerIfAwake() {
-        guard !isAsleep else { return }
+        guard !isAsleep, timer != nil else { return }
         restartTimer()
     }
 

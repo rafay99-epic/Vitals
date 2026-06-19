@@ -29,11 +29,11 @@ private struct CPUHeroCard: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(String(format: "%.0f%%", model.cpuUsage))
-                        .font(.system(size: 40, weight: .semibold, design: .rounded))
+                        .font(.system(size: 32, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .numericTransition()
                     Text("load")
-                        .font(.title3)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
