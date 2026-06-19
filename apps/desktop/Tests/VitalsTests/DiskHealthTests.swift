@@ -43,6 +43,10 @@ struct DiskHealthTests {
 
     @Test func poweredOnTextRollsOverToDaysAfterADay() {
         #expect(make(powerOnHours: 10).poweredOnText == "10 h")
+        #expect(make(powerOnHours: 23).poweredOnText == "23 h")
+        #expect(make(powerOnHours: 24).poweredOnText == "1 day")
+        #expect(make(powerOnHours: 47).poweredOnText == "1 day")
+        #expect(make(powerOnHours: 48).poweredOnText == "2 days")
         #expect(make(powerOnHours: 1012).poweredOnText == "42 days")
     }
 

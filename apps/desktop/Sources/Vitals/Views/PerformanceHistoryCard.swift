@@ -208,7 +208,7 @@ struct PerformanceHistoryCard: View {
             Text(String(format: "Memory %.2f GB", gigabytes(sample.memoryUsed)))
             Text(String(format: "Swap %.2f GB", gigabytes(sample.swapUsed)))
         case .power:
-            Text("Power \(wattsText(sample.totalWatts ?? 0))")
+            Text("Power \(sample.totalWatts.map(wattsText) ?? "—")")
         }
     }
 

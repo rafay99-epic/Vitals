@@ -55,7 +55,9 @@ struct DiskHealthSnapshot {
 
     /// Power-on time as days once past a day, hours below. Pure, for testing.
     var poweredOnText: String {
-        powerOnHours >= 48 ? "\(powerOnHours / 24) days" : "\(powerOnHours) h"
+        guard powerOnHours >= 24 else { return "\(powerOnHours) h" }
+        let days = powerOnHours / 24
+        return days == 1 ? "1 day" : "\(days) days"
     }
 }
 
