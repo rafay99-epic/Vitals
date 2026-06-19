@@ -27,6 +27,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 REPO="rafay99-epic/Vitals"
 
 # In this repo "nightly" is both a branch AND a release tag, so a bare `nightly`
@@ -66,6 +68,20 @@ fi
 # Stable version = 0.<commit count on main AFTER this promotion commit>.
 version="0.$(( $(git rev-list --count "${ORIGIN_MAIN}") + 1 ))"
 
+# Build the release notes NOW, before main moves. The changelog covers the
+# nightly commits being promoted (since the last Stable cut); ci.yml's release
+# job reads this commit's body as the Stable release notes. It must be computed
+# here: after the promotion main == nightly, so the range can't be recovered.
+changelog="$(bash "${SCRIPT_DIR}/changelog.sh" \
+  "$(bash "${SCRIPT_DIR}/stable-base.sh" "${ORIGIN_MAIN}" "${ORIGIN_NIGHTLY}")" \
+  "${ORIGIN_NIGHTLY}")"
+commit_msg_file="$(mktemp)"
+{
+  echo "Promote nightly → main: Stable ${version}"
+  echo
+  echo "$changelog"
+} > "$commit_msg_file"
+
 echo
 echo "About to cut Stable ${version}. Changes since the last Stable cut:"
 git --no-pager log --oneline "${ORIGIN_MAIN}..${ORIGIN_NIGHTLY}" | sed 's/^/  /'
@@ -95,7 +111,7 @@ if ! git diff --quiet --cached "${ORIGIN_NIGHTLY}"; then
   exit 1
 fi
 
-git commit --quiet -m "Promote nightly → main: Stable ${version}"
+git commit --quiet -F "$commit_msg_file"
 git push origin main
 
 # Return the user to where they started.

@@ -50,8 +50,10 @@ jobs:
     runs-on: macos-26
     needs: test
     # Only this job writes releases (least privilege; the test job stays read-only).
+    # pull-requests: read lets changelog.sh read PR titles/labels for the notes.
     permissions:
       contents: write
+      pull-requests: read
     # Only the canonical repo publishes — a fork building its own `nightly`
     # branch must not push to (or fail against) these releases.
     if: github.repository == 'rafay99-epic/Vitals'
@@ -75,6 +77,36 @@ jobs:
           export VITALS_BUILD="$BUILD"
           ./make-dmg.sh
 
+      - name: Build release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Notes list what's in this Nightly beyond the last Stable release —
+          # the same shared changelog.sh that feeds the Stable notes + promotion
+          # PR, so they never drift. Needs origin/main; the checkout used
+          # persist-credentials:false, so fetch it explicitly with the token.
+          git fetch --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "+refs/heads/main:refs/remotes/origin/main" || true
+          base="$(bash "$GITHUB_WORKSPACE/.github/scripts/stable-base.sh" refs/remotes/origin/main HEAD)"
+          changelog="$(bash "$GITHUB_WORKSPACE/.github/scripts/changelog.sh" "$base" HEAD)"
+          notes="$RUNNER_TEMP/nightly-notes.md"
+          {
+            echo "Nightly build from the \`nightly\` branch @ \`$SHA\` (build $BUILD, version $VERSION-nightly)."
+            echo
+            echo "**Install:** \`brew install --cask rafay99-epic/apps/vitals-nightly\`, or download \`Vitals-Nightly.dmg\` below and drag to Applications."
+            echo
+            echo "Installs as **Vitals Nightly** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Nightly auto-updates from this feed."
+            echo
+            echo "⚠️ Unsigned pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
+            echo
+            echo "---"
+            echo
+            echo "### Changes since the last Stable release"
+            echo
+            echo "$changelog"
+          } > "$notes"
+          echo "NOTES_FILE=$notes" >> "$GITHUB_ENV"
+
       - name: Refresh the rolling "nightly" pre-release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -89,10 +121,4 @@ jobs:
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Vitals Nightly · build $BUILD" \
-            --notes "Nightly build from the \`nightly\` branch @ \`$SHA\` (build $BUILD, version $VERSION-nightly).
-
-          **Install:** \`brew install --cask rafay99-epic/apps/vitals-nightly\`, or download \`Vitals-Nightly.dmg\` below and drag to Applications.
-
-          Installs as **Vitals Nightly** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Nightly auto-updates from this feed.
-
-          ⚠️ Unsigned pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
+            --notes-file "$NOTES_FILE"

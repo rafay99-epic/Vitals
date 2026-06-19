@@ -103,13 +103,37 @@ jobs:
           ./build.sh
           ./make-dmg.sh
 
+      # The promotion commit (promote.sh) bakes the grouped-by-area PR changelog
+      # into its body — and main moves ONLY via promotion, so HEAD's body IS the
+      # release notes. They can't be regenerated here: after promotion main ==
+      # nightly, so the "since last Stable" range no longer exists. A non-promotion
+      # push has an empty body → fall back to GitHub's auto-generated notes.
+      - name: Build release notes
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          git log -1 --format=%b HEAD > "$notes"
+          if grep -q '[^[:space:]]' "$notes"; then
+            prev="$(git tag -l 'v*' --sort=-v:refname | awk 'NR==1')"
+            if [ -n "$prev" ]; then
+              printf '\n**Full Changelog**: https://github.com/%s/compare/%s...v%s\n' \
+                "$GITHUB_REPOSITORY" "$prev" "$VERSION" >> "$notes"
+            fi
+            echo "NOTES_FILE=$notes" >> "$GITHUB_ENV"
+          fi
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v$VERSION" build/Vitals.dmg \
-            --title "Vitals $VERSION" \
-            --generate-notes
+          if [ -n "${NOTES_FILE:-}" ]; then
+            gh release create "v$VERSION" build/Vitals.dmg \
+              --title "Vitals $VERSION" \
+              --notes-file "$NOTES_FILE"
+          else
+            gh release create "v$VERSION" build/Vitals.dmg \
+              --title "Vitals $VERSION" \
+              --generate-notes
+          fi
 # Dependency checking is handled by Dependabot (.github/dependabot.yml) and
 # Dependabot security alerts — dependency-review-action needs GitHub Advanced
 # Security, which isn't available on private personal repos.
