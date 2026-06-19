@@ -16,12 +16,21 @@ License: **GPL-3.0**.
    (fan control, uninstall, cleanup) gets maximum caution, confirmation, and reversibility.
 4. **Layers that don't leak** — Services talk to hardware and know nothing about UI.
    Models (@MainActor ObservableObject) poll and publish. Views only display.
+5. **One system, not two** — when a surface (a card, a meter, a grid, a parser) shows up
+   in more than one place, it is **one shared component with one set of inputs**, never a
+   copy. Copies drift — two power cards end up in different orders, two temp grids gain
+   different legends, two parsers disagree on an edge case. If you catch yourself pasting a
+   view or re-deriving a value the model already publishes, stop and extract. Concretely
+   today: **every** power card is `PowerRails`; the P/E meter is `ClusterMeter` (Dashboard +
+   CPU tab); the per-core temp grid is `CoreTempGrid` (Dashboard + CPU tab); GitHub
+   release parsing is `convex/lib/github.ts` (backend action + website fallback). Reuse
+   first; if the existing component doesn't fit, generalize it rather than fork it.
 
 ## Workflow rules (user's explicit requirements — do not violate)
 
-- **`nightly` is the integration + default branch; `main` is protected Stable.** Every
-  feature on its own branch **from `nightly`** → push → **draft PR into `nightly`** (the
-  default branch, so PRs target it automatically). The user squash-merges. **`main` is
+- **`nightly` is the integration branch; `main` is the default + protected Stable branch.** Every
+  feature on its own branch **from `nightly`** → push → **draft PR into `nightly`** (the repo
+  default is `main`, so switch the PR base to `nightly` when opening it). The user squash-merges. **`main` is
   branch-protected — PRs or pushes straight to `main` are rejected**; it moves only via
   the user's **weekly `nightly → main` (squash) promotion**, which cuts the Stable
   release. Never hand-commit to `main` (it would diverge from `nightly` and conflict the

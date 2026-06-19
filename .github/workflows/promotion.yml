@@ -1,59 +1,146 @@
 name: Promotion
 
-# Weekly Saturday job that opens (or refreshes) a draft `nightly → main` PR
-# summarizing every squash-merge queued for the next Stable cut, grouped by
-# the `area:*` labels labeler.yml applies. CLAUDE.md: `main` moves only via
-# the user's weekly nightly → main (squash) promotion — this workflow
-# prepares that PR; the user reviews + squash-merges. The squash is what
-# ci.yml's release job builds the Stable DMG from.
+# Weekly automated Stable cut: every Saturday it (1) verifies nightly is green —
+# builds, tests, and lints the Swift desktop app — and only if everything passes
+# does it (2) open a `nightly → main` PR (the changelog record, grouped by
+# `area:*` label) and (3) run `.github/scripts/promote.sh`, which sets `main` to
+# nightly's tree, pushes, and closes that PR. The push to `main` triggers ci.yml's
+# release job (builds + publishes the Stable DMG). No human step — and a red
+# build/test never reaches Stable, because the promote job needs the verify job.
 #
-# This workflow only writes the PR description; it never merges. Cron is UTC
-# and can be delayed under heavy GitHub load, so workflow_dispatch is also
-# available for catch-up + manual runs.
+# Why a script and not the merge button: main and nightly don't share recent
+# history (each promotion adds a main-only squash commit), so the button's 3-way
+# merge conflicts every time — see promote.sh. The script avoids the merge entirely.
+#
+# REQUIRES the PROMOTION_TOKEN secret — a fine-grained PAT with Contents: R/W,
+# Pull requests: R/W, and Workflows: R/W. It must be a PAT (not the default
+# GITHUB_TOKEN): a push made with GITHUB_TOKEN does NOT trigger ci.yml, so the
+# release would never build; and a promotion can change files under
+# .github/workflows, which needs the Workflows scope. The PAT (or the bot it
+# belongs to) must also be allowed to push to the protected `main` branch.
+#
+# Cron is UTC and can be delayed under heavy GitHub load, so workflow_dispatch is
+# also available for catch-up + manual runs. Scheduled triggers only fire from the
+# workflow file on the DEFAULT branch (main), so this takes effect once it lands
+# on main (via the first promotion after merge).
 on:
   schedule:
-    # Saturday 15:00 PKT = 10:00 UTC. PKT is UTC+5 with no DST, so this is
-    # fixed year-round and the user's local "3 PM Saturday" never drifts.
+    # Saturday 15:00 PKT = 10:00 UTC. PKT is UTC+5 with no DST, so this is fixed
+    # year-round and the user's local "3 PM Saturday" never drifts.
     - cron: "0 10 * * 6"
   workflow_dispatch:
 
-# Read-only by default — only the promote job gets the write scope it needs.
+# Read-only by default — the jobs use the PROMOTION_TOKEN PAT for any writes.
 permissions:
   contents: read
 
 # Two of these must never race — overlapping runs would fight over the same
-# PR body. Queue rather than cancel so a manual dispatch during the cron
-# window doesn't drop work.
+# PR body and both try to push main. Queue rather than cancel so a manual
+# dispatch during the cron window doesn't drop work.
 concurrency:
   group: promotion
   cancel-in-progress: false
 
 jobs:
-  promote:
-    name: Open or refresh nightly → main PR
+  # Cheap gate: is there anything to promote, and is the release token present?
+  # Skips the expensive verify/promote jobs on idle weeks, and fails fast (before
+  # spending a macOS runner) if PROMOTION_TOKEN is missing when it's actually needed.
+  check:
+    name: Anything to promote?
     runs-on: ubuntu-latest
     # Forks have no `nightly`/`main` pair worth promoting and the auto token
     # can't write to the upstream repo anyway.
     if: github.repository == 'rafay99-epic/Vitals'
     permissions:
       contents: read
-      pull-requests: write
+    outputs:
+      promote: ${{ steps.diff.outputs.promote }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # full history — the script walks every commit in main..nightly
-          ref: nightly # always diff against nightly's tip regardless of dispatch ref
-      - name: Open or refresh the promotion PR
+          fetch-depth: 0
+          ref: nightly
+      # Compare main's CONTENT to nightly's. A commits-ahead count stays > 0 after
+      # a promotion even when the trees match (nightly's commits never land on
+      # main), so a tree diff is the correct "is there a real change" signal and
+      # avoids opening an orphan PR on an idle week.
+      - name: Diff main vs nightly
+        id: diff
+        run: |
+          git fetch --quiet origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/nightly:refs/remotes/origin/nightly"
+          if git diff --quiet refs/remotes/origin/main refs/remotes/origin/nightly; then
+            echo "main already equals nightly — nothing to promote."
+            echo "promote=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "promote=true" >> "$GITHUB_OUTPUT"
+          fi
+      # Only matters when we're actually going to promote — don't redly fail an
+      # idle week for a missing secret.
+      - name: Require PROMOTION_TOKEN
+        if: steps.diff.outputs.promote == 'true'
         env:
-          # Prefer a user PAT (`PROMOTION_TOKEN` secret) when set, fall back to
-          # the default Actions token. GitHub blocks the default token from
-          # `createPullRequest` unless "Allow GitHub Actions to create and
-          # approve pull requests" is enabled in repo Settings → Actions →
-          # General → Workflow permissions. If that toggle is on, the default
-          # token is enough and no secret is needed. If it isn't (or org
-          # policy forbids it), drop a fine-grained PAT scoped to this repo
-          # with Contents: Read + Pull requests: Read & Write into the
-          # PROMOTION_TOKEN secret and the script keeps working — PATs belong
-          # to a user, not Actions, so they bypass the create-PR block.
-          GH_TOKEN: ${{ secrets.PROMOTION_TOKEN || github.token }}
+          TOK: ${{ secrets.PROMOTION_TOKEN }}
+        run: |
+          if [ -z "${TOK:-}" ]; then
+            echo "::error::Auto-promotion needs the PROMOTION_TOKEN secret — a fine-grained PAT with Contents: R/W, Pull requests: R/W, and Workflows: R/W. It must be a PAT (not GITHUB_TOKEN): a GITHUB_TOKEN push to main does NOT trigger ci.yml's release, and a promotion may change .github/workflows files."
+            exit 1
+          fi
+
+  # The gate that protects Stable: build + test + lint the Swift desktop app on
+  # nightly's tip. If any step fails, this job fails, `promote` (which needs it)
+  # is skipped, and nothing reaches main. Mirrors ci.yml's release gate.
+  verify:
+    name: Verify nightly (build · test · lint)
+    needs: check
+    if: needs.check.outputs.promote == 'true'
+    runs-on: macos-26
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: nightly
+      - name: Swift build (release config)
+        run: swift build -c release
+      - name: Swift tests
+        run: swift test
+      - name: SwiftLint
+        run: |
+          brew install swiftlint
+          swiftlint --reporter github-actions-logging
+
+  # Only runs if check said "promote" AND verify passed. Opens the changelog PR,
+  # then promotes (sets main to nightly, pushes → triggers the release, closes PR).
+  promote:
+    name: Promote nightly → main (cut Stable)
+    needs: [check, verify]
+    if: needs.check.outputs.promote == 'true'
+    runs-on: ubuntu-latest
+    # Uses PROMOTION_TOKEN (the PAT) for everything, so the job token stays read-only.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history — the scripts walk every commit in main..nightly
+          ref: nightly # always promote nightly's tip regardless of dispatch ref
+          # Persist the PAT so `git push origin main` in promote.sh is authored by
+          # the PAT — which is what makes the push trigger ci.yml's release job.
+          token: ${{ secrets.PROMOTION_TOKEN }}
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Summarize the promotion as a PR (the release's changelog record)
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
         run: bash .github/scripts/promotion.sh
+      - name: Promote (sets main to nightly, pushes → triggers the release, closes the PR)
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
+        run: bash .github/scripts/promote.sh --yes

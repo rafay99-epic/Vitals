@@ -1,14 +1,23 @@
 version: 2
+# `nightly` is the integration branch; `main` is protected and moves only via the
+# weekly nightly → main promotion (which sets main's tree to exactly nightly).
+# Without target-branch, Dependabot defaults to the repo default branch (main) —
+# but a bump merged to main would be reverted at the next promotion and never reach
+# nightly. So every ecosystem targets `nightly`; the bump then flows to main via the
+# normal promotion, like any other change.
 updates:
   - package-ecosystem: "swift"
     directory: "/apps/desktop"
+    target-branch: "nightly"
     schedule:
       interval: "weekly"
   - package-ecosystem: "bun"
     directory: "/"
+    target-branch: "nightly"
     schedule:
       interval: "weekly"
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "nightly"
     schedule:
       interval: "weekly"

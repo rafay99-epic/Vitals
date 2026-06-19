@@ -158,21 +158,7 @@ private struct HealthPowerCard: View {
 
     var body: some View {
         SectionCard(title: "SoC power", symbol: "bolt.fill") {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    PowerTile(title: "CPU", watts: power.cpuWatts, symbol: "cpu", tint: .blue)
-                    PowerTile(title: "GPU", watts: power.gpuWatts, symbol: "cpu.fill", tint: .purple)
-                    PowerTile(title: "Neural Engine", watts: power.aneWatts, symbol: "brain", tint: .pink)
-                }
-                HStack {
-                    Text("Total package").font(.callout).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(wattsText(power.total))
-                        .font(.system(.body, design: .rounded, weight: .semibold))
-                        .monospacedDigit()
-                        .numericTransition()
-                }
-            }
+            PowerRails(power: power)
         }
     }
 }

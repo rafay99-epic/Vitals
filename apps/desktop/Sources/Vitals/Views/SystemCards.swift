@@ -409,3 +409,89 @@ struct BatteryContent: View {
         minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
     }
 }
+
+/// SoC power at a glance on the Dashboard — total package draw plus the CPU /
+/// GPU / Neural Engine rails. Reuses the shared `PowerTile`; shows an honest
+/// note until the first energy delta lands (or when IOReport is unavailable),
+/// never a fake 0 W.
+struct PowerCard: View {
+    @EnvironmentObject private var model: VitalsModel
+
+    var body: some View {
+        SectionCard(title: "Power", symbol: "bolt.fill") {
+            if let power = model.power {
+                PowerRails(power: power)
+            } else {
+                Text("Power readings appear in a moment — or aren't available on this Mac.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            }
+        }
+    }
+}
+
+/// SSD health at a glance. Wrapper-free so it can sit inside a CollapsibleCard
+/// on the Dashboard, mirroring `BatteryContent`. Every figure is a real SMART
+/// counter; an unavailable drive says so rather than showing zeros.
+struct DiskContent: View {
+    @EnvironmentObject private var model: VitalsModel
+    @EnvironmentObject private var settings: AppSettings
+
+    /// Header symbol for the dashboard card — flags a critical warning if any.
+    static func symbol(for disk: DiskHealthSnapshot?) -> String {
+        (disk?.criticalWarning ?? 0) == 0 ? "internaldrive.fill" : "internaldrive.badge.exclamationmark"
+    }
+
+    var body: some View {
+        Group {
+            if let disk = model.diskHealth {
+                HStack(alignment: .center, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(disk.percentUsed)%")
+                            .font(.system(size: 28, weight: .semibold, design: .rounded))
+                            .numericTransition()
+                        Text("used").font(.caption).foregroundStyle(.secondary)
+                        Gauge(value: min(Double(disk.percentUsed) / 100, 1)) { EmptyView() }
+                            .gaugeStyle(.accessoryLinearCapacity)
+                            .tint(diskWearTint(disk.wearLevel))
+                            .frame(width: 200)
+                    }
+
+                    Divider()
+                        .frame(height: 64)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        detailRow(symbol: "internaldrive", text: identityLine(disk))
+                        detailRow(symbol: "square.and.arrow.down", text: "\(formatBytes(UInt64(disk.bytesWritten))) written")
+                        detailRow(symbol: "power", text: "Powered on \(disk.poweredOnText)")
+                        if let temp = disk.temperature {
+                            detailRow(symbol: "thermometer.low", text: "Temperature \(settings.formatWithUnit(temp))")
+                        }
+                    }
+                    Spacer()
+                }
+            } else {
+                Text("SSD health unavailable.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            }
+        }
+    }
+
+    private func identityLine(_ disk: DiskHealthSnapshot) -> String {
+        let condition = DiskHealthSnapshot.condition(criticalWarning: disk.criticalWarning)
+        let parts = [disk.model, disk.capacityBytes.map { formatBytes(UInt64($0)) }, condition].compactMap { $0 }
+        return parts.joined(separator: " · ")
+    }
+
+    private func detailRow(symbol: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            Text(text)
+        }
+        .font(.callout)
+    }
+}

@@ -72,6 +72,15 @@ struct CPUCard: View {
                 Spacer(minLength: 0)
             }
 
+            // Apple Silicon: split the blended load into Performance vs
+            // Efficiency cores. Hidden when there's no trusted split.
+            if let clusters = model.cpuClusters {
+                VStack(alignment: .leading, spacing: 7) {
+                    ClusterMeter(label: "Performance", percent: clusters.performance, tint: .accentColor)
+                    ClusterMeter(label: "Efficiency", percent: clusters.efficiency, tint: .teal)
+                }
+            }
+
             if !model.cpuSensors.isEmpty {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showCores.toggle() }
@@ -88,7 +97,7 @@ struct CPUCard: View {
                 }
                 .buttonStyle(.plain)
 
-                if showCores { dieGrid }
+                if showCores { CoreTempGrid(sensors: model.cpuSensors) }
             }
         }
         // Match the paired card's height in the row (see SectionCard).
@@ -107,38 +116,6 @@ struct CPUCard: View {
             if let note {
                 Text(note).font(.caption2).foregroundStyle(.tertiary)
             }
-        }
-    }
-
-    private var dieGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
-                ForEach(model.cpuSensors) { sensor in
-                    DieCell(sensor: sensor)
-                }
-            }
-            dieLegend
-        }
-    }
-
-    @ViewBuilder
-    private var dieLegend: some View {
-        let temps = model.cpuSensors.map(\.celsius)
-        if let coolest = temps.min(), let hottest = temps.max() {
-            HStack(spacing: 12) {
-                Text("Coolest \(settings.format(coolest, decimals: 0))")
-                Text("Hottest \(settings.format(hottest, decimals: 0))")
-                Spacer()
-                Capsule()
-                    .fill(LinearGradient(
-                        colors: [tempGradientColor(40), tempGradientColor(60), tempGradientColor(75), tempGradientColor(90)],
-                        startPoint: .leading, endPoint: .trailing))
-                    .frame(width: 96, height: 5)
-                Text("\(settings.format(40, decimals: 0))–\(settings.format(90, decimals: 0))")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
         }
     }
 }

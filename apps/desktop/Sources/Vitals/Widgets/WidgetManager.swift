@@ -72,6 +72,7 @@ final class WidgetManager: ObservableObject {
         panel.orderFrontRegardless()
         visible.insert(kind)
         persistVisible()
+        syncGPUSampling()
     }
 
     func hide(_ kind: WidgetKind) {
@@ -79,9 +80,17 @@ final class WidgetManager: ObservableObject {
         panels[kind] = nil
         visible.remove(kind)
         persistVisible()
+        syncGPUSampling()
     }
 
     private func persistVisible() {
         defaults.set(visible.map(\.rawValue), forKey: Keys.visible)
+    }
+
+    /// Tells the model whether any GPU-bearing widget (`.gpu` or `.combined`) is
+    /// on screen, so the IOReport GPU sample is only skipped when nothing visible
+    /// reads it — a shown widget must never go stale.
+    private func syncGPUSampling() {
+        model.setGPUWidgetVisible(visible.contains(.gpu) || visible.contains(.combined))
     }
 }

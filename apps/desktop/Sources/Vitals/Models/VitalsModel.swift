@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import AppKit
 
 @MainActor
 final class VitalsModel: ObservableObject {
@@ -23,6 +24,7 @@ final class VitalsModel: ObservableObject {
         let memoryUsed: Double  // bytes
         let swapUsed: Double    // bytes
         let batteryPercent: Double?  // charge %, nil when no battery
+        let totalWatts: Double?      // SoC package power, nil until the 2nd sample
     }
 
     @Published private(set) var cpuSensors: [Sensor] = []
@@ -38,10 +40,18 @@ final class VitalsModel: ObservableObject {
     /// pixels, and Swift Charts rebuild cost scales with mark count.
     @Published private(set) var chartHistory: [Sample] = []
     @Published private(set) var cpuUsage: Double = 0
+    /// Per-cluster CPU utilisation (Apple Silicon). Nil when there's no trusted
+    /// P/E split — `cpuUsage` (the blended figure) still applies.
+    @Published private(set) var cpuClusters: (performance: Double, efficiency: Double)?
+    /// Per-core utilisation for the CPU tab's deep view. Empty without a trusted split.
+    @Published private(set) var cpuPerCore: [CoreUsage] = []
     @Published private(set) var memory: MemorySnapshot?
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
     @Published private(set) var battery: BatterySnapshot?
+    /// The internal SSD's SMART health (wear, endurance, power-on hours…). Nil
+    /// on a Mac/VM that doesn't expose SMART, or for the first tick or two.
+    @Published private(set) var diskHealth: DiskHealthSnapshot?
     /// Live SoC power draw (CPU/GPU/ANE rails). Nil until the second sample —
     /// power is an energy delta and needs a prior reading — and on the rare
     /// machine where IOReport is unavailable.
@@ -81,13 +91,48 @@ final class VitalsModel: ObservableObject {
     /// Whether the main window is open. Top-process sampling (the costliest part
     /// of a tick) is skipped when it's closed and no process-CPU alert needs it.
     private var mainWindowVisible = false
+    /// True while the Mac is asleep — set by `NSWorkspace.willSleep/didWake`
+    /// observers. The timer is torn down on sleep and rebuilt on wake, so no
+    /// sensor reads happen (and no battery is burned) while the machine is
+    /// suspended. The flag also guards `start()` so a settings change made while
+    /// asleep can't restart sampling until wake.
+    private var isAsleep = false
+    /// Whether a desktop widget showing GPU data (the GPU or Combined widget) is
+    /// on screen. The widget reads `self.gpu`, so the IOReport GPU sample is only
+    /// skipped when this is false too — never let a visible widget go stale.
+    private var gpuWidgetVisible = false
+    /// `NSWorkspace` sleep/wake observers; removed in `deinit`.
+    private var sleepObservers: [NSObjectProtocol] = []
 
     /// Call when the main window opens/closes (ContentView appear/disappear).
     func setMainWindowVisible(_ visible: Bool) { mainWindowVisible = visible }
 
+    /// Call when a GPU-bearing widget (`.gpu` / `.combined`) appears/disappears
+    /// so the sampler keeps the IOReport GPU reading live while it's on screen.
+    func setGPUWidgetVisible(_ visible: Bool) { gpuWidgetVisible = visible }
+
+    /// Test/diagnostic exposure of whether the sampling timer is armed. Sleep
+    /// tears it down; wake rebuilds it.
+    internal var isSamplingTimerActive: Bool { timer != nil }
+
     private var needsTopProcesses: Bool {
         mainWindowVisible || settings.alertRules.contains { $0.enabled && $0.metric == .processCPU }
     }
+    /// Whether the IOReport GPU sample is needed this tick. The GPU reading is
+    /// only consumed by surfaces the user can see: the window's GPU card, a GPU
+    /// or Combined desktop widget, a GPU-usage menu-bar metric, or a GPU-usage
+    /// alert. Menu-bar-only with no GPU metric → skip the read and hold the last
+    /// value, cutting an IOReport round-trip every tick.
+    private var needsGPU: Bool {
+        mainWindowVisible
+            || gpuWidgetVisible
+            || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage))
+            || settings.alertRules.contains { $0.enabled && $0.metric == .gpuUsage }
+    }
+    /// Whether the IOReport SoC-power sample is needed. Power draw only appears
+    /// in the window's Power card — no widget, menu-bar metric, or alert reads
+    /// it — so it's skipped entirely when the window is closed.
+    private var needsPower: Bool { mainWindowVisible }
     private var cancellables: Set<AnyCancellable> = []
     private static let maxChartPoints = 300
     /// A single sample must finish within this long or the watchdog frees the
@@ -113,7 +158,27 @@ final class VitalsModel: ObservableObject {
         settings.$refreshInterval
             .dropFirst()
             .removeDuplicates()
-            .sink { [weak self] _ in self?.restartTimer() }
+            .sink { [weak self] _ in self?.restartTimerIfAwake() }
+            .store(in: &cancellables)
+        // Power state and the battery-throttle toggle both change the effective
+        // cadence, so a transition restarts the timer at the new interval. The
+        // model refreshes the power state each tick (`updatePowerState`), and
+        // these sinks only fire on an actual transition (AppSettings reassigns
+        // `isOnBattery`/`isLowPowerMode` only when they move).
+        settings.$isOnBattery
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.restartTimerIfAwake() }
+            .store(in: &cancellables)
+        settings.$isLowPowerMode
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.restartTimerIfAwake() }
+            .store(in: &cancellables)
+        settings.$reduceOnBattery
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.restartTimerIfAwake() }
             .store(in: &cancellables)
         settings.$historyMinutes
             .dropFirst()
@@ -129,6 +194,25 @@ final class VitalsModel: ObservableObject {
             .filter { $0.contains(where: \.enabled) }
             .sink { [weak self] _ in self?.notifications.requestAuthorizationIfNeeded() }
             .store(in: &cancellables)
+
+        // Pause sampling on system sleep and resume on wake — no sensor reads,
+        // no wakeups, no battery drain while the Mac is suspended. Registered
+        // last: the closures capture self, which must be fully initialized.
+        let workspace = NSWorkspace.shared.notificationCenter
+        sleepObservers = [
+            workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.handleSleep() }
+            },
+            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.handleWake() }
+            },
+        ]
+    }
+
+    deinit {
+        timer?.invalidate()
+        timer = nil
+        sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 
     /// Never below 0.5 s — the Picker only offers 1/2/5, but a corrupted
@@ -140,12 +224,13 @@ final class VitalsModel: ObservableObject {
     }
 
     func start() {
-        guard timer == nil else { return }
+        guard timer == nil, !isAsleep else { return }
         tick()
-        let timer = Timer(timeInterval: safeRefreshInterval, repeats: true) { [weak self] _ in
+        let interval = settings.effectiveRefreshInterval
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
-        timer.tolerance = safeRefreshInterval / 4
+        timer.tolerance = interval / 4
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -153,6 +238,38 @@ final class VitalsModel: ObservableObject {
     private func restartTimer() {
         timer?.invalidate()
         timer = nil
+        start()
+    }
+
+    /// Restarts the timer only while awake **and already running** — a cadence-
+    /// relevant setting change made while asleep must not resume sampling until
+    /// the Mac wakes, and the `timer != nil` guard blocks a re-entrant call
+    /// during the first `start()` (where `tick()` runs before `self.timer` is
+    /// assigned) from scheduling a second, leaked timer.
+    private func restartTimerIfAwake() {
+        guard !isAsleep, timer != nil else { return }
+        restartTimer()
+    }
+
+    /// Tears down the sampling timer on system sleep. An in-flight tick (if any)
+    /// is allowed to finish — it's one harmless extra sample — but no new ticks
+    /// fire until `handleWake`.
+    private func handleSleep() {
+        guard !isAsleep else { return }
+        isAsleep = true
+        timer?.invalidate()
+        timer = nil
+        Log.notice(.sampler, "system sleeping — sampling paused")
+    }
+
+    /// Rebuilds the sampling timer on wake and immediately takes a fresh sample
+    /// so readings recover from the gap at once. The cadence is re-read from
+    /// `effectiveRefreshInterval`, so a power-source change that happened during
+    /// sleep (unplugged in clamshell, woken on battery) takes effect immediately.
+    private func handleWake() {
+        guard isAsleep else { return }
+        isAsleep = false
+        Log.notice(.sampler, "system woke — sampling resumed")
         start()
     }
 
@@ -174,16 +291,25 @@ final class VitalsModel: ObservableObject {
     /// pipeline is freed so the next tick retries, and `sensorsStalled` lets
     /// the UI stop pretending the frozen readings are live.
     private func tick() {
-        guard !isSampling else { return }
+        guard !isSampling, !isAsleep else { return }
         isSampling = true
+        // Keep the cadence in sync with the power source first. This may publish
+        // `isOnBattery`/`isLowPowerMode` and re-enter `restartTimerIfAwake` →
+        // `start` → `tick`; the `!isSampling` guard above makes that re-entrant
+        // tick a no-op, so only this sample actually runs.
+        settings.updatePowerState()
 
         let includeTopProcesses = needsTopProcesses
+        let includeGPU = needsGPU
+        let includePower = needsPower
         let work = Task { [weak self] in
             guard let self else { return }
-            let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses)
+            let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses,
+                                                     includeGPU: includeGPU,
+                                                     includePower: includePower)
             guard !Task.isCancelled else { return }
-            self.apply(snapshot)
-            self.sensorsStalled = false
+            self.apply(snapshot, sampledGPU: includeGPU)
+            self.assignIfChanged(&self.sensorsStalled, to: false)
             self.isSampling = false
         }
 
@@ -195,29 +321,54 @@ final class VitalsModel: ObservableObject {
             if !self.sensorsStalled {
                 Log.notice(.sampler, "a sensor sample exceeded \(Self.sampleTimeout)s and was cancelled — readings may pause")
             }
-            self.sensorsStalled = true
+            self.assignIfChanged(&self.sensorsStalled, to: true)
             self.isSampling = false
         }
     }
 
-    private func apply(_ snapshot: SensorSampler.Snapshot) {
+    private func apply(_ snapshot: SensorSampler.Snapshot, sampledGPU: Bool) {
         let classified = Self.classify(snapshot.readings)
 
         cpuSensors = classified.filter { $0.kind == .cpu }
             .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
-        gpuTemp = Self.average(of: classified, kind: .gpu)
-        ssdTemp = Self.average(of: classified, kind: .storage)
-        batteryTemp = Self.average(of: classified, kind: .battery)
+        // Gate the cheap, often-stable scalars: `@Published` fires
+        // `objectWillChange` on every assignment regardless of whether the value
+        // actually moved, so reassigning `thermalState` to the same enum each
+        // tick would still invalidate every observing view. Only reassign when
+        // the value genuinely changes — the temperature Double?s drift most
+        // ticks but the compare is trivial, and `thermalState`/`hasSMC`/
+        // `hasLoaded`/`sensorsStalled` barely move, so their observers (Health
+        // tab, Fan card, the loading state) skip re-rendering on a normal tick.
+        assignIfChanged(&gpuTemp, to: Self.average(of: classified, kind: .gpu))
+        assignIfChanged(&ssdTemp, to: Self.average(of: classified, kind: .storage))
+        assignIfChanged(&batteryTemp, to: Self.average(of: classified, kind: .battery))
         fans = snapshot.fans
-        hasSMC = snapshot.hasSMC
-        thermalState = ProcessInfo.processInfo.thermalState
-        if let usage = snapshot.cpuUsage { cpuUsage = usage }
+        assignIfChanged(&hasSMC, to: snapshot.hasSMC)
+        assignIfChanged(&thermalState, to: ProcessInfo.processInfo.thermalState)
+        if let usage = snapshot.cpuUsage {
+            cpuUsage = usage.overall
+            if let performance = usage.performance, let efficiency = usage.efficiency {
+                cpuClusters = (performance: performance, efficiency: efficiency)
+            } else {
+                cpuClusters = nil
+            }
+            cpuPerCore = usage.perCore
+        }
         memory = snapshot.memory
         topProcesses = snapshot.topProcesses
         battery = snapshot.battery
-        gpu = snapshot.gpu
+        diskHealth = snapshot.diskHealth
+        // Only reassign GPU when it was actually sampled this tick. When the
+        // window/widgets/metric don't need it, the sampler returns nil and we
+        // hold the last reading — so reopening the window shows the prior value
+        // until the next tick refreshes it, never a fabricated blank.
+        if sampledGPU { gpu = snapshot.gpu }
+        // Power is nil both when skipped and when IOReport had no delta this
+        // tick; `if let` holds the last good reading in either case. The history
+        // Sample uses the fresh `snapshot.power?.total`, so a skip is an honest
+        // gap in the chart, not a flat-held value.
         if let power = snapshot.power { self.power = power }
-        hasLoaded = true
+        assignIfChanged(&hasLoaded, to: true)
 
         // Custom rules run every tick — disk/battery/process alerts shouldn't
         // depend on temperature sensors being present.
@@ -234,7 +385,10 @@ final class VitalsModel: ObservableObject {
                 usage: cpuUsage,
                 memoryUsed: Double(memory?.used ?? 0),
                 swapUsed: Double(memory?.swapUsed ?? 0),
-                batteryPercent: battery?.percent
+                batteryPercent: battery?.percent,
+                // The fresh tick's reading (not the sticky `self.power`), so a
+                // missed IOReport sample is an honest gap, not a flat-held value.
+                totalWatts: snapshot.power?.total
             ))
             trimHistory()
 
@@ -365,6 +519,18 @@ final class VitalsModel: ObservableObject {
         let values = sensors.filter { $0.kind == kind }.map(\.celsius)
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
+    }
+
+    /// Reassign `target` only when `newValue` differs — `@Published` fires
+    /// `objectWillChange` on every assignment regardless of whether the value
+    /// moved, so this gates the cheap, often-stable Equatable properties
+    /// (`thermalState`, `hasSMC`, `hasLoaded`, `sensorsStalled`, the temperature
+    /// Double?s) so their observers skip re-rendering on a tick where nothing
+    /// actually changed. Generic over `Equatable` so it costs nothing for the
+    /// array/struct properties, which stay ungated.
+    private func assignIfChanged<T: Equatable>(_ target: inout T, to newValue: T) {
+        guard target != newValue else { return }
+        target = newValue
     }
 
     static func classify(_ readings: [HIDSensors.Reading]) -> [Sensor] {

@@ -9,12 +9,13 @@ actor SensorSampler {
         let readings: [HIDSensors.Reading]
         let fans: [SMC.Fan]
         let hasSMC: Bool
-        let cpuUsage: Double?
+        let cpuUsage: CPUUsage?
         let memory: MemorySnapshot?
         let topProcesses: [ProcessSampler.Process]
         let battery: BatterySnapshot?
         let gpu: GPUSnapshot?
         let power: PowerSnapshot?
+        let diskHealth: DiskHealthSnapshot?
     }
 
     private let hid = HIDSensors()
@@ -31,13 +32,28 @@ actor SensorSampler {
     private var batteryHealthCheckedAt = Date.distantPast
     private static let batteryHealthInterval: TimeInterval = 600
 
+    // SSD SMART changes over hours/days, so it's read at most every few minutes
+    // off the sampling actor (the IOKit user-client round-trip shouldn't sit on
+    // the tick), and the cached snapshot is served in between.
+    private var diskHealth: DiskHealthSnapshot?
+    private var diskHealthCheckedAt = Date.distantPast
+    private static let diskHealthInterval: TimeInterval = 300
+
     /// `includeTopProcesses` gates the per-process rusage sweep — the heaviest
     /// part of a tick (a syscall per PID). It's only needed when the window is
     /// open or a process-CPU alert is armed; skipping it idle (menu-bar only)
     /// cuts the tick's cost noticeably.
-    func sample(includeTopProcesses: Bool) -> Snapshot {
+    ///
+    /// `includeGPU` / `includePower` gate the two IOReport samplers. They're
+    /// only read when a surface the user can actually see needs them (the
+    /// window's GPU/Power cards, a GPU widget, or a GPU-usage menu-bar metric or
+    /// alert). When skipped, the snapshot carries nil and `VitalsModel` holds
+    /// the last reading — so reopening the window shows the prior value until
+    /// the next sample refreshes it, never a fabricated zero.
+    func sample(includeTopProcesses: Bool, includeGPU: Bool = true, includePower: Bool = true) -> Snapshot {
         let battery = Battery.read(officialHealth: batteryHealth)
         if battery != nil { refreshBatteryHealthIfStale() }
+        refreshDiskHealthIfStale()
         return Snapshot(
             readings: hid.readAll(),
             fans: smc?.fans() ?? [],
@@ -46,9 +62,27 @@ actor SensorSampler {
             memory: MemoryStats.read(),
             topProcesses: includeTopProcesses ? processSampler.sample(top: 5) : [],
             battery: battery,
-            gpu: gpu.sample(),
-            power: power.sample()
+            gpu: includeGPU ? gpu.sample() : nil,
+            power: includePower ? power.sample() : nil,
+            diskHealth: diskHealth
         )
+    }
+
+    /// Refreshes the cached SSD SMART snapshot off the sampling actor if it's
+    /// stale, serving the last good value in between. Stamps the time up front so
+    /// a slow user-client call can't spawn a second read; only a successful read
+    /// replaces the cache (mirrors `refreshBatteryHealthIfStale`).
+    private func refreshDiskHealthIfStale() {
+        guard Date().timeIntervalSince(diskHealthCheckedAt) >= Self.diskHealthInterval else { return }
+        diskHealthCheckedAt = Date()
+        Task.detached { [weak self] in
+            let value = DiskHealth.read()
+            await self?.storeDiskHealth(value)
+        }
+    }
+
+    private func storeDiskHealth(_ value: DiskHealthSnapshot?) {
+        if let value { diskHealth = value }
     }
 
     /// Kicks off a background read of macOS's Maximum Capacity if the cached
