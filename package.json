@@ -22,11 +22,11 @@
   },
   "dependencies": {
     "@convex-dev/rate-limiter": "^0.3.2",
-    "convex": "^1.40.0"
+    "convex": "^1.41.0"
   },
   "devDependencies": {
     "concurrently": "^10.0.3",
-    "turbo": "^2.5.8",
+    "turbo": "^2.9.18",
     "typescript": "~6.0.2"
   }
 }
