@@ -39,7 +39,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history — the script walks every commit in main..nightly
           ref: nightly # always diff against nightly's tip regardless of dispatch ref
