@@ -10,14 +10,17 @@
 # which cuts the Stable release; ci.yml's release job builds + publishes the
 # DMG once that lands on main.
 #
-# The PR body lists every squash-merged commit in `main..nightly`, grouped
-# by the `area:*` label the labeler workflow applies — so the same tag
-# system governs both feature PRs and the rolled-up promotion PR.
+# The PR body is the shared changelog (changelog.sh) for the unreleased range —
+# the nightly commits since the last Stable cut (stable-base.sh) — grouped by the
+# `area:*` labels. The same generator feeds the Stable release notes (promote.sh →
+# ci.yml) and the Nightly notes (nightly.yml), so all three never drift.
 #
 # Requires: gh, jq, git. GH_TOKEN env var with `pull-requests: write` scope.
 # Assumes the workspace is checked out at `nightly` with full history.
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Which token are we using? GitHub's auto-issued GITHUB_TOKEN starts with
 # `ghs_`; user PATs start with `ghp_` (classic) or `github_pat_` (fine-
@@ -32,101 +35,31 @@ case "${GH_TOKEN:-}" in
   *)            echo "::warning::Using token of unknown shape — gh may reject it." ;;
 esac
 
-git fetch origin main:refs/remotes/origin/main --quiet
+# Need both branches as remote-tracking refs: stable-base.sh matches main's tree
+# against nightly's history to find the last-promoted point.
+git fetch --quiet origin \
+  "+refs/heads/main:refs/remotes/origin/main" \
+  "+refs/heads/nightly:refs/remotes/origin/nightly"
 
-AHEAD=$(git rev-list --count origin/main..HEAD)
-if [ "$AHEAD" -eq 0 ]; then
-  echo "::notice::nightly is at main — nothing to promote."
+BASE="$(bash "${SCRIPT_DIR}/stable-base.sh")"
+HEAD_REF="refs/remotes/origin/nightly"
+
+if git diff --quiet "refs/remotes/origin/main" "$HEAD_REF"; then
+  echo "::notice::main already equals nightly — nothing to promote."
   exit 0
 fi
-echo "$AHEAD commits ahead of main."
 
-# Squash-merged PRs end every subject with `(#NN)`. `--reverse` so oldest
-# lands first in the body, matching the order they were merged into nightly.
-mapfile -t PR_NUMS < <(
-  git log --reverse --format='%s' origin/main..HEAD \
-    | grep -oE '\(#[0-9]+\)$' \
-    | tr -d '()#' || true
-)
-
-# Anything without a `(#NN)` suffix bypassed the PR flow — surface it.
-mapfile -t DIRECT < <(
-  git log --reverse --format='%h  %s' origin/main..HEAD \
-    | grep -vE '\(#[0-9]+\)$' || true
-)
-
-# Buckets mirror .github/labeler.yml. An unknown area:* drops into
-# uncategorized rather than being silently dropped.
-declare -A BUCKETS=( [desktop]="" [website]="" [backend]="" [ci]="" [docs]="" [uncategorized]="" )
-declare -A COUNTS=(  [desktop]=0  [website]=0  [backend]=0  [ci]=0  [docs]=0  [uncategorized]=0  )
-TOTAL=0
-
-for n in "${PR_NUMS[@]:-}"; do
-  [ -z "$n" ] && continue
-  data=$(gh pr view "$n" --json title,author,labels 2>/dev/null) \
-    || { echo "skip #$n (gh pr view failed)"; continue; }
-  title=$(jq -r '.title' <<< "$data")
-  author=$(jq -r '.author.login // "ghost"' <<< "$data")
-  areas=$(jq -r '.labels[].name' <<< "$data" | grep '^area:' | sed 's/^area://' || true)
-
-  line="- #${n} ${title} — @${author}"
-
-  if [ -z "$areas" ]; then
-    BUCKETS[uncategorized]+="${line}"$'\n'
-    COUNTS[uncategorized]=$((COUNTS[uncategorized] + 1))
-  else
-    while IFS= read -r area; do
-      [ -z "$area" ] && continue
-      if [ -n "${BUCKETS[$area]+x}" ]; then
-        BUCKETS[$area]+="${line}"$'\n'
-        COUNTS[$area]=$((COUNTS[$area] + 1))
-      else
-        BUCKETS[uncategorized]+="${line} _(area: ${area})_"$'\n'
-        COUNTS[uncategorized]=$((COUNTS[uncategorized] + 1))
-      fi
-    done <<< "$areas"
-  fi
-  TOTAL=$((TOTAL + 1))
-done
+CHANGELOG="$(bash "${SCRIPT_DIR}/changelog.sh" "$BASE" "$HEAD_REF")"
 
 TODAY=$(date -u +%Y-%m-%d)
 BODY_FILE=$(mktemp)
 {
   echo "## Stable promotion — week of ${TODAY}"
   echo
-  echo "${TOTAL} PR$([ "$TOTAL" -eq 1 ] || echo s) queued from \`nightly\` since the last Stable cut."
-  echo
   echo "**Don't use the merge button** — main and nightly don't share recent history, so squash/merge/rebase all conflict here. The promotion job runs \`.github/scripts/promote.sh\` automatically (or run it locally): it sets main's tree to nightly's, pushes, and closes this PR. \`ci.yml\`'s release job then builds the DMG and publishes \`v0.<commit count on main>\` (the version never goes backwards — CLAUDE.md)."
   echo
-
-  emit_section() {
-    local label="$1" key="$2"
-    local count=${COUNTS[$key]}
-    [ "$count" -eq 0 ] && return
-    echo "### ${label} (${count})"
-    echo
-    printf '%s' "${BUCKETS[$key]}"
-    echo
-  }
-
-  emit_section "Desktop"       desktop
-  emit_section "Website"       website
-  emit_section "Backend"       backend
-  emit_section "CI"            ci
-  emit_section "Docs"          docs
-  emit_section "Uncategorized" uncategorized
-
-  if [ "${#DIRECT[@]}" -gt 0 ] && [ -n "${DIRECT[0]:-}" ]; then
-    echo "### Direct commits to \`nightly\` (${#DIRECT[@]})"
-    echo
-    echo "Bypassed the PR flow — CLAUDE.md says to avoid this; surfaced here as a safety net."
-    echo
-    echo '```'
-    printf '%s\n' "${DIRECT[@]}"
-    echo '```'
-    echo
-  fi
-
+  echo "$CHANGELOG"
+  echo
   echo "---"
   echo "_Auto-generated by [\`.github/workflows/promotion.yml\`](.github/workflows/promotion.yml). Refreshes every Saturday 15:00 PKT (10:00 UTC) and on manual dispatch._"
 } > "$BODY_FILE"
