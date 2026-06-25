@@ -134,6 +134,21 @@ jobs:
               --title "Vitals $VERSION" \
               --generate-notes
           fi
+
+      # Keep the Homebrew cask in sync automatically — the stable `vitals` cask is
+      # version-pinned, so this pushes the new version + DMG sha256 to the tap so
+      # nobody hand-edits it. Needs a TAP_TOKEN secret (fine-grained PAT with
+      # Contents: Read & Write on rafay99-epic/homebrew-apps); skips with a
+      # warning if it's absent so a missing secret never fails the release.
+      - name: Bump Homebrew cask
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "::warning::TAP_TOKEN not set — skipping cask bump. Add a fine-grained PAT with Contents: Read & Write on rafay99-epic/homebrew-apps as the TAP_TOKEN secret to automate it."
+            exit 0
+          fi
+          CASK=vitals bash "$GITHUB_WORKSPACE/.github/scripts/bump-cask.sh" "$PWD/build/Vitals.dmg"
 # Dependency checking is handled by Dependabot (.github/dependabot.yml) and
 # Dependabot security alerts — dependency-review-action needs GitHub Advanced
 # Security, which isn't available on private personal repos.
