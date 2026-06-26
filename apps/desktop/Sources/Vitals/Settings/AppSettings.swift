@@ -312,10 +312,13 @@ final class AppSettings: ObservableObject {
             "warnThreshold": 85.0,
             "notifyOverheat": true,
             "notifyThermal": true,
-            // Off by default: history logging is opt-in (no background data
-            // collection unless asked), which also keeps the History view empty
-            // until the user turns logging on.
-            "loggingEnabled": false,
+            // On by default: now that history lives in an efficient local SQLite
+            // database (not a CSV), logging is cheap and reliable, so the History
+            // tab is populated and useful out of the box. The data is local-only
+            // (~/.vitals) and never leaves the Mac; it's one switch to turn off in
+            // Settings → Data. A one-time enable (see `loggingDefaultedOnV2`) also
+            // flips users who predate this default.
+            "loggingEnabled": true,
             // Capture meaningful events + all errors out of the box (negligible
             // cost), but nothing chatty. The developer Log Console (a separate
             // window) views them; logging happens regardless.
@@ -339,12 +342,14 @@ final class AppSettings: ObservableObject {
             "tabSize": TabSize.medium.rawValue,
     ]
 
-    /// Every UserDefaults key Vitals owns: the registered ones, plus the two
-    /// stored outside registration (the menu-bar metric set and the alert rules).
-    /// `ConfigStore` mirrors exactly these to `config.json`. A new setting is
-    /// covered automatically if it has a registered default; otherwise add it.
+    /// Every UserDefaults key Vitals owns: the registered ones, plus those stored
+    /// outside registration (the menu-bar metric set, the alert rules, and the
+    /// one-time logging-default migration flag — which must persist so the flip
+    /// runs only once). `ConfigStore` mirrors exactly these to `config.json`. A new
+    /// setting is covered automatically if it has a registered default; otherwise
+    /// add it here.
     static var persistedKeys: [String] {
-        Array(registeredDefaults.keys) + ["menuBarMetrics", "alertRules"]
+        Array(registeredDefaults.keys) + ["menuBarMetrics", "alertRules", "loggingDefaultedOnV2"]
     }
 
     init(defaults: UserDefaults = .standard, configURL: URL? = ConfigStore.fileURL) {
@@ -367,6 +372,15 @@ final class AppSettings: ObservableObject {
         notifyOverheat = defaults.bool(forKey: "notifyOverheat")
         notifyThermal = defaults.bool(forKey: "notifyThermal")
         alertRules = AppSettings.loadAlertRules(defaults)
+        // History logging is now on by default (SQLite makes it cheap). A user who
+        // installed before this — whose mirrored `loggingEnabled` is the old
+        // `false`, overriding the new default on restore — is enabled once here,
+        // marked by `loggingDefaultedOnV2` so it never re-overrides a later, explicit
+        // choice to turn it back off.
+        if defaults.object(forKey: "loggingDefaultedOnV2") == nil {
+            defaults.set(true, forKey: "loggingEnabled")
+            defaults.set(true, forKey: "loggingDefaultedOnV2")
+        }
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         diagnosticLogLevel = LogLevel(rawValue: defaults.integer(forKey: "diagnosticLogLevel")) ?? .notice
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
