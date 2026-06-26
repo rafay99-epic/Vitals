@@ -39,7 +39,7 @@ struct DiskView: View {
 
 // MARK: - Wear / health hero
 
-private struct DiskHealthHeroCard: View {
+struct DiskHealthHeroCard: View {
     let disk: DiskHealthSnapshot
 
     var body: some View {
@@ -87,7 +87,7 @@ private struct DiskHealthHeroCard: View {
 
 // MARK: - Endurance (bytes written / read)
 
-private struct DiskEnduranceCard: View {
+struct DiskEnduranceCard: View {
     let disk: DiskHealthSnapshot
 
     var body: some View {
@@ -113,7 +113,7 @@ private struct DiskEnduranceCard: View {
 
 // MARK: - Lifetime counters
 
-private struct DiskLifetimeCard: View {
+struct DiskLifetimeCard: View {
     @EnvironmentObject private var settings: AppSettings
     let disk: DiskHealthSnapshot
 

@@ -22,15 +22,15 @@ struct ConfigStoreTests {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
         let source = freshSuite("vitals.test.cfg.a")
         source.set(5.0, forKey: "refreshInterval")
-        source.set("dashboard,gpu,storage", forKey: "tabOrder")
+        source.set("fahrenheit", forKey: "temperatureUnit")
         source.set(true, forKey: "liquidGlass")
-        ConfigStore.save(source, keys: ["refreshInterval", "tabOrder", "liquidGlass"], to: url)
+        ConfigStore.save(source, keys: ["refreshInterval", "temperatureUnit", "liquidGlass"], to: url)
 
         let restored = freshSuite("vitals.test.cfg.b")
         let count = ConfigStore.restore(into: restored, from: url)
         #expect(count == 3)
         #expect(restored.double(forKey: "refreshInterval") == 5.0)
-        #expect(restored.string(forKey: "tabOrder") == "dashboard,gpu,storage")
+        #expect(restored.string(forKey: "temperatureUnit") == "fahrenheit")
         #expect(restored.bool(forKey: "liquidGlass") == true)
     }
 
@@ -63,7 +63,7 @@ struct ConfigStoreTests {
         let firstSuite = freshSuite("vitals.test.cfg.durability.1")
         let first = AppSettings(defaults: firstSuite, configURL: url)
         first.refreshInterval = 5.0
-        first.hiddenTabs = []  // "show every tab"
+        first.tabDisplayMode = .labels  // a non-default appearance choice
         ConfigStore.save(firstSuite, keys: AppSettings.persistedKeys, to: url)
 
         // An update wipes UserDefaults — modeled as a brand-new, empty suite — but
@@ -73,6 +73,6 @@ struct ConfigStoreTests {
         let secondSuite = freshSuite("vitals.test.cfg.durability.2")
         let second = AppSettings(defaults: secondSuite, configURL: url)
         #expect(second.refreshInterval == 5.0)
-        #expect(second.hiddenTabs.isEmpty)  // the user's "all tabs" choice came back
+        #expect(second.tabDisplayMode == .labels)  // the user's appearance choice came back
     }
 }

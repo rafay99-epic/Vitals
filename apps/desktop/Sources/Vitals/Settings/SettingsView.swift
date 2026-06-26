@@ -190,11 +190,11 @@ private struct MenuBarMetricToggle: View {
     }
 }
 
-// MARK: - Tabs customization
+// MARK: - Tabs appearance
 
-/// Navigation-bar customization: label display mode, size, and a show / reorder
-/// list. Reordering uses arrows rather than drag — predictable, keyboard- and
-/// VoiceOver-friendly, and a clean fit for the card design.
+/// Navigation-bar appearance: label display mode and density. The tab *set*
+/// itself is fixed and curated (five tabs, fixed order) — there's deliberately
+/// no show/hide/reorder, so the app looks the same, designed, on every Mac.
 private struct TabsCard: View {
     @EnvironmentObject private var settings: AppSettings
 
@@ -212,81 +212,11 @@ private struct TabsCard: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
-            Divider().opacity(0.5)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Show & reorder")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(Array(settings.tabOrder.enumerated()), id: \.element) { index, tab in
-                    TabReorderRow(tab: tab, index: index)
-                }
-                Text("Vitals starts with a few core tabs. Switch on the ones you want — GPU, Health, Applications, Login Items, Cleanup — and reorder with the arrows. The Dashboard always stays, and ⌘1–9 follow this order.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
+            Text("Dashboard · System · Storage · Cleanup · Applications. ⌘1–5 follow this order.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-}
-
-private struct TabReorderRow: View {
-    @EnvironmentObject private var settings: AppSettings
-    let tab: AppTab
-    let index: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 1) {
-                moveButton(systemName: "chevron.up", delta: -1, disabled: index == 0)
-                moveButton(systemName: "chevron.down", delta: 1, disabled: index == settings.tabOrder.count - 1)
-            }
-            Image(systemName: tab.symbol)
-                .font(.system(size: 11, weight: .medium))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.indigo)
-                .frame(width: 22, height: 22)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.indigo.opacity(0.14)))
-            Text(tab.title)
-                .font(.system(size: 12.5))
-            Spacer()
-            Toggle("", isOn: visibility)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .disabled(!tab.canHide)
-                .help(tab.canHide ? "Show \(tab.title) in the navigation bar" : "The Dashboard is always shown")
-        }
-    }
-
-    private func moveButton(systemName: String, delta: Int, disabled: Bool) -> some View {
-        Button {
-            let target = index + delta
-            guard settings.tabOrder.indices.contains(index),
-                  settings.tabOrder.indices.contains(target) else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                settings.tabOrder.swapAt(index, target)
-            }
-        } label: {
-            Image(systemName: systemName)
-                .font(.system(size: 9, weight: .bold))
-                .frame(width: 18, height: 14)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(disabled ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.secondary))
-        .disabled(disabled)
-    }
-
-    private var visibility: Binding<Bool> {
-        Binding(
-            get: { !settings.hiddenTabs.contains(tab) },
-            set: { visible in
-                if visible {
-                    settings.hiddenTabs.remove(tab)
-                } else if tab.canHide {
-                    settings.hiddenTabs.insert(tab)
-                }
-            }
-        )
     }
 }
 
