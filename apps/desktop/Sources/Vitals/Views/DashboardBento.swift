@@ -118,7 +118,7 @@ struct DashboardTileGrid: View {
 
             DashboardTile(
                 title: "Memory",
-                value: String(format: "%.1f GB", gigabytes(model.memory?.used ?? 0)),
+                value: model.memory.map { String(format: "%.1f GB", gigabytes($0.used)) } ?? "—",
                 subtitle: memorySubtitle,
                 symbol: "memorychip",
                 tint: model.memory.map { pressureColor($0.pressure) } ?? .indigo,

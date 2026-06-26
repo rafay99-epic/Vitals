@@ -56,6 +56,7 @@ struct SegmentControl<Item: Identifiable & Equatable>: View {
             }
         }
         .accessibilityLabel(title(item))
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .help(title(item))
     }
 }

@@ -162,10 +162,10 @@ private struct TemperaturesCard: View {
             } else {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 24) {
-                        stat("Average", model.averageCPUTemp.map { settings.format($0) } ?? "—")
-                        stat("Hottest", model.hottestCPUSensor.map { settings.format($0.celsius) } ?? "—",
-                             note: model.hottestCPUSensor?.label)
-                        stat("Thermal", model.thermalState.label)
+                        statColumn("Average", model.averageCPUTemp.map { settings.format($0) } ?? "—")
+                        statColumn("Hottest", model.hottestCPUSensor.map { settings.format($0.celsius) } ?? "—",
+                                   note: model.hottestCPUSensor?.label)
+                        statColumn("Thermal", model.thermalState.label)
                         Spacer(minLength: 0)
                     }
                     let others = otherTemps
@@ -195,18 +195,5 @@ private struct TemperaturesCard: View {
             rows.append(MetricRow(symbol: "battery.100percent", label: "Battery", value: settings.formatWithUnit(battery)))
         }
         return rows
-    }
-
-    private func stat(_ label: String, _ value: String, note: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .numericTransition()
-            if let note {
-                Text(note).font(.caption2).foregroundStyle(.tertiary)
-            }
-        }
     }
 }
