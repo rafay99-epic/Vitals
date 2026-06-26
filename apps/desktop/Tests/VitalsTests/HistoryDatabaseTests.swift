@@ -100,4 +100,29 @@ struct HistoryDatabaseTests {
         #expect(fm.fileExists(atPath: csv.appendingPathExtension("imported").path))
         #expect(fm.fileExists(atPath: alerts.appendingPathExtension("imported").path))
     }
+
+    @Test func removesStaleImportedBackupsAfterGracePeriod() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("vitals-clean-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        // A backup from a migration 3 days ago — past the 2-day grace.
+        let staleBase = dir.appendingPathComponent("history.csv")
+        let stale = staleBase.appendingPathExtension("imported")
+        try "old data".write(to: stale, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.modificationDate: Date().addingTimeInterval(-3 * 86_400)], ofItemAtPath: stale.path)
+
+        // A backup from a migration just now — still within grace.
+        let freshBase = dir.appendingPathComponent("alerts.log")
+        let fresh = freshBase.appendingPathExtension("imported")
+        try "new data".write(to: fresh, atomically: true, encoding: .utf8)
+
+        // The base files don't exist, so nothing imports — only the cleanup runs.
+        _ = HistoryDatabase(file: dir.appendingPathComponent("history.sqlite3"),
+                            legacyReadings: [staleBase], legacyAlerts: freshBase)
+
+        #expect(!fm.fileExists(atPath: stale.path))   // stale backup auto-removed
+        #expect(fm.fileExists(atPath: fresh.path))    // fresh backup kept (still in grace)
+    }
 }

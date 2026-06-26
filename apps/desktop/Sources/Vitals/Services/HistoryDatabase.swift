@@ -49,6 +49,10 @@ final class HistoryDatabase: @unchecked Sendable {
     /// grow the table without bound. Generous — a year at one row / 10 s is only
     /// ~3M rows. Alerts are tiny and never pruned.
     private static let retention: TimeInterval = 365 * 86_400
+    /// How long the imported legacy files (`*.imported`) are kept after migration
+    /// as a safety net before being deleted automatically, so they don't linger
+    /// in the data home and confuse the user. Measured from the migration moment.
+    private static let importedGracePeriod: TimeInterval = 2 * 86_400
 
     /// `file` is the database path; `legacyReadings`/`legacyAlerts` are the old
     /// CSV / alert-log files imported once on first open (empty for tests).
@@ -85,6 +89,7 @@ final class HistoryDatabase: @unchecked Sendable {
         exec("PRAGMA busy_timeout=3000;")
         createSchema()
         importLegacyFilesIfNeeded()
+        removeStaleImportedFiles()
         prune()
     }
 
@@ -264,7 +269,7 @@ final class HistoryDatabase: @unchecked Sendable {
             }
             exec("COMMIT;")
             for url in legacyReadings where fm.fileExists(atPath: url.path) {
-                try? fm.moveItem(at: url, to: url.appendingPathExtension("imported"))
+                retire(url)
             }
             if imported > 0 { Log.notice(.history, "imported \(imported) readings from CSV into SQLite") }
         }
@@ -279,8 +284,36 @@ final class HistoryDatabase: @unchecked Sendable {
                 recordAlertUnsafe(message: event.message, at: event.time); imported += 1
             }
             exec("COMMIT;")
-            try? fm.moveItem(at: alertsURL, to: alertsURL.appendingPathExtension("imported"))
+            retire(alertsURL)
             if imported > 0 { Log.notice(.history, "imported \(imported) alerts from log into SQLite") }
+        }
+    }
+
+    /// Rename an imported legacy file to `*.imported` and stamp it with the
+    /// migration time, so the grace clock for auto-deletion starts now (a plain
+    /// rename keeps the file's old timestamp, which could be months back).
+    private func retire(_ url: URL) {
+        let fm = FileManager.default
+        let imported = url.appendingPathExtension("imported")
+        try? fm.removeItem(at: imported)   // a prior, expired backup
+        guard (try? fm.moveItem(at: url, to: imported)) != nil else { return }
+        try? fm.setAttributes([.modificationDate: Date()], ofItemAtPath: imported.path)
+    }
+
+    /// Delete the imported legacy backups once they're older than the grace
+    /// period — so a converted user's data home doesn't keep stale CSV/alert
+    /// files around to confuse them. Runs every open; the file's own timestamp
+    /// (stamped at migration in `retire`) is the clock.
+    private func removeStaleImportedFiles() {
+        let fm = FileManager.default
+        let cutoff = Date().addingTimeInterval(-Self.importedGracePeriod)
+        let backups = (legacyReadings + [legacyAlerts].compactMap { $0 })
+            .map { $0.appendingPathExtension("imported") }
+        for url in backups {
+            guard let modified = try? fm.attributesOfItem(atPath: url.path)[.modificationDate] as? Date,
+                  modified < cutoff else { continue }
+            try? fm.removeItem(at: url)
+            Log.notice(.history, "removed migrated legacy file \(url.lastPathComponent)")
         }
     }
 
