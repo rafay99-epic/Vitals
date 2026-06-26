@@ -20,6 +20,12 @@ struct HelpView: View {
             body: "Every number is a real reading from your hardware. Average CPU comes from the die temperature sensors, Hottest Core is the single warmest one, and Thermal Pressure is macOS's own throttling signal. When the fan shows 0 rpm, it genuinely isn't spinning."
         ),
         Topic(
+            symbol: "cpu",
+            tint: .blue,
+            title: "System",
+            body: "Every hardware deep-dive lives here behind one filter: CPU, GPU, Memory, Battery, Sensors (all temperatures, the fans and their control, and drive health), Processes, and History. Pick a segment to change the view — the window never resizes. The Dashboard shows the headlines; this is where you go for detail."
+        ),
+        Topic(
             symbol: "menubar.rectangle",
             tint: .blue,
             title: "Menu bar",
@@ -35,7 +41,7 @@ struct HelpView: View {
             symbol: "square.grid.2x2",
             tint: .purple,
             title: "Applications",
-            body: "Uninstalling moves the app and its leftover files (caches, preferences, containers, launch agents) to the Trash — nothing is deleted permanently, so you can always recover from the Finder. System apps and Apple software are never listed."
+            body: "Two segments: Installed and Startup. Uninstalling moves the app and its leftover files (caches, preferences, containers, launch agents) to the Trash — nothing is deleted permanently, so you can always recover from the Finder. System apps and Apple software are never listed. Startup shows everything that launches itself at login; you can disable or remove your own items, while Apple's stay read-only."
         ),
         Topic(
             symbol: "sparkles",
@@ -59,7 +65,7 @@ struct HelpView: View {
             symbol: "keyboard",
             tint: .teal,
             title: "Shortcuts",
-            body: "⌘1 Dashboard · ⌘2 Applications · ⌘3 Cleanup · ⌘4 Storage · ⌘, Settings. The header drags the window."
+            body: "⌘1 Dashboard · ⌘2 System · ⌘3 Storage · ⌘4 Cleanup · ⌘5 Applications · ⌘, Settings. The header drags the window."
         ),
     ]
 

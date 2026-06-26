@@ -165,7 +165,7 @@ private struct HealthPowerCard: View {
 
 // MARK: - Diagnostics
 
-private struct HealthDiagnosticsCard: View {
+struct HealthDiagnosticsCard: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
     @State private var copied = false
