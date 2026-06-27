@@ -1,0 +1,24 @@
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_03e95b9012c190::t_6c6eca0397e6fa 63-67,74-76
+  s_03e95b9012c190::t_65bfcb171ba5bc 99-104
+  s_03e95b9012c190::t_13009d8ecb1c55 265-274,276,281,284,286,293-297,302,312,315-326
+  s_03e95b9012c190::t_c37c40f19e5d85 77
+apps/desktop/Tests/VitalsTests/HistoryDatabaseTests.swift
+  s_03e95b9012c190::t_42b360742a449a 122-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "deeb01c7ab61cfaf2e426de40b61652faaece1d5",
+  "prompts": {},
+  "sessions": {
+    "s_03e95b9012c190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bfa3e86d-6d02-4348-b3de-c4447d65a04d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
