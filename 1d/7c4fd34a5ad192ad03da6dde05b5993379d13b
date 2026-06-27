@@ -1,0 +1,21 @@
+apps/desktop/Sources/Vitals/Settings/AppSettings.swift
+  s_1a5e3df53c0a56::t_87b05698b9c884 456-463,470,475-489
+apps/desktop/Tests/VitalsTests/PowerThrottleTests.swift
+  s_1a5e3df53c0a56::t_a9a92b37461c01 136-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "1d7c4fd34a5ad192ad03da6dde05b5993379d13b",
+  "prompts": {},
+  "sessions": {
+    "s_1a5e3df53c0a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6a51e2e2-2c55-4c2b-b618-f23e8fe2e35d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
