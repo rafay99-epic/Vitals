@@ -15,6 +15,13 @@
 # Porter, Quill, …) — generate it once, paste the same secrets into each repo.
 set -euo pipefail
 IDENTITY_NAME="${CODESIGN_IDENTITY:-Vitals Local Signing}"
+# Allowlist the identity name (letters, digits, space, . _ -) so it can't inject
+# newlines or OpenSSL-config metacharacters when written into req.cnf below.
+case "$IDENTITY_NAME" in
+  *[!A-Za-z0-9._\ -]*|"")
+    echo "CODESIGN_IDENTITY must be non-empty and contain only letters, digits, spaces, '.', '_', '-'." >&2
+    exit 1 ;;
+esac
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 KEY="$WORK/key.pem"; CERT="$WORK/cert.pem"; P12="$WORK/signing.p12"
 read -r -s -p "Choose a password for the exported .p12 (the CI secret): " P12_PW; echo
