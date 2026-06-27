@@ -1,0 +1,35 @@
+apps/desktop/Sources/Vitals/Services/HistoryReader.swift
+  s_03e95b9012c190::t_a106e681126c39 102-103,106-109,112,114-122,124-126
+  s_03e95b9012c190::t_afe28b480b9a3f 113
+  s_03e95b9012c190::t_c848e158207ff4 123
+apps/desktop/Tests/VitalsTests/HistoryDatabaseTests.swift
+  s_03e95b9012c190::t_dfce61718f2334 24
+  s_03e95b9012c190::t_6293d8ae8f6657 74-83
+  s_03e95b9012c190::t_909f57d7c0e102 91-94,97-98,102-103,108
+  s_03e95b9012c190::t_da090f372a0c5a 32
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_03e95b9012c190::t_059cefd999464b 128-131,136-137
+  s_03e95b9012c190::t_4ea57e983beba5 207-216
+  s_03e95b9012c190::t_d3b9f912412c19 183,433
+  s_03e95b9012c190::t_400b8505ce2d81 243-244,249,261-285
+  s_03e95b9012c190::t_4eaa7b612c09d8 286-288
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_03e95b9012c190::t_9ae11f0c0a1240 757
+  s_03e95b9012c190::t_f0068a38dde00b 751-756,759-760
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "5ed6027f91b303104ef534c46bc05a150f657a22",
+  "prompts": {},
+  "sessions": {
+    "s_03e95b9012c190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bfa3e86d-6d02-4348-b3de-c4447d65a04d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
