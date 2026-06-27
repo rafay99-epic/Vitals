@@ -1,0 +1,23 @@
+apps/desktop/Scripts/make-signing-cert.sh
+  s_ca6c4761de12d7::t_6a7030b514c843 22-24,26,29
+.github/scripts/setup-signing.sh
+  s_ca6c4761de12d7::t_76877099c72c67 19-21
+.github/workflows/nightly.yml
+  s_ca6c4761de12d7::t_efc739c4fc4553 112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "22fb8dcd9b3fef03dfa1114537326053196e5e09",
+  "prompts": {},
+  "sessions": {
+    "s_ca6c4761de12d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7030776b-9a45-43ce-8f69-28fc53a3fc05",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
