@@ -118,7 +118,7 @@ private struct MemoryCompositionCard: View {
             row("tray.full.fill", "Cached files", memory.cached, of: memory.total),
             row("circle.dashed", "Free", memory.free, of: memory.total),
         ]
-        rows.append(MetricRow(symbol: "arrow.left.arrow.right", label: "Swap used", value: swapValue(memory)))
+        rows.append(MetricRow(symbol: "arrow.left.arrow.right", label: "Swap used", value: swapSummary(memory)))
         return rows
     }
 
@@ -126,11 +126,6 @@ private struct MemoryCompositionCard: View {
         let percent = total > 0 ? Double(bytes) / Double(total) * 100 : 0
         return MetricRow(symbol: symbol, label: label,
                          value: String(format: "%.2f GB · %.0f%%", gigabytes(bytes), percent))
-    }
-
-    private func swapValue(_ memory: MemorySnapshot) -> String {
-        guard memory.swapTotal > 0 else { return "None" }
-        return String(format: "%.2f GB of %.1f GB", gigabytes(memory.swapUsed), gigabytes(memory.swapTotal))
     }
 }
 
