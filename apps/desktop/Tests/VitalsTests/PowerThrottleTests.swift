@@ -133,7 +133,10 @@ struct PowerThrottleTests {
         let firstSuite = UserDefaults(suiteName: "vitals.test.power.durability.\(UUID().uuidString)")!
         let first = AppSettings(defaults: firstSuite, configURL: url)
         first.reduceOnBattery = false  // opt out
-        ConfigStore.save(firstSuite, keys: AppSettings.persistedKeys, to: url)
+        // flushConfig drains the instance's serial write queue, so the opt-out
+        // lands *after* the init-time save — closing the race where that older
+        // async write clobbered it back to the default (the CI-only flake).
+        first.flushConfig()
 
         // An update wipes UserDefaults — a fresh suite — but the config survives.
         let secondSuite = UserDefaults(suiteName: "vitals.test.power.durability.\(UUID().uuidString)")!
