@@ -125,11 +125,16 @@ final class HistoryDatabase: @unchecked Sendable {
             gpu_mem_gb    REAL
         );
         """)
+        // UNIQUE(ts, message): a fired alert is identified by when + what, so
+        // re-importing the alert log (e.g. a crash between import and retire) can't
+        // duplicate rows — INSERT OR IGNORE makes it idempotent. Distinct alerts
+        // differ in ts (the cooldown spaces repeats), so none are lost.
         exec("""
         CREATE TABLE IF NOT EXISTS alerts (
             id      INTEGER PRIMARY KEY,
             ts      INTEGER NOT NULL,
-            message TEXT NOT NULL
+            message TEXT NOT NULL,
+            UNIQUE(ts, message)
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);")
@@ -175,7 +180,7 @@ final class HistoryDatabase: @unchecked Sendable {
         queue.async { [weak self] in
             guard let self, let db = self.db else { return }
             var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, "INSERT INTO alerts (ts, message) VALUES (?,?);", -1, &stmt, nil) == SQLITE_OK
+            guard sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO alerts (ts, message) VALUES (?,?);", -1, &stmt, nil) == SQLITE_OK
             else { return }
             defer { sqlite3_finalize(stmt) }
             sqlite3_bind_int64(stmt, 1, Self.millis(time))
@@ -199,14 +204,21 @@ final class HistoryDatabase: @unchecked Sendable {
             guard count > 0 else { return [] }
             let stride = maxPoints > 0 ? max(1, count / Int64(maxPoints)) : 1
 
-            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb FROM samples WHERE ts >= ?"
-            if stride > 1 { sql += " AND id % \(stride) = 0" }
+            // `cutoff` and `stride` are computed Int64s (never user input), so
+            // inlining them is safe — and lets the thinned query also pin the true
+            // first/last in-range rows, so the chart's endpoints are the real
+            // newest/oldest readings, not just the nearest surviving sample.
+            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb FROM samples WHERE ts >= \(cutoff)"
+            if stride > 1 {
+                sql += " AND (id % \(stride) = 0"
+                    + " OR id = (SELECT MIN(id) FROM samples WHERE ts >= \(cutoff))"
+                    + " OR id = (SELECT MAX(id) FROM samples WHERE ts >= \(cutoff)))"
+            }
             sql += " ORDER BY ts ASC;"
 
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
             defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_int64(stmt, 1, cutoff)
 
             var out: [HistorySample] = []
             while sqlite3_step(stmt) == SQLITE_ROW {
@@ -228,12 +240,13 @@ final class HistoryDatabase: @unchecked Sendable {
         }
     }
 
-    /// The most recent fired alerts, newest first.
+    /// The most recent fired alerts, newest first. `id DESC` breaks ts ties so the
+    /// order is deterministic (insertion order) rather than arbitrary.
     func recentAlerts(limit: Int) -> [AlertEvent] {
         queue.sync {
             guard let db else { return [] }
             var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, "SELECT ts, message FROM alerts ORDER BY ts DESC LIMIT ?;", -1, &stmt, nil) == SQLITE_OK
+            guard sqlite3_prepare_v2(db, "SELECT ts, message FROM alerts ORDER BY ts DESC, id DESC LIMIT ?;", -1, &stmt, nil) == SQLITE_OK
             else { return [] }
             defer { sqlite3_finalize(stmt) }
             sqlite3_bind_int64(stmt, 1, Int64(limit))
@@ -242,6 +255,34 @@ final class HistoryDatabase: @unchecked Sendable {
                 out.append(AlertEvent(time: Self.date(sqlite3_column_int64(stmt, 0)), message: text(stmt, 1)))
             }
             return out
+        }
+    }
+
+    /// Stream every readings row, oldest→newest, to `body` — without materializing
+    /// the whole table. Used by CSV export so a year of history (~3M rows) never
+    /// loads into memory at once. Runs on the serial queue; call off the main thread.
+    func forEachSample(_ body: (HistorySample) -> Void) {
+        queue.sync {
+            guard let db else { return }
+            let sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb FROM samples ORDER BY ts ASC;"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            defer { sqlite3_finalize(stmt) }
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                body(HistorySample(
+                    time: Self.date(sqlite3_column_int64(stmt, 0)),
+                    avgTemp: sqlite3_column_double(stmt, 1),
+                    hottestTemp: sqlite3_column_double(stmt, 2),
+                    gpuTemp: optionalDouble(stmt, 3),
+                    fanRPM: optionalDouble(stmt, 4),
+                    cpuUsage: sqlite3_column_double(stmt, 5),
+                    memoryGB: sqlite3_column_double(stmt, 6),
+                    thermalState: text(stmt, 7),
+                    batteryPercent: optionalDouble(stmt, 8),
+                    gpuUsage: optionalDouble(stmt, 9),
+                    gpuMemoryGB: optionalDouble(stmt, 10)
+                ))
+            }
         }
     }
 
@@ -389,7 +430,7 @@ final class HistoryDatabase: @unchecked Sendable {
     private func recordAlertUnsafe(message: String, at time: Date) {
         guard let db else { return }
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "INSERT INTO alerts (ts, message) VALUES (?,?);", -1, &stmt, nil) == SQLITE_OK
+        guard sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO alerts (ts, message) VALUES (?,?);", -1, &stmt, nil) == SQLITE_OK
         else { return }
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_int64(stmt, 1, Self.millis(time))

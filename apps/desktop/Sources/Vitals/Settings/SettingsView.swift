@@ -748,10 +748,16 @@ private struct DataPane: View {
     }
 
     private var logSizeText: String {
-        guard let size = try? FileManager.default.attributesOfItem(atPath: DataHome.historyDatabaseFile.path)[.size] as? UInt64 else {
-            return "no data yet"
+        // Sum the database and its WAL/SHM sidecars — recent rows can sit in the
+        // -wal file before a checkpoint, so the main file alone understates usage.
+        let fm = FileManager.default
+        let base = DataHome.historyDatabaseFile.path
+        let paths = [base, base + "-wal", base + "-shm"]
+        let total = paths.reduce(UInt64(0)) { sum, path in
+            sum + ((try? fm.attributesOfItem(atPath: path)[.size] as? UInt64) ?? 0)
         }
-        return "currently " + ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+        guard total > 0 else { return "no data yet" }
+        return "currently " + ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)
     }
 
     /// Exports the whole database as a timestamped CSV into the data home's

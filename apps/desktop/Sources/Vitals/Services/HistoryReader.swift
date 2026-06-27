@@ -99,20 +99,31 @@ enum HistoryExport {
     static let csvHeader = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"
 
     /// Writes the whole database out as CSV (every row, no down-sampling); returns
-    /// the new file, or nil if there's nothing logged yet.
+    /// the new file, or nil if there's nothing logged yet. Streams row-by-row to a
+    /// `FileHandle` so a year of history never materializes in memory.
     static func csv() -> URL? {
-        let samples = HistoryReader.load(range: .all, now: Date(), maxPoints: .max)
-        guard !samples.isEmpty else { return nil }
         guard let destination = prepareDestination(extension: "csv") else { return nil }
-        var text = csvHeader
-        for sample in samples { text += csvLine(sample) }
-        do {
-            try text.write(to: destination, atomically: true, encoding: .utf8)
-            return destination
-        } catch {
-            Log.notice(.history, "history CSV export failed", error: error)
+        let fm = FileManager.default
+        guard fm.createFile(atPath: destination.path, contents: csvHeader.data(using: .utf8)),
+              let handle = try? FileHandle(forWritingTo: destination) else {
+            Log.notice(.history, "history CSV export failed to open the destination")
             return nil
         }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+
+        var wroteAny = false
+        HistoryDatabase.shared.forEachSample { sample in
+            if let data = csvLine(sample).data(using: .utf8) {
+                try? handle.write(contentsOf: data)
+                wroteAny = true
+            }
+        }
+        guard wroteAny else {
+            try? fm.removeItem(at: destination)   // nothing logged yet — no empty file (handle closed by defer)
+            return nil
+        }
+        return destination
     }
 
     /// One CSV row in the legacy format/precision (so round-trips with `parse`).
