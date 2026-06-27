@@ -83,16 +83,26 @@ final class ProcessSampler {
             }
         }
 
+        // Resolve each pid's name at most once — `proc_pidpath` is a syscall, and
+        // a process can rank in both the CPU and memory top lists.
+        var nameByPid: [pid_t: String] = [:]
+        func name(_ pid: pid_t) -> String {
+            if let cached = nameByPid[pid] { return cached }
+            let resolved = Self.name(of: pid)
+            nameByPid[pid] = resolved
+            return resolved
+        }
+
         let byCPU = percentByPid
             .sorted { $0.value > $1.value }
             .prefix(count)
-            .map { Process(id: $0.key, name: Self.name(of: $0.key),
+            .map { Process(id: $0.key, name: name($0.key),
                            cpuPercent: $0.value, memory: currentMemory[$0.key] ?? 0) }
 
         let byMemory = currentMemory
             .sorted { $0.value > $1.value }
             .prefix(count)
-            .map { Process(id: $0.key, name: Self.name(of: $0.key),
+            .map { Process(id: $0.key, name: name($0.key),
                            cpuPercent: percentByPid[$0.key] ?? 0, memory: $0.value) }
 
         return Sampled(byCPU: Array(byCPU), byMemory: Array(byMemory))

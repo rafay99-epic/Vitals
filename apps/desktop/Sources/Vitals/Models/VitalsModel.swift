@@ -427,7 +427,15 @@ final class VitalsModel: ObservableObject {
     /// rate needs two readings), and treats a counter that went backwards — a
     /// 32-bit wrap or a stat reset — as zero rather than a fabricated spike.
     private func updateMemoryActivity(_ memory: MemorySnapshot?) {
-        guard let memory else { return }
+        // Memory unavailable (a VM/restricted Mac): drop the published rates and
+        // the baseline so the UI stops presenting the last sample's rates as live
+        // and doesn't compute a bogus rate against a stale prior reading on return.
+        guard let memory else {
+            memoryActivity = nil
+            previousMemorySnapshot = nil
+            previousMemorySnapshotAt = nil
+            return
+        }
         let now = Date()
         defer { previousMemorySnapshot = memory; previousMemorySnapshotAt = now }
         guard let previous = previousMemorySnapshot,

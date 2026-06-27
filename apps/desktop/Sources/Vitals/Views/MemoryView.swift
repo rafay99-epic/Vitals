@@ -8,7 +8,6 @@ import Charts
 /// heaviest memory consumers. Every number is a real reading: an idle rate shows
 /// 0/s, an absent figure shows "—", nothing is smoothed or invented.
 struct MemoryView: View {
-    @EnvironmentObject private var model: VitalsModel
     /// True only while Memory is the visible segment. Gates the history chart so
     /// it never rebuilds marks in the background (same rule as GPU/Battery).
     let isActive: Bool
@@ -33,21 +32,25 @@ struct MemoryView: View {
 private struct MemoryUsageHistoryCard: View {
     @EnvironmentObject private var model: VitalsModel
 
-    private var hasSwap: Bool { model.chartHistory.contains { $0.swapUsed > 0 } }
-    private var totalGB: Double { max(gigabytes(model.memoryTotal), 1) }
-
     var body: some View {
-        SectionCard(title: "Usage history", symbol: "chart.xyaxis.line") {
+        // One pass over the series, hoisted out of the per-sample chart closure:
+        // whether to draw the swap line at all, and the Y-axis ceiling. Swap can
+        // exceed installed RAM, so the domain takes the larger of RAM and the
+        // tallest swap reading — otherwise a swap spike would clip.
+        let maxSwapGB = model.chartHistory.reduce(0.0) { max($0, gigabytes($1.swapUsed)) }
+        let hasSwap = maxSwapGB > 0
+        let upperGB = max(gigabytes(model.memoryTotal), maxSwapGB, 1)
+        return SectionCard(title: "Usage history", symbol: "chart.xyaxis.line") {
             VStack(alignment: .leading, spacing: 10) {
                 // Deferred keeps the 50–150 ms first-layout cost off the
                 // tab-switch animation (see GPUView/BatteryView).
-                Deferred { chart }.frame(height: 150)
-                legend
+                Deferred { chart(hasSwap: hasSwap, upperGB: upperGB) }.frame(height: 150)
+                legend(hasSwap: hasSwap)
             }
         }
     }
 
-    private var chart: some View {
+    private func chart(hasSwap: Bool, upperGB: Double) -> some View {
         Chart(model.chartHistory) { sample in
             AreaMark(x: .value("Time", sample.time),
                      y: .value("Used", gigabytes(sample.memoryUsed)))
@@ -66,11 +69,11 @@ private struct MemoryUsageHistoryCard: View {
                     .interpolationMethod(.catmullRom)
             }
         }
-        .chartYScale(domain: 0...totalGB)
+        .chartYScale(domain: 0...upperGB)
         .chartYAxisLabel("GB")
     }
 
-    private var legend: some View {
+    private func legend(hasSwap: Bool) -> some View {
         HStack(spacing: 16) {
             swatch(.blue, "Used")
             if hasSwap { swatch(.orange, "Swap") }
@@ -149,7 +152,11 @@ private struct MemoryActivityCard: View {
                         .foregroundStyle(.tertiary)
                 }
             } else {
-                Text("Gathering…")
+                // No memory reading at all (a VM/restricted Mac) is a permanent
+                // "unavailable", matching the hero and Composition cards; a real
+                // Mac only sits at "Gathering…" for the one tick before the first
+                // rate (a rate needs two readings) lands.
+                Text(model.memory == nil ? "Memory activity unavailable." : "Gathering…")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 60)
             }
