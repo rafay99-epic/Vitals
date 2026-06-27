@@ -1,0 +1,19 @@
+apps/desktop/Scripts/make-signing-cert.sh
+  s_ca6c4761de12d7::t_9c99510ff46d0c 18-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "dbe4651d94e16caedcbd68ce1c24174c2bab44d5",
+  "prompts": {},
+  "sessions": {
+    "s_ca6c4761de12d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7030776b-9a45-43ce-8f69-28fc53a3fc05",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
