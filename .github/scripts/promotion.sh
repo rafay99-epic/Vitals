@@ -44,8 +44,12 @@ git fetch --quiet origin \
 BASE="$(bash "${SCRIPT_DIR}/stable-base.sh")"
 HEAD_REF="refs/remotes/origin/nightly"
 
-if git diff --quiet "refs/remotes/origin/main" "$HEAD_REF"; then
-  echo "::notice::main already equals nightly — nothing to promote."
+# Direction is nightly → main: nothing to promote if the source (nightly) and the
+# target (main) already hold the same tree. `--quiet` only reports presence, so
+# operand order is cosmetic — nightly (source) is listed first to read in the
+# promotion direction.
+if git diff --quiet "$HEAD_REF" "refs/remotes/origin/main"; then
+  echo "::notice::nightly already matches main — nothing to promote."
   exit 0
 fi
 
