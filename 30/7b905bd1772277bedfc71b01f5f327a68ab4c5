@@ -1,0 +1,38 @@
+apps/desktop/Sources/Vitals/Services/ProcessSampler.swift
+  s_fb9b4bc3d01c7a::t_d5ef3a3cc8de67 37,43,47,49,52,62,75-80,82,84-98
+  s_fb9b4bc3d01c7a::t_17e9e53e83dd7f 13-25
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_fb9b4bc3d01c7a::t_f308a81be33f03 367
+  s_fb9b4bc3d01c7a::t_38d21edd9d3f42 49-51,54-60
+  s_fb9b4bc3d01c7a::t_a91a63746323d8 425-450
+  s_fb9b4bc3d01c7a::t_2b212ac0c408c3 369
+apps/desktop/Sources/Vitals/Views/MemoryView.swift
+  s_fb9b4bc3d01c7a::t_8139f57ae4b928 1-210
+apps/desktop/Sources/Vitals/Services/SystemStats.swift
+  s_fb9b4bc3d01c7a::t_546b98bca25d01 228-231
+  s_fb9b4bc3d01c7a::t_221ae678ca0dfd 162-172,177-186
+  s_fb9b4bc3d01c7a::t_93690a209cd57a 187-188
+apps/desktop/Sources/Vitals/App/Main.swift
+  s_fb9b4bc3d01c7a::t_487fe8b05e38a4 151
+apps/desktop/Sources/Vitals/Services/SensorSampler.swift
+  s_fb9b4bc3d01c7a::t_8c23b280c34c84 15
+  s_fb9b4bc3d01c7a::t_92cd61b9b0c86a 58,65-66
+apps/desktop/Sources/Vitals/Views/SystemView.swift
+  s_fb9b4bc3d01c7a::t_2c3bcb9eea1122 86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "307b905bd1772277bedfc71b01f5f327a68ab4c5",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
