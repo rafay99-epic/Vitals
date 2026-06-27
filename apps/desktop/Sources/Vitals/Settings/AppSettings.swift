@@ -453,24 +453,40 @@ final class AppSettings: ObservableObject {
     /// comparison rather than a disk read + write.
     private var lastConfigData: Data?
 
+    /// Every config-file write for this instance runs here, serialized, so they
+    /// land in the order they were issued. A plain `DispatchQueue.global` lets a
+    /// later write finish before an earlier one (the global pool runs them
+    /// concurrently), so under load the init-time save could clobber a fresher
+    /// value — exactly the flake that broke the durability test. One serial queue
+    /// makes "last write wins" actually mean the last write *issued*.
+    private let configWriteQueue = DispatchQueue(label: "tech.syntaxlab.vitals.config-write", qos: .utility)
+
     /// Mirrors the current settings to `config.json` off the main thread, but
     /// only when the persisted content actually changed.
     private func saveConfig() {
         guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
               data != lastConfigData else { return }
         lastConfigData = data
-        DispatchQueue.global(qos: .utility).async {
+        configWriteQueue.async {
             ConfigStore.write(data, to: configURL)
         }
     }
 
-    /// Writes the config synchronously — used on app termination so the last
-    /// edits land even if they happened inside the save debounce window.
-    private func flushConfig() {
-        guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
-              data != lastConfigData else { return }
-        lastConfigData = data
-        ConfigStore.write(data, to: configURL)
+    /// Flushes the latest settings to disk and blocks until every queued write
+    /// for this instance has landed — used on app termination so the last edits
+    /// survive even if they happened inside the save debounce window. The barrier
+    /// also guarantees ordering: any earlier async `saveConfig` has completed
+    /// before this returns, so the bytes on disk reflect the current state.
+    func flushConfig() {
+        if let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
+           data != lastConfigData {
+            lastConfigData = data
+            configWriteQueue.async {
+                ConfigStore.write(data, to: configURL)
+            }
+        }
+        // Drain the serial queue: returns only once all pending writes are done.
+        configWriteQueue.sync {}
     }
 
     deinit {

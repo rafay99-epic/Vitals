@@ -59,9 +59,11 @@ git fetch --quiet origin \
   "+refs/heads/main:${ORIGIN_MAIN}" \
   "+refs/heads/nightly:${ORIGIN_NIGHTLY}"
 
-# Nothing to ship if main's content already equals nightly's.
-if git diff --quiet "${ORIGIN_MAIN}" "${ORIGIN_NIGHTLY}"; then
-  echo "main is already identical to nightly — nothing to promote."
+# Direction is nightly → main: nothing to ship if the source (nightly) already
+# matches the target (main). `--quiet` only reports presence, so operand order is
+# cosmetic — nightly (source) is listed first to read in the promotion direction.
+if git diff --quiet "${ORIGIN_NIGHTLY}" "${ORIGIN_MAIN}"; then
+  echo "nightly is already identical to main — nothing to promote."
   exit 0
 fi
 

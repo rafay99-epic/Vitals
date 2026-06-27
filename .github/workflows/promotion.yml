@@ -60,18 +60,22 @@ jobs:
         with:
           fetch-depth: 0
           ref: nightly
-      # Compare main's CONTENT to nightly's. A commits-ahead count stays > 0 after
+      # Direction is nightly → main: does nightly (the source) carry content that
+      # main (the target) doesn't yet have? A commits-ahead count stays > 0 after
       # a promotion even when the trees match (nightly's commits never land on
       # main), so a tree diff is the correct "is there a real change" signal and
-      # avoids opening an orphan PR on an idle week.
-      - name: Diff main vs nightly
+      # avoids opening an orphan PR on an idle week. `git diff --quiet` only
+      # reports presence, so operand order can't change the result — but we list
+      # nightly (source) before main (target) so the check reads in the
+      # promotion direction rather than backwards.
+      - name: Diff nightly → main (anything to promote?)
         id: diff
         run: |
           git fetch --quiet origin \
-            "+refs/heads/main:refs/remotes/origin/main" \
-            "+refs/heads/nightly:refs/remotes/origin/nightly"
-          if git diff --quiet refs/remotes/origin/main refs/remotes/origin/nightly; then
-            echo "main already equals nightly — nothing to promote."
+            "+refs/heads/nightly:refs/remotes/origin/nightly" \
+            "+refs/heads/main:refs/remotes/origin/main"
+          if git diff --quiet refs/remotes/origin/nightly refs/remotes/origin/main; then
+            echo "nightly already matches main — nothing to promote."
             echo "promote=false" >> "$GITHUB_OUTPUT"
           else
             echo "promote=true" >> "$GITHUB_OUTPUT"
