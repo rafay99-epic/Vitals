@@ -1,0 +1,35 @@
+apps/desktop/build.sh
+  s_ca6c4761de12d7::t_3f428d555094a0 92-113
+.github/scripts/setup-signing.sh
+  s_ca6c4761de12d7::t_5002965f7d303d 1-35
+CLAUDE.md
+  s_ca6c4761de12d7::t_b3a9e39f0d9896 105-134
+.github/workflows/ci.yml
+  s_ca6c4761de12d7::t_d8369412176c8d 22,27
+  s_ca6c4761de12d7::t_7277c384aa1687 102-113
+apps/desktop/README.md
+  s_ca6c4761de12d7::t_cfcaff9bf6952c 97-117
+apps/desktop/make-dmg.sh
+  s_ca6c4761de12d7::t_5426eb6b6eed42 96-99
+apps/desktop/Scripts/make-signing-cert.sh
+  s_ca6c4761de12d7::t_5d636028cd1e0e 1-35
+.github/workflows/nightly.yml
+  s_ca6c4761de12d7::t_debf1a60169c56 17
+  s_ca6c4761de12d7::t_96350a9270f204 74-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "eacc4e6f1ae6177ea97535f05b4879936cb8edd2",
+  "prompts": {},
+  "sessions": {
+    "s_ca6c4761de12d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7030776b-9a45-43ce-8f69-28fc53a3fc05",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
