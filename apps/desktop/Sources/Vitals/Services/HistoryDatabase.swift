@@ -60,12 +60,20 @@ final class HistoryDatabase: @unchecked Sendable {
         self.dbFile = file
         self.legacyReadings = legacyReadings
         self.legacyAlerts = legacyAlerts
-        queue.sync { open() }
+        // Open + the one-time CSV import (which can parse a large file) run
+        // asynchronously on the queue — `shared` is first touched by the
+        // main-thread tick, and this must never block it. Every later operation is
+        // dispatched to the same serial queue, so it naturally runs after `open`.
+        queue.async { self.open() }
     }
 
     deinit {
         if let db { sqlite3_close(db) }
     }
+
+    /// Blocks until `open` (and any one-time import) has finished — for tests that
+    /// assert on `open`'s side effects right after construction.
+    func waitUntilReady() { queue.sync {} }
 
     // MARK: Setup
 
@@ -88,8 +96,12 @@ final class HistoryDatabase: @unchecked Sendable {
         exec("PRAGMA synchronous=NORMAL;")
         exec("PRAGMA busy_timeout=3000;")
         createSchema()
-        importLegacyFilesIfNeeded()
-        removeStaleImportedFiles()
+        // Don't clean up on the same launch we migrate: the freshly-retired
+        // backups are brand new, and skipping avoids any chance of deleting one
+        // whose timestamp stamp didn't take. Stale backups are swept on a later,
+        // non-migrating launch.
+        let migratedNow = importLegacyFilesIfNeeded()
+        if !migratedNow { removeStaleImportedFiles() }
         prune()
     }
 
@@ -250,31 +262,44 @@ final class HistoryDatabase: @unchecked Sendable {
     // MARK: Legacy import (CSV → SQLite, one time)
 
     /// On the first launch after upgrading, fold the old CSV log and alert log
-    /// into the database, then rename the originals to `*.imported` so they're
-    /// preserved (never deleted — they're the user's data) and never re-imported.
-    /// `INSERT OR IGNORE` makes a partial/repeated run harmless.
-    private func importLegacyFilesIfNeeded() {
+    /// into the database, then retire the originals to `*.imported`. Returns
+    /// whether anything was retired this run.
+    ///
+    /// Data-safety: a file is only retired if it was actually read **and** the
+    /// import left rows in the database — so a file we couldn't open, or an import
+    /// that failed (no DB, disk full), leaves the user's raw CSV exactly where it
+    /// is for a later retry rather than renaming (and eventually deleting) the only
+    /// copy. `INSERT OR IGNORE` on the `ts UNIQUE` key makes a repeated run safe.
+    private func importLegacyFilesIfNeeded() -> Bool {
+        guard db != nil else { return false }   // open failed — never touch the user's files
         let fm = FileManager.default
+        var retiredAny = false
 
         // Readings: previous file first (older rows), then the current one.
         if legacyReadings.contains(where: { fm.fileExists(atPath: $0.path) }) {
             var imported = 0
+            var read: [URL] = []
             exec("BEGIN;")
             for url in legacyReadings {
+                guard fm.fileExists(atPath: url.path) else { continue }
                 guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                read.append(url)
                 for line in text.split(separator: "\n") {
                     guard let s = HistoryReader.parse(line) else { continue }
                     if insertSampleUnsafe(s) { imported += 1 }
                 }
             }
             exec("COMMIT;")
-            for url in legacyReadings where fm.fileExists(atPath: url.path) {
-                retire(url)
+            // Only retire once data is safely in the table (covers a partial/failed
+            // import). A file with no real rows is retired on a later launch once
+            // the DB has rows (e.g. from live logging) so it doesn't linger forever.
+            if hasSamples() {
+                for url in read { retire(url); retiredAny = true }
             }
             if imported > 0 { Log.notice(.history, "imported \(imported) readings from CSV into SQLite") }
         }
 
-        // Alerts.
+        // Alerts (low-stakes — retire whenever the file was readable).
         if let alertsURL = legacyAlerts, fm.fileExists(atPath: alertsURL.path),
            let text = try? String(contentsOf: alertsURL, encoding: .utf8) {
             exec("BEGIN;")
@@ -284,9 +309,21 @@ final class HistoryDatabase: @unchecked Sendable {
                 recordAlertUnsafe(message: event.message, at: event.time); imported += 1
             }
             exec("COMMIT;")
-            retire(alertsURL)
+            retire(alertsURL); retiredAny = true
             if imported > 0 { Log.notice(.history, "imported \(imported) alerts from log into SQLite") }
         }
+        return retiredAny
+    }
+
+    /// Whether the readings table holds any row — the gate for retiring (and
+    /// thus eventually deleting) the migrated CSV, so the only copy of real data
+    /// is never removed after a failed import.
+    private func hasSamples() -> Bool {
+        guard let db else { return false }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT EXISTS(SELECT 1 FROM samples);", -1, &stmt, nil) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_int64(stmt, 0) == 1
     }
 
     /// Rename an imported legacy file to `*.imported` and stamp it with the

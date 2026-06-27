@@ -119,8 +119,9 @@ struct HistoryDatabaseTests {
         try "new data".write(to: fresh, atomically: true, encoding: .utf8)
 
         // The base files don't exist, so nothing imports — only the cleanup runs.
-        _ = HistoryDatabase(file: dir.appendingPathComponent("history.sqlite3"),
-                            legacyReadings: [staleBase], legacyAlerts: freshBase)
+        let db = HistoryDatabase(file: dir.appendingPathComponent("history.sqlite3"),
+                                 legacyReadings: [staleBase], legacyAlerts: freshBase)
+        db.waitUntilReady()   // open() runs async — let it finish before asserting
 
         #expect(!fm.fileExists(atPath: stale.path))   // stale backup auto-removed
         #expect(fm.fileExists(atPath: fresh.path))    // fresh backup kept (still in grace)
