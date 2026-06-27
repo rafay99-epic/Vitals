@@ -19,14 +19,24 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 KEY="$WORK/key.pem"; CERT="$WORK/cert.pem"; P12="$WORK/signing.p12"
 read -r -s -p "Choose a password for the exported .p12 (the CI secret): " P12_PW; echo
 [ -n "$P12_PW" ] || { echo "Password cannot be empty." >&2; exit 1; }
-# Escape `/` in the CN so a name with slashes can't break -subj DN parsing.
-SUBJ_CN="${IDENTITY_NAME//\//\\/}"
+# Pass the subject via a config file rather than `-subj`, so the CN is taken
+# literally — no DN-separator escaping needed for `/`, `\`, `+`, `,`, `=`, etc.
+REQ_CONF="$WORK/req.cnf"
+cat > "$REQ_CONF" <<EOF
+[req]
+distinguished_name = dn
+prompt = no
+x509_extensions = v3
+[dn]
+CN = $IDENTITY_NAME
+[v3]
+basicConstraints = critical,CA:false
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,codeSigning
+EOF
 # Keep stderr visible (only silence stdout) so cert-generation failures are diagnosable.
 openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -days 3650 -nodes \
-  -subj "/CN=$SUBJ_CN" \
-  -addext "basicConstraints=critical,CA:false" \
-  -addext "keyUsage=critical,digitalSignature" \
-  -addext "extendedKeyUsage=critical,codeSigning" >/dev/null
+  -config "$REQ_CONF" >/dev/null
 P12_PW="$P12_PW" openssl pkcs12 -export -inkey "$KEY" -in "$CERT" -out "$P12" \
   -name "$IDENTITY_NAME" -passout env:P12_PW \
   -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
