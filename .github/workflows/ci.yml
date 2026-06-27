@@ -19,10 +19,12 @@ on:
     paths:
       - "apps/desktop/**"
       - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
   pull_request:
     paths:
       - "apps/desktop/**"
       - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
 
 # PRs cancel superseded runs; main never cancels, so pushes serialize and two
 # releases can't race to publish the same version.
@@ -96,6 +98,18 @@ jobs:
 
       - name: Compute version
         run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+
+      # Import the stable self-signed cert so this release shares one signature
+      # with every prior release — users keep their TCC grants (Accessibility /
+      # Microphone / Screen Recording) + Gatekeeper identity across the
+      # auto-update instead of re-granting each time. Push-to-main only (this job
+      # is gated to `refs/heads/main`); a fork PR never reaches here, so the
+      # secret can't leak. No secret → the script warns and the build is ad-hoc.
+      - name: Set up stable code-signing certificate
+        env:
+          MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
+          MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
 
       - name: Build app and installer
         run: |

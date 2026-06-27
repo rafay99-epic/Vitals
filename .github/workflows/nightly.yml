@@ -14,6 +14,7 @@ on:
     paths:
       - "apps/desktop/**"
       - ".github/workflows/nightly.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 # Read-only by default — only the publish job below is granted contents: write.
@@ -70,6 +71,17 @@ jobs:
           # Monotonic CI run number — the updater orders Nightly builds by this.
           echo "BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
+      # Same stable cert as the Stable release (the .p12 is shared) so the
+      # Nightly channel — a separate, auto-updating app — also keeps its TCC
+      # grants + Gatekeeper identity across updates. Safe here: this job only
+      # runs on push to the `nightly` branch and is fork-guarded above, so it's
+      # never a fork PR that could read the secret. No secret → ad-hoc fallback.
+      - name: Set up stable code-signing certificate
+        env:
+          MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
+          MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
+
       - name: Build Nightly app and installer
         run: |
           export VITALS_CHANNEL=nightly
@@ -97,7 +109,7 @@ jobs:
             echo
             echo "Installs as **Vitals Nightly** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Nightly auto-updates from this feed."
             echo
-            echo "⚠️ Unsigned pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
+            echo "⚠️ Self-signed (not notarized) pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
             echo
             echo "---"
             echo

@@ -93,6 +93,10 @@ echo "Compressing…"
 hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$OUT_DMG" >/dev/null
 rm -f "$RW_DMG" build/dmg-background.png
 rm -rf "$STAGE"
+# Ad-hoc sign the *disk image wrapper* only — this does NOT recurse into or
+# re-sign the .app inside it (that bundle keeps whatever signature build.sh gave
+# it, ad-hoc or the stable CODESIGN_IDENTITY). Keep it ad-hoc: re-signing the app
+# here with `--deep` would strip the stable identity and reset users' TCC grants.
 codesign --force --sign - "$OUT_DMG"
 
 # Stamp the app icon onto the .dmg file itself so it shows in Finder/Downloads
