@@ -1,0 +1,24 @@
+apps/desktop/Sources/Vitals/Views/MemoryView.swift
+  s_fb9b4bc3d01c7a::t_22532583ed4a3e 155-159
+  s_fb9b4bc3d01c7a::t_6450ede9a609df 36-43,47-48,53,72,76
+apps/desktop/Sources/Vitals/Services/ProcessSampler.swift
+  s_fb9b4bc3d01c7a::t_06c1309b5a1fd4 86-95,99,105
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_fb9b4bc3d01c7a::t_477ac3c77fb933 430-438
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "df125fbc6ce190004c9517e8dbe394efa6b70576",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
