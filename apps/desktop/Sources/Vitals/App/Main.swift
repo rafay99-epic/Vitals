@@ -148,7 +148,7 @@ private func runProbe() {
     _ = processSampler.sample(top: 5)
     Thread.sleep(forTimeInterval: 1.0)
     print("\nTop processes:")
-    for process in processSampler.sample(top: 5) {
+    for process in processSampler.sample(top: 5).byCPU {
         print(String(format: "  %-30s %5.1f%%", (process.name as NSString).utf8String!, process.cpuPercent))
     }
 }

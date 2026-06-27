@@ -83,7 +83,7 @@ struct SystemView: View {
                 GPUView(isActive: active(.gpu)).tabVisibility(segment == .gpu)
             }
             if visited.contains(.memory) {
-                MemoryView().tabVisibility(segment == .memory)
+                MemoryView(isActive: active(.memory)).tabVisibility(segment == .memory)
             }
             if visited.contains(.battery) {
                 BatteryView(isActive: active(.battery)).tabVisibility(segment == .battery)
@@ -106,19 +106,6 @@ struct SystemView: View {
     /// A segment is "active" only when System is the visible tab *and* this is the
     /// selected segment — the gate every kept-alive chart / sampler reads.
     private func active(_ seg: Segment) -> Bool { isActive && segment == seg }
-}
-
-// MARK: - Memory segment
-
-/// Memory had no deep-dive of its own — it was only a Dashboard card. As a System
-/// segment it gets room to breathe, reusing the same `MemoryCard` (one component,
-/// not two) so the breakdown can never drift from the Dashboard's.
-struct MemoryView: View {
-    var body: some View {
-        MetricScroll {
-            MemoryCard()
-        }
-    }
 }
 
 // MARK: - Sensors segment

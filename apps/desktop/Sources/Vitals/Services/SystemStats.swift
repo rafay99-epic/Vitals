@@ -159,8 +159,31 @@ struct MemorySnapshot {
     let swapUsed: UInt64
     let swapTotal: UInt64
     let pressure: MemoryPressure
+    // Cumulative VM page counters since boot, straight from the same
+    // `vm_statistics64` read. They only become a meaningful per-second rate once
+    // diffed against a prior sample — `VitalsModel` does that to publish
+    // `MemoryActivity` — so the raw running totals live here, never a fabricated
+    // rate from a single reading.
+    let pageIns: UInt64
+    let pageOuts: UInt64
+    let swapIns: UInt64
+    let swapOuts: UInt64
+    let compressions: UInt64
+    let decompressions: UInt64
 
     var usedFraction: Double { total > 0 ? Double(used) / Double(total) : 0 }
+}
+
+/// Live virtual-memory activity, in pages per second, derived by diffing two
+/// `MemorySnapshot` counter readings. Nil until a second sample exists — a rate
+/// needs a prior reading, so the first tick has nothing honest to report.
+struct MemoryActivity {
+    let pageInsPerSec: Double
+    let pageOutsPerSec: Double
+    let swapInsPerSec: Double
+    let swapOutsPerSec: Double
+    let compressionsPerSec: Double
+    let decompressionsPerSec: Double
 }
 
 enum MemoryStats {
@@ -202,7 +225,10 @@ enum MemoryStats {
 
         return MemorySnapshot(
             total: total, used: used, app: app, wired: wired, compressed: compressed,
-            cached: cached, free: free, swapUsed: swapUsed, swapTotal: swapTotal, pressure: pressure
+            cached: cached, free: free, swapUsed: swapUsed, swapTotal: swapTotal, pressure: pressure,
+            pageIns: UInt64(stats.pageins), pageOuts: UInt64(stats.pageouts),
+            swapIns: UInt64(stats.swapins), swapOuts: UInt64(stats.swapouts),
+            compressions: UInt64(stats.compressions), decompressions: UInt64(stats.decompressions)
         )
     }
 }
