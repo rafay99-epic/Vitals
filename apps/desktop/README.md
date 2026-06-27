@@ -94,8 +94,27 @@ Two prompts to expect on first launch: macOS asks to allow notifications
 (needed for the overheat alerts), and if you enable "Launch at login" in
 Settings, Vitals appears under System Settings → General → Login Items.
 
-The app is ad-hoc signed, so it runs on the machine that built it. To use it
-on another Mac, build it there (or sign with your own Developer ID).
+The app is ad-hoc signed by default, so it runs on the machine that built it. To
+use it on another Mac, build it there (or sign with your own Developer ID).
+
+### Stable signing (so permissions survive updates)
+
+Ad-hoc signatures change every build, and macOS keys TCC grants (Accessibility /
+Microphone / Screen Recording) and Gatekeeper identity to the signature — so each
+ad-hoc update looks like a brand-new app and silently drops every permission. To
+keep grants across updates, sign every build with one **stable self-signed
+certificate** (no Apple account, no notarization). Generate it once:
+
+```sh
+./Scripts/make-signing-cert.sh        # creates "Vitals Local Signing", imports it,
+                                       # prints the two CI-secret values
+CODESIGN_IDENTITY="Vitals Local Signing" ./build.sh   # signs locally with it
+```
+
+`build.sh` reads `CODESIGN_IDENTITY`; unset (or a name not in the keychain) falls
+back to ad-hoc. In CI the cert is imported from secrets on the release/nightly
+jobs only — see the repo CLAUDE.md "Code signing" section. The **same** cert /
+`.p12` can be reused across every app in this family.
 
 ## Rebuild after changes
 

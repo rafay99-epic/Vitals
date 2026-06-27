@@ -7,32 +7,20 @@ struct AlertEvent: Identifiable {
     var id: Date { time }
 }
 
-/// A tiny append-only log of fired alerts in the data home (`~/.vitals/alerts.log`),
-/// so you can see what tripped and when — separate from the metric CSV. Lines are
-/// `ISO8601<TAB>message`; tab-separated to avoid escaping the message's commas.
-/// Best-effort: a failed write is silently dropped (an alert log is not critical
-/// data), and parsing skips any malformed line.
+/// Fired alerts, so you can see what tripped and when. Stored in the history
+/// `HistoryDatabase` (an `alerts` table) — this stays the view-facing API and
+/// delegates there. Best-effort: a failed write is silently dropped (an alert
+/// log is not critical data). The legacy `~/.vitals/logs/alerts.log` (tab-separated
+/// `ISO8601<TAB>message`) is imported into the database once on upgrade; `parse`
+/// still reads that format for the importer.
 enum AlertLog {
-    static var fileURL: URL { DataHome.alertsFile }
-
     static func record(message: String, at time: Date) {
-        let line = isoFormatter.string(from: time) + "\t"
-            + message.replacingOccurrences(of: "\n", with: " ") + "\n"
-        guard let data = line.data(using: .utf8) else { return }
-        if let handle = try? FileHandle(forWritingTo: fileURL) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-        } else {
-            try? data.write(to: fileURL)   // first write creates the file
-        }
+        HistoryDatabase.shared.recordAlert(message: message.replacingOccurrences(of: "\n", with: " "), at: time)
     }
 
     /// The most recent events, newest first.
     static func recent(limit: Int = 50) -> [AlertEvent] {
-        guard let text = try? String(contentsOf: fileURL, encoding: .utf8) else { return [] }
-        let events = text.split(separator: "\n").compactMap(parse)
-        return Array(events.suffix(limit).reversed())
+        HistoryDatabase.shared.recentAlerts(limit: limit)
     }
 
     static func parse(_ line: Substring) -> AlertEvent? {

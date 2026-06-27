@@ -1,76 +1,36 @@
 import Foundation
 
-/// The main window's top-level destinations. Lives in the model layer rather
-/// than inside the view so settings can reorder, hide, size and re-style the
-/// navigation bar without the view owning that state.
+/// The main window's five top-level destinations, in fixed order. A deliberately
+/// small, curated set — Apple's own apps don't let you rearrange their tabs, and
+/// the flexibility was the chaos. Each tab is a *job* or a *subsystem*, never a
+/// single metric: the live readings that used to each own a tab (CPU, GPU,
+/// Battery, Health, Disk, History, Processes) now live as segments inside
+/// `System`, with the Dashboard as the glanceable overview above them.
 ///
 /// Keyboard shortcuts are deliberately *not* a property here: they follow the
-/// tab's visible position (⌘1 = leftmost), assigned in the header from the
-/// ordered, unhidden list — so a shortcut always matches what the eye sees.
+/// tab's position (⌘1 = leftmost), assigned in the header from `allCases` — so a
+/// shortcut always matches what the eye sees.
 enum AppTab: String, CaseIterable, Identifiable {
-    case dashboard, cpu, gpu, battery, health, disk, history, processes, applications, loginItems, cleanup, storage
+    case dashboard, system, storage, cleanup, applications
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .dashboard: return "Dashboard"
-        case .cpu: return "CPU"
-        case .gpu: return "GPU"
-        case .battery: return "Battery"
-        case .health: return "Health"
-        case .disk: return "Disk"
-        case .history: return "History"
-        case .processes: return "Processes"
+        case .dashboard:    return "Dashboard"
+        case .system:       return "System"
+        case .storage:      return "Storage"
+        case .cleanup:      return "Cleanup"
         case .applications: return "Applications"
-        case .loginItems: return "Login Items"
-        case .cleanup: return "Cleanup"
-        case .storage: return "Storage"
         }
     }
 
     var symbol: String {
         switch self {
-        case .dashboard: return "gauge.with.dots.needle.50percent"
-        case .cpu: return "cpu"
-        case .gpu: return "cpu.fill"
-        case .battery: return "battery.100percent"
-        case .health: return "waveform.path.ecg"
-        case .disk: return "internaldrive.fill"
-        case .history: return "chart.xyaxis.line"
-        case .processes: return "list.bullet"
+        case .dashboard:    return "gauge.with.dots.needle.50percent"
+        case .system:       return "cpu"
+        case .storage:      return "internaldrive"
+        case .cleanup:      return "sparkles"
         case .applications: return "square.grid.2x2"
-        case .loginItems: return "power"
-        case .cleanup: return "sparkles"
-        case .storage: return "internaldrive"
         }
     }
-
-    /// The Dashboard is the app's home and can never be hidden — it guarantees
-    /// the window always has somewhere to land.
-    var canHide: Bool { self != .dashboard }
-
-    // MARK: Default navigation
-
-    /// What the nav bar shows on a fresh install: a deliberately small,
-    /// monitoring-first set. Vitals' soul is a hardware monitor, so the default
-    /// foregrounds the live vitals (Dashboard), what's driving them (Processes),
-    /// their trend (History), battery health, and disk — five items, like
-    /// Activity Monitor. Following Hick's law and progressive disclosure, the
-    /// deep-dive and management tabs start hidden and are one switch away in
-    /// Settings → Tabs.
-    static let defaultVisible: [AppTab] = [.dashboard, .processes, .history, .battery, .storage]
-
-    /// The full default order: the visible set first, then the hidden tabs
-    /// grouped by concern — monitoring deep-dives (GPU, Health), then the
-    /// management tools (Applications, Login Items, Cleanup). Contains every tab,
-    /// so a fresh install starts from a complete, intentional order.
-    static let defaultOrder: [AppTab] = [
-        .dashboard, .processes, .history, .battery, .storage,   // shown
-        .cpu, .gpu, .health, .disk,                             // monitoring deep-dives
-        .applications, .loginItems, .cleanup,                   // management tools
-    ]
-
-    /// Hidden on a fresh install — everything not in `defaultVisible`, in
-    /// `defaultOrder` order.
-    static var defaultHidden: [AppTab] { defaultOrder.filter { !defaultVisible.contains($0) } }
 }

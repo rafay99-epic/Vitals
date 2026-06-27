@@ -190,11 +190,11 @@ private struct MenuBarMetricToggle: View {
     }
 }
 
-// MARK: - Tabs customization
+// MARK: - Tabs appearance
 
-/// Navigation-bar customization: label display mode, size, and a show / reorder
-/// list. Reordering uses arrows rather than drag — predictable, keyboard- and
-/// VoiceOver-friendly, and a clean fit for the card design.
+/// Navigation-bar appearance: label display mode and density. The tab *set*
+/// itself is fixed and curated (five tabs, fixed order) — there's deliberately
+/// no show/hide/reorder, so the app looks the same, designed, on every Mac.
 private struct TabsCard: View {
     @EnvironmentObject private var settings: AppSettings
 
@@ -212,81 +212,11 @@ private struct TabsCard: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
-            Divider().opacity(0.5)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Show & reorder")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(Array(settings.tabOrder.enumerated()), id: \.element) { index, tab in
-                    TabReorderRow(tab: tab, index: index)
-                }
-                Text("Vitals starts with a few core tabs. Switch on the ones you want — GPU, Health, Applications, Login Items, Cleanup — and reorder with the arrows. The Dashboard always stays, and ⌘1–9 follow this order.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
+            Text("Dashboard · System · Storage · Cleanup · Applications. ⌘1–5 follow this order.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-}
-
-private struct TabReorderRow: View {
-    @EnvironmentObject private var settings: AppSettings
-    let tab: AppTab
-    let index: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 1) {
-                moveButton(systemName: "chevron.up", delta: -1, disabled: index == 0)
-                moveButton(systemName: "chevron.down", delta: 1, disabled: index == settings.tabOrder.count - 1)
-            }
-            Image(systemName: tab.symbol)
-                .font(.system(size: 11, weight: .medium))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.indigo)
-                .frame(width: 22, height: 22)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.indigo.opacity(0.14)))
-            Text(tab.title)
-                .font(.system(size: 12.5))
-            Spacer()
-            Toggle("", isOn: visibility)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .disabled(!tab.canHide)
-                .help(tab.canHide ? "Show \(tab.title) in the navigation bar" : "The Dashboard is always shown")
-        }
-    }
-
-    private func moveButton(systemName: String, delta: Int, disabled: Bool) -> some View {
-        Button {
-            let target = index + delta
-            guard settings.tabOrder.indices.contains(index),
-                  settings.tabOrder.indices.contains(target) else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                settings.tabOrder.swapAt(index, target)
-            }
-        } label: {
-            Image(systemName: systemName)
-                .font(.system(size: 9, weight: .bold))
-                .frame(width: 18, height: 14)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(disabled ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.secondary))
-        .disabled(disabled)
-    }
-
-    private var visibility: Binding<Bool> {
-        Binding(
-            get: { !settings.hiddenTabs.contains(tab) },
-            set: { visible in
-                if visible {
-                    settings.hiddenTabs.remove(tab)
-                } else if tab.canHide {
-                    settings.hiddenTabs.insert(tab)
-                }
-            }
-        )
     }
 }
 
@@ -775,17 +705,17 @@ private struct DataPane: View {
         VStack(spacing: 12) {
             SettingsCard(title: "Logging", symbol: "doc.text", tint: .indigo) {
                 SwitchRow(label: "Log readings to disk", isOn: $settings.loggingEnabled)
-                settingsRow("History file") {
+                settingsRow("History database") {
                     HStack(spacing: 8) {
-                        Button("Export…") { exportCSV() }
+                        Button("Export CSV…") { exportCSV() }
                         Button("Reveal") {
-                            NSWorkspace.shared.activateFileViewerSelecting([HistoryLogger.fileURL])
+                            NSWorkspace.shared.activateFileViewerSelecting([DataHome.historyDatabaseFile])
                         }
                     }
                     .controlSize(.small)
                     .disabled(!logFileExists)
                 }
-                Text("One line every 10 seconds while Vitals runs (\(logSizeText)). Stored in \(folderDisplayPath)/history; Export saves a timestamped copy to \(folderDisplayPath)/exports. Open the CSV in Numbers or Excel.")
+                Text("One reading every 10 seconds while Vitals runs, stored in a SQLite database (\(logSizeText)) at \(folderDisplayPath)/history. Export writes a timestamped CSV to \(folderDisplayPath)/exports — open it in Numbers or Excel.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -810,42 +740,34 @@ private struct DataPane: View {
     }
 
     private var logFileExists: Bool {
-        FileManager.default.fileExists(atPath: HistoryLogger.fileURL.path)
+        FileManager.default.fileExists(atPath: DataHome.historyDatabaseFile.path)
     }
 
     private var folderDisplayPath: String {
         (DataHome.directory.path as NSString).abbreviatingWithTildeInPath
     }
 
-    private static let exportStampFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        return formatter
-    }()
-
     private var logSizeText: String {
-        guard let size = try? FileManager.default.attributesOfItem(atPath: HistoryLogger.fileURL.path)[.size] as? UInt64 else {
-            return "no file yet"
+        // Sum the database and its WAL/SHM sidecars — recent rows can sit in the
+        // -wal file before a checkpoint, so the main file alone understates usage.
+        let fm = FileManager.default
+        let base = DataHome.historyDatabaseFile.path
+        let paths = [base, base + "-wal", base + "-shm"]
+        let total = paths.reduce(UInt64(0)) { sum, path in
+            sum + ((try? fm.attributesOfItem(atPath: path)[.size] as? UInt64) ?? 0)
         }
-        return "currently " + ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+        guard total > 0 else { return "no data yet" }
+        return "currently " + ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)
     }
 
-    /// Writes a timestamped copy of the log into the data home's `exports/`
-    /// folder and reveals it — the fixed, predictable location, rather than a
-    /// save panel.
+    /// Exports the whole database as a timestamped CSV into the data home's
+    /// `exports/` folder and reveals it — reusing `HistoryExport` so the format
+    /// matches the History tab's export exactly.
     private func exportCSV() {
-        let exports = DataHome.exportsDirectory
-        try? FileManager.default.createDirectory(at: exports, withIntermediateDirectories: true)
-        let destination = exports.appendingPathComponent(
-            "vitals-history-\(Self.exportStampFormatter.string(from: Date())).csv")
-        try? FileManager.default.removeItem(at: destination)
-        do {
-            try FileManager.default.copyItem(at: HistoryLogger.fileURL, to: destination)
-        } catch {
-            Log.notice(.history, "history CSV export failed", error: error)
-            return
+        Task.detached {
+            guard let destination = HistoryExport.csv() else { return }
+            await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([destination]) }
         }
-        NSWorkspace.shared.activateFileViewerSelecting([destination])
     }
 }
 

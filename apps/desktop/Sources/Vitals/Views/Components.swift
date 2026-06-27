@@ -297,6 +297,23 @@ struct ClusterMeter: View {
     }
 }
 
+/// A labelled statistic column (caption label · rounded mono value · optional
+/// note) — the shared building block for the Average/Hottest/CPU-power stats on
+/// the CPU and Sensors temperature cards, so the pattern can't drift between
+/// them. Mirrors the global `utilizationBar` helper.
+func statColumn(_ label: String, _ value: String, note: String? = nil) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+        Text(label).font(.caption).foregroundStyle(.secondary)
+        Text(value)
+            .font(.system(size: 22, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .numericTransition()
+        if let note {
+            Text(note).font(.caption2).foregroundStyle(.tertiary)
+        }
+    }
+}
+
 extension View {
     func cardBackground() -> some View {
         modifier(CardBackground())

@@ -2,9 +2,9 @@ import Foundation
 
 /// Mirrors structured log entries to `~/.vitals/vitals.log` as JSONL (one JSON
 /// object per line) so the diagnostic snapshot can attach the recent tail and a
-/// crash leaves a trail on disk. Same shape as `HistoryLogger`/`AlertLog`:
-/// append-only, size-capped, rotated to `vitals-previous.log` when it grows past
-/// the cap. Best-effort — a failed write is dropped (a diagnostic log is not
+/// crash leaves a trail on disk. An append-only, size-capped JSONL file, rotated
+/// to `vitals-previous.log` when it grows past the cap. Best-effort — a failed
+/// write is dropped (a diagnostic log is not
 /// critical data, and we must never let logging itself throw into a caller).
 ///
 /// All writes hop onto one serial queue, so `Log.emit` (called from any thread)

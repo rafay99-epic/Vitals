@@ -3,9 +3,10 @@ import Charts
 import AppKit
 
 /// The History tab: a browsable timeline of the logged readings, zoomable to the
-/// last hour/day/week or everything. Reads the CSV off-main and only while the
-/// tab is open, so it never costs anything in the background. History logging is
-/// off by default, so the empty state invites turning it on.
+/// last hour/day/week or everything. Queries the SQLite store off-main and only
+/// while the tab is open, so it never costs anything in the background. Logging is
+/// on by default; if the user turns it off, the empty state invites turning it
+/// back on.
 struct HistoryView: View {
     @EnvironmentObject private var settings: AppSettings
     let isActive: Bool

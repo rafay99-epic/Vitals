@@ -41,14 +41,6 @@ struct ContentView: View {
         // closed (menu-bar only).
         .onAppear { model.setMainWindowVisible(true) }
         .onDisappear { model.setMainWindowVisible(false) }
-        // If the user hides a tab they're on, fall back to the Dashboard so
-        // the canvas never shows a tab with no indicator in the bar. Drop hidden
-        // tabs from `visited` too, so a tab disabled in Settings is actually
-        // torn down (no layout/observation) rather than kept alive invisibly.
-        .onChange(of: settings.hiddenTabs) { _, hidden in
-            visited.subtract(hidden)
-            if hidden.contains(section) { section = .dashboard }
-        }
     }
 
     /// "Labels" mode shows every tab name, so the centered bar needs a wider
@@ -104,7 +96,7 @@ struct ContentView: View {
 
     private var tabBar: some View {
         HStack(spacing: 2) {
-            ForEach(Array(settings.visibleTabs.enumerated()), id: \.element) { index, item in
+            ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, item in
                 tabButton(item, index: index)
             }
         }
@@ -213,9 +205,9 @@ private struct HeaderUpdateButton: View {
     }
 }
 
-private extension View {
-    /// A kept-mounted tab: visible and interactive only when active, otherwise
-    /// hidden (but still laid out, so it never has to re-mount).
+extension View {
+    /// A kept-mounted tab (or System segment): visible and interactive only when
+    /// active, otherwise hidden (but still laid out, so it never has to re-mount).
     func tabVisibility(_ active: Bool) -> some View {
         opacity(active ? 1 : 0)
             .allowsHitTesting(active)
@@ -233,69 +225,49 @@ private extension View {
 struct TabCanvas: View {
     @Binding var section: AppTab
     @Binding var visited: Set<AppTab>
-    // Owned here so the scans survive section switches.
+    // Owned here so the scans survive section switches. Processes lives inside
+    // the System tab (as a segment); Apps + Login Items share the Applications
+    // tab — but their models are still owned at this level so a scan started in
+    // one segment/section survives switching tabs.
     @StateObject private var processesModel = ProcessesModel()
     @StateObject private var appsModel = AppsModel()
     @StateObject private var loginItemsModel = LoginItemsModel()
     @StateObject private var cleanupModel = CleanupModel()
     @StateObject private var storageModel = StorageModel()
+    /// The System tab's selected segment, owned here so a Dashboard tile can drill
+    /// straight to a subsystem and the choice survives switching tabs.
+    @State private var systemSegment: SystemView.Segment = .cpu
 
     var body: some View {
         // Tabs mount lazily on first visit, then stay alive — switching back
         // to a visited tab is instant (no re-mount, no Liquid Glass flash),
-        // while tabs that are never opened or hidden in Settings cost nothing.
-        // Charts are gated on `isActive` so a kept-alive background tab doesn't
-        // rebuild marks. Each tab keeps its own GlassEffectContainer: one
-        // container can't wrap all tabs (it composites every glass descendant
-        // into a single layer that ignores per-tab opacity).
+        // while tabs that are never opened cost nothing. Charts are gated on
+        // `isActive` so a kept-alive background tab doesn't rebuild marks. Each
+        // tab keeps its own GlassEffectContainer: one container can't wrap all
+        // tabs (it composites every glass descendant into a single layer that
+        // ignores per-tab opacity).
         ZStack {
             if visited.contains(.dashboard) {
-                DashboardView(isActive: section == .dashboard)
+                DashboardView(isActive: section == .dashboard, drill: drill(to:))
                     .tabVisibility(section == .dashboard)
             }
-            if visited.contains(.cpu) {
-                CPUView()
-                    .tabVisibility(section == .cpu)
+            if visited.contains(.system) {
+                SystemView(processesModel: processesModel, isActive: section == .system,
+                           segment: $systemSegment)
+                    .tabVisibility(section == .system)
             }
-            if visited.contains(.gpu) {
-                GPUView(isActive: section == .gpu)
-                    .tabVisibility(section == .gpu)
-            }
-            if visited.contains(.battery) {
-                BatteryView(isActive: section == .battery)
-                    .tabVisibility(section == .battery)
-            }
-            if visited.contains(.health) {
-                HealthView()
-                    .tabVisibility(section == .health)
-            }
-            if visited.contains(.disk) {
-                DiskView()
-                    .tabVisibility(section == .disk)
-            }
-            if visited.contains(.history) {
-                HistoryView(isActive: section == .history)
-                    .tabVisibility(section == .history)
-            }
-            if visited.contains(.processes) {
-                ProcessesView(model: processesModel, isActive: section == .processes)
-                    .tabVisibility(section == .processes)
-            }
-            if visited.contains(.applications) {
-                AppsView(model: appsModel, isActive: section == .applications)
-                    .tabVisibility(section == .applications)
-            }
-            if visited.contains(.loginItems) {
-                LoginItemsView(model: loginItemsModel, isActive: section == .loginItems)
-                    .tabVisibility(section == .loginItems)
+            if visited.contains(.storage) {
+                StorageView(model: storageModel, isActive: section == .storage)
+                    .tabVisibility(section == .storage)
             }
             if visited.contains(.cleanup) {
                 CleanupView(model: cleanupModel, isActive: section == .cleanup)
                     .tabVisibility(section == .cleanup)
             }
-            if visited.contains(.storage) {
-                StorageView(model: storageModel, isActive: section == .storage)
-                    .tabVisibility(section == .storage)
+            if visited.contains(.applications) {
+                ApplicationsView(appsModel: appsModel, loginItemsModel: loginItemsModel,
+                                 isActive: section == .applications)
+                    .tabVisibility(section == .applications)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -305,9 +277,24 @@ struct TabCanvas: View {
         // header, unaffected.
         .animation(nil, value: section)
     }
+
+    /// Drill from a Dashboard tile into the matching System segment: select the
+    /// segment first (so it's ready when the tab appears), mark System visited,
+    /// then spring the tab indicator across to System.
+    private func drill(to segment: SystemView.Segment) {
+        systemSegment = segment
+        visited.insert(.system)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+            section = .system
+        }
+    }
 }
 
-/// The original live dashboard, unchanged — now one section of the window.
+/// The Dashboard: the glanceable overview, Mole-style. A health-score hero, a
+/// bento grid of per-subsystem tiles (each with a live sparkline, each a tap into
+/// the matching System segment), the live multi-metric chart, power and fans, and
+/// the top processes. Detail is a drill-in — the heavy per-subsystem cards live in
+/// the System tab now, so nothing here is duplicated.
 struct DashboardView: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
@@ -316,6 +303,8 @@ struct DashboardView: View {
     /// hover lookup) on `isActive` keeps a kept-alive background dashboard from
     /// paying that cost every sample, mirroring GPU/Battery.
     let isActive: Bool
+    /// Jump to a System segment (tap a tile to drill into its detail).
+    let drill: (SystemView.Segment) -> Void
 
     var body: some View {
         ScrollView {
@@ -364,38 +353,14 @@ struct DashboardView: View {
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: 16) {
             UpdateBanner()
-            DashboardHero()
+            DashboardHealthHero(drill: drill)
+            DashboardTileGrid(drill: drill)
             PerformanceHistoryCard(isActive: isActive)
             HStack(alignment: .top, spacing: 16) {
-                CPUCard()
-                GPUCard()
-            }
-            HStack(alignment: .top, spacing: 16) {
-                MemoryCard()
+                PowerCard()
                 FanCard()
             }
-            PowerCard()
-            CollapsibleCard(
-                title: "Top processes",
-                symbol: "list.bullet.rectangle",
-                subtitle: model.topProcesses.first.map { String(format: "%@ · %.0f%%", $0.name, $0.cpuPercent) }
-            ) {
-                TopProcessesContent()
-            }
-            CollapsibleCard(
-                title: "Battery",
-                symbol: BatteryContent.symbol(for: model.battery),
-                subtitle: model.battery.map { "\(Int($0.percent))%" }
-            ) {
-                BatteryContent()
-            }
-            CollapsibleCard(
-                title: "SSD",
-                symbol: DiskContent.symbol(for: model.diskHealth),
-                subtitle: model.diskHealth.map { "\($0.percentUsed)% used" }
-            ) {
-                DiskContent()
-            }
+            DashboardProcessesCard(drill: drill)
             footer
         }
     }

@@ -10,7 +10,9 @@ let package = Package(
             name: "Vitals",
             dependencies: ["PrivateSensors"],
             swiftSettings: [.swiftLanguageMode(.v5)],
-            linkerSettings: [.linkedFramework("IOKit")]
+            // libsqlite3 ships with macOS — `import SQLite3` against it keeps the
+            // history store dependency-free, matching the zero-dependency norm.
+            linkerSettings: [.linkedFramework("IOKit"), .linkedLibrary("sqlite3")]
         ),
         .testTarget(
             name: "VitalsTests",

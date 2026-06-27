@@ -89,5 +89,26 @@ if [ ! -f "$ICON_CACHE" ]; then
 fi
 cp "$ICON_CACHE" "$APP/Contents/Resources/AppIcon.icns"
 
-codesign --force --sign - "$APP"
+# Code signing. Default is ad-hoc (`-`), which is fine for a local build but
+# produces a *different* signature every time — and macOS keys TCC grants
+# (Accessibility / Microphone / Screen Recording) and Gatekeeper identity to the
+# signature, so an ad-hoc update looks like a brand-new app and silently drops
+# every permission. Set CODESIGN_IDENTITY to a stable self-signed cert (see
+# Scripts/make-signing-cert.sh) and every build shares one designated requirement,
+# so the grant persists across updates. CI exports it from a secret on releases
+# only (.github/scripts/setup-signing.sh). No Apple account / notarization.
+SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+if [ "$SIGN_IDENTITY" != "-" ]; then
+  SIGN_IDENTITIES="$(security find-identity -p codesigning 2>/dev/null || true)"
+  if ! grep -qF "\"$SIGN_IDENTITY\"" <<< "$SIGN_IDENTITIES"; then
+    echo "CODESIGN_IDENTITY=\"$SIGN_IDENTITY\" not found in keychain; falling back to ad-hoc." >&2
+    SIGN_IDENTITY="-"
+  fi
+fi
+if [ "$SIGN_IDENTITY" = "-" ]; then
+  codesign --force --sign - "$APP"
+else
+  echo "Signing with stable identity: $SIGN_IDENTITY (TCC grant persists across builds)"
+  codesign --force --deep --sign "$SIGN_IDENTITY" "$APP"
+fi
 echo "Done → $PWD/$APP"

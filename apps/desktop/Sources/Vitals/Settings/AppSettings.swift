@@ -252,26 +252,6 @@ final class AppSettings: ObservableObject {
     @Published var tabDisplayMode: TabDisplayMode { didSet { defaults.set(tabDisplayMode.rawValue, forKey: "tabDisplayMode") } }
     /// Navigation-bar density.
     @Published var tabSize: TabSize { didSet { defaults.set(tabSize.rawValue, forKey: "tabSize") } }
-    /// Tabs the user has hidden from the bar. Dashboard is never in here — it
-    /// can't be hidden, so the window always has somewhere to land.
-    @Published var hiddenTabs: Set<AppTab> {
-        didSet {
-            defaults.set(AppTab.allCases.filter(hiddenTabs.contains).map(\.rawValue).joined(separator: ","),
-                         forKey: "hiddenTabs")
-        }
-    }
-    /// The display order of every tab (visible or hidden). Always contains all
-    /// tabs — new tabs added in a future version are appended on load.
-    @Published var tabOrder: [AppTab] {
-        didSet { defaults.set(tabOrder.map(\.rawValue).joined(separator: ","), forKey: "tabOrder") }
-    }
-
-    /// Tabs in display order with hidden ones removed — what the header draws.
-    /// Non-hideable tabs (the Dashboard) always survive, so the bar is never
-    /// empty even if a stale value tried to hide one.
-    var visibleTabs: [AppTab] {
-        tabOrder.filter { !$0.canHide || !hiddenTabs.contains($0) }
-    }
 
     @Published var theme: AppTheme {
         didSet {
@@ -332,13 +312,16 @@ final class AppSettings: ObservableObject {
             "warnThreshold": 85.0,
             "notifyOverheat": true,
             "notifyThermal": true,
-            // Off by default: history logging is opt-in (no background data
-            // collection unless asked), which also keeps the History view empty
-            // until the user turns logging on.
-            "loggingEnabled": false,
+            // On by default: now that history lives in an efficient local SQLite
+            // database (not a CSV), logging is cheap and reliable, so the History
+            // tab is populated and useful out of the box. The data is local-only
+            // (~/.vitals) and never leaves the Mac; it's one switch to turn off in
+            // Settings → Data. A one-time enable (see `loggingDefaultedOnV2`) also
+            // flips users who predate this default.
+            "loggingEnabled": true,
             // Capture meaningful events + all errors out of the box (negligible
-            // cost), but nothing chatty. The Logs tab that views them ships
-            // hidden (see "hiddenTabs"); logging happens regardless.
+            // cost), but nothing chatty. The developer Log Console (a separate
+            // window) views them; logging happens regardless.
             "diagnosticLogLevel": LogLevel.notice.rawValue,
             "autoUpdateCheck": true,
             "gpuAcceleration": true,
@@ -357,20 +340,16 @@ final class AppSettings: ObservableObject {
             "confirmBeforeQuittingProcess": false,
             "tabDisplayMode": TabDisplayMode.expanding.rawValue,
             "tabSize": TabSize.medium.rawValue,
-            // Ship a small, monitoring-first nav bar; deep-dive and management
-            // tabs start hidden (see AppTab.defaultVisible). Applies to fresh
-            // installs and anyone who never customized their tabs; a stored
-            // value always wins.
-            "hiddenTabs": AppTab.defaultHidden.map(\.rawValue).joined(separator: ","),
-            "tabOrder": AppTab.defaultOrder.map(\.rawValue).joined(separator: ","),
     ]
 
-    /// Every UserDefaults key Vitals owns: the registered ones, plus the two
-    /// stored outside registration (the menu-bar metric set and the alert rules).
-    /// `ConfigStore` mirrors exactly these to `config.json`. A new setting is
-    /// covered automatically if it has a registered default; otherwise add it.
+    /// Every UserDefaults key Vitals owns: the registered ones, plus those stored
+    /// outside registration (the menu-bar metric set, the alert rules, and the
+    /// one-time logging-default migration flag — which must persist so the flip
+    /// runs only once). `ConfigStore` mirrors exactly these to `config.json`. A new
+    /// setting is covered automatically if it has a registered default; otherwise
+    /// add it here.
     static var persistedKeys: [String] {
-        Array(registeredDefaults.keys) + ["menuBarMetrics", "alertRules"]
+        Array(registeredDefaults.keys) + ["menuBarMetrics", "alertRules", "loggingDefaultedOnV2"]
     }
 
     init(defaults: UserDefaults = .standard, configURL: URL? = ConfigStore.fileURL) {
@@ -393,6 +372,15 @@ final class AppSettings: ObservableObject {
         notifyOverheat = defaults.bool(forKey: "notifyOverheat")
         notifyThermal = defaults.bool(forKey: "notifyThermal")
         alertRules = AppSettings.loadAlertRules(defaults)
+        // History logging is now on by default (SQLite makes it cheap). A user who
+        // installed before this — whose mirrored `loggingEnabled` is the old
+        // `false`, overriding the new default on restore — is enabled once here,
+        // marked by `loggingDefaultedOnV2` so it never re-overrides a later, explicit
+        // choice to turn it back off.
+        if defaults.object(forKey: "loggingDefaultedOnV2") == nil {
+            defaults.set(true, forKey: "loggingEnabled")
+            defaults.set(true, forKey: "loggingDefaultedOnV2")
+        }
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         diagnosticLogLevel = LogLevel(rawValue: defaults.integer(forKey: "diagnosticLogLevel")) ?? .notice
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
@@ -411,8 +399,6 @@ final class AppSettings: ObservableObject {
         confirmBeforeQuittingProcess = defaults.bool(forKey: "confirmBeforeQuittingProcess")
         tabDisplayMode = TabDisplayMode(rawValue: defaults.string(forKey: "tabDisplayMode") ?? "") ?? .expanding
         tabSize = TabSize(rawValue: defaults.string(forKey: "tabSize") ?? "") ?? .medium
-        hiddenTabs = AppSettings.loadHiddenTabs(defaults)
-        tabOrder = AppSettings.loadTabOrder(defaults)
 
         // SMAppService.status is an XPC round-trip; in init it sat directly
         // on the launch path and delayed the first frame. Load it async.
@@ -467,24 +453,40 @@ final class AppSettings: ObservableObject {
     /// comparison rather than a disk read + write.
     private var lastConfigData: Data?
 
+    /// Every config-file write for this instance runs here, serialized, so they
+    /// land in the order they were issued. A plain `DispatchQueue.global` lets a
+    /// later write finish before an earlier one (the global pool runs them
+    /// concurrently), so under load the init-time save could clobber a fresher
+    /// value — exactly the flake that broke the durability test. One serial queue
+    /// makes "last write wins" actually mean the last write *issued*.
+    private let configWriteQueue = DispatchQueue(label: "tech.syntaxlab.vitals.config-write", qos: .utility)
+
     /// Mirrors the current settings to `config.json` off the main thread, but
     /// only when the persisted content actually changed.
     private func saveConfig() {
         guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
               data != lastConfigData else { return }
         lastConfigData = data
-        DispatchQueue.global(qos: .utility).async {
+        configWriteQueue.async {
             ConfigStore.write(data, to: configURL)
         }
     }
 
-    /// Writes the config synchronously — used on app termination so the last
-    /// edits land even if they happened inside the save debounce window.
-    private func flushConfig() {
-        guard let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
-              data != lastConfigData else { return }
-        lastConfigData = data
-        ConfigStore.write(data, to: configURL)
+    /// Flushes the latest settings to disk and blocks until every queued write
+    /// for this instance has landed — used on app termination so the last edits
+    /// survive even if they happened inside the save debounce window. The barrier
+    /// also guarantees ordering: any earlier async `saveConfig` has completed
+    /// before this returns, so the bytes on disk reflect the current state.
+    func flushConfig() {
+        if let configURL, let data = ConfigStore.serialize(defaults, keys: Self.persistedKeys),
+           data != lastConfigData {
+            lastConfigData = data
+            configWriteQueue.async {
+                ConfigStore.write(data, to: configURL)
+            }
+        }
+        // Drain the serial queue: returns only once all pending writes are done.
+        configWriteQueue.sync {}
     }
 
     deinit {
@@ -540,36 +542,6 @@ final class AppSettings: ObservableObject {
             Log.notice(.settings, "couldn't decode saved alert rules — resetting to none", error: error)
             return []
         }
-    }
-
-    /// Hidden tabs, filtered so Dashboard can never end up hidden even if a
-    /// stale or hand-edited value lists it. A tab introduced in a newer version
-    /// than the user's saved layout won't appear in their stored order; mirror
-    /// `loadTabOrder`'s append-missing rule by defaulting any such tab that ships
-    /// hidden (`defaultHidden`) to hidden — otherwise a new deep-dive would barge
-    /// into an upgrading user's nav bar uninvited.
-    private static func loadHiddenTabs(_ defaults: UserDefaults) -> Set<AppTab> {
-        let raw = defaults.string(forKey: "hiddenTabs") ?? ""
-        var hidden = Set(raw.split(separator: ",").compactMap { AppTab(rawValue: String($0)) }.filter(\.canHide))
-        let known = Set((defaults.string(forKey: "tabOrder") ?? "")
-            .split(separator: ",").compactMap { AppTab(rawValue: String($0)) })
-        for tab in AppTab.defaultHidden where !known.contains(tab) { hidden.insert(tab) }
-        return hidden
-    }
-
-    /// The saved order, then any tabs missing from it appended in their natural
-    /// order — so a tab added in a future version still shows up, and a corrupt
-    /// value degrades to the default rather than dropping tabs.
-    private static func loadTabOrder(_ defaults: UserDefaults) -> [AppTab] {
-        let stored = (defaults.string(forKey: "tabOrder") ?? "")
-            .split(separator: ",").compactMap { AppTab(rawValue: String($0)) }
-        var order = stored
-        var seen = Set(stored)
-        for tab in AppTab.allCases where !seen.contains(tab) {
-            order.append(tab)
-            seen.insert(tab)
-        }
-        return order
     }
 
     /// "45.1°" in the display unit.
