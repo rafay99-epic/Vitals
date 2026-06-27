@@ -102,6 +102,36 @@ License: **GPL-3.0**.
   builds it as Nightly locally next to Stable (build number 0, so it'll offer to pull the
   published Nightly).
 
+### Code signing (stable, self-signed — keeps permissions across updates)
+
+macOS keys TCC grants (Accessibility / Microphone / Screen Recording) **and** Gatekeeper
+identity to the code signature. Ad-hoc signing (`codesign --sign -`) produces a *different*
+signature every build, so each auto-update looks like a brand-new app and **silently drops
+every permission**. The fix: sign every published build with one **stable self-signed
+certificate** (no Apple account, no notarization, no Developer ID), giving all builds the
+same designated requirement so the grant persists.
+
+- **`build.sh` reads `CODESIGN_IDENTITY`** (one env var, like sibling apps). Unset — or a
+  name not present in the keychain — falls back to ad-hoc (the local default; a missing
+  cert never breaks a build). The app has **no `*.entitlements` file** (SwiftPM target), so
+  the stable-sign path does not pass `--entitlements`; if one is ever added, the
+  `codesign --deep --sign` line must pass it or re-signing strips it.
+- **`make-dmg.sh` ad-hoc-signs only the DMG *wrapper*** — it does not recurse into the
+  `.app` inside, so the bundle keeps build.sh's signature. Don't change it to `--deep`
+  re-sign the app: that strips the stable identity and resets users' TCC grants.
+- **`Scripts/make-signing-cert.sh`** generates the cert once (default CN `Vitals Local
+  Signing`), imports it into the login keychain, and prints the two CI-secret values. The
+  **same cert / `.p12` is reusable across every app in this family** — generate once, paste
+  the same secrets into each repo.
+- **CI: `.github/scripts/setup-signing.sh`** imports the cert from secrets into a throwaway
+  keychain and exports `CODESIGN_IDENTITY`. It is wired into the **publishing jobs only**:
+  `ci.yml`'s `release` job (push to `main`) and `nightly.yml`'s `nightly` job (push to
+  `nightly`, fork-guarded). **Never** add it to a `pull_request` job — a fork PR could
+  exfiltrate the secret. Both jobs are trusted branch-push contexts, never PRs. Missing
+  secrets → the script warns and the build is ad-hoc (a release never fails over it).
+- **Two repo secrets the maintainer must add** (from `make-signing-cert.sh` output):
+  `MACOS_SIGN_CERT_P12` (base64 of the `.p12`) and `MACOS_SIGN_CERT_PASSWORD`.
+
 ## Commands
 
 ```sh
