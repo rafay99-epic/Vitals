@@ -46,8 +46,18 @@ final class VitalsModel: ObservableObject {
     /// Per-core utilisation for the CPU tab's deep view. Empty without a trusted split.
     @Published private(set) var cpuPerCore: [CoreUsage] = []
     @Published private(set) var memory: MemorySnapshot?
+    /// Live VM page-traffic rates (page-ins/outs, swap-ins/outs, compress/
+    /// decompress). Nil until the second sample — a rate needs a prior reading.
+    @Published private(set) var memoryActivity: MemoryActivity?
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
     @Published private(set) var topProcesses: [ProcessSampler.Process] = []
+    /// The heaviest memory consumers, top-first. Sampled in the same sweep as
+    /// `topProcesses` (which is CPU-ordered), so it costs no extra syscalls.
+    @Published private(set) var topMemoryProcesses: [ProcessSampler.Process] = []
+    /// The previous tick's cumulative VM counters + when they were read, kept to
+    /// diff into `memoryActivity`.
+    private var previousMemorySnapshot: MemorySnapshot?
+    private var previousMemorySnapshotAt: Date?
     @Published private(set) var battery: BatterySnapshot?
     /// The internal SSD's SMART health (wear, endurance, power-on hours…). Nil
     /// on a Mac/VM that doesn't expose SMART, or for the first tick or two.
@@ -354,7 +364,9 @@ final class VitalsModel: ObservableObject {
             cpuPerCore = usage.perCore
         }
         memory = snapshot.memory
+        updateMemoryActivity(snapshot.memory)
         topProcesses = snapshot.topProcesses
+        topMemoryProcesses = snapshot.topMemoryProcesses
         battery = snapshot.battery
         diskHealth = snapshot.diskHealth
         // Only reassign GPU when it was actually sampled this tick. When the
@@ -408,6 +420,32 @@ final class VitalsModel: ObservableObject {
                 ))
             }
         }
+    }
+
+    /// Turn the snapshot's running VM counters into per-second rates by diffing
+    /// against the previous tick. Publishes nil until a second sample lands (a
+    /// rate needs two readings), and treats a counter that went backwards — a
+    /// 32-bit wrap or a stat reset — as zero rather than a fabricated spike.
+    private func updateMemoryActivity(_ memory: MemorySnapshot?) {
+        guard let memory else { return }
+        let now = Date()
+        defer { previousMemorySnapshot = memory; previousMemorySnapshotAt = now }
+        guard let previous = previousMemorySnapshot,
+              let previousAt = previousMemorySnapshotAt else { return }
+        let elapsed = now.timeIntervalSince(previousAt)
+        guard elapsed > 0 else { return }
+        func rate(_ current: UInt64, _ before: UInt64) -> Double {
+            guard current >= before else { return 0 }
+            return Double(current - before) / elapsed
+        }
+        memoryActivity = MemoryActivity(
+            pageInsPerSec: rate(memory.pageIns, previous.pageIns),
+            pageOutsPerSec: rate(memory.pageOuts, previous.pageOuts),
+            swapInsPerSec: rate(memory.swapIns, previous.swapIns),
+            swapOutsPerSec: rate(memory.swapOuts, previous.swapOuts),
+            compressionsPerSec: rate(memory.compressions, previous.compressions),
+            decompressionsPerSec: rate(memory.decompressions, previous.decompressions)
+        )
     }
 
     /// Overheat: average CPU above the warning threshold for 2 minutes

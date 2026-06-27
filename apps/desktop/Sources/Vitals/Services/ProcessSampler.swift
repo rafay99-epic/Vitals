@@ -10,6 +10,19 @@ final class ProcessSampler {
         let id: pid_t
         let name: String
         let cpuPercent: Double
+        /// Physical-memory footprint (`ri_phys_footprint`) — the same figure the
+        /// Processes tab and Activity Monitor's Memory column show.
+        let memory: UInt64
+    }
+
+    /// Two views of the same sweep: the heaviest CPU consumers (needs a prior
+    /// sample for the delta) and the heaviest memory consumers (instantaneous, so
+    /// it's populated even on the very first tick).
+    struct Sampled {
+        let byCPU: [Process]
+        let byMemory: [Process]
+
+        static let empty = Sampled(byCPU: [], byMemory: [])
     }
 
     private var previousCPUTime: [pid_t: UInt64] = [:]
@@ -21,21 +34,22 @@ final class ProcessSampler {
         return Double(info.numer) / Double(info.denom)
     }()
 
-    func sample(top count: Int) -> [Process] {
+    func sample(top count: Int) -> Sampled {
         let now = mach_absolute_time()
         let pidCount = proc_listallpids(nil, 0)
         // Sanity-cap the count: it's syscall-controlled, and a garbage-huge
         // value would otherwise allocate an unbounded array and overflow the
         // Int32 byte-size argument below. Real systems have a few hundred PIDs.
-        guard pidCount > 0, pidCount < 100_000 else { return [] }
+        guard pidCount > 0, pidCount < 100_000 else { return .empty }
         let capacity = Int(pidCount) + 64
         var pids = [pid_t](repeating: 0, count: capacity)
         let byteSize = capacity * MemoryLayout<pid_t>.size
-        guard byteSize <= Int(Int32.max) else { return [] }
+        guard byteSize <= Int(Int32.max) else { return .empty }
         let filled = proc_listallpids(&pids, Int32(byteSize))
-        guard filled > 0 else { return [] }
+        guard filled > 0 else { return .empty }
 
         var currentCPUTime: [pid_t: UInt64] = [:]
+        var currentMemory: [pid_t: UInt64] = [:]
         var deltas: [(pid: pid_t, ticks: UInt64)] = []
         for pid in pids.prefix(Int(filled)) where pid > 0 {
             var usage = rusage_info_v4()
@@ -45,6 +59,7 @@ final class ProcessSampler {
                 }
             }
             guard result == 0 else { continue }
+            currentMemory[pid] = usage.ri_phys_footprint
             let cpuTime = usage.ri_user_time + usage.ri_system_time
             currentCPUTime[pid] = cpuTime
             if let before = previousCPUTime[pid], cpuTime >= before {
@@ -56,16 +71,31 @@ final class ProcessSampler {
         let wallNanos = Double(now - previousSampleAt) * Self.nanosPerMachTick
         previousCPUTime = currentCPUTime
         previousSampleAt = now
-        guard hadPreviousSample, wallNanos > 0 else { return [] }
 
-        return deltas
-            .sorted { $0.ticks > $1.ticks }
-            .prefix(count)
-            .compactMap { entry in
+        // CPU% per pid, only when there's a prior sample to diff against. The
+        // memory list below doesn't depend on this, so it's still produced on the
+        // first tick — instantaneous footprint needs no delta.
+        var percentByPid: [pid_t: Double] = [:]
+        if hadPreviousSample, wallNanos > 0 {
+            for entry in deltas {
                 let percent = Double(entry.ticks) * Self.nanosPerMachTick / wallNanos * 100
-                guard percent >= 0.1 else { return nil }
-                return Process(id: entry.pid, name: Self.name(of: entry.pid), cpuPercent: percent)
+                if percent >= 0.1 { percentByPid[entry.pid] = percent }
             }
+        }
+
+        let byCPU = percentByPid
+            .sorted { $0.value > $1.value }
+            .prefix(count)
+            .map { Process(id: $0.key, name: Self.name(of: $0.key),
+                           cpuPercent: $0.value, memory: currentMemory[$0.key] ?? 0) }
+
+        let byMemory = currentMemory
+            .sorted { $0.value > $1.value }
+            .prefix(count)
+            .map { Process(id: $0.key, name: Self.name(of: $0.key),
+                           cpuPercent: percentByPid[$0.key] ?? 0, memory: $0.value) }
+
+        return Sampled(byCPU: Array(byCPU), byMemory: Array(byMemory))
     }
 
     private static func name(of pid: pid_t) -> String {
