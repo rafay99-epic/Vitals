@@ -1,0 +1,20 @@
+CLAUDE.md
+  s_03e95b9012c190::t_ab0f0f4e3389cb 125-138
+  s_03e95b9012c190::t_aa77eff4d2ffed 124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "9fe78d33b382e506487e185a2dbfa0d660f04d73",
+  "prompts": {},
+  "sessions": {
+    "s_03e95b9012c190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bfa3e86d-6d02-4348-b3de-c4447d65a04d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
