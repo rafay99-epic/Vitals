@@ -1,0 +1,23 @@
+.github/scripts/promote.sh
+  s_1a5e3df53c0a56::t_1d2fd7325afc77 62-66
+.github/scripts/promotion.sh
+  s_1a5e3df53c0a56::t_ff653dd14f877a 47-52
+.github/workflows/promotion.yml
+  s_1a5e3df53c0a56::t_89d16e13de62dc 63-64,67-71,75-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "842cce0af90ae907ef435562a46402b8dd042886",
+  "prompts": {},
+  "sessions": {
+    "s_1a5e3df53c0a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6a51e2e2-2c55-4c2b-b618-f23e8fe2e35d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
