@@ -1,0 +1,23 @@
+apps/desktop/Sources/Vitals/Views/Components.swift
+  s_fb9b4bc3d01c7a::t_9dbd49325ed5cc 524-530
+apps/desktop/Sources/Vitals/Views/SystemCards.swift
+  s_fb9b4bc3d01c7a::t_1ab94b746f2a62 274
+apps/desktop/Sources/Vitals/Views/MemoryView.swift
+  s_fb9b4bc3d01c7a::t_63d110b0f6abcb 121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "a99f543f30ac87446d93574f9a386d704bda993d",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
