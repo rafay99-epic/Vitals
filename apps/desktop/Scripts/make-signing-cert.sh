@@ -19,11 +19,14 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 KEY="$WORK/key.pem"; CERT="$WORK/cert.pem"; P12="$WORK/signing.p12"
 read -r -s -p "Choose a password for the exported .p12 (the CI secret): " P12_PW; echo
 [ -n "$P12_PW" ] || { echo "Password cannot be empty." >&2; exit 1; }
+# Escape `/` in the CN so a name with slashes can't break -subj DN parsing.
+SUBJ_CN="${IDENTITY_NAME//\//\\/}"
+# Keep stderr visible (only silence stdout) so cert-generation failures are diagnosable.
 openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -days 3650 -nodes \
-  -subj "/CN=$IDENTITY_NAME" \
+  -subj "/CN=$SUBJ_CN" \
   -addext "basicConstraints=critical,CA:false" \
   -addext "keyUsage=critical,digitalSignature" \
-  -addext "extendedKeyUsage=critical,codeSigning" >/dev/null 2>&1
+  -addext "extendedKeyUsage=critical,codeSigning" >/dev/null
 P12_PW="$P12_PW" openssl pkcs12 -export -inkey "$KEY" -in "$CERT" -out "$P12" \
   -name "$IDENTITY_NAME" -passout env:P12_PW \
   -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1

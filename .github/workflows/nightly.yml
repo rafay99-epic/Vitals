@@ -109,7 +109,7 @@ jobs:
             echo
             echo "Installs as **Vitals Nightly** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Nightly auto-updates from this feed."
             echo
-            echo "⚠️ Unsigned pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
+            echo "⚠️ Self-signed (not notarized) pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
             echo
             echo "---"
             echo

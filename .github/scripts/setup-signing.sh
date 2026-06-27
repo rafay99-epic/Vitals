@@ -16,6 +16,9 @@ fi
 KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
 KEYCHAIN_PW="$(openssl rand -base64 24)"
 CERT_P12="$RUNNER_TEMP/app-signing.p12"
+# Guarantee the decoded .p12 is removed even if a later step fails (the keychain is
+# kept — the build needs it; the runner is ephemeral and discarded after the job).
+trap 'rm -f "$CERT_P12"' EXIT
 security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
 security set-keychain-settings -lut 21600 "$KEYCHAIN"
 security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
