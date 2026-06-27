@@ -44,6 +44,13 @@ enum DataHome {
     // MARK: Files
 
     static var configFile: URL { configDirectory.appendingPathComponent("config.json") }
+    /// The SQLite history database — the readings/alerts store. Replaces the
+    /// legacy CSV (`historyFile`), which is now only read once to import into this
+    /// on first launch after upgrading. SQLite manages its own `-wal`/`-shm`
+    /// sidecar files alongside it.
+    static var historyDatabaseFile: URL { historyDirectory.appendingPathComponent("history.sqlite3") }
+    /// The legacy readings CSV (and its rotated predecessor) — pre-SQLite. Kept
+    /// only so the one-time importer can find and convert them.
     static var historyFile: URL { historyDirectory.appendingPathComponent("history.csv") }
     static var historyPrevious: URL { historyDirectory.appendingPathComponent("history-previous.csv") }
     /// The developer/diagnostic log (JSONL), and its rotated predecessor.

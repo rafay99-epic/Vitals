@@ -85,7 +85,6 @@ final class VitalsModel: ObservableObject {
     private let sampler = SensorSampler()
     private let notifications = NotificationManager()
     private let alertEngine = AlertEngine()
-    private let logger = HistoryLogger()
     private var timer: Timer?
     private var isSampling = false
     /// Whether the main window is open. Top-process sampling (the costliest part
@@ -395,7 +394,7 @@ final class VitalsModel: ObservableObject {
             checkAlerts(averageTemp: average)
 
             if settings.loggingEnabled {
-                logger.append(HistoryLogger.Entry(
+                HistoryDatabase.shared.append(HistoryDatabase.Entry(
                     averageTemp: average,
                     hottestTemp: hottest.celsius,
                     gpuTemp: gpuTemp,

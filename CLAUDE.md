@@ -121,7 +121,21 @@ bun run dmg                  # desktop app + DMG (macOS only)
   `SensorSampler` (actor; **all sampling runs off the main thread**), `AppInventory`,
   `LeftoverScanner`, `AppUninstaller`, `DiskCleaner`, `Battery`, `SystemStats`
   (`machHost` cached — `mach_host_self()` leaks a port right per call), `FanDaemon`
-  (root helper via launchd; separate process **by design**), `HistoryLogger`, `Updater`.
+  (root helper via launchd; separate process **by design**), `HistoryDatabase`, `Updater`.
+- **History store** (`HistoryDatabase`): logged readings + fired alerts live in one
+  channel-aware **SQLite** DB (`~/.vitals*/history/history.sqlite3`, WAL mode, linked via
+  system `libsqlite3` — `import SQLite3`, **no SPM dep**), replacing the old append-only
+  CSV. Logging is **on by default** (SQLite makes it cheap); a one-time, persisted
+  `loggingDefaultedOnV2` flip in `AppSettings` enables it for users who predate the change,
+  then respects a later explicit opt-out. One connection on a serial queue: writes
+  (`append`, `recordAlert`) are fire-and-forget so the main-thread tick never blocks on disk;
+  reads (`samples`, `recentAlerts`, exports) run off-main. On first launch it imports the
+  legacy `history.csv` (+ rotated previous) and `alerts.log` — idempotent (`INSERT OR IGNORE`
+  on `ts UNIQUE` / `alerts UNIQUE(ts,message)`) — retiring each to `*.imported` **only once
+  data is safely in the table** (never deletes the only copy after a failed read/import), then
+  auto-deletes those backups after a **2-day grace**. `HistoryReader` / `HistoryExport` /
+  `AlertLog` are the view-facing API and delegate here (one storage seam); CSV export **streams**
+  from the DB in the legacy column format so it round-trips through `HistoryReader.parse`.
 - `Sources/PrivateSensors/` — C shim for private APIs. CF-returning functions must be
   annotated `CF_RETURNS_RETAINED` so ARC manages them.
 - `Models/` — `VitalsModel` (tick → snapshot → publish; `chartHistory` downsampled to

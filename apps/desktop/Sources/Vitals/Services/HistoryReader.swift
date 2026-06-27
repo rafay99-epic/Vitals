@@ -1,8 +1,8 @@
 import Foundation
 
-/// One parsed row from the history log. Mirrors `HistoryLogger.Entry` /
-/// `HistoryLogger.header`. Optionals are columns that were blank (a subsystem
-/// that wasn't present when the row was written).
+/// One row of logged history — a database row, or a parsed legacy CSV line
+/// during import. Mirrors `HistoryDatabase.Entry`. Optionals are readings that
+/// weren't available when the row was written (a subsystem that wasn't present).
 struct HistorySample: Identifiable, Codable {
     let time: Date
     let avgTemp: Double
@@ -43,46 +43,22 @@ enum HistoryRange: String, CaseIterable, Identifiable {
     }
 }
 
-/// Reads the logged history CSV back into samples for the History tab. Blocking
-/// (file read + parse), so it's always called off the main thread; the view
-/// shows a loading state meanwhile and only reads while the tab is open — so it
-/// costs nothing in the background.
+/// Reads logged history back into samples for the History tab. Blocking (a SQLite
+/// range query), so it's always called off the main thread; the view shows a
+/// loading state meanwhile and only reads while the tab is open — so it costs
+/// nothing in the background. The actual storage is `HistoryDatabase`; this stays
+/// the view-facing API (and still owns the CSV `parse` used by the one-time import).
 enum HistoryReader {
     /// Loads samples within `range`, oldest→newest, downsampled to `maxPoints`
-    /// for drawing. For short ranges it walks the file from the newest line and
-    /// stops at the cutoff, so it never parses old rows it won't show.
+    /// for drawing. The database returns a coarse-thinned set; this applies the
+    /// final exact down-sample (keeping first + last).
     static func load(range: HistoryRange, now: Date, maxPoints: Int = 600) -> [HistorySample] {
-        // The rotated previous file only matters for the long ranges.
-        let files: [URL] = (range == .week || range == .all)
-            ? [DataHome.historyPrevious, DataHome.historyFile]
-            : [DataHome.historyFile]
-
-        var lines: [Substring] = []
-        for url in files {
-            if let text = try? String(contentsOf: url, encoding: .utf8) {
-                lines.append(contentsOf: text.split(separator: "\n"))
-            }
-        }
-
-        var samples: [HistorySample] = []
-        if let seconds = range.seconds {
-            let cutoff = now.addingTimeInterval(-seconds)
-            for line in lines.reversed() {
-                guard let sample = parse(line) else { continue }
-                if sample.time < cutoff { break }
-                samples.append(sample)
-            }
-            samples.reverse()
-        } else {
-            for line in lines where !line.isEmpty {
-                if let sample = parse(line) { samples.append(sample) }
-            }
-        }
-        return downsample(samples, to: maxPoints)
+        let raw = HistoryDatabase.shared.samples(range: range, now: now, maxPoints: maxPoints)
+        return downsample(raw, to: maxPoints)
     }
 
-    /// Parses one CSV row. Returns nil for the header and any malformed line, so
-    /// those are skipped rather than crashing the read.
+    /// Parses one legacy CSV row. Returns nil for the header and any malformed
+    /// line, so those are skipped. Used by `HistoryDatabase`'s one-time CSV import.
     static func parse(_ line: Substring) -> HistorySample? {
         let f = line.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
         guard f.count >= 11,
@@ -106,7 +82,9 @@ enum HistoryReader {
         return (0..<maxCount).map { samples[Int((Double($0) * stride).rounded())] }
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
+    /// Shared with `HistoryExport` so an exported CSV matches the legacy column
+    /// format exactly (and round-trips through `parse`).
+    static let isoFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
@@ -114,21 +92,56 @@ enum HistoryReader {
 }
 
 /// Writes the logged history into the data home's `exports/` folder. Blocking
-/// (reads/encodes the whole log), so it's called off the main thread.
+/// (queries/encodes the whole log), so it's called off the main thread.
 enum HistoryExport {
-    /// Copies the full CSV log; returns the new file, or nil if there's nothing yet.
+    /// The CSV header — the legacy column order, kept stable so exports stay
+    /// readable by the same tools and round-trip through `HistoryReader.parse`.
+    static let csvHeader = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"
+
+    /// Writes the whole database out as CSV (every row, no down-sampling); returns
+    /// the new file, or nil if there's nothing logged yet. Streams row-by-row to a
+    /// `FileHandle` so a year of history never materializes in memory.
     static func csv() -> URL? {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: DataHome.historyFile.path) else { return nil }
         guard let destination = prepareDestination(extension: "csv") else { return nil }
-        try? fm.removeItem(at: destination)
-        do {
-            try fm.copyItem(at: DataHome.historyFile, to: destination)
-            return destination
-        } catch {
-            Log.notice(.history, "history CSV export failed", error: error)
+        let fm = FileManager.default
+        guard fm.createFile(atPath: destination.path, contents: csvHeader.data(using: .utf8)),
+              let handle = try? FileHandle(forWritingTo: destination) else {
+            Log.notice(.history, "history CSV export failed to open the destination")
             return nil
         }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+
+        var wroteAny = false
+        HistoryDatabase.shared.forEachSample { sample in
+            if let data = csvLine(sample).data(using: .utf8) {
+                try? handle.write(contentsOf: data)
+                wroteAny = true
+            }
+        }
+        guard wroteAny else {
+            try? fm.removeItem(at: destination)   // nothing logged yet — no empty file (handle closed by defer)
+            return nil
+        }
+        return destination
+    }
+
+    /// One CSV row in the legacy format/precision (so round-trips with `parse`).
+    private static func csvLine(_ s: HistorySample) -> String {
+        let fields: [String] = [
+            HistoryReader.isoFormatter.string(from: s.time),
+            String(format: "%.1f", s.avgTemp),
+            String(format: "%.1f", s.hottestTemp),
+            s.gpuTemp.map { String(format: "%.1f", $0) } ?? "",
+            s.fanRPM.map { String(format: "%.0f", $0) } ?? "",
+            String(format: "%.1f", s.cpuUsage),
+            String(format: "%.2f", s.memoryGB),
+            s.thermalState,
+            s.batteryPercent.map { String(format: "%.0f", $0) } ?? "",
+            s.gpuUsage.map { String(format: "%.1f", $0) } ?? "",
+            s.gpuMemoryGB.map { String(format: "%.2f", $0) } ?? "",
+        ]
+        return fields.joined(separator: ",") + "\n"
     }
 
     /// Parses the whole log and writes it as a JSON array; nil if empty.

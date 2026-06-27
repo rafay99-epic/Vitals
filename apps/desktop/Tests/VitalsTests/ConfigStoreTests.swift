@@ -56,6 +56,31 @@ struct ConfigStoreTests {
         #expect(ConfigStore.restore(into: suite, from: tempURL()) == 0)
     }
 
+    @Test func enablesLoggingOnceForUpgradingUserThenRespectsOptOut() {
+        let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
+
+        // An existing user from before the on-by-default change: their mirrored
+        // config has logging off and no migration flag.
+        let firstSuite = freshSuite("vitals.test.logmig.1")
+        firstSuite.set(false, forKey: "loggingEnabled")
+        ConfigStore.save(firstSuite, keys: ["loggingEnabled"], to: url)
+
+        // Opening enables logging once (the flip), despite the stored false.
+        let secondSuite = freshSuite("vitals.test.logmig.2")
+        let upgraded = AppSettings(defaults: secondSuite, configURL: url)
+        #expect(upgraded.loggingEnabled == true)
+        ConfigStore.save(secondSuite, keys: AppSettings.persistedKeys, to: url)
+
+        // The user then turns it back off — an explicit choice that must stick.
+        upgraded.loggingEnabled = false
+        ConfigStore.save(secondSuite, keys: AppSettings.persistedKeys, to: url)
+
+        // A later launch must not re-enable it (the flip already ran once).
+        let thirdSuite = freshSuite("vitals.test.logmig.3")
+        let reopened = AppSettings(defaults: thirdSuite, configURL: url)
+        #expect(reopened.loggingEnabled == false)
+    }
+
     @Test func settingsSurviveADefaultsWipe() {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
 
