@@ -33,6 +33,48 @@ final class AppsModel: ObservableObject {
         var label: String { self == .name ? "Name" : "Size" }
     }
 
+    /// Live progress for a running uninstall, so the UI shows exactly what's
+    /// happening instead of a frozen sheet. Updated on the main actor between
+    /// each step of `executeStagedUninstall`.
+    struct UninstallProgress {
+        /// The current step's human label — the "is this thing stuck?" answer.
+        enum Phase: Equatable {
+            case quitting(String)
+            case removingFiles(String)
+            case homebrew(String)
+            case awaitingAdmin
+            case removingSystem
+            case finishing
+
+            var label: String {
+                switch self {
+                case .quitting(let name):      return "Quitting \(name)…"
+                case .removingFiles(let name): return "Removing \(name) and its files…"
+                case .homebrew(let name):      return "Uninstalling \(name) with Homebrew…"
+                case .awaitingAdmin:           return "Enter your administrator password to remove system files…"
+                case .removingSystem:          return "Removing system files…"
+                case .finishing:               return "Finishing up…"
+                }
+            }
+        }
+
+        var completedApps: Int
+        let totalApps: Int
+        var phase: Phase
+        var results: [AppResult] = []
+
+        /// App-granular fill for the determinate bar (multi-app removals).
+        var fraction: Double { totalApps > 0 ? Double(completedApps) / Double(totalApps) : 0 }
+    }
+
+    /// A finished app's outcome, shown live in the progress list as it lands.
+    struct AppResult: Identifiable {
+        let id: URL
+        let name: String
+        let succeeded: Bool
+        let detail: String
+    }
+
     @Published private(set) var apps: [InstalledApp] = []
     @Published private(set) var isScanning = false
     @Published var selection: Set<URL> = []
@@ -40,6 +82,9 @@ final class AppsModel: ObservableObject {
     @Published var sortOrder: SortOrder = .name
     @Published var staged: StagedUninstall?
     @Published private(set) var isPreparingUninstall = false
+    /// Non-nil while an uninstall is actually running — drives the in-sheet
+    /// progress view. The sheet stays up (bound to `staged`) and swaps to this.
+    @Published private(set) var uninstallProgress: UninstallProgress?
     @Published private(set) var lastOutcome: AppUninstaller.Outcome?
     /// Set when the Applications folder itself couldn't be read — distinguishes
     /// a genuine failure from simply having nothing removable installed.
@@ -151,20 +196,31 @@ final class AppsModel: ObservableObject {
             var leftovers: [URL: [Leftover]] = [:]
             var casks: [URL: String] = [:]
             var systemExtensions: [URL: [URL]] = [:]
-            for app in targets {
-                let bundleID = app.bundleID
-                let name = app.name
-                let url = app.id
-                leftovers[url] = await Task.detached(priority: .userInitiated) {
-                    LeftoverScanner.scan(bundleID: bundleID, appName: name, appURL: url)
-                }.value
-                if let cask = LeftoverScanner.homebrewCask(appName: name, installedCasks: casksList) {
-                    casks[url] = cask
+            // Scan every selected app concurrently — each scan is an independent
+            // filesystem walk, so a serial loop made multi-select needlessly slow.
+            let scanned = await withTaskGroup(of: (URL, [Leftover], [URL]).self) { group in
+                for app in targets {
+                    let bundleID = app.bundleID
+                    let name = app.name
+                    let url = app.id
+                    group.addTask(priority: .userInitiated) {
+                        (url,
+                         LeftoverScanner.scan(bundleID: bundleID, appName: name, appURL: url),
+                         LeftoverScanner.systemExtensions(bundleID: bundleID))
+                    }
                 }
-                let extensions = await Task.detached(priority: .utility) {
-                    LeftoverScanner.systemExtensions(bundleID: bundleID)
-                }.value
+                var out: [(URL, [Leftover], [URL])] = []
+                for await result in group { out.append(result) }
+                return out
+            }
+            for (url, found, extensions) in scanned {
+                leftovers[url] = found
                 if !extensions.isEmpty { systemExtensions[url] = extensions }
+            }
+            for app in targets {
+                if let cask = LeftoverScanner.homebrewCask(appName: app.name, installedCasks: casksList) {
+                    casks[app.id] = cask
+                }
             }
             // A root-owned bundle (installed by a pkg) can't be trashed — flag it
             // so the sheet shows it's admin/permanent, and the cask-handled ones
@@ -184,19 +240,20 @@ final class AppsModel: ObservableObject {
     /// and all system-domain leftovers across every app are removed in a single
     /// administrator prompt at the end.
     func executeStagedUninstall() {
-        guard let staged else { return }
-        self.staged = nil
+        guard let staged, uninstallProgress == nil else { return }
+        // Keep `staged` set so the sheet stays up and swaps to the progress view
+        // (no blank gap between confirm and the final summary).
+        uninstallProgress = UninstallProgress(completedApps: 0, totalApps: staged.apps.count,
+                                              phase: .finishing)
         Task {
             var combined = AppUninstaller.Outcome()
             var systemPaths: [URL] = []
             var systemBytes: UInt64 = 0
 
             for app in staged.apps {
+                uninstallProgress?.phase = .quitting(app.name)
                 if let running = AppUninstaller.runningApplication(bundleID: app.bundleID) {
-                    running.terminate()
-                    try? await Task.sleep(for: .milliseconds(800))
-                    if !running.isTerminated { running.forceTerminate() }
-                    try? await Task.sleep(for: .milliseconds(400))
+                    await Self.quit(running)
                 }
 
                 let keep = staged.excluded
@@ -204,6 +261,7 @@ final class AppsModel: ObservableObject {
 
                 var bundleHandledByBrew = false
                 if let cask = staged.casks[app.id] {
+                    uninstallProgress?.phase = .homebrew(app.name)
                     let removed = await Task.detached(priority: .userInitiated) {
                         AppUninstaller.homebrewUninstall(cask: cask)
                     }.value
@@ -218,6 +276,7 @@ final class AppsModel: ObservableObject {
                     systemBytes += app.sizeBytes ?? 0
                 }
 
+                uninstallProgress?.phase = .removingFiles(app.name)
                 let outcome = await Task.detached(priority: .userInitiated) {
                     AppUninstaller.uninstall(app: app, leftovers: leftovers, skipBundle: bundleHandledByBrew || bundleViaAdmin)
                 }.value
@@ -240,11 +299,18 @@ final class AppsModel: ObservableObject {
                     systemPaths.append(leftover.id)
                     systemBytes += leftover.sizeBytes
                 }
+
+                // Record this app's outcome live so the user watches the list fill.
+                uninstallProgress?.results.append(appResult(for: app, outcome: outcome,
+                                                            cask: staged.casks[app.id] != nil,
+                                                            viaAdmin: bundleViaAdmin))
+                uninstallProgress?.completedApps += 1
             }
 
             // One admin prompt for every system-domain leftover across the batch.
             if !systemPaths.isEmpty,
                let script = AppUninstaller.systemRemovalScript(for: systemPaths) {
+                uninstallProgress?.phase = .awaitingAdmin
                 do {
                     try await PrivilegedShell.runAsAdmin(
                         script,
@@ -264,10 +330,55 @@ final class AppsModel: ObservableObject {
                 }
             }
 
-            lastOutcome = combined
+            uninstallProgress?.phase = .finishing
             Log.notice(.uninstall, "uninstall finished: \(combined.trashed.count) trashed, \(combined.systemRemoved) system, \(ByteCountFormatter.string(fromByteCount: Int64(combined.freedBytes), countStyle: .file)) freed")
+            // Hand off to the summary state and rescan the (now shorter) app list.
+            lastOutcome = combined
+            uninstallProgress = nil
             refresh()
         }
+    }
+
+    /// Per-app line for the live results list — succeeded unless a Trash move
+    /// failed and didn't fall back to the admin path.
+    private func appResult(for app: InstalledApp, outcome: AppUninstaller.Outcome,
+                           cask: Bool, viaAdmin: Bool) -> AppResult {
+        let succeeded = outcome.failures.isEmpty
+        let detail: String
+        if cask {
+            detail = "Removed with Homebrew"
+        } else if viaAdmin || !outcome.failedBundles.isEmpty {
+            detail = "Needs your password (system-owned)"
+        } else if outcome.failures.isEmpty {
+            let count = outcome.trashed.count
+            detail = "\(count) item\(count == 1 ? "" : "s") · \(formatBytes(outcome.freedBytes))"
+        } else {
+            detail = "\(outcome.failures.count) item\(outcome.failures.count == 1 ? "" : "s") couldn't be removed"
+        }
+        return AppResult(id: app.id, name: app.name, succeeded: succeeded, detail: detail)
+    }
+
+    /// Quit a running app, then poll briefly for it to actually exit instead of
+    /// sleeping a fixed 1.2s every time — most apps quit in a few hundred ms, so
+    /// this returns as soon as they're gone and only escalates if they hang.
+    private static func quit(_ running: NSRunningApplication) async {
+        running.terminate()
+        for _ in 0..<20 {               // up to ~2s of graceful wait
+            if running.isTerminated { return }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        running.forceTerminate()
+        for _ in 0..<5 {                // up to ~0.5s after a force-quit
+            if running.isTerminated { return }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// Dismisses the finished-uninstall summary and tears down the sheet.
+    func finishUninstall() {
+        staged = nil
+        lastOutcome = nil
+        uninstallProgress = nil
     }
 
     func dismissOutcome() {
