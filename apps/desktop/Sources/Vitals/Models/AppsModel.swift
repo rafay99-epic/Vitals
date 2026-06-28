@@ -315,8 +315,14 @@ final class AppsModel: ObservableObject {
             }
 
             // One admin prompt for every system-domain leftover across the batch.
-            if !systemPaths.isEmpty,
-               let script = AppUninstaller.systemRemovalScript(for: systemPaths.map(\.url)) {
+            // Dedup first: two apps can surface the same shared system path, and
+            // counting it twice would inflate the summary's removed count + bytes.
+            var seenSystemPaths = Set<String>()
+            let uniqueSystemPaths = systemPaths.filter {
+                seenSystemPaths.insert($0.url.standardizedFileURL.path).inserted
+            }
+            if !uniqueSystemPaths.isEmpty,
+               let script = AppUninstaller.systemRemovalScript(for: uniqueSystemPaths.map(\.url)) {
                 uninstallProgress?.phase = .awaitingAdmin
                 do {
                     try await PrivilegedShell.runAsAdmin(
@@ -326,7 +332,7 @@ final class AppsModel: ObservableObject {
                     // The script is best-effort (`rm … || true`), so credit only
                     // the paths actually gone from disk — never an unverified count.
                     let fm = FileManager.default
-                    let removed = systemPaths.filter { !fm.fileExists(atPath: $0.url.path) }
+                    let removed = uniqueSystemPaths.filter { !fm.fileExists(atPath: $0.url.path) }
                     combined.usedAdmin = true
                     combined.systemRemoved = removed.count
                     combined.freedBytes += removed.reduce(0) { $0 + $1.bytes }
