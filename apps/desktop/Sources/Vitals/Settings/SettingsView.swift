@@ -2,8 +2,10 @@ import SwiftUI
 import AppKit
 import UserNotifications
 
-/// Settings in the same design language as the main window: capsule tabs,
-/// card sections with tinted icon tiles, switch toggles.
+/// Settings, hosted as the main window's last sidebar section (`.settings`) — no
+/// longer a cramped fixed-size dialog. Same design language as every other
+/// panel: a page title, the capsule sub-section switcher, then card sections
+/// with tinted icon tiles and switch toggles, in a readable centered column.
 struct SettingsView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case general, alerts, data, updates, developer, about
@@ -37,8 +39,17 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            tabBar
-                .padding(.vertical, 10)
+            // Page header: title + sub-section switcher, with a top inset that
+            // clears the traffic-light strip like the sidebar header does.
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Settings")
+                    .font(.system(size: 22, weight: .bold))
+                tabBar
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.top, 34)
+            .padding(.bottom, 14)
             Divider()
                 .opacity(0.5)
             ScrollView {
@@ -52,10 +63,16 @@ struct SettingsView: View {
                     case .about: AboutPane()
                     }
                 }
-                .padding(16)
+                // A readable column pinned to the left, aligned under the title —
+                // settings forms shouldn't stretch to the full content width the
+                // way data panels do (matches macOS System Settings).
+                .frame(maxWidth: 620, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 20)
             }
         }
-        .frame(width: 520, height: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var tabBar: some View {
@@ -66,6 +83,7 @@ struct SettingsView: View {
         }
         .padding(3)
         .background(Capsule().fill(.quaternary.opacity(0.45)))
+        .fixedSize()
     }
 
     private func tabButton(_ item: Tab) -> some View {

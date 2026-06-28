@@ -15,15 +15,17 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
     private let model: VitalsModel
     private let settings: AppSettings
     private let fanControl: FanController
+    private let navigator: Navigator
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var cancellables: Set<AnyCancellable> = []
 
-    init(model: VitalsModel, settings: AppSettings, fanControl: FanController) {
+    init(model: VitalsModel, settings: AppSettings, fanControl: FanController, navigator: Navigator) {
         self.model = model
         self.settings = settings
         self.fanControl = fanControl
+        self.navigator = navigator
         super.init()
 
         // Show/hide with the preference.
@@ -117,6 +119,7 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
             .environmentObject(model)
             .environmentObject(settings)
             .environmentObject(fanControl)
+            .environmentObject(navigator)
             .environment(\.animationsEnabled, settings.animationsEnabled)
 
         let popover = NSPopover()

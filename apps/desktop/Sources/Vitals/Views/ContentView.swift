@@ -9,6 +9,7 @@ enum NavSection: String, CaseIterable, Identifiable {
     case overview
     case cpu, gpu, memory, battery, sensors, processes, history
     case storage, cleanup, applications, loginItems
+    case settings
 
     var id: String { rawValue }
 
@@ -26,6 +27,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .cleanup:      return "Cleanup"
         case .applications: return "Applications"
         case .loginItems:   return "Login Items"
+        case .settings:     return "Settings"
         }
     }
 
@@ -43,6 +45,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .cleanup:      return "sparkles"
         case .applications: return "square.grid.2x2"
         case .loginItems:   return "power"
+        case .settings:     return "gearshape"
         }
     }
 
@@ -55,13 +58,17 @@ enum NavSection: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var model: VitalsModel
-    @State private var section: NavSection = .overview
+    /// The selected destination, shared app-wide so the ⌘, command and the
+    /// menu-bar gear can also land on the Settings section (now an in-window
+    /// panel, not a separate dialog).
+    @EnvironmentObject private var navigator: Navigator
     /// Sections opened at least once, kept mounted for instant switch-back —
     /// seeded with Overview so home is live at launch. Mirrors the old lazy-tab
     /// approach: a section joins on first selection; hidden ones stay laid out.
     @State private var visited: Set<NavSection> = [.overview]
-    @State private var gearHovered = false
-    @Environment(\.openWindow) private var openWindow
+
+    /// The current section, read/written through the shared navigator.
+    private var section: NavSection { navigator.section }
 
     // Per-section models, owned here so a scan started in one section survives
     // switching sections (Processes, Apps, Login Items, Cleanup, Storage).
@@ -85,6 +92,10 @@ struct ContentView: View {
         .frame(minWidth: 980, minHeight: 680)
         .onAppear { model.setMainWindowVisible(true) }
         .onDisappear { model.setMainWindowVisible(false) }
+        // Keep the kept-mounted set in sync when navigation comes from outside
+        // the sidebar (⌘,, the menu-bar gear) — and on first appear, so a window
+        // reopened straight onto Settings mounts it. `initial: true` covers both.
+        .onChange(of: navigator.section, initial: true) { _, new in visited.insert(new) }
     }
 
     // MARK: Sidebar
@@ -109,6 +120,16 @@ struct ContentView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 12)
             }
+            // Settings is pinned to the very bottom — always visible regardless of
+            // how far the section list scrolls, the way macOS apps anchor app-wide
+            // settings (Music, Sensei). It's its own group, not part of Monitor or
+            // Maintain.
+            Divider().opacity(0.4).padding(.horizontal, 8)
+            VStack(alignment: .leading, spacing: 1) {
+                row(.settings, shortcutIndex: nil)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
         }
         .frame(width: 212)
         .frame(maxHeight: .infinity)
@@ -118,9 +139,8 @@ struct ContentView: View {
         .gesture(WindowDragGesture())
     }
 
-    /// Branding + the app-wide update + settings affordances. Lives at the top
-    /// (HIG: never put critical actions at a sidebar's bottom, which a window
-    /// move can hide). The top inset clears the traffic lights.
+    /// Branding + the app-wide update affordance. The top inset clears the
+    /// traffic lights. (Settings moved into the sidebar's pinned bottom row.)
     private var sidebarHeader: some View {
         HStack(spacing: 8) {
             Image(nsImage: NSApp.applicationIconImage)
@@ -129,22 +149,6 @@ struct ContentView: View {
             Text("Vitals").font(.system(size: 14, weight: .semibold))
             Spacer()
             HeaderUpdateButton()
-            Button {
-                openWindow(id: "settings")
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.quaternary.opacity(gearHovered ? 0.7 : 0)))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.12)) { gearHovered = hovering }
-            }
-            .help("Vitals settings")
         }
         .padding(.horizontal, 12)
         .padding(.top, 38)
@@ -168,7 +172,7 @@ struct ContentView: View {
         let shortcut = shortcutIndex.flatMap { $0 < 9 ? KeyEquivalent(Character("\($0 + 1)")) : nil }
         return Button {
             visited.insert(item)
-            section = item
+            navigator.section = item
         } label: {
             HStack(spacing: 9) {
                 Image(systemName: item.symbol)
@@ -230,6 +234,9 @@ struct ContentView: View {
             if visited.contains(.loginItems) {
                 LoginItemsView(model: loginItemsModel, isActive: active(.loginItems)).tabVisibility(active(.loginItems))
             }
+            if visited.contains(.settings) {
+                SettingsView().tabVisibility(active(.settings))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(nil, value: section)
@@ -238,7 +245,7 @@ struct ContentView: View {
     /// Drill from a Dashboard tile straight into the matching Monitor section.
     private func drill(to target: NavSection) {
         visited.insert(target)
-        section = target
+        navigator.section = target
     }
 }
 

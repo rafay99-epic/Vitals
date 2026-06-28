@@ -12,6 +12,7 @@ struct VitalsApp: App {
     @StateObject private var widgets: WidgetManager
     @StateObject private var menuBar: MenuBarController
     @StateObject private var logStore: LogStore
+    @StateObject private var navigator: Navigator
 
     init() {
         // Create the data home and migrate any legacy log before logging starts.
@@ -22,6 +23,7 @@ struct VitalsApp: App {
         let model = VitalsModel(settings: settings)
         let updater = Updater()
         let fanControl = FanController()
+        let navigator = Navigator()
         model.start()
         updater.startAutomaticChecks(settings: settings)
         settings.applyActivationPolicy()
@@ -30,10 +32,12 @@ struct VitalsApp: App {
         _model = StateObject(wrappedValue: model)
         _updater = StateObject(wrappedValue: updater)
         _fanControl = StateObject(wrappedValue: fanControl)
+        _navigator = StateObject(wrappedValue: navigator)
         // Widgets observe the same model/settings — one data path, no re-polling.
         _widgets = StateObject(wrappedValue: WidgetManager(model: model, settings: settings))
-        // The menu-bar status item hosts a live, compositor-animated label.
-        _menuBar = StateObject(wrappedValue: MenuBarController(model: model, settings: settings, fanControl: fanControl))
+        // The menu-bar status item hosts a live, compositor-animated label; its
+        // gear navigates the main window to the Settings section.
+        _menuBar = StateObject(wrappedValue: MenuBarController(model: model, settings: settings, fanControl: fanControl, navigator: navigator))
         // Diagnostic log store: seeds from vitals.log and feeds the Logs tab.
         // `AppSettings.init` already set the capture level before this point.
         _logStore = StateObject(wrappedValue: LogStore())
@@ -53,6 +57,8 @@ struct VitalsApp: App {
                 .environmentObject(updater)
                 .environmentObject(fanControl)
                 .environmentObject(logStore)
+                .environmentObject(widgets)
+                .environmentObject(navigator)
                 .environment(\.animationsEnabled, settings.animationsEnabled)
         }
         .defaultSize(width: 1100, height: 760)
@@ -61,20 +67,9 @@ struct VitalsApp: App {
         // edge (it pads around them).
         .windowStyle(.hiddenTitleBar)
         .commands {
-            SettingsCommands()
+            SettingsCommands(navigator: navigator)
             HelpCommands()
         }
-
-        // A plain window instead of the Settings scene: SettingsLink/openSettings
-        // is unreliable in apps that also have a MenuBarExtra, openWindow is not.
-        Window("Vitals Settings", id: "settings") {
-            SettingsView()
-                .environmentObject(settings)
-                .environmentObject(updater)
-                .environmentObject(widgets)
-        }
-        .windowResizability(.contentSize)
-        .defaultPosition(.center)
 
         Window("Vitals Help", id: "help") {
             HelpView()
@@ -100,15 +95,18 @@ struct VitalsApp: App {
     }
 }
 
-/// Replaces the default "Settings…" item in the app menu so ⌘, opens our
-/// settings window.
+/// Replaces the default "Settings…" item in the app menu so ⌘, selects the
+/// in-window Settings section (and reopens the main window if it was closed).
 struct SettingsCommands: Commands {
+    let navigator: Navigator
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Settings…") {
-                openWindow(id: "settings")
+                navigator.section = .settings
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
             }
             .keyboardShortcut(",", modifiers: .command)
         }
