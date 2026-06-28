@@ -1,0 +1,19 @@
+apps/desktop/Tests/VitalsTests/ConfigStoreTests.swift
+  s_98e4514bb0b817::t_acb1c4e69101f6 92-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "468209f881b3e988bcbc6f497dac71bc86ac25b5",
+  "prompts": {},
+  "sessions": {
+    "s_98e4514bb0b817": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f6fd7fd-5089-41dd-9263-65e155f90c83",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
