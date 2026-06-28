@@ -127,6 +127,65 @@ struct LeftoverScannerTests {
         #expect(LeftoverScanner.vendorNestedCandidates(bundleID: "com.slack", appName: "Slack", home: home).isEmpty)
         #expect(LeftoverScanner.vendorNestedCandidates(bundleID: nil, appName: "Slack", home: home).isEmpty)
     }
+
+    /// Prefix-enumeration of shared user dirs catches an app's id-prefixed
+    /// siblings (updater caches, helper data) but never a different app that
+    /// merely shares the prefix.
+    @Test func entryBelongsToBundleIsBoundaryGated() {
+        #expect(LeftoverScanner.entryBelongsToBundle("com.example.app", "com.example.app"))
+        #expect(LeftoverScanner.entryBelongsToBundle("com.example.app.ShipIt", "com.example.app"))
+        #expect(LeftoverScanner.entryBelongsToBundle("com.example.app.helper.plist", "com.example.app"))
+        #expect(!LeftoverScanner.entryBelongsToBundle("com.example.application", "com.example.app"))
+        #expect(!LeftoverScanner.entryBelongsToBundle("com.other.app", "com.example.app"))
+        // An invalid bundle id can never trigger broad enumeration.
+        #expect(!LeftoverScanner.entryBelongsToBundle("anything", "nodots"))
+    }
+
+    /// Recent-items shared-file-lists are matched by id + the `.sfl*` family,
+    /// never a different app or a non-sfl file.
+    @Test func sharedFileListMatchesRecentItemsByID() {
+        #expect(LeftoverScanner.isSharedFileList("com.example.app.sfl4", "com.example.app"))
+        #expect(LeftoverScanner.isSharedFileList("com.example.app.sfl3", "com.example.app"))
+        #expect(LeftoverScanner.isSharedFileList("com.example.app.sfl", "com.example.app"))
+        #expect(!LeftoverScanner.isSharedFileList("com.example.app.plist", "com.example.app"))
+        #expect(!LeftoverScanner.isSharedFileList("com.example.application.sfl4", "com.example.app"))
+        #expect(!LeftoverScanner.isSharedFileList("com.other.app.sfl4", "com.example.app"))
+    }
+
+    /// End-to-end against a temp home: the broadened enumeration must catch the
+    /// nested `.sfl4` recents file, a bundle-id-prefixed updater cache, and a
+    /// UUID-named daemon container (matched via its metadata id) — while leaving
+    /// a different app that merely shares the prefix untouched.
+    @Test func scanFindsNestedSharedFileListUpdaterCacheAndDaemonContainer() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("vitals-leftover-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: home) }
+
+        func make(_ relative: String, file: Bool = false, contents: String = "x") throws {
+            let url = home.appendingPathComponent(relative)
+            try fm.createDirectory(at: file ? url.deletingLastPathComponent() : url,
+                                   withIntermediateDirectories: true)
+            if file { try contents.write(to: url, atomically: true, encoding: .utf8) }
+        }
+
+        // Should be found:
+        try make("Library/Application Support/com.apple.sharedfilelist/com.apple.LSSharedFileList.ApplicationRecentDocuments/com.example.app.sfl4", file: true)
+        try make("Library/Caches/com.example.app.ShipIt")           // Squirrel updater cache
+        let daemon = "Library/Daemon Containers/\(UUID().uuidString)"
+        try make("\(daemon)/Data")
+        let metaURL = home.appendingPathComponent("\(daemon)/.com.apple.containermanagerd.metadata.plist")
+        try (["MCMMetadataIdentifier": "com.example.app"] as NSDictionary).write(to: metaURL)
+
+        // Must NOT be found — a different app that only shares the prefix:
+        try make("Library/Caches/com.example.application")
+
+        let found = LeftoverScanner.scan(bundleID: "com.example.app", appName: "Example", home: home)
+        let names = Set(found.map(\.id.lastPathComponent))
+        #expect(names.contains("com.example.app.sfl4"))
+        #expect(names.contains("com.example.app.ShipIt"))
+        #expect(found.contains { $0.id.path.contains("/Daemon Containers/") })
+        #expect(!names.contains("com.example.application"))
+    }
 }
 
 /// The complete uninstall reaches system-domain files and removes them as root,
