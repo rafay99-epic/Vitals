@@ -13,6 +13,9 @@ final class Updater: ObservableObject {
         case upToDate
         case available(Release)
         case downloading
+        /// Downloaded in the background and waiting for the user to install it
+        /// (the "Download updates automatically" path).
+        case readyToInstall(Release)
         case installing
         case failed(String)
     }
@@ -59,6 +62,11 @@ final class Updater: ObservableObject {
     private var activationObserver: NSObjectProtocol?
     private var cancellables: Set<AnyCancellable> = []
     private var notifiedVersion: String?
+    /// The live settings, so a background check can read `autoDownloadUpdates`
+    /// (silently pre-download) at the moment it finds an update.
+    private weak var settings: AppSettings?
+    /// A DMG already downloaded in the background, waiting to be installed.
+    private var pendingDMG: URL?
     private static let checkInterval: TimeInterval = 6 * 3600
     /// Don't re-check on every refocus — only if the last check is older than this.
     private static let activationRecheckAfter: TimeInterval = 30 * 60
@@ -67,12 +75,26 @@ final class Updater: ObservableObject {
         status == .checking || status == .downloading || status == .installing
     }
 
+    init() {
+        // Route notification taps (the "Download & Install" / "Install &
+        // Relaunch" buttons, or the banner itself) back into the update flow, so
+        // the user can update straight from the notification with no window open.
+        notifications.onUpdateAction = { [weak self] action in
+            guard let self else { return }
+            switch action {
+            case .download: Task { await self.handleDownloadAction() }
+            case .install:  Task { await self.handleInstallAction() }
+            }
+        }
+    }
+
     /// Checks at launch, every 6 hours, and when the user returns to the app
     /// (throttled), while the automatic toggle is on. Each channel tracks its
     /// own feed: Stable → the latest release, Nightly → the latest pre-release.
     /// Dev has no feed, so this is a no-op there.
     func startAutomaticChecks(settings: AppSettings) {
         guard Channel.current.updatesEnabled else { return }
+        self.settings = settings
         settings.$autoUpdateCheck
             .removeDuplicates()
             .sink { [weak self] enabled in
@@ -123,13 +145,15 @@ final class Updater: ObservableObject {
             if let release, Self.isNewer(release) {
                 Log.notice(.updater, "update available: \(release.displayVersion) (current \(Self.currentVersion))")
                 status = .available(release)
-                if !userInitiated, notifiedVersion != release.tag + "#\(release.buildNumber)" {
-                    notifiedVersion = release.tag + "#\(release.buildNumber)"
-                    notifications.send(
-                        title: "\(Channel.current.displayName) \(release.displayVersion) is available",
-                        body: "Open \(Channel.current.displayName) and click Install Update.",
-                        id: "vitals.update"
-                    )
+                if !userInitiated, notifiedVersion != Self.notifyKey(release) {
+                    notifiedVersion = Self.notifyKey(release)
+                    if settings?.autoDownloadUpdates == true {
+                        // Pre-download in the background, then notify "ready to
+                        // install" (which sends its own actionable notification).
+                        await downloadInBackground(release)
+                    } else {
+                        notifyUpdateAvailable(release)
+                    }
                 }
             } else {
                 status = .upToDate
@@ -152,29 +176,139 @@ final class Updater: ObservableObject {
         }
     }
 
+    /// Download the available release and install it. If the release was already
+    /// pre-downloaded (`readyToInstall`), skip straight to installing. Drives the
+    /// Settings "Install" button and the "Download & Install" notification action.
     func downloadAndInstall() async {
-        guard case .available(let release) = status else { return }
+        let release: Release
+        switch status {
+        case .available(let r):
+            release = r
+        case .readyToInstall(let r):
+            // Already on disk from a background pre-download — install it directly.
+            if let dmg = pendingDMG { await installAndRelaunch(dmgAt: dmg, release: r); return }
+            release = r
+        default:
+            return
+        }
         status = .downloading
         Log.notice(.updater, "downloading update \(release.displayVersion)")
         do {
             let dmg = try await Self.download(release)
-            status = .installing
-            Log.notice(.updater, "installing update \(release.displayVersion)")
-            try await Self.install(dmgAt: dmg)
-            // Hand off to the freshly installed copy and exit this one.
-            let relauncher = Process()
-            relauncher.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            relauncher.arguments = ["-c", "sleep 1; /usr/bin/open '\(Self.installPath)'"]
-            do {
-                try relauncher.run()
-            } catch {
-                Log.error(.updater, "couldn't launch the relauncher after install — the app will quit without reopening", error: error)
-            }
-            NSApp.terminate(nil)
+            await installAndRelaunch(dmgAt: dmg, release: release)
         } catch {
-            Log.error(.updater, "download/install failed", error: error)
+            Log.error(.updater, "download failed", error: error)
             status = .failed(error.localizedDescription)
+            notifyFailure(release)
         }
+    }
+
+    /// Install a previously background-downloaded DMG. Drives the Settings
+    /// "Install & Relaunch" button and the "ready to install" notification action.
+    func installPending() async {
+        guard case .readyToInstall(let release) = status, let dmg = pendingDMG else { return }
+        await installAndRelaunch(dmgAt: dmg, release: release)
+    }
+
+    /// Silently fetch the DMG after a background check, stash it, and notify the
+    /// user it's ready to install. On failure, fall back to the actionable
+    /// "available" notification so they can still download on demand.
+    private func downloadInBackground(_ release: Release) async {
+        guard !isBusy else { return }
+        status = .downloading
+        Log.notice(.updater, "pre-downloading update \(release.displayVersion) in the background")
+        do {
+            let dmg = try await Self.download(release)
+            pendingDMG = dmg
+            status = .readyToInstall(release)
+            notifyUpdateReady(release)
+        } catch {
+            Log.error(.updater, "background download failed — offering on-demand download instead", error: error)
+            status = .available(release)
+            notifyUpdateAvailable(release)
+        }
+    }
+
+    /// Install the mounted DMG, then hand off to the freshly installed copy and
+    /// terminate this one. Sets `.failed` (and notifies) if the install fails.
+    private func installAndRelaunch(dmgAt dmg: URL, release: Release) async {
+        status = .installing
+        Log.notice(.updater, "installing update \(release.displayVersion)")
+        do {
+            try await Self.install(dmgAt: dmg)
+        } catch {
+            Log.error(.updater, "install failed", error: error)
+            status = .failed(error.localizedDescription)
+            notifyFailure(release)
+            return
+        }
+        let relauncher = Process()
+        relauncher.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        relauncher.arguments = ["-c", "sleep 1; /usr/bin/open '\(Self.installPath)'"]
+        do {
+            try relauncher.run()
+        } catch {
+            Log.error(.updater, "couldn't launch the relauncher after install — the app will quit without reopening", error: error)
+        }
+        NSApp.terminate(nil)
+    }
+
+    // MARK: - Notification actions
+
+    /// User tapped "Download & Install" (or the banner body of an "available"
+    /// notification). Bring the app forward and run the download; re-check first
+    /// if the app relaunched since the notification was posted and lost its state.
+    private func handleDownloadAction() async {
+        NSApp.activate(ignoringOtherApps: true)
+        switch status {
+        case .available, .readyToInstall: break
+        default: await check(userInitiated: true)
+        }
+        await downloadAndInstall()
+    }
+
+    /// User tapped "Install & Relaunch" (or the banner body of a "ready"
+    /// notification). Install the pre-downloaded DMG; if it's gone (app
+    /// relaunched), fall back to a fresh download + install.
+    private func handleInstallAction() async {
+        NSApp.activate(ignoringOtherApps: true)
+        if pendingDMG != nil, case .readyToInstall = status {
+            await installPending()
+        } else {
+            await handleDownloadAction()
+        }
+    }
+
+    // MARK: - Notifications
+
+    private static func notifyKey(_ release: Release) -> String {
+        release.tag + "#\(release.buildNumber)"
+    }
+
+    private func notifyUpdateAvailable(_ release: Release) {
+        notifications.send(
+            title: "\(Channel.current.displayName) \(release.displayVersion) is available",
+            body: "Tap Download & Install to update in the background.",
+            id: "vitals.update",
+            categoryId: NotificationManager.Category.updateAvailable
+        )
+    }
+
+    private func notifyUpdateReady(_ release: Release) {
+        notifications.send(
+            title: "\(Channel.current.displayName) \(release.displayVersion) is ready to install",
+            body: "Downloaded and ready. Tap Install & Relaunch to finish.",
+            id: "vitals.update",
+            categoryId: NotificationManager.Category.updateReady
+        )
+    }
+
+    private func notifyFailure(_ release: Release) {
+        notifications.send(
+            title: "\(Channel.current.displayName) update failed",
+            body: "Couldn't update to \(release.displayVersion). Open \(Channel.current.displayName) → Settings → Updates to try again.",
+            id: "vitals.update.failed"
+        )
     }
 
     // MARK: - GitHub API

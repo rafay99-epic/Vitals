@@ -851,6 +851,12 @@ private struct UpdatesPane: View {
                 }
                 if Channel.current.updatesEnabled {
                     SwitchRow(label: "Check for updates automatically", isOn: $settings.autoUpdateCheck)
+                    SwitchRow(
+                        label: "Download updates automatically",
+                        caption: "Pre-download in the background so installing is instant. You still confirm before it installs.",
+                        isOn: $settings.autoDownloadUpdates
+                    )
+                    .disabled(!settings.autoUpdateCheck)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Button("Check for Updates") {
@@ -860,6 +866,11 @@ private struct UpdatesPane: View {
                             if case .available(let release) = updater.status {
                                 Button("Install \(Channel.current.displayName) \(release.displayVersion)") {
                                     Task { await updater.downloadAndInstall() }
+                                }
+                                .buttonStyle(.borderedProminent)
+                            } else if case .readyToInstall(let release) = updater.status {
+                                Button("Install & Relaunch \(release.displayVersion)") {
+                                    Task { await updater.installPending() }
                                 }
                                 .buttonStyle(.borderedProminent)
                             }
@@ -897,6 +908,8 @@ private struct UpdatesPane: View {
             return "You're up to date. Last checked \(when)."
         case .available(let release):
             return "\(Channel.current.displayName) \(release.displayVersion) is ready to install."
+        case .readyToInstall(let release):
+            return "\(Channel.current.displayName) \(release.displayVersion) downloaded — ready to install."
         case .downloading:
             return "Downloading update…"
         case .installing:

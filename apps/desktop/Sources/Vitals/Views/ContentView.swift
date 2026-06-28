@@ -269,6 +269,23 @@ private struct HeaderUpdateButton: View {
                 withAnimation(.easeOut(duration: 0.12)) { hovered = hovering }
             }
             .help("Install \(Channel.current.displayName) \(release.displayVersion)")
+        case .readyToInstall(let release):
+            Button {
+                Task { await updater.installPending() }
+            } label: {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.green)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(.green.opacity(hovered ? 0.22 : 0.14)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.12)) { hovered = hovering }
+            }
+            .help("Install \(Channel.current.displayName) \(release.displayVersion) — downloaded and ready")
         case .downloading:
             spinner.help("Downloading update…")
         case .installing:
@@ -411,6 +428,18 @@ struct UpdateBanner: View {
                 Spacer()
                 Button("Install Update") {
                     Task { await updater.downloadAndInstall() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        case .readyToInstall(let release):
+            banner {
+                Label("Vitals \(release.version) is ready to install", systemImage: "arrow.down.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Downloaded in the background")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Install & Relaunch") {
+                    Task { await updater.installPending() }
                 }
                 .buttonStyle(.borderedProminent)
             }
