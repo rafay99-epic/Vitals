@@ -12,6 +12,10 @@ enum AppUninstaller {
         var freedBytes: UInt64 = 0
         var systemRemoved = 0
         var usedAdmin = false
+        /// The user dismissed the admin prompt, so system-domain files (and any
+        /// root-owned bundle) were left in place — the summary must say so rather
+        /// than claim a clean finish.
+        var adminCancelled = false
         var caskUninstalled = 0
         var errorMessage: String?
         /// Bundles the user couldn't trash (root-owned / App-Management-blocked)
