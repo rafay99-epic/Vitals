@@ -113,20 +113,17 @@ enum LeftoverScanner {
         filename == bundleID || filename.hasPrefix(bundleID + ".") || filename.hasPrefix(bundleID + " ")
     }
 
-    /// Whether a directory entry belongs to `bundleID` when we *enumerate* a
-    /// shared user folder (Caches, Application Support, …) rather than probe an
-    /// exact path — the id itself, or an id-prefixed sibling the app scatters
-    /// alongside it (`com.foo.app`, `com.foo.app.ShipIt`, `com.foo.app.helper.plist`),
-    /// never a different app (`com.foo.application`).
-    ///
-    /// Prefix matching is allowed **only for ids with ≥3 components**: a 2-part id
-    /// like `com.foo` is a vendor namespace other apps live under, so prefixing it
-    /// would capture `com.foo.otherapp`. Such ids match by *exact name only*.
-    static func entryBelongsToBundle(_ filename: String, _ bundleID: String) -> Bool {
+    /// Whether a name contains `bundleID` as a whole dot-delimited component —
+    /// for Group Containers, named `<TEAMID>.<bundleID>` or `group.<bundleID>.x`,
+    /// where the id sits in the middle. A plain substring match would let
+    /// `com.foo.app` capture an unrelated `com.foo.application`; this requires a
+    /// boundary on both sides so it can't.
+    static func containsBundleIDComponent(_ filename: String, _ bundleID: String) -> Bool {
         guard isValidBundleID(bundleID) else { return false }
-        if filename == bundleID { return true }
-        guard bundleID.split(separator: ".").count >= 3 else { return false }
-        return startsWithBundleBoundary(filename, bundleID)
+        return filename == bundleID
+            || filename.hasPrefix(bundleID + ".")
+            || filename.hasSuffix("." + bundleID)
+            || filename.contains("." + bundleID + ".")
     }
 
     /// Whether a filename is one of an app's "recent items" shared-file-list
@@ -192,6 +189,8 @@ enum LeftoverScanner {
         if let bundleID, isValidBundleID(bundleID) {
             add("Application Support/\(bundleID)", .appSupport, under: library)
             add("Caches/\(bundleID)", .caches, under: library)
+            // Squirrel/ShipIt auto-updater's staging cache, keyed off the id.
+            add("Caches/\(bundleID).ShipIt", .caches, under: library)
             add("Logs/\(bundleID)", .logs, under: library)
             add("Preferences/\(bundleID).plist", .preferences, under: library)
             add("Saved Application State/\(bundleID).savedState", .savedState, under: library)
@@ -429,7 +428,7 @@ enum LeftoverScanner {
                 consider(url, .launchAgents, .user)
             }
             for url in entries(of: home.appendingPathComponent("Library/Group Containers"))
-            where url.lastPathComponent.contains(bundleID) {
+            where containsBundleIDComponent(url.lastPathComponent, bundleID) {
                 consider(url, .containers, .user)
             }
             for url in entries(of: home.appendingPathComponent("Library/Preferences/ByHost"))
@@ -439,33 +438,19 @@ enum LeftoverScanner {
         }
 
         let ownedIDs = Set(allBundleIDs)
-        // Every find below is keyed off a bundle id this app owns; with none
-        // (no valid id, no helpers), skip the directory enumeration entirely
-        // rather than list whole shared folders that can't match anything.
+        // The finds below are keyed off a bundle id this app owns; with none
+        // (no valid id, no helpers), skip the enumeration rather than list whole
+        // shared folders that can't match anything.
+        //
+        // These match by *exact* owned id (not a bundle-id prefix): a prefix
+        // sweep of the shared data dirs would capture a *separate installed* app
+        // whose id extends this one's (uninstalling `com.foo.app` must not trash
+        // `com.foo.app.beta`'s documents). The app's own suffixed artifacts are
+        // caught by exact probes (e.g. `Caches/<id>.ShipIt`) and by harvesting
+        // helper ids into `ownedIDs`.
         if !ownedIDs.isEmpty {
-            func ownsEntry(_ name: String) -> Bool { ownedIDs.contains { entryBelongsToBundle(name, $0) } }
             func ownsSharedFileList(_ name: String) -> Bool { ownedIDs.contains { isSharedFileList(name, $0) } }
 
-            // Files an app scatters under shared user dirs with a bundle-id *prefix*
-            // that exact-path probing misses: updater caches (com.foo.app.ShipIt),
-            // helper prefs/data (com.foo.app.helper.*), sandbox stores keyed by a
-            // helper id. Each dir is enumerated once and matched against every id
-            // this app owns. Boundary-matched, so com.foo.app never captures
-            // com.foo.application.
-            let prefixDirs: [(String, Leftover.Category)] = [
-                ("Library/Caches", .caches),
-                ("Library/Application Support", .appSupport),
-                ("Library/HTTPStorages", .webData),
-                ("Library/WebKit", .webData),
-                ("Library/Containers", .containers),
-                ("Library/Preferences", .preferences),
-            ]
-            for (dir, category) in prefixDirs {
-                for url in entries(of: home.appendingPathComponent(dir))
-                where ownsEntry(url.lastPathComponent) {
-                    consider(url, category, .user)
-                }
-            }
             // "Recent items" shared-file-lists live one level down, keyed by id:
             // ~/Library/Application Support/com.apple.sharedfilelist/<sub>/<id>.sfl*
             // (and occasionally directly in the root). Tiny each, but pure junk

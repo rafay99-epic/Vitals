@@ -378,7 +378,11 @@ private struct UninstallConfirmationSheet: View {
                 confirmation
             }
         }
+        // A shared minimum height so the sheet doesn't snap its window size
+        // between the confirm / progress / summary states — the transitions
+        // settle in place instead of jumping.
         .frame(width: 560)
+        .frame(minHeight: 340, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: model.uninstallProgress == nil)
         .animation(.easeInOut(duration: 0.2), value: model.lastOutcome == nil)
     }
@@ -570,9 +574,10 @@ private struct UninstallProgressView: View {
                     ProgressView(value: progress.fraction)
                         .progressViewStyle(.linear)
                     Text("\(progress.completedApps) of \(progress.totalApps) apps")
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
+                        .contentTransition(.numericText())
                 } else {
                     ProgressView()
                         .progressViewStyle(.linear)
@@ -594,19 +599,38 @@ private struct UninstallProgressView: View {
     }
 
     private func resultRow(_ result: AppsModel.AppResult) -> some View {
-        HStack(spacing: 8) {
+        let style = Self.rowStyle(result.outcome)
+        return HStack(spacing: 8) {
             AppIconView(url: result.id, size: 18)
             Text(result.name).fontWeight(.medium)
             Spacer()
-            Text(result.detail)
+            Text(style.detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-            Image(systemName: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            Image(systemName: style.symbol)
                 .font(.system(size: 13))
-                .foregroundStyle(result.succeeded ? Color.green : .orange)
+                .foregroundStyle(style.tint)
         }
         .font(.callout)
+    }
+
+    /// View-layer formatting of a model `AppResult.Outcome` into icon + copy, so
+    /// the model stays free of UI strings and byte formatting.
+    private static func rowStyle(_ outcome: AppsModel.AppResult.Outcome) -> (symbol: String, tint: Color, detail: String) {
+        switch outcome {
+        case .trashed(let items, let bytes):
+            return ("checkmark.circle.fill", .green, "\(items) item\(items == 1 ? "" : "s") · \(formatBytes(bytes))")
+        case .homebrew:
+            return ("checkmark.circle.fill", .green, "Removed with Homebrew")
+        case .removedViaAdmin:
+            return ("checkmark.circle.fill", .green, "Removed (system)")
+        case .pendingAdmin:
+            return ("lock.fill", .orange, "Needs your password")
+        case .failed(let items):
+            return ("exclamationmark.triangle.fill", .orange,
+                    "\(items) item\(items == 1 ? "" : "s") couldn't be removed")
+        }
     }
 }
 

@@ -65,12 +65,21 @@ final class AppsModel: ObservableObject {
         var fraction: Double { totalApps > 0 ? Double(completedApps) / Double(totalApps) : 0 }
     }
 
-    /// A finished app's outcome, shown live in the progress list as it lands.
+    /// An app's outcome, shown live in the progress list as it lands. Carries
+    /// structured data — the View turns it into an icon + label, so no formatted
+    /// bytes or UI copy live in the model.
     struct AppResult: Identifiable {
+        enum Outcome: Equatable {
+            case trashed(items: Int, bytes: UInt64)
+            case homebrew
+            /// Queued for the end-of-batch admin removal — not yet removed.
+            case pendingAdmin
+            case removedViaAdmin
+            case failed(items: Int)
+        }
         let id: URL
         let name: String
-        let succeeded: Bool
-        let detail: String
+        var outcome: Outcome
     }
 
     @Published private(set) var apps: [InstalledApp] = []
@@ -241,8 +250,10 @@ final class AppsModel: ObservableObject {
         guard let staged, uninstallProgress == nil else { return }
         // Keep `staged` set so the sheet stays up and swaps to the progress view
         // (no blank gap between confirm and the final summary).
+        // Seed with the first app's real phase so the sheet never flashes
+        // "Finishing up…" for a frame before the loop starts.
         uninstallProgress = UninstallProgress(completedApps: 0, totalApps: staged.apps.count,
-                                              phase: .finishing)
+                                              phase: .quitting(staged.apps.first?.name ?? ""))
         Task {
             var combined = AppUninstaller.Outcome()
             var systemPaths: [URL] = []
@@ -330,6 +341,18 @@ final class AppsModel: ObservableObject {
                 }
             }
 
+            // Settle the rows that were waiting on the admin pass: only now do
+            // we know whether the system-owned bundles were actually removed.
+            // If admin was cancelled/failed they stay `pendingAdmin` (honest —
+            // still on disk), so a row never claims a removal that didn't happen.
+            if combined.usedAdmin, combined.errorMessage == nil, !combined.adminCancelled,
+               var progress = uninstallProgress {
+                for index in progress.results.indices where progress.results[index].outcome == .pendingAdmin {
+                    progress.results[index].outcome = .removedViaAdmin
+                }
+                uninstallProgress = progress
+            }
+
             uninstallProgress?.phase = .finishing
             Log.notice(.uninstall, "uninstall finished: \(combined.trashed.count) trashed, \(combined.systemRemoved) system, \(ByteCountFormatter.string(fromByteCount: Int64(combined.freedBytes), countStyle: .file)) freed")
             // Hand off to the summary state and rescan the (now shorter) app list.
@@ -339,23 +362,22 @@ final class AppsModel: ObservableObject {
         }
     }
 
-    /// Per-app line for the live results list — succeeded unless a Trash move
-    /// failed and didn't fall back to the admin path.
+    /// Per-app line for the live results list. System-owned bundles report as
+    /// `pendingAdmin` because the actual removal only happens in the batch admin
+    /// pass afterward — so the row never shows a premature "removed" check.
     private func appResult(for app: InstalledApp, outcome: AppUninstaller.Outcome,
                            cask: Bool, viaAdmin: Bool) -> AppResult {
-        let succeeded = outcome.failures.isEmpty
-        let detail: String
+        let result: AppResult.Outcome
         if cask {
-            detail = "Removed with Homebrew"
+            result = .homebrew
         } else if viaAdmin || !outcome.failedBundles.isEmpty {
-            detail = "Needs your password (system-owned)"
+            result = .pendingAdmin
         } else if outcome.failures.isEmpty {
-            let count = outcome.trashed.count
-            detail = "\(count) item\(count == 1 ? "" : "s") · \(formatBytes(outcome.freedBytes))"
+            result = .trashed(items: outcome.trashed.count, bytes: outcome.freedBytes)
         } else {
-            detail = "\(outcome.failures.count) item\(outcome.failures.count == 1 ? "" : "s") couldn't be removed"
+            result = .failed(items: outcome.failures.count)
         }
-        return AppResult(id: app.id, name: app.name, succeeded: succeeded, detail: detail)
+        return AppResult(id: app.id, name: app.name, outcome: result)
     }
 
     /// Quit a running app, then poll briefly for it to actually exit instead of
@@ -363,15 +385,22 @@ final class AppsModel: ObservableObject {
     /// this returns as soon as they're gone and only escalates if they hang.
     private static func quit(_ running: NSRunningApplication) async {
         running.terminate()
+        var exited = false
         for _ in 0..<20 {               // up to ~2s of graceful wait
-            if running.isTerminated { return }
+            if running.isTerminated { exited = true; break }
             try? await Task.sleep(for: .milliseconds(100))
         }
-        running.forceTerminate()
-        for _ in 0..<5 {                // up to ~0.5s after a force-quit
-            if running.isTerminated { return }
-            try? await Task.sleep(for: .milliseconds(100))
+        if !exited {
+            running.forceTerminate()
+            for _ in 0..<5 {            // up to ~0.5s after a force-quit
+                if running.isTerminated { exited = true; break }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
         }
+        // A brief settle even once the process is gone: macOS can still hold the
+        // app's container/files open for a moment, and trashing them immediately
+        // would report "in use". Far shorter than the old fixed 1.2s.
+        if exited { try? await Task.sleep(for: .milliseconds(250)) }
     }
 
     /// Dismisses the finished-uninstall summary and tears down the sheet.
@@ -379,9 +408,5 @@ final class AppsModel: ObservableObject {
         staged = nil
         lastOutcome = nil
         uninstallProgress = nil
-    }
-
-    func dismissOutcome() {
-        lastOutcome = nil
     }
 }
