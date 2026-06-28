@@ -1,0 +1,22 @@
+apps/desktop/Sources/Vitals/Views/SensorsView.swift
+  s_fb9b4bc3d01c7a::t_c340c81a25b306 35,37-38
+CLAUDE.md
+  s_fb9b4bc3d01c7a::t_294468624e9bb7 189-194
+  s_fb9b4bc3d01c7a::t_73b836292b2336 174-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "c5975ecc4213f8fe376f31dda3a560990af18ff1",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
