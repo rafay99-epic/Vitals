@@ -100,7 +100,11 @@ struct ContentView: View {
                         row(item, shortcutIndex: index + 1)
                     }
                     groupLabel("Maintain")
-                    ForEach(Self.maintain) { row($0, shortcutIndex: nil) }
+                    ForEach(Array(Self.maintain.enumerated()), id: \.element) { index, item in
+                        // Continue the running index so the 9th visible row
+                        // (Storage) keeps ⌘9; the row's `< 9` guard drops the rest.
+                        row(item, shortcutIndex: 1 + Self.monitor.count + index)
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 12)
