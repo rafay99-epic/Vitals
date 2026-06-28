@@ -1,0 +1,19 @@
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_fb9b4bc3d01c7a::t_5e1a0c1719b771 103-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "21a54a827f8cd067b3e9f8344af5347432d9f9a7",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
