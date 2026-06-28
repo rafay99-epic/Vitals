@@ -4,10 +4,12 @@ import UserNotifications
 
 /// Settings, hosted as the main window's last sidebar section (`.settings`) — a
 /// single searchable page, not a stack of tabs. Every setting is a titled card;
-/// cards are grouped into scrollable sections (General, Interface, Monitoring,
-/// Alerts, Updates, Data, Developer, About) and laid in a two-column masonry that
-/// fills the window width. A search field at the top live-filters the cards, so a
-/// setting is findable by name across the whole surface — no hunting through tabs.
+/// cards are grouped into sections (General, Interface, Monitoring, Alerts,
+/// Updates, Data, Developer, About) that are split across **two page columns**,
+/// each a continuous top-to-bottom stack — so cards never strand an empty gap and
+/// the layout still fills the window width. A search field at the top live-filters
+/// the cards, so a setting is findable by name across the whole surface — no
+/// hunting through tabs.
 struct SettingsView: View {
     /// True only while Settings is the visible section — gates the ⌘F shortcut so
     /// it doesn't capture the key combo while another section is showing.
@@ -68,7 +70,9 @@ struct SettingsView: View {
     }
 
     private func column(_ sections: [SettingsSectionModel]) -> some View {
-        VStack(alignment: .leading, spacing: 28) {
+        // Lazy so opening Settings (or scrolling) only builds the sections near the
+        // viewport, not all eight at once — keeps open/search snappy.
+        LazyVStack(alignment: .leading, spacing: 28) {
             ForEach(sections) { section in
                 SettingsSectionView(section: section, query: query)
             }
@@ -107,10 +111,10 @@ struct SettingsView: View {
 
     // MARK: - The section registry
     //
-    // Order top-to-bottom. Each card carries searchable `keywords` (its controls'
-    // labels) so a query like "battery" or "log" surfaces the right cards even
-    // when the word isn't in the title. Within a section, cards alternate into two
-    // columns by their position here, so filtering never reshuffles the layout.
+    // Listed in reading order; the page splits these sections across two columns
+    // (see `rightColumnTitles`). Each card carries searchable `keywords` (its
+    // controls' labels) so a query like "battery" or "log" surfaces the right cards
+    // even when the word isn't in the title.
 
     static let sections: [SettingsSectionModel] = [
         SettingsSectionModel(title: "General", cards: [
@@ -197,10 +201,9 @@ struct SettingsSectionModel: Identifiable {
 }
 
 /// One section: a header rule, an optional full-width prologue (the About hero),
-/// then the cards in a two-column masonry. Columns are assigned from each card's
-/// position in the *unfiltered* section, so a search that hides some cards never
-/// makes the survivors jump columns. A section with a single visible card spans
-/// the full width instead of leaving an empty column.
+/// then its cards as a single continuous stack (the section *is* one page column),
+/// so cards never strand a gap beside a taller sibling. Hidden entirely when the
+/// search filters out all of its cards.
 private struct SettingsSectionView: View {
     let section: SettingsSectionModel
     let query: String

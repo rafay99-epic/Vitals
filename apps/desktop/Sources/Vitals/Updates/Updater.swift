@@ -137,6 +137,10 @@ final class Updater: ObservableObject {
     func check(userInitiated: Bool) async {
         guard Channel.current.updatesEnabled else { status = .idle; return }
         guard !isBusy else { return }
+        // Capture the prior state *before* `.checking` overwrites it, so we can
+        // tell whether this build was already downloaded. (`.downloading` /
+        // `.installing` can't reach here — the `isBusy` guard returns first.)
+        let previous = status
         status = .checking
         Log.debug(.updater, "checking for updates (userInitiated: \(userInitiated))")
         do {
@@ -144,15 +148,13 @@ final class Updater: ObservableObject {
             lastChecked = Date()
             if let release, Self.isNewer(release) {
                 Log.notice(.updater, "update available: \(release.displayVersion) (current \(Self.currentVersion))")
-                // Don't clobber an in-flight or already-downloaded build for the
-                // same release — a routine re-check must not reset
-                // `.readyToInstall` back to `.available` and abandon the cached DMG.
-                switch status {
-                case .readyToInstall(let pending) where Self.notifyKey(pending) == Self.notifyKey(release):
-                    break
-                case .downloading, .installing:
-                    break
-                default:
+                // Keep an already-downloaded build for the *same* release — a
+                // routine re-check must not reset `.readyToInstall` back to
+                // `.available` and abandon the cached DMG.
+                if case .readyToInstall(let pending) = previous,
+                   Self.notifyKey(pending) == Self.notifyKey(release) {
+                    status = .readyToInstall(pending)
+                } else {
                     status = .available(release)
                 }
                 if !userInitiated, notifiedVersion != Self.notifyKey(release) {
