@@ -1,0 +1,29 @@
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_2952bc4b1fdb0b::t_90aa51683a06ff 259,265,269
+  s_2952bc4b1fdb0b::t_0105fb52326174 12-14,16,38-47,57
+  s_2952bc4b1fdb0b::t_d9b6dab44187bb 414
+  s_2952bc4b1fdb0b::t_3e04e71c88614d 425
+  s_2952bc4b1fdb0b::t_3c0bf6608f8f3a 184,188-189,191,208-225,229-232,236-251
+  s_2952bc4b1fdb0b::t_cb2aae2a5a8d85 375,378
+  s_2952bc4b1fdb0b::t_a3ea3d1aa102bb 183
+  s_2952bc4b1fdb0b::t_7b67c026c8e4e0 252,282-326
+  s_2952bc4b1fdb0b::t_5d4019f654f42d 349
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_2952bc4b1fdb0b::t_bef6a796c3177a 238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "92aa3d0c95636b89d6f6821450c531be1eb22901",
+  "prompts": {},
+  "sessions": {
+    "s_2952bc4b1fdb0b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "467b07e2-c6ed-45c5-81d4-9bcc7dbcc120",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
