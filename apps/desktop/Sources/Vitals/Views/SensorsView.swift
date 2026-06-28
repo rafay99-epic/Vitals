@@ -32,8 +32,10 @@ private struct TemperaturesCard: View {
 
     var body: some View {
         SectionCard(title: "Temperatures", symbol: "thermometer.medium") {
-            if model.cpuSensors.isEmpty && model.gpuTemp == nil
+            if model.hasLoaded && model.cpuSensors.isEmpty && model.gpuTemp == nil
                 && model.ssdTemp == nil && model.batteryTemp == nil {
+                // Only after the first sample — before it, the rows below show
+                // "—" rather than a false "unavailable" flash on first mount.
                 Text("Temperature sensors are unavailable on this Mac.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 60)
