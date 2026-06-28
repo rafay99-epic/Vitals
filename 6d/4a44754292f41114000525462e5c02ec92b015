@@ -1,0 +1,25 @@
+apps/desktop/Tests/VitalsTests/CleanupTests.swift
+  s_fb9b4bc3d01c7a::t_3b17587a139f9d 154-188
+  s_fb9b4bc3d01c7a::t_5e30aafa8e68ef 130-153
+apps/desktop/Sources/Vitals/Services/LeftoverScanner.swift
+  s_fb9b4bc3d01c7a::t_3780cfd51f4044 430-452,454-463,468
+  s_fb9b4bc3d01c7a::t_ac72248bd8b798 353-357
+  s_fb9b4bc3d01c7a::t_b847570b00a11f 116-133
+  s_fb9b4bc3d01c7a::t_b602d5d6614c11 453,464-467,469-474
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "6d4a44754292f41114000525462e5c02ec92b015",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
