@@ -7,6 +7,7 @@ struct MenuBarPanel: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var fanControl: FanController
+    @EnvironmentObject private var navigator: Navigator
     @Environment(\.openWindow) private var openWindow
     @Namespace private var presetIndicator
     @State private var copied = false
@@ -328,7 +329,8 @@ struct MenuBarPanel: View {
             .controlSize(.small)
             .help("Vitals Help")
             Button {
-                openWindow(id: "settings")
+                navigator.section = .settings
+                openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Image(systemName: "gearshape")

@@ -10,8 +10,8 @@ struct ProcessesView: View {
     /// it starts/stops sampling on this rather than on appear/disappear.
     var isActive: Bool
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var navigator: Navigator
     @Environment(\.animationsEnabled) private var animationsEnabled
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -150,7 +150,7 @@ struct ProcessesView: View {
                 title: "Nothing to show",
                 message: "No processes are listed. System processes are hidden by default — turn them on in Settings to see everything."
             ) {
-                Button { openWindow(id: "settings") } label: {
+                Button { navigator.section = .settings } label: {
                     Label("Open Settings", systemImage: "gearshape")
                 }
                 .controlSize(.large)

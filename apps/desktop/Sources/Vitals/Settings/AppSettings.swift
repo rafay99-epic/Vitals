@@ -170,6 +170,12 @@ final class AppSettings: ObservableObject {
         }
     }
     @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
+    /// When on, a background check that finds an update silently downloads the
+    /// DMG, then notifies "ready to install" (install still needs one tap — the
+    /// app never swaps itself without the user's say-so). Off by default: the
+    /// notification offers to download on demand instead. Only meaningful while
+    /// `autoUpdateCheck` is on.
+    @Published var autoDownloadUpdates: Bool { didSet { defaults.set(autoDownloadUpdates, forKey: "autoDownloadUpdates") } }
     /// Master switch for GPU-driven rendering: Liquid Glass and every animation.
     /// On by default, but turning it off drops the app to opaque classic cards
     /// with no motion — Activity-Monitor-light on the GPU. Liquid Glass requires
@@ -324,6 +330,10 @@ final class AppSettings: ObservableObject {
             // window) views them; logging happens regardless.
             "diagnosticLogLevel": LogLevel.notice.rawValue,
             "autoUpdateCheck": true,
+            // Off by default: updates download on demand (a tap on the
+            // notification). Turning this on pre-downloads in the background so the
+            // install is instant — but never auto-installs.
+            "autoDownloadUpdates": false,
             "gpuAcceleration": true,
             // Ships off: the app is lean (opaque cards) by default; glass is opt-in.
             "liquidGlass": false,
@@ -384,6 +394,7 @@ final class AppSettings: ObservableObject {
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         diagnosticLogLevel = LogLevel(rawValue: defaults.integer(forKey: "diagnosticLogLevel")) ?? .notice
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
+        autoDownloadUpdates = defaults.bool(forKey: "autoDownloadUpdates")
         gpuAcceleration = defaults.bool(forKey: "gpuAcceleration")
         liquidGlass = defaults.bool(forKey: "liquidGlass")
         glassIntensity = defaults.double(forKey: "glassIntensity")
