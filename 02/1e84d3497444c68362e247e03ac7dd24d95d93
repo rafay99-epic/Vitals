@@ -1,0 +1,27 @@
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_fb9b4bc3d01c7a::t_692717d250e450 36-77
+  s_fb9b4bc3d01c7a::t_4365f5c6297dc8 85-87
+  s_fb9b4bc3d01c7a::t_4d9cd18d4f876b 199-210,212-217,220-224
+  s_fb9b4bc3d01c7a::t_41a265d55bb908 243-247,254,256,264,279,302-307,313,333,335-337,342-382
+  s_fb9b4bc3d01c7a::t_6350e578844c0b 383
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_fb9b4bc3d01c7a::t_3bd68e968da795 370-384
+  s_fb9b4bc3d01c7a::t_9432c0003ad6c6 545-667
+  s_fb9b4bc3d01c7a::t_63fad4f3566bc6 89-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "021e84d3497444c68362e247e03ac7dd24d95d93",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
