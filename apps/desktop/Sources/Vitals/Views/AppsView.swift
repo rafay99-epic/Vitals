@@ -618,11 +618,12 @@ private struct UninstallSummaryView: View {
     let outcome: AppUninstaller.Outcome
     let onDone: () -> Void
 
-    private var clean: Bool { outcome.failures.isEmpty && outcome.errorMessage == nil }
+    private var clean: Bool { outcome.failures.isEmpty && outcome.errorMessage == nil && !outcome.adminCancelled }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Label("Uninstall finished", systemImage: clean ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            Label(clean ? "Uninstall finished" : "Uninstall incomplete",
+                  systemImage: clean ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(clean ? Color.green : .orange)
 
@@ -639,6 +640,9 @@ private struct UninstallSummaryView: View {
                 }
                 if let error = outcome.errorMessage {
                     summaryRow("System removal", error, warn: true)
+                }
+                if outcome.adminCancelled {
+                    summaryRow("System files kept", "password cancelled", warn: true)
                 }
             }
 

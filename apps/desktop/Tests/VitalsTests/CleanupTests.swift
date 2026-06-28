@@ -139,6 +139,10 @@ struct LeftoverScannerTests {
         #expect(!LeftoverScanner.entryBelongsToBundle("com.other.app", "com.example.app"))
         // An invalid bundle id can never trigger broad enumeration.
         #expect(!LeftoverScanner.entryBelongsToBundle("anything", "nodots"))
+        // A 2-part id is a vendor namespace: match its exact folder, but never
+        // prefix-grab a sibling app (com.foo must not capture com.foo.other).
+        #expect(LeftoverScanner.entryBelongsToBundle("com.foo", "com.foo"))
+        #expect(!LeftoverScanner.entryBelongsToBundle("com.foo.other", "com.foo"))
     }
 
     /// Recent-items shared-file-lists are matched by id + the `.sfl*` family,
@@ -150,6 +154,8 @@ struct LeftoverScannerTests {
         #expect(!LeftoverScanner.isSharedFileList("com.example.app.plist", "com.example.app"))
         #expect(!LeftoverScanner.isSharedFileList("com.example.application.sfl4", "com.example.app"))
         #expect(!LeftoverScanner.isSharedFileList("com.other.app.sfl4", "com.example.app"))
+        // A longer id's sfl must not be mistaken for a shorter app id's.
+        #expect(!LeftoverScanner.isSharedFileList("com.foo.bar.sfl4", "com.foo"))
     }
 
     /// End-to-end against a temp home: the broadened enumeration must catch the

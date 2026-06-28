@@ -318,7 +318,9 @@ final class AppsModel: ObservableObject {
                     combined.systemRemoved = systemPaths.count
                     combined.freedBytes += systemBytes
                 } catch let error as PrivilegedShell.AdminError {
-                    if !error.cancelled {
+                    if error.cancelled {
+                        combined.adminCancelled = true
+                    } else {
                         Log.error(.uninstall, "privileged leftover removal failed — \(error.message)")
                         combined.errorMessage = error.message
                     }
