@@ -9,7 +9,11 @@ import UserNotifications
 /// fills the window width. A search field at the top live-filters the cards, so a
 /// setting is findable by name across the whole surface — no hunting through tabs.
 struct SettingsView: View {
+    /// True only while Settings is the visible section — gates the ⌘F shortcut so
+    /// it doesn't capture the key combo while another section is showing.
+    var isActive: Bool = true
     @State private var query = ""
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,6 +35,16 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Carry the query down so the building blocks can highlight matches.
+        .environment(\.settingsSearchQuery, query)
+        // ⌘F focuses search (Find), scoped to when Settings is on screen.
+        .background {
+            Button("") { searchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                .disabled(!isActive)
+                .accessibilityHidden(true)
+        }
     }
 
     /// Page title + search, with a top inset that clears the traffic-light strip
@@ -40,7 +54,7 @@ struct SettingsView: View {
             Text("Settings")
                 .font(.system(size: 24, weight: .bold))
             Spacer(minLength: 12)
-            SettingsSearchField(query: $query)
+            SettingsSearchField(query: $query, focused: $searchFocused)
                 .frame(maxWidth: 260)
         }
         .padding(.horizontal, 28)
@@ -166,22 +180,15 @@ private struct SettingsSectionView: View {
     let query: String
 
     var body: some View {
-        let indexed = Array(section.cards.enumerated())
-        let left = indexed.filter { $0.offset.isMultiple(of: 2) }.map(\.element).filter { $0.matches(query) }
-        let right = indexed.filter { !$0.offset.isMultiple(of: 2) }.map(\.element).filter { $0.matches(query) }
-        let total = left.count + right.count
-
-        if total > 0 {
+        let visible = section.cards.filter { $0.matches(query) }
+        if !visible.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 sectionHeader
                 if let prologue = section.prologue { prologue }
-                if total == 1 {
-                    (left.first ?? right.first)?.view
+                if visible.count == 1 {
+                    visible[0].view
                 } else {
-                    HStack(alignment: .top, spacing: 16) {
-                        column(left)
-                        column(right)
-                    }
+                    SettingsMasonry(cards: visible)
                 }
             }
         }
@@ -198,12 +205,50 @@ private struct SettingsSectionView: View {
                 .frame(height: 1)
         }
     }
+}
+
+/// A two-column masonry that keeps the columns near-equal in height, so a short
+/// card never leaves a tall empty gap beside a taller one. Card heights are
+/// measured live; assignment uses longest-first greedy packing (the classic
+/// balanced-partition heuristic) but each column then renders in the cards'
+/// original registry order, so the result is both balanced and logically ordered.
+private struct SettingsMasonry: View {
+    let cards: [SettingsCardModel]
+    @State private var heights: [UUID: CGFloat] = [:]
+
+    var body: some View {
+        let split = balanced()
+        HStack(alignment: .top, spacing: 16) {
+            column(split.left)
+            column(split.right)
+        }
+    }
 
     private func column(_ cards: [SettingsCardModel]) -> some View {
         VStack(spacing: 16) {
-            ForEach(cards) { $0.view }
+            ForEach(cards) { card in
+                card.view
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights[card.id] = $0 }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private func balanced() -> (left: [SettingsCardModel], right: [SettingsCardModel]) {
+        // Until a card is measured, assume a middling height so the first
+        // (offscreen) pass splits evenly; real heights refine it before it shows.
+        func height(_ card: SettingsCardModel) -> CGFloat { (heights[card.id] ?? 180) + 16 }
+        var leftIDs = Set<UUID>()
+        var leftHeight: CGFloat = 0, rightHeight: CGFloat = 0
+        for card in cards.sorted(by: { height($0) > height($1) }) {
+            if leftHeight <= rightHeight {
+                leftIDs.insert(card.id); leftHeight += height(card)
+            } else {
+                rightHeight += height(card)
+            }
+        }
+        return (cards.filter { leftIDs.contains($0.id) },
+                cards.filter { !leftIDs.contains($0.id) })
     }
 }
 
@@ -211,15 +256,17 @@ private struct SettingsSectionView: View {
 /// control. Live-filters as you type; the clear button resets it.
 private struct SettingsSearchField: View {
     @Binding var query: String
+    var focused: FocusState<Bool>.Binding
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(focused.wrappedValue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             TextField("Search settings…", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12.5))
+                .focused(focused)
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -232,7 +279,51 @@ private struct SettingsSearchField: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(Capsule().fill(.quaternary.opacity(0.3)))
-        .overlay(Capsule().strokeBorder(.separator.opacity(0.5), lineWidth: 1))
+        .overlay(
+            Capsule().strokeBorder(
+                focused.wrappedValue ? AnyShapeStyle(Color.accentColor.opacity(0.7)) : AnyShapeStyle(.separator.opacity(0.5)),
+                lineWidth: 1
+            )
+        )
+        .animation(.easeOut(duration: 0.12), value: focused.wrappedValue)
+    }
+}
+
+// MARK: - Search match highlighting
+
+private struct SettingsSearchQueryKey: EnvironmentKey {
+    static let defaultValue = ""
+}
+
+extension EnvironmentValues {
+    /// The live Settings search query, read by the building-block labels so they
+    /// can accent the matched substring wherever it appears.
+    var settingsSearchQuery: String {
+        get { self[SettingsSearchQueryKey.self] }
+        set { self[SettingsSearchQueryKey.self] = newValue }
+    }
+}
+
+/// A text label that accents the run matching the current search query — so when
+/// a card surfaces from a search, the user sees *why* it matched. Base font/colour
+/// come from the call site's modifiers; the matched run overrides to the accent.
+private struct HighlightLabel: View {
+    let text: String
+    @Environment(\.settingsSearchQuery) private var query
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(highlighted)
+    }
+
+    private var highlighted: AttributedString {
+        var string = AttributedString(text)
+        guard query.count >= 2,
+              let range = string.range(of: query, options: .caseInsensitive) else { return string }
+        string[range].foregroundColor = .accentColor
+        string[range].inlinePresentationIntent = .stronglyEmphasized
+        return string
     }
 }
 
@@ -255,7 +346,7 @@ private struct SettingsCard<Content: View>: View {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .fill(tint.opacity(0.14))
                     )
-                Text(title)
+                HighlightLabel(title)
                     .font(.system(size: 13, weight: .semibold))
             }
             content
@@ -281,10 +372,10 @@ private struct SwitchRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(label)
+                HighlightLabel(label)
                     .font(.system(size: 12.5))
                 if let caption {
-                    Text(caption)
+                    HighlightLabel(caption)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -320,7 +411,7 @@ private struct MenuBarMetricToggle: View {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(.blue.opacity(0.14))
                     )
-                Text(metric.label)
+                HighlightLabel(metric.label)
                     .font(.system(size: 12.5))
             }
         }
@@ -331,7 +422,7 @@ private struct MenuBarMetricToggle: View {
 
 private func settingsRow(_ label: String, @ViewBuilder control: () -> some View) -> some View {
     HStack {
-        Text(label)
+        HighlightLabel(label)
             .font(.system(size: 12.5))
         Spacer()
         control()

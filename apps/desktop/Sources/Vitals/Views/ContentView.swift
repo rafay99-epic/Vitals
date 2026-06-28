@@ -235,7 +235,7 @@ struct ContentView: View {
                 LoginItemsView(model: loginItemsModel, isActive: active(.loginItems)).tabVisibility(active(.loginItems))
             }
             if visited.contains(.settings) {
-                SettingsView().tabVisibility(active(.settings))
+                SettingsView(isActive: active(.settings)).tabVisibility(active(.settings))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
