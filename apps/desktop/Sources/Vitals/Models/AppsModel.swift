@@ -256,8 +256,9 @@ final class AppsModel: ObservableObject {
                                               phase: .quitting(staged.apps.first?.name ?? ""))
         Task {
             var combined = AppUninstaller.Outcome()
-            var systemPaths: [URL] = []
-            var systemBytes: UInt64 = 0
+            // Each system-domain path with its size, so the summary can credit
+            // only the ones actually gone after the (best-effort) admin script.
+            var systemPaths: [(url: URL, bytes: UInt64)] = []
 
             for app in staged.apps {
                 uninstallProgress?.phase = .quitting(app.name)
@@ -281,8 +282,7 @@ final class AppsModel: ObservableObject {
                 // and goes straight to the admin pass.
                 let bundleViaAdmin = !bundleHandledByBrew && staged.bundlesNeedingAdmin.contains(app.id)
                 if bundleViaAdmin {
-                    systemPaths.append(app.id)
-                    systemBytes += app.sizeBytes ?? 0
+                    systemPaths.append((app.id, app.sizeBytes ?? 0))
                 }
 
                 uninstallProgress?.phase = .removingFiles(app.name)
@@ -295,8 +295,7 @@ final class AppsModel: ObservableObject {
 
                 // Trash that failed (App-Management-blocked) falls back to admin.
                 for bundle in outcome.failedBundles {
-                    systemPaths.append(bundle)
-                    systemBytes += app.sizeBytes ?? 0
+                    systemPaths.append((bundle, app.sizeBytes ?? 0))
                 }
 
                 let bundleID = app.bundleID
@@ -305,8 +304,7 @@ final class AppsModel: ObservableObject {
                 }.value
 
                 for leftover in leftovers where leftover.requiresAdmin {
-                    systemPaths.append(leftover.id)
-                    systemBytes += leftover.sizeBytes
+                    systemPaths.append((leftover.id, leftover.sizeBytes))
                 }
 
                 // Record this app's outcome live so the user watches the list fill.
@@ -318,16 +316,20 @@ final class AppsModel: ObservableObject {
 
             // One admin prompt for every system-domain leftover across the batch.
             if !systemPaths.isEmpty,
-               let script = AppUninstaller.systemRemovalScript(for: systemPaths) {
+               let script = AppUninstaller.systemRemovalScript(for: systemPaths.map(\.url)) {
                 uninstallProgress?.phase = .awaitingAdmin
                 do {
                     try await PrivilegedShell.runAsAdmin(
                         script,
                         prompt: "Vitals needs administrator access to remove system-level leftover files."
                     )
+                    // The script is best-effort (`rm … || true`), so credit only
+                    // the paths actually gone from disk — never an unverified count.
+                    let fm = FileManager.default
+                    let removed = systemPaths.filter { !fm.fileExists(atPath: $0.url.path) }
                     combined.usedAdmin = true
-                    combined.systemRemoved = systemPaths.count
-                    combined.freedBytes += systemBytes
+                    combined.systemRemoved = removed.count
+                    combined.freedBytes += removed.reduce(0) { $0 + $1.bytes }
                 } catch let error as PrivilegedShell.AdminError {
                     if error.cancelled {
                         combined.adminCancelled = true
