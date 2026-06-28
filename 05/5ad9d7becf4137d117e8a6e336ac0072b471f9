@@ -1,0 +1,25 @@
+apps/desktop/Sources/Vitals/Views/DashboardBento.swift
+  s_fb9b4bc3d01c7a::t_1d22c8180649ff 18,89,257,267
+apps/desktop/Sources/Vitals/Views/SensorsView.swift
+  s_fb9b4bc3d01c7a::t_99e6e4b5a7c421 3-7
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_fb9b4bc3d01c7a::t_cf106db8b28244 235
+  s_fb9b4bc3d01c7a::t_53eccfdd117939 3-54,58-62,65-75,78-81,85,90,92-103,105-106,109-110,112-113,117-141,143,145-147,150-156,159-162,164,167,169,171,173-177,179-185,189-227,230-234,236-237,242-244,259,278,283-284,294,296,300-303,305,334
+  s_fb9b4bc3d01c7a::t_d4c22c7fa2b5ef 306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "055ad9d7becf4137d117e8a6e336ac0072b471f9",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
