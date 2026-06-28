@@ -1,0 +1,30 @@
+apps/desktop/Tests/VitalsTests/CleanupTests.swift
+  s_fb9b4bc3d01c7a::t_39f09d6aa62105 142-145
+  s_fb9b4bc3d01c7a::t_7d0fc74872fff6 157-158
+apps/desktop/Sources/Vitals/Services/LeftoverScanner.swift
+  s_fb9b4bc3d01c7a::t_f3cae03ebe273a 442-467,469-487
+  s_fb9b4bc3d01c7a::t_3834670968479c 118,120-124,126-129,135-137,140-141
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_fb9b4bc3d01c7a::t_962b44c8b589d9 321-323
+apps/desktop/Sources/Vitals/Services/AppUninstaller.swift
+  s_fb9b4bc3d01c7a::t_24926914697ff4 15-18
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_fb9b4bc3d01c7a::t_6cc231037b0634 621,625-626
+  s_fb9b4bc3d01c7a::t_6a8eff842f0cb8 644-646
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "cebc52fb0b279ff08c58fd83e93b86163fc1e92d",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
