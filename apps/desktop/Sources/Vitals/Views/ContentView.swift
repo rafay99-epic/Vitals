@@ -1,173 +1,247 @@
 import SwiftUI
 
-/// Top-level navigation: a stationary header with segmented tabs over one
-/// fixed content canvas — Activity Monitor style. There is no sidebar and no
-/// window toolbar, so nothing can resize or snap the content, ever: tab
-/// switches change what's drawn, never the geometry it's drawn in.
+/// Every navigable destination, as one flat tier in the sidebar — a glanceable
+/// Overview on top, then a read-only **Monitor** group and a write/maintenance
+/// **Maintain** group (the "read freely, write carefully" split, made visible).
+/// This replaces the old two-tier navigation (top capsule tabs *plus* the
+/// System/Applications sub-segment bars): one level, no tabs-in-tabs.
+enum NavSection: String, CaseIterable, Identifiable {
+    case overview
+    case cpu, gpu, memory, battery, sensors, processes, history
+    case storage, cleanup, applications, loginItems
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview:     return "Overview"
+        case .cpu:          return "CPU"
+        case .gpu:          return "GPU"
+        case .memory:       return "Memory"
+        case .battery:      return "Battery"
+        case .sensors:      return "Temps & Fans"
+        case .processes:    return "Processes"
+        case .history:      return "History"
+        case .storage:      return "Storage"
+        case .cleanup:      return "Cleanup"
+        case .applications: return "Applications"
+        case .loginItems:   return "Login Items"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .overview:     return "gauge.with.dots.needle.50percent"
+        case .cpu:          return "cpu"
+        case .gpu:          return "cpu.fill"
+        case .memory:       return "memorychip"
+        case .battery:      return "battery.100percent"
+        case .sensors:      return "thermometer.medium"
+        case .processes:    return "list.bullet"
+        case .history:      return "chart.xyaxis.line"
+        case .storage:      return "internaldrive"
+        case .cleanup:      return "sparkles"
+        case .applications: return "square.grid.2x2"
+        case .loginItems:   return "power"
+        }
+    }
+
+}
+
+/// Top-level navigation: a fixed left sidebar over one content canvas. The
+/// sidebar never collapses, so window geometry never changes from navigation
+/// (the constraint the old capsule-tab shell solved by forbidding a sidebar
+/// outright — a *fixed* rail honours it too, while giving one clean nav level).
 struct ContentView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var model: VitalsModel
-    @State private var section: AppTab = .dashboard
+    @State private var section: NavSection = .overview
+    /// Sections opened at least once, kept mounted for instant switch-back —
+    /// seeded with Overview so home is live at launch. Mirrors the old lazy-tab
+    /// approach: a section joins on first selection; hidden ones stay laid out.
+    @State private var visited: Set<NavSection> = [.overview]
     @State private var gearHovered = false
-    /// Tabs that have been opened at least once and stay mounted for instant
-    /// switch-back. Seeded with the Dashboard so the home tab is live at launch.
-    /// A tab joins the set the first time it's selected; hidden tabs are pulled
-    /// back out. See `TabCanvas` below for why this is lazy, not all-up-front.
-    @State private var visited: Set<AppTab> = [.dashboard]
     @Environment(\.openWindow) private var openWindow
-    @Namespace private var tabIndicator
+
+    // Per-section models, owned here so a scan started in one section survives
+    // switching sections (Processes, Apps, Login Items, Cleanup, Storage).
+    @StateObject private var processesModel = ProcessesModel()
+    @StateObject private var appsModel = AppsModel()
+    @StateObject private var loginItemsModel = LoginItemsModel()
+    @StateObject private var cleanupModel = CleanupModel()
+    @StateObject private var storageModel = StorageModel()
+
+    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .sensors, .processes, .history]
+    private static let maintain: [NavSection] = [.storage, .cleanup, .applications, .loginItems]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-                .opacity(0.5)
-            // The tab canvas owns the per-tab models (Processes, Apps, Cleanup,
-            // etc.) so their `objectWillChange` publications invalidate
-            // `TabCanvas.body` — NOT `ContentView.body`. This is critical: the
-            // nav bar lives in `ContentView.header`, and without this split every
-            // per-tab model publish (e.g. ProcessesModel flipping `hasLoaded`
-            // ~1 ms after the tab opens) would re-evaluate the header mid-spring,
-            // hitching the indicator animation.
-            TabCanvas(section: $section, visited: $visited)
+        HStack(spacing: 0) {
+            sidebar
+            Divider().opacity(0.5)
+            content
         }
-        // The hidden title bar still reserves a safe-area strip; claim it so
-        // the header shares the row with the traffic lights instead of
-        // leaving a dead band above itself.
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
-        .frame(minWidth: minWindowWidth, minHeight: 680)
-        // Let the model skip the costly top-process sweep when the window is
-        // closed (menu-bar only).
+        .frame(minWidth: 980, minHeight: 680)
         .onAppear { model.setMainWindowVisible(true) }
         .onDisappear { model.setMainWindowVisible(false) }
     }
 
-    /// "Labels" mode shows every tab name, so the centered bar needs a wider
-    /// floor to stay clear of the wordmark — more so at the larger size. The
-    /// icon-led modes always fit at 980.
-    private var minWindowWidth: CGFloat {
-        guard settings.tabDisplayMode == .labels else { return 980 }
-        return settings.tabSize == .large ? 1200 : 1100
-    }
+    // MARK: Sidebar
 
-    // MARK: Header
-
-    /// The title bar replacement: branding, centered tabs, settings — one
-    /// row shared with the traffic lights. It also drags the window, since
-    /// the system title bar is hidden.
-    private var header: some View {
-        ZStack {
-            HStack(spacing: 9) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 26, height: 26)
-                Text("Vitals")
-                    .font(.system(size: 14, weight: .semibold))
-                Spacer()
-                // App-wide update affordance — visible on every tab, not just
-                // the Dashboard banner, so an available update is never missed.
-                HeaderUpdateButton()
-                Button {
-                    openWindow(id: "settings")
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 14, weight: .medium))
-                        .symbolRenderingMode(.hierarchical)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(.quaternary.opacity(gearHovered ? 0.7 : 0)))
-                        .contentShape(Circle())
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sidebarHeader
+            ScrollView {
+                VStack(alignment: .leading, spacing: 1) {
+                    row(.overview, shortcutIndex: 0)
+                    groupLabel("Monitor")
+                    ForEach(Array(Self.monitor.enumerated()), id: \.element) { index, item in
+                        row(item, shortcutIndex: index + 1)
+                    }
+                    groupLabel("Maintain")
+                    ForEach(Self.maintain) { row($0, shortcutIndex: nil) }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .onHover { hovering in
-                    withAnimation(.easeOut(duration: 0.12)) { gearHovered = hovering }
-                }
-                .help("Vitals settings")
+                .padding(.horizontal, 8)
+                .padding(.bottom, 12)
             }
-            tabBar
         }
-        .padding(.leading, 84)  // clear the traffic lights
-        .padding(.trailing, 12)
-        .frame(height: settings.tabSize.headerHeight)
+        .frame(width: 212)
+        .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
+        // No system title bar, so the sidebar drags the window (its top strip
+        // shares the row with the traffic lights).
         .gesture(WindowDragGesture())
     }
 
-    private var tabBar: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, item in
-                tabButton(item, index: index)
+    /// Branding + the app-wide update + settings affordances. Lives at the top
+    /// (HIG: never put critical actions at a sidebar's bottom, which a window
+    /// move can hide). The top inset clears the traffic lights.
+    private var sidebarHeader: some View {
+        HStack(spacing: 8) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 24, height: 24)
+            Text("Vitals").font(.system(size: 14, weight: .semibold))
+            Spacer()
+            HeaderUpdateButton()
+            Button {
+                openWindow(id: "settings")
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(.quaternary.opacity(gearHovered ? 0.7 : 0)))
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.12)) { gearHovered = hovering }
+            }
+            .help("Vitals settings")
         }
-        .padding(3)
-        .background(Capsule().fill(.quaternary.opacity(0.45)))
+        .padding(.horizontal, 12)
+        .padding(.top, 38)
+        .padding(.bottom, 10)
     }
 
-    /// Whether this tab shows its text label, per the display-mode setting:
-    /// Labels → always, Icons → never, Expanding → only when selected.
-    private func showsLabel(for item: AppTab, selected: Bool) -> Bool {
-        switch settings.tabDisplayMode {
-        case .labels: return true
-        case .icons: return false
-        case .expanding: return selected
-        }
+    private func groupLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, 9)
+            .padding(.top, 14)
+            .padding(.bottom, 3)
     }
 
-    /// A capsule tab whose label appears per the display mode and whose metrics
-    /// scale with the size setting. In Expanding mode only the selected tab
-    /// reveals its label (riding the same spring as the sliding indicator, so it
-    /// grows out of the icon); the rest stay icon-only with the name on hover /
-    /// for VoiceOver. The ⌘ shortcut follows visible position, so ⌘1 is always
-    /// the leftmost tab.
-    private func tabButton(_ item: AppTab, index: Int) -> some View {
+    /// A sidebar destination row — icon + label, the whole row a click target,
+    /// the selected one filled. ⌘1…⌘9 follow visible position for the first
+    /// nine. Switching never animates geometry — only the selection fill moves.
+    private func row(_ item: NavSection, shortcutIndex: Int?) -> some View {
         let selected = section == item
-        let size = settings.tabSize
-        let showLabel = showsLabel(for: item, selected: selected)
-        let shortcut = index < 9 ? KeyEquivalent(Character("\(index + 1)")) : nil
+        let shortcut = shortcutIndex.flatMap { $0 < 9 ? KeyEquivalent(Character("\($0 + 1)")) : nil }
         return Button {
             visited.insert(item)
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                section = item
-            }
+            section = item
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 9) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: size.iconSize, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                    .frame(width: size.iconSlot)  // stable slot so icons don't shift as labels grow
-                if showLabel {
-                    Text(item.title)
-                        .font(.system(size: size.labelSize, weight: .medium))
-                        .fixedSize()
-                        .transition(.opacity)
-                }
+                    .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .frame(width: 20)
+                Text(item.title)
+                    .font(.system(size: 13, weight: selected ? .medium : .regular))
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, showLabel ? size.hPadSelected : size.hPadCollapsed)
-            .padding(.vertical, size.vPad)
-            .contentShape(Capsule())
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(selected ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Color.clear))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-        .background {
-            if selected {
-                Capsule()
-                    .fill(.quaternary)
-                    .matchedGeometryEffect(id: "selected-tab", in: tabIndicator)
+        .keyboardShortcut(shortcut.map { KeyboardShortcut($0, modifiers: .command) })
+        .help(item.title)
+    }
+
+    // MARK: Content
+
+    /// A section is active only when it's the selected one (the gate every
+    /// kept-alive chart / sampler reads). The window-open gate is separate
+    /// (`model.setMainWindowVisible`), so this is just the selection.
+    private func active(_ s: NavSection) -> Bool { section == s }
+
+    /// Sections mount lazily, then stay alive (kept-mounted, hidden) so switching
+    /// back is instant. Switches aren't animated — fading a translucent panel in
+    /// over the glass window flashes dark before the blur resolves.
+    private var content: some View {
+        ZStack {
+            if visited.contains(.overview) {
+                DashboardView(isActive: active(.overview), drill: drill).tabVisibility(active(.overview))
+            }
+            if visited.contains(.cpu) { CPUView().tabVisibility(active(.cpu)) }
+            if visited.contains(.gpu) { GPUView(isActive: active(.gpu)).tabVisibility(active(.gpu)) }
+            if visited.contains(.memory) { MemoryView(isActive: active(.memory)).tabVisibility(active(.memory)) }
+            if visited.contains(.battery) { BatteryView(isActive: active(.battery)).tabVisibility(active(.battery)) }
+            if visited.contains(.sensors) { SensorsView().tabVisibility(active(.sensors)) }
+            if visited.contains(.processes) {
+                ProcessesView(model: processesModel, isActive: active(.processes)).tabVisibility(active(.processes))
+            }
+            if visited.contains(.history) { HistoryView(isActive: active(.history)).tabVisibility(active(.history)) }
+            if visited.contains(.storage) {
+                StorageView(model: storageModel, isActive: active(.storage)).tabVisibility(active(.storage))
+            }
+            if visited.contains(.cleanup) {
+                CleanupView(model: cleanupModel, isActive: active(.cleanup)).tabVisibility(active(.cleanup))
+            }
+            if visited.contains(.applications) {
+                AppsView(model: appsModel, isActive: active(.applications)).tabVisibility(active(.applications))
+            }
+            if visited.contains(.loginItems) {
+                LoginItemsView(model: loginItemsModel, isActive: active(.loginItems)).tabVisibility(active(.loginItems))
             }
         }
-        .keyboardShortcut(shortcut.map { KeyboardShortcut($0, modifiers: .command) })
-        .accessibilityLabel(item.title)
-        .help(shortcut != nil ? "\(item.title) (⌘\(index + 1))" : item.title)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(nil, value: section)
+    }
+
+    /// Drill from a Dashboard tile straight into the matching Monitor section.
+    private func drill(to target: NavSection) {
+        visited.insert(target)
+        section = target
     }
 }
 
 /// The header's update affordance: a compact badged download icon when an
-/// update is available (one click installs, from any tab), and a small spinner
-/// while it downloads and installs. Icon-only so the header stays uncrowded with
-/// eight tabs — the full "Install Update" call to action still lives in the
-/// Dashboard banner. Reads the shared `Updater`, so it stays in sync. Nothing
-/// shows when up to date.
+/// update is available (one click installs, from any section), and a small
+/// spinner while it downloads and installs. Reads the shared `Updater`, so it
+/// stays in sync. Nothing shows when up to date.
 private struct HeaderUpdateButton: View {
     @EnvironmentObject private var updater: Updater
     @State private var hovered = false
@@ -182,7 +256,7 @@ private struct HeaderUpdateButton: View {
                     .font(.system(size: 15, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.blue)
-                    .frame(width: 30, height: 30)
+                    .frame(width: 26, height: 26)
                     .background(Circle().fill(.blue.opacity(hovered ? 0.22 : 0.14)))
                     .contentShape(Circle())
             }
@@ -201,13 +275,13 @@ private struct HeaderUpdateButton: View {
     }
 
     private var spinner: some View {
-        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 30, height: 30)
+        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 26, height: 26)
     }
 }
 
 extension View {
-    /// A kept-mounted tab (or System segment): visible and interactive only when
-    /// active, otherwise hidden (but still laid out, so it never has to re-mount).
+    /// A kept-mounted section: visible and interactive only when active,
+    /// otherwise hidden (but still laid out, so it never has to re-mount).
     func tabVisibility(_ active: Bool) -> some View {
         opacity(active ? 1 : 0)
             .allowsHitTesting(active)
@@ -215,96 +289,21 @@ extension View {
     }
 }
 
-/// Owns the per-tab models and the tab ZStack. Split out from `ContentView` so
-/// the per-tab models' `objectWillChange` publications invalidate this view's
-/// body — not `ContentView`'s. The nav bar lives in `ContentView.header`; if
-/// the per-tab models were `@StateObject`s there (as they used to be), every
-/// publish (e.g. `ProcessesModel.hasLoaded` flipping ~1 ms after the tab opens)
-/// would re-evaluate the header mid-spring and hitch the indicator animation.
-/// Here, a publish only re-renders the tab content below the header.
-struct TabCanvas: View {
-    @Binding var section: AppTab
-    @Binding var visited: Set<AppTab>
-    // Owned here so the scans survive section switches. Processes lives inside
-    // the System tab (as a segment); Apps + Login Items share the Applications
-    // tab — but their models are still owned at this level so a scan started in
-    // one segment/section survives switching tabs.
-    @StateObject private var processesModel = ProcessesModel()
-    @StateObject private var appsModel = AppsModel()
-    @StateObject private var loginItemsModel = LoginItemsModel()
-    @StateObject private var cleanupModel = CleanupModel()
-    @StateObject private var storageModel = StorageModel()
-    /// The System tab's selected segment, owned here so a Dashboard tile can drill
-    /// straight to a subsystem and the choice survives switching tabs.
-    @State private var systemSegment: SystemView.Segment = .cpu
-
-    var body: some View {
-        // Tabs mount lazily on first visit, then stay alive — switching back
-        // to a visited tab is instant (no re-mount, no Liquid Glass flash),
-        // while tabs that are never opened cost nothing. Charts are gated on
-        // `isActive` so a kept-alive background tab doesn't rebuild marks. Each
-        // tab keeps its own GlassEffectContainer: one container can't wrap all
-        // tabs (it composites every glass descendant into a single layer that
-        // ignores per-tab opacity).
-        ZStack {
-            if visited.contains(.dashboard) {
-                DashboardView(isActive: section == .dashboard, drill: drill(to:))
-                    .tabVisibility(section == .dashboard)
-            }
-            if visited.contains(.system) {
-                SystemView(processesModel: processesModel, isActive: section == .system,
-                           segment: $systemSegment)
-                    .tabVisibility(section == .system)
-            }
-            if visited.contains(.storage) {
-                StorageView(model: storageModel, isActive: section == .storage)
-                    .tabVisibility(section == .storage)
-            }
-            if visited.contains(.cleanup) {
-                CleanupView(model: cleanupModel, isActive: section == .cleanup)
-                    .tabVisibility(section == .cleanup)
-            }
-            if visited.contains(.applications) {
-                ApplicationsView(appsModel: appsModel, loginItemsModel: loginItemsModel,
-                                 isActive: section == .applications)
-                    .tabVisibility(section == .applications)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Swap tabs instantly — never cross-fade. Fading a translucent tab in
-        // over the translucent glass window shows a dark intermediate before
-        // the blur resolves. The tab indicator still springs — it lives in the
-        // header, unaffected.
-        .animation(nil, value: section)
-    }
-
-    /// Drill from a Dashboard tile into the matching System segment: select the
-    /// segment first (so it's ready when the tab appears), mark System visited,
-    /// then spring the tab indicator across to System.
-    private func drill(to segment: SystemView.Segment) {
-        systemSegment = segment
-        visited.insert(.system)
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-            section = .system
-        }
-    }
-}
-
 /// The Dashboard: the glanceable overview, Mole-style. A health-score hero, a
 /// bento grid of per-subsystem tiles (each with a live sparkline, each a tap into
-/// the matching System segment), the live multi-metric chart, power and fans, and
+/// the matching Monitor section), the live multi-metric chart, power and fans, and
 /// the top processes. Detail is a drill-in — the heavy per-subsystem cards live in
-/// the System tab now, so nothing here is duplicated.
+/// the Monitor sections now, so nothing here is duplicated.
 struct DashboardView: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
-    /// True only while the Dashboard is the visible tab. The live history chart
-    /// rebuilds its marks from `chartHistory` on every tick — gating it (and the
-    /// hover lookup) on `isActive` keeps a kept-alive background dashboard from
-    /// paying that cost every sample, mirroring GPU/Battery.
+    /// True only while the Dashboard is the visible section. The live history
+    /// chart rebuilds its marks from `chartHistory` on every tick — gating it
+    /// (and the hover lookup) on `isActive` keeps a kept-alive background
+    /// dashboard from paying that cost every sample, mirroring GPU/Battery.
     let isActive: Bool
-    /// Jump to a System segment (tap a tile to drill into its detail).
-    let drill: (SystemView.Segment) -> Void
+    /// Jump to a Monitor section (tap a tile to drill into its detail).
+    let drill: (NavSection) -> Void
 
     var body: some View {
         ScrollView {
@@ -332,7 +331,7 @@ struct DashboardView: View {
     }
 
     /// The dashboard's cards batched into one Liquid Glass pass. Kept per-view:
-    /// the tab is mounted once, so this container is created once and never
+    /// the section is mounted once, so this container is created once and never
     /// re-initialized on switch.
     @ViewBuilder
     private var glassBatched: some View {

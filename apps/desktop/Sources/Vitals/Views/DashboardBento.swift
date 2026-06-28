@@ -15,7 +15,7 @@ import SwiftUI
 /// opens System ▸ Sensors for the full breakdown.
 struct DashboardHealthHero: View {
     @EnvironmentObject private var model: VitalsModel
-    let drill: (SystemView.Segment) -> Void
+    let drill: (NavSection) -> Void
     @State private var hovered = false
 
     var body: some View {
@@ -86,7 +86,7 @@ struct DashboardHealthHero: View {
 struct DashboardTileGrid: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
-    let drill: (SystemView.Segment) -> Void
+    let drill: (NavSection) -> Void
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -254,7 +254,7 @@ struct DashboardTile: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
-        .help("Open \(title) in System")
+        .help("Open \(title)")
     }
 }
 
@@ -264,7 +264,7 @@ struct DashboardTile: View {
 /// status screen too). The whole card drills into System ▸ Processes — the full
 /// sortable, searchable, quittable manager.
 struct DashboardProcessesCard: View {
-    let drill: (SystemView.Segment) -> Void
+    let drill: (NavSection) -> Void
     @State private var hovered = false
 
     var body: some View {
