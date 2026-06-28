@@ -341,14 +341,18 @@ final class AppsModel: ObservableObject {
                 }
             }
 
-            // Settle the rows that were waiting on the admin pass: only now do
-            // we know whether the system-owned bundles were actually removed.
-            // If admin was cancelled/failed they stay `pendingAdmin` (honest —
-            // still on disk), so a row never claims a removal that didn't happen.
-            if combined.usedAdmin, combined.errorMessage == nil, !combined.adminCancelled,
-               var progress = uninstallProgress {
+            // Settle the rows that were waiting on the admin pass by checking the
+            // disk, not by trusting the run: the removal script is best-effort
+            // (`rm … || true`), so "the prompt succeeded" doesn't mean every path
+            // is gone. A pending row's id is the app bundle path; if it's gone we
+            // confirm "Removed (system)", otherwise it stays "Needs your password"
+            // — never a removal we can't actually see.
+            if var progress = uninstallProgress {
+                let fm = FileManager.default
                 for index in progress.results.indices where progress.results[index].outcome == .pendingAdmin {
-                    progress.results[index].outcome = .removedViaAdmin
+                    if !fm.fileExists(atPath: progress.results[index].id.path) {
+                        progress.results[index].outcome = .removedViaAdmin
+                    }
                 }
                 uninstallProgress = progress
             }

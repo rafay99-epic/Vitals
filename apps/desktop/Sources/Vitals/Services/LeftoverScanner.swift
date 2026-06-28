@@ -113,17 +113,16 @@ enum LeftoverScanner {
         filename == bundleID || filename.hasPrefix(bundleID + ".") || filename.hasPrefix(bundleID + " ")
     }
 
-    /// Whether a name contains `bundleID` as a whole dot-delimited component —
-    /// for Group Containers, named `<TEAMID>.<bundleID>` or `group.<bundleID>.x`,
-    /// where the id sits in the middle. A plain substring match would let
-    /// `com.foo.app` capture an unrelated `com.foo.application`; this requires a
-    /// boundary on both sides so it can't.
-    static func containsBundleIDComponent(_ filename: String, _ bundleID: String) -> Bool {
+    /// Whether a Group Container directory belongs to `bundleID`. Group
+    /// containers are named `<TEAMID>.<ownerID>` or `group.<ownerID>`; the owner
+    /// is the whole remainder after the first component, matched **exactly** — so
+    /// a sibling app whose id merely extends this one's (`com.foo.app.beta`) is
+    /// never captured, which would otherwise trash that app's data.
+    static func groupContainerBelongsToBundle(_ filename: String, _ bundleID: String) -> Bool {
         guard isValidBundleID(bundleID) else { return false }
-        return filename == bundleID
-            || filename.hasPrefix(bundleID + ".")
-            || filename.hasSuffix("." + bundleID)
-            || filename.contains("." + bundleID + ".")
+        if filename == bundleID { return true }
+        guard let firstDot = filename.firstIndex(of: ".") else { return false }
+        return String(filename[filename.index(after: firstDot)...]) == bundleID
     }
 
     /// Whether a filename is one of an app's "recent items" shared-file-list
@@ -428,7 +427,7 @@ enum LeftoverScanner {
                 consider(url, .launchAgents, .user)
             }
             for url in entries(of: home.appendingPathComponent("Library/Group Containers"))
-            where containsBundleIDComponent(url.lastPathComponent, bundleID) {
+            where groupContainerBelongsToBundle(url.lastPathComponent, bundleID) {
                 consider(url, .containers, .user)
             }
             for url in entries(of: home.appendingPathComponent("Library/Preferences/ByHost"))
