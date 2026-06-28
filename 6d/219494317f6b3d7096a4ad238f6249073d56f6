@@ -1,0 +1,23 @@
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_fb9b4bc3d01c7a::t_8e5bd35bf64332 307
+  s_fb9b4bc3d01c7a::t_0704254f4b0075 285
+  s_fb9b4bc3d01c7a::t_f806fbe9b4323f 319,326-329,331-332
+  s_fb9b4bc3d01c7a::t_d2f126af725f2f 259-261
+  s_fb9b4bc3d01c7a::t_66364c87eeba46 298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "6d219494317f6b3d7096a4ad238f6249073d56f6",
+  "prompts": {},
+  "sessions": {
+    "s_fb9b4bc3d01c7a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7f55075b-02b5-4077-8d8c-d8aed90ce6c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
