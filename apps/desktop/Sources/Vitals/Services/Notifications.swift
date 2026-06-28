@@ -123,8 +123,14 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         case Action.install:
             resolved = .install
         case UNNotificationDefaultActionIdentifier:
-            // Tapping the banner body → the category's primary action.
-            resolved = category == Category.updateReady ? .install : .download
+            // Tapping the banner body → the category's primary action, but ONLY
+            // for the update categories. An overheat/thermal/custom-alert tap
+            // (no category, or a non-update one) must never start an update.
+            switch category {
+            case Category.updateReady:     resolved = .install
+            case Category.updateAvailable: resolved = .download
+            default:                       resolved = nil
+            }
         default:
             resolved = nil  // "Later", dismiss, or an unrelated category
         }

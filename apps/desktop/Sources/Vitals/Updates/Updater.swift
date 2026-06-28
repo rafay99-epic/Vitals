@@ -144,7 +144,17 @@ final class Updater: ObservableObject {
             lastChecked = Date()
             if let release, Self.isNewer(release) {
                 Log.notice(.updater, "update available: \(release.displayVersion) (current \(Self.currentVersion))")
-                status = .available(release)
+                // Don't clobber an in-flight or already-downloaded build for the
+                // same release — a routine re-check must not reset
+                // `.readyToInstall` back to `.available` and abandon the cached DMG.
+                switch status {
+                case .readyToInstall(let pending) where Self.notifyKey(pending) == Self.notifyKey(release):
+                    break
+                case .downloading, .installing:
+                    break
+                default:
+                    status = .available(release)
+                }
                 if !userInitiated, notifiedVersion != Self.notifyKey(release) {
                     notifiedVersion = Self.notifyKey(release)
                     if settings?.autoDownloadUpdates == true {
@@ -244,7 +254,10 @@ final class Updater: ObservableObject {
         }
         let relauncher = Process()
         relauncher.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        relauncher.arguments = ["-c", "sleep 1; /usr/bin/open '\(Self.installPath)'"]
+        // Pass the bundle path as a positional argument ($0), never interpolated
+        // into the script — a quote or space in the app path can't break the
+        // command or inject anything.
+        relauncher.arguments = ["-c", "sleep 1; exec /usr/bin/open \"$0\"", Self.installPath]
         do {
             try relauncher.run()
         } catch {

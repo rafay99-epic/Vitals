@@ -20,10 +20,15 @@ struct SettingsView: View {
             header
             Divider().opacity(0.5)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 28) {
+                Group {
                     if anyMatch {
-                        ForEach(Self.sections) { section in
-                            SettingsSectionView(section: section, query: query)
+                        // Two columns of whole sections. Each column is one
+                        // continuous vertical stack, so cards never strand a gap
+                        // (the worst case is one column ending slightly lower at the
+                        // very bottom — the section split below keeps them even).
+                        HStack(alignment: .top, spacing: 24) {
+                            column(leftSections)
+                            column(rightSections)
                         }
                     } else {
                         noMatches
@@ -61,6 +66,27 @@ struct SettingsView: View {
         .padding(.top, 34)
         .padding(.bottom, 16)
     }
+
+    private func column(_ sections: [SettingsSectionModel]) -> some View {
+        VStack(alignment: .leading, spacing: 28) {
+            ForEach(sections) { section in
+                SettingsSectionView(section: section, query: query)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    /// Sections split across the two page columns, hand-balanced by their card
+    /// weight so the columns end at roughly the same height — no big trailing gap.
+    /// Interface is the heaviest section (the long Menu-bar + Desktop-Widgets
+    /// cards), so it anchors the right column on its own; General anchors the left.
+    private var leftSections: [SettingsSectionModel] {
+        Self.sections.filter { !Self.rightColumnTitles.contains($0.title) }
+    }
+    private var rightSections: [SettingsSectionModel] {
+        Self.sections.filter { Self.rightColumnTitles.contains($0.title) }
+    }
+    private static let rightColumnTitles: Set<String> = ["Interface", "Monitoring", "Updates", "Data"]
 
     private var anyMatch: Bool {
         query.isEmpty || Self.sections.contains { $0.cards.contains { $0.matches(query) } }
@@ -185,11 +211,9 @@ private struct SettingsSectionView: View {
             VStack(alignment: .leading, spacing: 14) {
                 sectionHeader
                 if let prologue = section.prologue { prologue }
-                if visible.count == 1 {
-                    visible[0].view
-                } else {
-                    SettingsMasonry(cards: visible)
-                }
+                // One continuous stack — the section *is* a column, so its cards
+                // never leave a gap beside a taller sibling.
+                ForEach(visible) { $0.view }
             }
         }
     }
@@ -204,51 +228,6 @@ private struct SettingsSectionView: View {
                 .fill(.separator.opacity(0.5))
                 .frame(height: 1)
         }
-    }
-}
-
-/// A two-column masonry that keeps the columns near-equal in height, so a short
-/// card never leaves a tall empty gap beside a taller one. Card heights are
-/// measured live; assignment uses longest-first greedy packing (the classic
-/// balanced-partition heuristic) but each column then renders in the cards'
-/// original registry order, so the result is both balanced and logically ordered.
-private struct SettingsMasonry: View {
-    let cards: [SettingsCardModel]
-    @State private var heights: [UUID: CGFloat] = [:]
-
-    var body: some View {
-        let split = balanced()
-        HStack(alignment: .top, spacing: 16) {
-            column(split.left)
-            column(split.right)
-        }
-    }
-
-    private func column(_ cards: [SettingsCardModel]) -> some View {
-        VStack(spacing: 16) {
-            ForEach(cards) { card in
-                card.view
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights[card.id] = $0 }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .top)
-    }
-
-    private func balanced() -> (left: [SettingsCardModel], right: [SettingsCardModel]) {
-        // Until a card is measured, assume a middling height so the first
-        // (offscreen) pass splits evenly; real heights refine it before it shows.
-        func height(_ card: SettingsCardModel) -> CGFloat { (heights[card.id] ?? 180) + 16 }
-        var leftIDs = Set<UUID>()
-        var leftHeight: CGFloat = 0, rightHeight: CGFloat = 0
-        for card in cards.sorted(by: { height($0) > height($1) }) {
-            if leftHeight <= rightHeight {
-                leftIDs.insert(card.id); leftHeight += height(card)
-            } else {
-                rightHeight += height(card)
-            }
-        }
-        return (cards.filter { leftIDs.contains($0.id) },
-                cards.filter { !leftIDs.contains($0.id) })
     }
 }
 

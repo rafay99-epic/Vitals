@@ -428,7 +428,7 @@ struct UpdateBanner: View {
         switch updater.status {
         case .available(let release):
             banner {
-                Label("Vitals \(release.version) is available", systemImage: "arrow.down.circle.fill")
+                Label("Vitals \(release.displayVersion) is available", systemImage: "arrow.down.circle.fill")
                     .foregroundStyle(.blue)
                 Text("You're on \(Updater.currentVersion)")
                     .foregroundStyle(.secondary)
@@ -440,7 +440,7 @@ struct UpdateBanner: View {
             }
         case .readyToInstall(let release):
             banner {
-                Label("Vitals \(release.version) is ready to install", systemImage: "arrow.down.circle.fill")
+                Label("Vitals \(release.displayVersion) is ready to install", systemImage: "arrow.down.circle.fill")
                     .foregroundStyle(.green)
                 Text("Downloaded in the background")
                     .foregroundStyle(.secondary)
