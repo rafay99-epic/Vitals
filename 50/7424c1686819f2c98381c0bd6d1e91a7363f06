@@ -1,0 +1,40 @@
+apps/desktop/Sources/Vitals/Updates/Updater.swift
+  s_2952bc4b1fdb0b::t_452551bb434548 89,179-181,183-193,198-237,240,242-278,282-312
+  s_2952bc4b1fdb0b::t_ad1e38962082ac 68-69,78-88
+  s_2952bc4b1fdb0b::t_92c47128261974 16-18
+  s_2952bc4b1fdb0b::t_e9ec78ba3b96b6 97
+  s_2952bc4b1fdb0b::t_6f4156bf1fca83 148-156
+  s_2952bc4b1fdb0b::t_18cb0fcfdd2776 65-67
+  s_2952bc4b1fdb0b::t_c626be0f00fcfc 90
+  s_2952bc4b1fdb0b::t_39850a99d391e2 313
+apps/desktop/Sources/Vitals/Services/Notifications.swift
+  s_2952bc4b1fdb0b::t_2910ea973b340c 7-12,14,17-37,40-69,82-84,90,96-135
+apps/desktop/Sources/Vitals/Settings/AppSettings.swift
+  s_2952bc4b1fdb0b::t_89a41557bba6e4 173-178
+  s_2952bc4b1fdb0b::t_ccaa28ef11f890 333-336
+  s_2952bc4b1fdb0b::t_fe99a8780cf163 397
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_2952bc4b1fdb0b::t_dcc17df7b28792 434-445
+  s_2952bc4b1fdb0b::t_b3a73a7344af0f 272-288
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_2952bc4b1fdb0b::t_0b81a178481e56 854-855,858-859,871-873
+  s_2952bc4b1fdb0b::t_df58a86aaf652f 856-857
+  s_2952bc4b1fdb0b::t_be783558bc76fe 911-912
+  s_2952bc4b1fdb0b::t_e7392f701fd82b 874-875
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "507424c1686819f2c98381c0bd6d1e91a7363f06",
+  "prompts": {},
+  "sessions": {
+    "s_2952bc4b1fdb0b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "467b07e2-c6ed-45c5-81d4-9bcc7dbcc120",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
