@@ -271,7 +271,7 @@ struct MemoryCard: View {
         HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Swap used").font(.caption).foregroundStyle(.secondary)
-                Text(swapText(memory))
+                Text(swapSummary(memory))
                     .font(.system(.body, design: .rounded, weight: .medium))
                     .foregroundStyle(memory.swapUsed > 0 ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
             }
@@ -285,11 +285,6 @@ struct MemoryCard: View {
             }
             Spacer()
         }
-    }
-
-    private func swapText(_ memory: MemorySnapshot) -> String {
-        guard memory.swapTotal > 0 else { return "None" }
-        return String(format: "%.2f GB of %.1f GB", gigabytes(memory.swapUsed), gigabytes(memory.swapTotal))
     }
 
     private func pressureBadge(_ pressure: MemoryPressure) -> some View {

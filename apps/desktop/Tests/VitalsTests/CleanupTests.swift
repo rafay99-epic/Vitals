@@ -127,6 +127,78 @@ struct LeftoverScannerTests {
         #expect(LeftoverScanner.vendorNestedCandidates(bundleID: "com.slack", appName: "Slack", home: home).isEmpty)
         #expect(LeftoverScanner.vendorNestedCandidates(bundleID: nil, appName: "Slack", home: home).isEmpty)
     }
+
+    /// Group-container matching identifies the *owner* (the remainder after the
+    /// team-id / "group." prefix) and requires it to equal the bundle id exactly,
+    /// so a sibling app whose id extends this one's is never captured.
+    @Test func groupContainerMatchesOwnerExactly() {
+        #expect(LeftoverScanner.groupContainerBelongsToBundle("com.example.app", "com.example.app"))
+        #expect(LeftoverScanner.groupContainerBelongsToBundle("ABCDE12345.com.example.app", "com.example.app"))
+        #expect(LeftoverScanner.groupContainerBelongsToBundle("group.com.example.app", "com.example.app"))
+        // A separate installed sibling whose id extends this one's must not match.
+        #expect(!LeftoverScanner.groupContainerBelongsToBundle("ABCDE12345.com.example.app.beta", "com.example.app"))
+        #expect(!LeftoverScanner.groupContainerBelongsToBundle("group.com.example.app.beta", "com.example.app"))
+        #expect(!LeftoverScanner.groupContainerBelongsToBundle("com.example.applications", "com.example.app"))
+        #expect(!LeftoverScanner.groupContainerBelongsToBundle("anything", "nodots"))
+    }
+
+    /// Recent-items shared-file-lists are matched by id + the `.sfl*` family,
+    /// never a different app or a non-sfl file.
+    @Test func sharedFileListMatchesRecentItemsByID() {
+        #expect(LeftoverScanner.isSharedFileList("com.example.app.sfl4", "com.example.app"))
+        #expect(LeftoverScanner.isSharedFileList("com.example.app.sfl3", "com.example.app"))
+        #expect(LeftoverScanner.isSharedFileList("com.example.app.sfl", "com.example.app"))
+        #expect(!LeftoverScanner.isSharedFileList("com.example.app.plist", "com.example.app"))
+        #expect(!LeftoverScanner.isSharedFileList("com.example.application.sfl4", "com.example.app"))
+        #expect(!LeftoverScanner.isSharedFileList("com.other.app.sfl4", "com.example.app"))
+        // A longer id's sfl must not be mistaken for a shorter app id's.
+        #expect(!LeftoverScanner.isSharedFileList("com.foo.bar.sfl4", "com.foo"))
+    }
+
+    /// End-to-end against a temp home: the scan must catch the nested `.sfl4`
+    /// recents file, the exact `.ShipIt` updater cache, and a UUID-named daemon
+    /// container (matched via its metadata id) — and crucially must NOT touch a
+    /// *separate installed* app whose id extends the target's (`com.example.app.beta`),
+    /// whose Containers hold real user documents.
+    @Test func scanFindsAppJunkButNotASiblingApp() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("vitals-leftover-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: home) }
+
+        func make(_ relative: String, file: Bool = false, contents: String = "x") throws {
+            let url = home.appendingPathComponent(relative)
+            try fm.createDirectory(at: file ? url.deletingLastPathComponent() : url,
+                                   withIntermediateDirectories: true)
+            if file { try contents.write(to: url, atomically: true, encoding: .utf8) }
+        }
+
+        // The target app's own junk — should be found:
+        try make("Library/Application Support/com.apple.sharedfilelist/com.apple.LSSharedFileList.ApplicationRecentDocuments/com.example.app.sfl4", file: true)
+        try make("Library/Caches/com.example.app.ShipIt")           // Squirrel updater cache
+        let daemon = "Library/Daemon Containers/\(UUID().uuidString)"
+        try make("\(daemon)/Data")
+        let metaURL = home.appendingPathComponent("\(daemon)/.com.apple.containermanagerd.metadata.plist")
+        try (["MCMMetadataIdentifier": "com.example.app"] as NSDictionary).write(to: metaURL)
+
+        // The target app's own group container — should be found:
+        try make("Library/Group Containers/ABCDE12345.com.example.app")
+
+        // A separate installed sibling app — its data must be left untouched:
+        try make("Library/Containers/com.example.app.beta")         // sandbox documents!
+        try make("Library/Caches/com.example.app.beta")
+        try make("Library/Caches/com.example.application")
+        try make("Library/Group Containers/ABCDE12345.com.example.app.beta")
+
+        let found = LeftoverScanner.scan(bundleID: "com.example.app", appName: "Example", home: home)
+        let names = Set(found.map(\.id.lastPathComponent))
+        #expect(names.contains("com.example.app.sfl4"))
+        #expect(names.contains("com.example.app.ShipIt"))
+        #expect(found.contains { $0.id.path.contains("/Daemon Containers/") })
+        #expect(names.contains("ABCDE12345.com.example.app"))      // own group container
+        // The sibling app's data is never captured.
+        #expect(!found.contains { $0.id.path.contains("com.example.app.beta") })
+        #expect(!names.contains("com.example.application"))
+    }
 }
 
 /// The complete uninstall reaches system-domain files and removes them as root,

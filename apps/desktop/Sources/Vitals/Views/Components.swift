@@ -521,6 +521,13 @@ func gigabytes(_ bytes: Double) -> Double {
     bytes / 1_073_741_824
 }
 
+/// Swap as "used of total", or "None" when no swap is configured. Shared by the
+/// Memory hero card and the composition grid so the two can't drift.
+func swapSummary(_ memory: MemorySnapshot) -> String {
+    guard memory.swapTotal > 0 else { return "None" }
+    return String(format: "%.2f GB of %.1f GB", gigabytes(memory.swapUsed), gigabytes(memory.swapTotal))
+}
+
 /// Color for the macOS memory-pressure level — green/yellow/red like
 /// Activity Monitor's pressure graph.
 func pressureColor(_ pressure: MemoryPressure) -> Color {

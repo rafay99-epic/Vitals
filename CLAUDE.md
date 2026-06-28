@@ -171,17 +171,27 @@ bun run dmg                  # desktop app + DMG (macOS only)
 - `Models/` — `VitalsModel` (tick → snapshot → publish; `chartHistory` downsampled to
   300 points), `AppsModel`, `CleanupModel`. Tab models are owned by `ContentView` as
   `@StateObject` so scans survive tab switches.
-- `Views/` — display only. Main shell is a **stationary header with capsule tabs**
-  (Activity Monitor style). There is deliberately **no NavigationSplitView, no window
-  toolbar items, no system title bar** — see performance rules.
+- `Views/` — display only. Main shell is a **fixed left sidebar** (`ContentView`):
+  an Overview on top, then a **Monitor** group (CPU/GPU/Memory/Battery/Temps & Fans/
+  Processes/History) and a **Maintain** group (Storage/Cleanup/Applications/Login
+  Items) — one flat nav level, the "read freely, write carefully" split made visible
+  (Sensei / Apple Music pattern). The sidebar **never collapses** (no toggle), so it
+  obeys the geometry rule below. There is deliberately **no collapsible
+  NavigationSplitView, no window toolbar items, no system title bar** — see
+  performance rules. Each section is its own panel (`CPUView`, `MemoryView`,
+  `SensorsView`, `AppsView`, …); there is **no second tab/segment level** — depth
+  lives inside a panel (expandable cards, inline drill-down), never tabs-in-tabs.
 - Single window (`Window` scene, not `WindowGroup`) and single instance (guard in
   `Main.swift`; the fan daemon's `.prohibited` activation policy excludes it).
 
 ## Performance rules (each one was a shipped fix — don't regress)
 
-- **Window geometry must never change from navigation.** Tabs switch content, not
-  layout. Don't reintroduce sidebars or toolbar items: AppKit *snaps* (not animates)
-  toolbar segments and detail panes on sidebar toggle.
+- **Window geometry must never change from navigation.** Selecting a sidebar row
+  switches content, not layout. The sidebar is **fixed-width and never collapses** —
+  that's the whole point: a *collapsible* sidebar / toolbar items are what's banned,
+  because AppKit *snaps* (not animates) toolbar segments and detail panes on sidebar
+  toggle. A non-collapsing rail has no toggle, so nothing snaps. Don't add a collapse
+  button, toolbar items, or a second nav level.
 - Swift Charts pay 50–150 ms on first layout → mount through the `Deferred` wrapper
   (Components.swift) so window-open animates against placeholders.
 - Grids use **fixed column counts** (`GridItem(.flexible())`), never `.adaptive` —

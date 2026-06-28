@@ -12,6 +12,7 @@ actor SensorSampler {
         let cpuUsage: CPUUsage?
         let memory: MemorySnapshot?
         let topProcesses: [ProcessSampler.Process]
+        let topMemoryProcesses: [ProcessSampler.Process]
         let battery: BatterySnapshot?
         let gpu: GPUSnapshot?
         let power: PowerSnapshot?
@@ -54,13 +55,15 @@ actor SensorSampler {
         let battery = Battery.read(officialHealth: batteryHealth)
         if battery != nil { refreshBatteryHealthIfStale() }
         refreshDiskHealthIfStale()
+        let processes = includeTopProcesses ? processSampler.sample(top: 5) : .empty
         return Snapshot(
             readings: hid.readAll(),
             fans: smc?.fans() ?? [],
             hasSMC: smc != nil,
             cpuUsage: cpuSampler.sample(),
             memory: MemoryStats.read(),
-            topProcesses: includeTopProcesses ? processSampler.sample(top: 5) : [],
+            topProcesses: processes.byCPU,
+            topMemoryProcesses: processes.byMemory,
             battery: battery,
             gpu: includeGPU ? gpu.sample() : nil,
             power: includePower ? power.sample() : nil,

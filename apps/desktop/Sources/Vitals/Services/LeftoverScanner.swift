@@ -113,6 +113,30 @@ enum LeftoverScanner {
         filename == bundleID || filename.hasPrefix(bundleID + ".") || filename.hasPrefix(bundleID + " ")
     }
 
+    /// Whether a Group Container directory belongs to `bundleID`. Group
+    /// containers are named `<TEAMID>.<ownerID>` or `group.<ownerID>`; the owner
+    /// is the whole remainder after the first component, matched **exactly** — so
+    /// a sibling app whose id merely extends this one's (`com.foo.app.beta`) is
+    /// never captured, which would otherwise trash that app's data.
+    static func groupContainerBelongsToBundle(_ filename: String, _ bundleID: String) -> Bool {
+        guard isValidBundleID(bundleID) else { return false }
+        if filename == bundleID { return true }
+        guard let firstDot = filename.firstIndex(of: ".") else { return false }
+        return String(filename[filename.index(after: firstDot)...]) == bundleID
+    }
+
+    /// Whether a filename is one of an app's "recent items" shared-file-list
+    /// stores — `<bundleID>.sfl`, `.sfl2`, `.sfl3`, `.sfl4`. macOS nests these
+    /// under `…/com.apple.sharedfilelist/<subfolder>/`, so probing the exact
+    /// root path misses them; this drives the enumeration that catches them. The
+    /// component after the id must be *only* the sfl extension, so a longer id
+    /// (`com.foo.bar.sfl4`) can't be mistaken for a shorter app's file (`com.foo`).
+    static func isSharedFileList(_ filename: String, _ bundleID: String) -> Bool {
+        guard isValidBundleID(bundleID), filename.hasPrefix(bundleID + ".") else { return false }
+        let suffix = filename.dropFirst(bundleID.count + 1)
+        return !suffix.contains(".") && suffix.hasPrefix("sfl")
+    }
+
     private static func isAppleName(_ filename: String) -> Bool {
         filename.hasPrefix("com.apple.")
     }
@@ -164,6 +188,8 @@ enum LeftoverScanner {
         if let bundleID, isValidBundleID(bundleID) {
             add("Application Support/\(bundleID)", .appSupport, under: library)
             add("Caches/\(bundleID)", .caches, under: library)
+            // Squirrel/ShipIt auto-updater's staging cache, keyed off the id.
+            add("Caches/\(bundleID).ShipIt", .caches, under: library)
             add("Logs/\(bundleID)", .logs, under: library)
             add("Preferences/\(bundleID).plist", .preferences, under: library)
             add("Saved Application State/\(bundleID).savedState", .savedState, under: library)
@@ -332,10 +358,12 @@ enum LeftoverScanner {
     }
 
     /// Probes the filesystem and returns every leftover that actually exists,
-    /// with sizes — both user-domain (Trash) and system-domain (admin).
-    static func scan(bundleID: String?, appName: String, appURL: URL? = nil) -> [Leftover] {
+    /// with sizes — both user-domain (Trash) and system-domain (admin). `home`
+    /// is injectable so the user-domain enumeration can be tested against a
+    /// temp directory; it defaults to the real home.
+    static func scan(bundleID: String?, appName: String, appURL: URL? = nil,
+                     home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [Leftover] {
         let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
         var found: [Leftover] = []
         var seen = Set<String>()
 
@@ -399,12 +427,48 @@ enum LeftoverScanner {
                 consider(url, .launchAgents, .user)
             }
             for url in entries(of: home.appendingPathComponent("Library/Group Containers"))
-            where url.lastPathComponent.contains(bundleID) {
+            where groupContainerBelongsToBundle(url.lastPathComponent, bundleID) {
                 consider(url, .containers, .user)
             }
             for url in entries(of: home.appendingPathComponent("Library/Preferences/ByHost"))
             where url.lastPathComponent.hasPrefix(bundleID + ".") && url.pathExtension == "plist" {
                 consider(url, .preferences, .user)
+            }
+        }
+
+        let ownedIDs = Set(allBundleIDs)
+        // The finds below are keyed off a bundle id this app owns; with none
+        // (no valid id, no helpers), skip the enumeration rather than list whole
+        // shared folders that can't match anything.
+        //
+        // These match by *exact* owned id (not a bundle-id prefix): a prefix
+        // sweep of the shared data dirs would capture a *separate installed* app
+        // whose id extends this one's (uninstalling `com.foo.app` must not trash
+        // `com.foo.app.beta`'s documents). The app's own suffixed artifacts are
+        // caught by exact probes (e.g. `Caches/<id>.ShipIt`) and by harvesting
+        // helper ids into `ownedIDs`.
+        if !ownedIDs.isEmpty {
+            func ownsSharedFileList(_ name: String) -> Bool { ownedIDs.contains { isSharedFileList(name, $0) } }
+
+            // "Recent items" shared-file-lists live one level down, keyed by id:
+            // ~/Library/Application Support/com.apple.sharedfilelist/<sub>/<id>.sfl*
+            // (and occasionally directly in the root). Tiny each, but pure junk
+            // once the app is gone.
+            let sharedList = home.appendingPathComponent("Library/Application Support/com.apple.sharedfilelist")
+            for entry in entries(of: sharedList) {
+                if ownsSharedFileList(entry.lastPathComponent) { consider(entry, .preferences, .user) }
+                for url in entries(of: entry) where ownsSharedFileList(url.lastPathComponent) {
+                    consider(url, .preferences, .user)
+                }
+            }
+            // Sandboxed *daemon* data — UUID-named, so it's matched by the bundle
+            // id recorded in each container's metadata plist (exact, no guessing).
+            for container in entries(of: home.appendingPathComponent("Library/Daemon Containers")) {
+                let meta = container.appendingPathComponent(".com.apple.containermanagerd.metadata.plist")
+                guard let dict = NSDictionary(contentsOf: meta),
+                      let id = dict["MCMMetadataIdentifier"] as? String,
+                      ownedIDs.contains(id) else { continue }
+                consider(container, .containers, .user)
             }
         }
         // Launch agents that point at the app bundle by path, even if named differently.
