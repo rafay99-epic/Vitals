@@ -43,7 +43,6 @@ final class AppsModel: ObservableObject {
             case removingFiles(String)
             case homebrew(String)
             case awaitingAdmin
-            case removingSystem
             case finishing
 
             var label: String {
@@ -52,7 +51,6 @@ final class AppsModel: ObservableObject {
                 case .removingFiles(let name): return "Removing \(name) and its files…"
                 case .homebrew(let name):      return "Uninstalling \(name) with Homebrew…"
                 case .awaitingAdmin:           return "Enter your administrator password to remove system files…"
-                case .removingSystem:          return "Removing system files…"
                 case .finishing:               return "Finishing up…"
                 }
             }
@@ -302,7 +300,7 @@ final class AppsModel: ObservableObject {
 
                 // Record this app's outcome live so the user watches the list fill.
                 uninstallProgress?.results.append(appResult(for: app, outcome: outcome,
-                                                            cask: staged.casks[app.id] != nil,
+                                                            cask: bundleHandledByBrew,
                                                             viaAdmin: bundleViaAdmin))
                 uninstallProgress?.completedApps += 1
             }

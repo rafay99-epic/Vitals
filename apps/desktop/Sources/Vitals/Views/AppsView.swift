@@ -86,9 +86,11 @@ struct AppsView: View {
         }
         .sheet(item: $model.staged) { staged in
             UninstallConfirmationSheet(model: model, staged: staged)
-                // Don't let a swipe/Esc dismiss the sheet mid-removal — the work
-                // keeps running and the user would lose all progress feedback.
-                .interactiveDismissDisabled(model.uninstallProgress != nil)
+                // Don't let a swipe/Esc dismiss the sheet mid-removal (the work
+                // keeps running) or at the summary (dismissing without Done would
+                // strand a stale lastOutcome and reopen onto it next time) — only
+                // the in-sheet buttons drive it.
+                .interactiveDismissDisabled(model.uninstallProgress != nil || model.lastOutcome != nil)
         }
     }
 
