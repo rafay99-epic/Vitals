@@ -1,0 +1,32 @@
+apps/desktop/Sources/Vitals/Models/StorageModel.swift
+  s_4cf99c7662eed8::t_ea531e16fc14a4 335
+  s_4cf99c7662eed8::t_4341c5025f2f1b 326
+  s_4cf99c7662eed8::t_e4197b395f0c3d 152
+  s_4cf99c7662eed8::t_ccc6ae684bd0cf 4-12,15-16,23-26,31,48-51,54,59,76-80,105-108,113,119-120,234-244,258-265,272,277-281,289-290,296-297,302,309-310,315-320,323-325,330,334,339,345-349,355-359
+  s_4cf99c7662eed8::t_72dbdd7327502a 298-301
+  s_4cf99c7662eed8::t_d205c0b16cdfc4 68-72
+  s_4cf99c7662eed8::t_e9c83683eb2668 200
+  s_4cf99c7662eed8::t_b4f6414cdb1586 360
+apps/desktop/Tests/VitalsTests/StorageTests.swift
+  s_4cf99c7662eed8::t_9b2f80ff720a29 1-133
+apps/desktop/Sources/Vitals/Views/StorageView.swift
+  s_4cf99c7662eed8::t_d31bb759fa99e2 4
+  s_4cf99c7662eed8::t_d060d9911c3b99 5,8-16,32-35,41-47,50-51,68-91,218-230,268-277,314,367,369-382,384-392,394-408,412-420,424-429,452-453,463-473,477,488,503,515,519,522,528,536-543,568-593,728-730,738,740-743,774-777
+  s_4cf99c7662eed8::t_f276d13f15df30 454-462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "6b829e10408be091bb5ca789daff61b01f308c23",
+  "prompts": {},
+  "sessions": {
+    "s_4cf99c7662eed8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a242ae23-4970-44db-bb07-4377aa8014bb",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
