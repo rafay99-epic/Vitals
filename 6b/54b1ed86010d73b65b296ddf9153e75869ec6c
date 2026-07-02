@@ -1,0 +1,28 @@
+apps/desktop/Tests/VitalsTests/StorageTests.swift
+  s_4cf99c7662eed8::t_98d341bce11d16 144-148,150,152-155
+  s_4cf99c7662eed8::t_78df6dde581c6e 134-143,149,151,156-296
+apps/desktop/Sources/Vitals/Models/StorageModel.swift
+  s_4cf99c7662eed8::t_fd76842ac71611 115-122,140,146-148,150,156,160-163,192-196,200,210,212-216,219,227-228
+apps/desktop/Sources/Vitals/Services/AppInventory.swift
+  s_4cf99c7662eed8::t_cd00df0d852a49 17-46,51-52
+  s_4cf99c7662eed8::t_b903900864b4e4 111,116-121,135-171,173-183,196,200,202-203,205,208-209,215
+  s_4cf99c7662eed8::t_5fc41a69b17ec4 184-186,204,206-207
+apps/desktop/Sources/Vitals/Views/StorageView.swift
+  s_4cf99c7662eed8::t_1a70486f94badb 170,791,823,827-833
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "6b54b1ed86010d73b65b296ddf9153e75869ec6c",
+  "prompts": {},
+  "sessions": {
+    "s_4cf99c7662eed8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a242ae23-4970-44db-bb07-4377aa8014bb",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
