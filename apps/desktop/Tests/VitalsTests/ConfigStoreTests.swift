@@ -89,7 +89,14 @@ struct ConfigStoreTests {
         let first = AppSettings(defaults: firstSuite, configURL: url)
         first.refreshInterval = 5.0
         first.tabDisplayMode = .labels  // a non-default appearance choice
-        ConfigStore.save(firstSuite, keys: AppSettings.persistedKeys, to: url)
+        // Drain the instance's serial write queue rather than racing it with a
+        // manual ConfigStore.save: `first`'s init enqueued an async mirror of the
+        // *registered defaults* to this same url. A raw save can land before that
+        // stale init write, which then clobbers the file back to defaults — the
+        // CI-only flake that blocked the promotion gate. flushConfig serializes
+        // the current state and blocks until every queued write has landed in
+        // order, so the file deterministically reflects {5.0, .labels}.
+        first.flushConfig()
 
         // An update wipes UserDefaults — modeled as a brand-new, empty suite — but
         // the config file in ~/.vitals survives and rebuilds the settings. (Two
