@@ -112,8 +112,14 @@ final class StorageModel: ObservableObject {
         Log.debug(.storage, "storage analysis started (includeHidden: \(includeHidden))")
         refreshAccess()
         volume = StorageAnalyzer.volumeUsage()
-        scanCategories()
-        scanInsights()
+        // Insights are measured as a byproduct of the category walk (their
+        // paths live inside the category trees), so the category scan needs
+        // the list up front and the insight task only mops up what the walk
+        // can't produce.
+        let insightList = StorageAnalyzer.insights()
+        insights = insightList
+        scanCategories(watching: insightList)
+        scanInsights(insightList)
         // A browser open on stale entries would show pre-re-analyze numbers.
         if isBrowsing, let root = path.last { runAnalyze(root) }
     }
@@ -131,23 +137,30 @@ final class StorageModel: ObservableObject {
 
     // MARK: Overview categories
 
-    private func scanCategories() {
+    private func scanCategories(watching insightList: [StorageAnalyzer.StorageInsight]) {
         categoryTask?.cancel()
         isScanning = true
         let template = StorageAnalyzer.categories()
         categories = template
         // Unique roots across all categories, sized concurrently (bounded) by
-        // the shared sizer rather than one category at a time.
+        // the shared sizer rather than one category at a time. Plain insight
+        // paths ride along as watches — their subtotals fall out of the same
+        // walk. (Old Downloads is date-filtered, so it can't.)
         let roots = Array(Set(template.flatMap { $0.scanRoots }))
+        let watchPaths = insightList.filter { !$0.oldDownloadsOnly }.map(\.url.path)
         guard !roots.isEmpty else { isScanning = false; return }
 
         categoryTask = Task { [weak self] in
             guard let self else { return }
             var sizes: [URL: UInt64] = [:]
-            for await (url, size) in inventory.sizes(for: roots) {
+            for await (url, size, subtotals) in inventory.sizesWithSubtotals(for: roots, watching: watchPaths) {
                 if Task.isCancelled { isScanning = false; return }
                 sizes[url] = size
                 sizeCache[url.path] = size
+                for (path, subtotal) in subtotals {
+                    sizeCache[path] = subtotal
+                    applyInsightSize(path: path, subtotal)
+                }
                 categories = Self.applyingCategorySizes(template, sizes)
             }
             // Cancelled after the loop drained: Stop → Re-analyze may already
@@ -176,30 +189,34 @@ final class StorageModel: ObservableObject {
 
     // MARK: Insights
 
-    private func scanInsights() {
+    /// Most insight sizes arrive as category-walk subtotals; this task only
+    /// measures what that walk can't: the date-filtered Old Downloads, plus a
+    /// fallback pass for any insight whose covering category root never got
+    /// walked (a missing category, or a path outside every scan root).
+    private func scanInsights(_ list: [StorageAnalyzer.StorageInsight]) {
         insightTask?.cancel()
         isScanningInsights = true
-        let list = StorageAnalyzer.insights()
-        insights = list
         guard !list.isEmpty else { isScanningInsights = false; return }
+        let catTask = categoryTask
 
         insightTask = Task { [weak self] in
             guard let self else { return }
-            // Old Downloads needs date-filtered sizing; the rest are plain
-            // directory sizes, routed through the shared concurrent sizer.
             for insight in list where insight.oldDownloadsOnly {
                 if Task.isCancelled { isScanningInsights = false; return }
                 let size = await Task.detached(priority: .utility) {
                     StorageAnalyzer.insightSize(insight)
                 }.value
                 if Task.isCancelled { isScanningInsights = false; return }
-                applyInsightSize(insight.url, size)
+                applyInsightSize(path: insight.url.path, size)
             }
-            let plain = list.filter { !$0.oldDownloadsOnly }.map(\.url)
-            for await (url, size) in inventory.sizes(for: plain) {
+            // Wait out the category walk — it delivers the plain insights.
+            await catTask?.value
+            if Task.isCancelled { isScanningInsights = false; return }
+            let missing = insights.filter { $0.sizeBytes == nil && !$0.oldDownloadsOnly }.map(\.url)
+            for await (url, size) in inventory.sizes(for: missing) {
                 if Task.isCancelled { isScanningInsights = false; return }
                 sizeCache[url.path] = size
-                applyInsightSize(url, size)
+                applyInsightSize(path: url.path, size)
             }
             // Same stale-tail hazard as the category scan.
             guard !Task.isCancelled else { return }
@@ -207,8 +224,8 @@ final class StorageModel: ObservableObject {
         }
     }
 
-    private func applyInsightSize(_ url: URL, _ size: UInt64) {
-        if let index = insights.firstIndex(where: { $0.url == url }) {
+    private func applyInsightSize(path: String, _ size: UInt64) {
+        if let index = insights.firstIndex(where: { $0.url.path == path }) {
             insights[index].sizeBytes = size
         }
     }

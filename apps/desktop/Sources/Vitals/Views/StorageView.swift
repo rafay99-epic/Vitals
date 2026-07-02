@@ -167,6 +167,7 @@ struct StorageView: View {
                         }
                         InsightRow(
                             insight: insight,
+                            isScanning: model.isScanningInsights,
                             onOpen: { model.openInsight(insight) },
                             onReveal: { revealInFinder(insight.url) }
                         )
@@ -787,6 +788,7 @@ private struct StorageRow: View {
 
 private struct InsightRow: View {
     let insight: StorageAnalyzer.StorageInsight
+    let isScanning: Bool
     let onOpen: () -> Void
     let onReveal: () -> Void
 
@@ -818,9 +820,16 @@ private struct InsightRow: View {
                         .monospacedDigit()
                         .foregroundStyle(size > 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
                         .frame(width: 86, alignment: .trailing)
-                } else {
+                } else if isScanning {
                     ProgressView()
                         .controlSize(.small)
+                        .frame(width: 86, alignment: .trailing)
+                } else {
+                    // Stopped before this one was measured — say so honestly
+                    // rather than spinning forever (matches the category cards).
+                    Text("Not measured")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
                         .frame(width: 86, alignment: .trailing)
                 }
 
