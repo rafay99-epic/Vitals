@@ -1,12 +1,19 @@
 import SwiftUI
 import AppKit
 import Charts
+import QuickLook
+import UniformTypeIdentifiers
 
 /// The Storage tab: occupied space at a glance (a capacity bar over category
-/// cards) and an analyzer table that drills into the largest folders and files
-/// under any location. This surface only *reads* — it never deletes or moves
-/// anything; reclaiming space lives in Cleanup, where it gets confirmation and
-/// reversibility. "Reveal in Finder" is the most it will ever do to a file.
+/// cards) and a drill-down file browser that opens over the same panel. This
+/// surface only *reads* — it never deletes or moves anything; reclaiming space
+/// lives in Cleanup, where it gets confirmation and reversibility. "Reveal in
+/// Finder" and an in-app Quick Look are the most it will ever do to a file.
+///
+/// Two pages swap **in place** so window geometry never changes on navigation
+/// (the performance rule): an Overview and a Browser, keyed off
+/// `model.isBrowsing`. Each keeps its own ScrollView; the divider + footer sit
+/// outside the swap so the frame is identical on both pages.
 /// Which overview graphic the hero shows. Both visualize the same volume
 /// composition, so the user picks one rather than seeing both at once.
 enum OverviewChart: String, CaseIterable, Identifiable {
@@ -22,31 +29,26 @@ struct StorageView: View {
     var isActive: Bool
     @EnvironmentObject private var settings: AppSettings
     @State private var confirmWholeDisk = false
+    /// In-app Quick Look target — a file row sets this instead of opening the
+    /// file, so a click previews consistently rather than sometimes launching
+    /// an app and sometimes not.
+    @State private var previewURL: URL?
     /// Persisted so the chosen graphic sticks across launches.
     @AppStorage("storageOverviewChart") private var overviewChart: OverviewChart = .bar
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if model.volumeUnavailable {
-                        volumeErrorState
-                    } else {
-                        capacityHero
-                        if !model.hasFullDiskAccess {
-                            fdaBanner
-                        }
-                        if model.hasRun {
-                            categoryGrid
-                            insightsCard
-                            analyzerCard
-                        } else {
-                            idlePrompt
-                        }
-                    }
+            ZStack {
+                if model.isBrowsing {
+                    browserPage
+                        .transition(.opacity.combined(with: .offset(x: 24)))
+                } else {
+                    overviewPage
+                        .transition(.opacity.combined(with: .offset(x: -24)))
                 }
-                .padding(20)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: model.isBrowsing)
             Divider()
                 .opacity(0.5)
             footer
@@ -60,6 +62,30 @@ struct StorageView: View {
             if settings.autoAnalyzeStorage && !model.hasRun {
                 model.analyze(includeHidden: settings.analyzerIncludesHidden)
             }
+        }
+    }
+
+    // MARK: Overview page
+
+    private var overviewPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                if model.volumeUnavailable {
+                    volumeErrorState
+                } else {
+                    capacityHero
+                    if !model.hasFullDiskAccess {
+                        fdaBanner
+                    }
+                    if model.hasRun {
+                        categoryGrid
+                        insightsCard
+                    } else {
+                        idlePrompt
+                    }
+                }
+            }
+            .padding(20)
         }
     }
 
@@ -189,6 +215,19 @@ struct StorageView: View {
                     .controlSize(.large)
                     .help("Stop scanning")
                 } else {
+                    // Whole-disk scan is the far-reaching entry point, so it sits
+                    // as a quiet borderless button beside the primary Re-analyze
+                    // and keeps its own confirmation before walking everything.
+                    if settings.allowWholeDiskScan {
+                        Button {
+                            confirmWholeDisk = true
+                        } label: {
+                            Label("Whole disk", systemImage: "externaldrive")
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .help("Scan the entire boot volume from the top")
+                    }
                     Button {
                         runAnalyze()
                     } label: {
@@ -226,6 +265,16 @@ struct StorageView: View {
         }
         .padding(16)
         .cardBackground()
+        .confirmationDialog(
+            "Scan the whole disk?",
+            isPresented: $confirmWholeDisk,
+            titleVisibility: .visible
+        ) {
+            Button("Scan Whole Disk") { model.analyzeWholeDisk() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This walks every readable folder from the top of your drive, including system areas, so it can take several minutes and use the disk heavily. Vitals only reads — nothing is deleted — and you can press Stop at any time.")
+        }
     }
 
     private var heroValue: String {
@@ -262,7 +311,7 @@ struct StorageView: View {
         }
     }
 
-    // MARK: Idle prompt
+    // MARK: Idle / error prompts
 
     private var volumeErrorState: some View {
         EmptyStateView(
@@ -315,55 +364,67 @@ struct StorageView: View {
         }
     }
 
-    // MARK: Analyzer
+    // MARK: Browser page
 
-    private var analyzerCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Button {
-                    model.goUp()
-                } label: {
-                    Image(systemName: "chevron.up")
-                }
-                .buttonStyle(.borderless)
-                .disabled(model.path.count <= 1)
-                .help("Up one level")
+    private var browserPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                browserHeader
+                browserSummary
+                browserChart
+                browserTable
+            }
+            .padding(20)
+        }
+        // In-app preview — a file row sets `previewURL`; nothing here launches
+        // another app on a click.
+        .quickLookPreview($previewURL)
+    }
 
-                breadcrumb
+    private var browserHeader: some View {
+        HStack(spacing: 8) {
+            Button {
+                model.closeBrowser()
+            } label: {
+                Label("Storage", systemImage: "chevron.left")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
 
-                Spacer()
-                if model.isAnalyzing {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                if settings.allowWholeDiskScan {
-                    Button {
-                        confirmWholeDisk = true
-                    } label: {
-                        Label("Whole disk", systemImage: "externaldrive")
-                    }
-                    .buttonStyle(.borderless)
+            Button {
+                model.goUp()
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.borderless)
+            .disabled(model.path.count <= 1)
+            .help("Up one level")
+
+            breadcrumb
+
+            Spacer(minLength: 8)
+
+            if model.isAnalyzing {
+                ProgressView()
                     .controlSize(.small)
-                    .disabled(model.isBusy)
-                    .help("Scan the entire boot volume from the top")
-                }
             }
 
-            analyzerChart
-            analyzerTable
+            Picker("", selection: sortBinding) {
+                ForEach(StorageEntrySort.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("Sort by size or name")
         }
-        .padding(16)
-        .cardBackground()
-        .confirmationDialog(
-            "Scan the whole disk?",
-            isPresented: $confirmWholeDisk,
-            titleVisibility: .visible
-        ) {
-            Button("Scan Whole Disk") { model.analyzeWholeDisk() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This walks every readable folder from the top of your drive, including system areas, so it can take several minutes and use the disk heavily. Vitals only reads — nothing is deleted — and you can press Stop at any time.")
-        }
+    }
+
+    /// Bridges the model's `private(set) sort` to the Picker; writes go through
+    /// `setSort` so the model re-ranks (never sort in the view).
+    private var sortBinding: Binding<StorageEntrySort> {
+        Binding(get: { model.sort }, set: { model.setSort($0) })
     }
 
     private var breadcrumb: some View {
@@ -388,10 +449,32 @@ struct StorageView: View {
         }
     }
 
+    private var browserSummary: some View {
+        HStack(spacing: 8) {
+            // Until the listing lands, the count is unknown — show nothing
+            // rather than a transient "0 items" that reads as a real total.
+            // The header spinner already says a measure is in flight.
+            if model.entryTotal > 0 || !model.isAnalyzing {
+                Text("\(model.entryTotal) items")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            if let root = model.path.last {
+                Text(displayName(root))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
     /// A horizontal bar chart of the current folder's largest items — a quick
     /// visual comparison above the full, drillable table.
     @ViewBuilder
-    private var analyzerChart: some View {
+    private var browserChart: some View {
         let top = Array(model.entries.prefix(8))
         if top.contains(where: { $0.sizeBytes > 0 }) {
             Deferred {
@@ -402,7 +485,7 @@ struct StorageView: View {
     }
 
     @ViewBuilder
-    private var analyzerTable: some View {
+    private var browserTable: some View {
         if model.entries.isEmpty {
             VStack(spacing: 8) {
                 if model.isAnalyzing {
@@ -417,7 +500,7 @@ struct StorageView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 120)
         } else {
-            // entries is already the largest-first top-N from the model.
+            // entries is already the pre-sorted, capped top-N from the model.
             let largest = model.largestEntryBytes
             LazyVStack(spacing: 0) {
                 ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
@@ -429,24 +512,33 @@ struct StorageView: View {
                     StorageRow(
                         entry: entry,
                         fraction: largest > 0 ? Double(entry.sizeBytes) / Double(largest) : 0,
-                        onOpen: {
+                        onActivate: {
                             if entry.isDirectory {
                                 model.drill(into: entry)
                             } else {
-                                revealInFinder(entry.url)
+                                previewURL = entry.url
                             }
                         },
+                        onQuickLook: { previewURL = entry.url },
                         onReveal: { revealInFinder(entry.url) }
                     )
                 }
             }
             if model.entryTotal > model.entries.count {
-                Text("Showing the \(model.entries.count) largest of \(model.entryTotal) items")
+                Text(overflowCaption)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.top, 8)
             }
         }
+    }
+
+    /// Size order shows the *largest* N; name order shows an arbitrary N of the
+    /// folder — say which honestly so the cap never reads as a total.
+    private var overflowCaption: String {
+        model.sort == .size
+            ? "Showing the \(model.entries.count) largest of \(model.entryTotal) items"
+            : "Showing \(model.entries.count) of \(model.entryTotal) items"
     }
 
     // MARK: Footer
@@ -471,6 +563,32 @@ struct StorageView: View {
 
 @MainActor private func revealInFinder(_ url: URL) {
     NSWorkspace.shared.activateFileViewerSelecting([url])
+}
+
+// MARK: - File icons
+
+/// Real file-type icons for the browser rows. NSWorkspace icon lookups aren't
+/// free, so every icon is computed once and reused: one folder icon for every
+/// directory, and one icon per file extension (unknown/extension-less files
+/// share the generic content icon). Main-actor-isolated — the browser rows that
+/// read it are all on the main actor.
+@MainActor
+final class FileIconCache {
+    static let shared = FileIconCache()
+
+    private lazy var folderIcon = NSWorkspace.shared.icon(for: .folder)
+    /// Keyed by lowercase extension ("" = no/unknown extension → generic icon).
+    private var byExtension: [String: NSImage] = [:]
+
+    func icon(for entry: StorageEntry) -> NSImage {
+        if entry.isDirectory { return folderIcon }
+        let ext = entry.url.pathExtension.lowercased()
+        if let cached = byExtension[ext] { return cached }
+        let type = ext.isEmpty ? .data : (UTType(filenameExtension: ext) ?? .data)
+        let image = NSWorkspace.shared.icon(for: type)
+        byExtension[ext] = image
+        return image
+    }
 }
 
 // MARK: - Capacity bar
@@ -607,7 +725,9 @@ private struct StorageCategoryCard: View {
 private struct StorageRow: View {
     let entry: StorageEntry
     let fraction: Double
-    let onOpen: () -> Void
+    /// Directory → drill; file → in-app Quick Look. The parent decides which.
+    let onActivate: () -> Void
+    let onQuickLook: () -> Void
     let onReveal: () -> Void
 
     @State private var hovered = false
@@ -615,12 +735,12 @@ private struct StorageRow: View {
     private var tint: Color { entry.isDirectory ? .accentColor : .secondary }
 
     var body: some View {
-        Button(action: onOpen) {
+        Button(action: onActivate) {
             HStack(spacing: 11) {
-                Image(systemName: entry.isDirectory ? "folder.fill" : "doc")
-                    .font(.system(size: 14))
-                    .foregroundStyle(entry.isDirectory ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                    .frame(width: 18)
+                Image(nsImage: FileIconCache.shared.icon(for: entry))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 18, height: 18)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.name)
@@ -651,9 +771,12 @@ private struct StorageRow: View {
         .background(Rectangle().fill(hovered ? AnyShapeStyle(.quaternary.opacity(0.4)) : AnyShapeStyle(.clear)))
         .onHover { hovered = $0 }
         .contextMenu {
+            if !entry.isDirectory {
+                Button("Quick Look", systemImage: "eye") { onQuickLook() }
+            }
+            Button("Open", systemImage: "arrow.up.forward.app") { NSWorkspace.shared.open(entry.url) }
             Button("Reveal in Finder", systemImage: "magnifyingglass") { onReveal() }
         }
-        .help(entry.isDirectory ? "Open \(entry.name)" : "Reveal \(entry.name) in Finder")
     }
 }
 
@@ -712,7 +835,6 @@ private struct InsightRow: View {
         .contextMenu {
             Button("Reveal in Finder", systemImage: "magnifyingglass") { onReveal() }
         }
-        .help("Open \(insight.name)")
     }
 }
 
