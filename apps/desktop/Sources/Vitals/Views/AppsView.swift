@@ -1,8 +1,16 @@
 import SwiftUI
 import AppKit
 
-func formatBytes(_ bytes: UInt64) -> String {
-    ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+/// One shared formatter: the class-method form allocates internally per call,
+/// and size labels re-render across hundreds of rows on every scan publish.
+@MainActor private let byteFormatter: ByteCountFormatter = {
+    let formatter = ByteCountFormatter()
+    formatter.countStyle = .file
+    return formatter
+}()
+
+@MainActor func formatBytes(_ bytes: UInt64) -> String {
+    byteFormatter.string(fromByteCount: Int64(bytes))
 }
 
 /// Process-wide icon cache: NSWorkspace lookups are not cheap, and list rows

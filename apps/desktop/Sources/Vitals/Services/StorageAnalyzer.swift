@@ -98,34 +98,31 @@ enum StorageAnalyzer {
     }
 
     /// The non-overlapping overview categories that exist on this Mac.
+    /// Every category's `scanRoots` is its root's **immediate children** — the
+    /// same listing `children(of:)` gives the drill-down — so the sizes the
+    /// overview measures are cached per child and reused verbatim when the
+    /// user drills in (and symlinked children are consistently excluded from
+    /// both, never followed out of the tree being summed).
     static func categories() -> [StorageCategory] {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
         let library = home.appendingPathComponent("Library", isDirectory: true)
+        let applications = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        let systemLibrary = URL(fileURLWithPath: "/Library", isDirectory: true)
+
+        func childURLs(_ root: URL) -> [URL] { children(of: root).map(\.url) }
 
         // Home minus Library — kept separate so User Files + User Library don't
         // double count the home folder.
-        let homeChildren = ((try? fm.contentsOfDirectory(
-            at: home, includingPropertiesForKeys: nil, options: []
-        )) ?? []).filter { $0.lastPathComponent != "Library" }
-
         let candidates: [StorageCategory] = [
-            .init(kind: .userFiles, root: home, scanRoots: homeChildren, sizeBytes: nil),
-            .init(kind: .userLibrary, root: library, scanRoots: [library], sizeBytes: nil),
-            .init(kind: .applications,
-                  root: URL(fileURLWithPath: "/Applications", isDirectory: true),
-                  scanRoots: [URL(fileURLWithPath: "/Applications", isDirectory: true)],
+            .init(kind: .userFiles, root: home,
+                  scanRoots: childURLs(home).filter { $0.lastPathComponent != "Library" },
                   sizeBytes: nil),
-            .init(kind: .systemLibrary,
-                  root: URL(fileURLWithPath: "/Library", isDirectory: true),
-                  scanRoots: [URL(fileURLWithPath: "/Library", isDirectory: true)],
-                  sizeBytes: nil),
+            .init(kind: .userLibrary, root: library, scanRoots: childURLs(library), sizeBytes: nil),
+            .init(kind: .applications, root: applications, scanRoots: childURLs(applications), sizeBytes: nil),
+            .init(kind: .systemLibrary, root: systemLibrary, scanRoots: childURLs(systemLibrary), sizeBytes: nil),
         ]
         return candidates.filter { fm.fileExists(atPath: $0.root.path) }
-    }
-
-    static func size(of category: StorageCategory) -> UInt64 {
-        category.scanRoots.reduce(0) { $0 + AppInventory.directorySize($1) }
     }
 
     /// The immediate children of `url`, sized later by the caller. Symlinks are

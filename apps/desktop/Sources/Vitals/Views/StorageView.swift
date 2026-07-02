@@ -384,6 +384,9 @@ struct StorageView: View {
     private var browserHeader: some View {
         HStack(spacing: 8) {
             Button {
+                // Drop any Quick Look target with the page — a stale non-nil
+                // binding would reopen the panel on the next browser visit.
+                previewURL = nil
                 model.closeBrowser()
             } label: {
                 Label("Storage", systemImage: "chevron.left")

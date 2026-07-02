@@ -79,8 +79,6 @@ final class StorageModel: ObservableObject {
         sort == .size ? (entries.first?.sizeBytes ?? 0) : (entries.map(\.sizeBytes).max() ?? 0)
     }
 
-    var categoriesTotal: UInt64 { categories.reduce(0) { $0 + ($1.sizeBytes ?? 0) } }
-
     /// Any disk-walking work in flight.
     var isBusy: Bool { isScanning || isScanningInsights || isAnalyzing }
 
@@ -152,6 +150,9 @@ final class StorageModel: ObservableObject {
                 sizeCache[url.path] = size
                 categories = Self.applyingCategorySizes(template, sizes)
             }
+            // Cancelled after the loop drained: Stop → Re-analyze may already
+            // have a fresh scan running — this tail must not clobber it.
+            guard !Task.isCancelled else { return }
             categories = Self.applyingCategorySizes(template, sizes)
             isScanning = false
         }
@@ -200,6 +201,8 @@ final class StorageModel: ObservableObject {
                 sizeCache[url.path] = size
                 applyInsightSize(url, size)
             }
+            // Same stale-tail hazard as the category scan.
+            guard !Task.isCancelled else { return }
             isScanningInsights = false
         }
     }
@@ -308,7 +311,10 @@ final class StorageModel: ObservableObject {
             }
             let unmeasured = children.map(\.url).filter { sizes[$0] == nil }
             guard !unmeasured.isEmpty else {
-                await MainActor.run { [weak self] in self?.isAnalyzing = false }
+                await MainActor.run { [weak self] in
+                    guard !Task.isCancelled else { return }
+                    self?.isAnalyzing = false
+                }
                 return
             }
 
@@ -334,7 +340,9 @@ final class StorageModel: ObservableObject {
             let snapshot = Self.ranked(children, sizes: sizes, limit: limit, sort: sort)
             let measured = Dictionary(uniqueKeysWithValues: sizes.map { ($0.key.path, $0.value) })
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                // A cancelled task's tail must not overwrite the navigation
+                // (or the just-cleared cache) that superseded it.
+                guard let self, !Task.isCancelled else { return }
                 self.entries = snapshot
                 self.sizeCache.merge(measured) { _, new in new }
                 self.isAnalyzing = false
