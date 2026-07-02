@@ -1,0 +1,28 @@
+apps/desktop/Sources/Vitals/Services/StorageAnalyzer.swift
+  s_4cf99c7662eed8::t_5b19c9a48d344e 101-105,110-113,118-119,121-123
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_4cf99c7662eed8::t_49b74c7aae38b9 4-13
+apps/desktop/Sources/Vitals/Views/StorageView.swift
+  s_4cf99c7662eed8::t_0275ab7fbb82ab 387-389
+apps/desktop/Sources/Vitals/Models/StorageModel.swift
+  s_4cf99c7662eed8::t_f3c3fbd5dd3e47 153-155
+  s_4cf99c7662eed8::t_7d7f38b874404d 343-345
+  s_4cf99c7662eed8::t_6b170c038d74bb 204-205
+  s_4cf99c7662eed8::t_69b87bb332686d 314-317
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "3fe7be55b8f0636dd949d30ef5bc3dc7d30012a2",
+  "prompts": {},
+  "sessions": {
+    "s_4cf99c7662eed8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a242ae23-4970-44db-bb07-4377aa8014bb",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
