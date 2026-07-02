@@ -14,10 +14,42 @@ struct InstalledApp: Identifiable, Hashable {
     let requiresAdmin: Bool
 }
 
+/// A counting gate over concurrent directory walks. Every sizing stream of one
+/// `AppInventory` shares it, so however many streams are open at once (an
+/// overview scan plus a drill-down plus a fallback), the *total* number of
+/// walks touching the disk never exceeds `width` — streams queue behind each
+/// other instead of multiplying.
+actor SizingGate {
+    private let width: Int
+    private var inUse = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(width: Int) { self.width = width }
+
+    func acquire() async {
+        if inUse < width {
+            inUse += 1
+            return
+        }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func release() {
+        if waiters.isEmpty {
+            inUse -= 1
+        } else {
+            // Hand the slot straight to the next waiter; inUse stays constant.
+            waiters.removeFirst().resume()
+        }
+    }
+}
+
 /// Finds the applications a user can uninstall. System software is excluded
 /// by design: nothing under /System, no Apple bundle identifiers, and never
 /// Vitals itself.
 actor AppInventory {
+    /// Shared by every stream this inventory produces — see `SizingGate`.
+    let gate = SizingGate(width: 6)
     nonisolated static let searchDirectories: [URL] = [
         URL(fileURLWithPath: "/Applications", isDirectory: true),
         URL(fileURLWithPath: "/Applications/Utilities", isDirectory: true),
@@ -76,12 +108,17 @@ actor AppInventory {
     /// churn after a rescan or window close.
     nonisolated func sizes(for urls: [URL], concurrency: Int = 6) -> AsyncStream<(URL, UInt64)> {
         AsyncStream { continuation in
-            let worker = Task.detached(priority: .utility) {
+            let worker = Task.detached(priority: .utility) { [gate] in
                 await withTaskGroup(of: (URL, UInt64).self) { group in
                     var pending = urls[...]
                     func addNext() {
                         guard !Task.isCancelled, let url = pending.popFirst() else { return }
-                        group.addTask { (url, Self.directorySize(url)) }
+                        group.addTask {
+                            await gate.acquire()
+                            let size = Self.directorySize(url)
+                            await gate.release()
+                            return (url, size)
+                        }
                     }
                     for _ in 0..<concurrency { addNext() }
                     for await pair in group {
@@ -95,7 +132,58 @@ actor AppInventory {
         }
     }
 
+    /// Like `sizes(for:)`, but each walk also accumulates subtotals for the
+    /// `watching` paths that live inside the walked directory — so one pass
+    /// over ~/Library can report Xcode DerivedData, Docker data, and friends
+    /// as a byproduct instead of each needing its own walk. Every watched path
+    /// under a yielded url gets an entry (0 if nothing was found there), so a
+    /// yield is an authoritative measurement for its covered watches.
+    nonisolated func sizesWithSubtotals(
+        for urls: [URL], watching watchPaths: [String], concurrency: Int = 6
+    ) -> AsyncStream<(URL, UInt64, [String: UInt64])> {
+        AsyncStream { continuation in
+            let worker = Task.detached(priority: .utility) { [gate] in
+                await withTaskGroup(of: (URL, UInt64, [String: UInt64]).self) { group in
+                    var pending = urls[...]
+                    func addNext() {
+                        guard !Task.isCancelled, let url = pending.popFirst() else { return }
+                        let covered = watchPaths.filter {
+                            $0 == url.path || $0.hasPrefix(url.path + "/")
+                        }
+                        group.addTask {
+                            await gate.acquire()
+                            let (size, subtotals) = Self.directorySize(url, accumulating: covered)
+                            await gate.release()
+                            return (url, size, subtotals)
+                        }
+                    }
+                    for _ in 0..<concurrency { addNext() }
+                    for await triple in group {
+                        continuation.yield(triple)
+                        addNext()
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in worker.cancel() }
+        }
+    }
+
     nonisolated static func directorySize(_ url: URL) -> UInt64 {
+        directorySize(url, accumulating: []).total
+    }
+
+    /// One walk, two answers: the allocated size of `url`'s whole tree, plus a
+    /// subtotal for every `watchPaths` entry (a path inside `url`) counting
+    /// just the files under it. Watches always come back in the result — 0
+    /// when nothing lives there — so callers can treat presence as "measured".
+    nonisolated static func directorySize(
+        _ url: URL, accumulating watchPaths: [String]
+    ) -> (total: UInt64, subtotals: [String: UInt64]) {
+        var subtotals = Dictionary(uniqueKeysWithValues: watchPaths.map { ($0, UInt64(0)) })
+        // Precomputed once: the per-file loop below runs for every file in the
+        // tree, and building "watch/" there would allocate per file per watch.
+        let watches = watchPaths.map { (path: $0, prefix: $0 + "/") }
         let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .isRegularFileKey]
         guard let enumerator = FileManager.default.enumerator(
             at: url,
@@ -105,18 +193,25 @@ actor AppInventory {
         ) else {
             // A plain file (some leftovers are single plists).
             let size = (try? url.resourceValues(forKeys: keys).totalFileAllocatedSize) ?? 0
-            return UInt64(size)
+            return (UInt64(size), subtotals)
         }
         var total: UInt64 = 0
         for case let file as URL in enumerator {
-            if Task.isCancelled { return total }
+            if Task.isCancelled { return (total, subtotals) }
             guard let values = try? file.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
-            total += UInt64(values.totalFileAllocatedSize ?? 0)
+            let size = UInt64(values.totalFileAllocatedSize ?? 0)
+            total += size
+            if !watches.isEmpty {
+                let path = file.path
+                for watch in watches where path.hasPrefix(watch.prefix) {
+                    subtotals[watch.path]! += size
+                }
+            }
         }
         if total == 0 {
             let size = (try? url.resourceValues(forKeys: keys).totalFileAllocatedSize) ?? 0
             total = UInt64(size)
         }
-        return total
+        return (total, subtotals)
     }
 }
