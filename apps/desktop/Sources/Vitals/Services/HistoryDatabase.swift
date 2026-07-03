@@ -33,6 +33,34 @@ final class HistoryDatabase: @unchecked Sendable {
         let batteryPercent: Double?
         let gpuUsage: Double?
         let gpuMemoryGB: Double?
+        /// Network throughput (bytes/s) + battery health at sample time. Trailing
+        /// and optional (with nil defaults) so call sites that predate these fields
+        /// keep compiling, and pre-v2 rows read them back as nil.
+        let netDownBps: Double?
+        let netUpBps: Double?
+        let cycleCount: Int?
+        let maxCapacityPct: Double?
+
+        init(averageTemp: Double, hottestTemp: Double, gpuTemp: Double?, fanRPM: Double?,
+             cpuUsage: Double, memoryUsedGB: Double, thermalState: String,
+             batteryPercent: Double?, gpuUsage: Double?, gpuMemoryGB: Double?,
+             netDownBps: Double? = nil, netUpBps: Double? = nil,
+             cycleCount: Int? = nil, maxCapacityPct: Double? = nil) {
+            self.averageTemp = averageTemp
+            self.hottestTemp = hottestTemp
+            self.gpuTemp = gpuTemp
+            self.fanRPM = fanRPM
+            self.cpuUsage = cpuUsage
+            self.memoryUsedGB = memoryUsedGB
+            self.thermalState = thermalState
+            self.batteryPercent = batteryPercent
+            self.gpuUsage = gpuUsage
+            self.gpuMemoryGB = gpuMemoryGB
+            self.netDownBps = netDownBps
+            self.netUpBps = netUpBps
+            self.cycleCount = cycleCount
+            self.maxCapacityPct = maxCapacityPct
+        }
     }
 
     private let queue = DispatchQueue(label: "com.vitals.history-db")
@@ -95,6 +123,12 @@ final class HistoryDatabase: @unchecked Sendable {
         exec("PRAGMA journal_mode=WAL;")
         exec("PRAGMA synchronous=NORMAL;")
         exec("PRAGMA busy_timeout=3000;")
+        // Migrate an existing (pre-v2) table BEFORE createSchema: on an old install
+        // the `samples` table already exists, so `CREATE TABLE IF NOT EXISTS` is a
+        // no-op and can't add the new columns — the ALTERs here do. On a fresh
+        // install there's no table yet, so this is a no-op and createSchema builds
+        // the full v2 table directly. Runs on the serial queue, before any INSERT.
+        migrateSchemaIfNeeded()
         createSchema()
         // Don't clean up on the same launch we migrate: the freshly-retired
         // backups are brand new, and skipping avoids any chance of deleting one
@@ -122,7 +156,11 @@ final class HistoryDatabase: @unchecked Sendable {
             thermal_state TEXT NOT NULL,
             battery_pct   REAL,
             gpu_usage     REAL,
-            gpu_mem_gb    REAL
+            gpu_mem_gb    REAL,
+            net_down_bps  REAL,
+            net_up_bps    REAL,
+            cycle_count   INTEGER,
+            max_capacity_pct REAL
         );
         """)
         // UNIQUE(ts, message): a fired alert is identified by when + what, so
@@ -138,7 +176,60 @@ final class HistoryDatabase: @unchecked Sendable {
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);")
-        exec("PRAGMA user_version=1;")
+        exec("PRAGMA user_version=2;")
+    }
+
+    /// v1 → v2 migration: add the network-throughput + battery-health columns to an
+    /// existing `samples` table. `ALTER TABLE ADD COLUMN` is inherently
+    /// data-preserving (old rows keep their values, the new columns read back NULL).
+    ///
+    /// Idempotent by belt-and-braces: it only runs when `user_version < 2`, only
+    /// when the `samples` table already exists, and each `ADD COLUMN` is guarded by
+    /// a `PRAGMA table_info` presence check — so a half-completed prior run, or a
+    /// dev build that already added some columns, never errors or double-adds.
+    private func migrateSchemaIfNeeded() {
+        guard db != nil else { return }
+        guard userVersion() < 2 else { return }
+        let existing = columnNames(of: "samples")
+        // No `samples` table yet → this is a fresh install; createSchema builds the
+        // full v2 table (and stamps user_version) itself, nothing to migrate.
+        guard !existing.isEmpty else { return }
+
+        let additions: [(name: String, type: String)] = [
+            ("net_down_bps", "REAL"),
+            ("net_up_bps", "REAL"),
+            ("cycle_count", "INTEGER"),
+            ("max_capacity_pct", "REAL"),
+        ]
+        for column in additions where !existing.contains(column.name) {
+            exec("ALTER TABLE samples ADD COLUMN \(column.name) \(column.type);")
+        }
+        exec("PRAGMA user_version=2;")
+        Log.notice(.history, "migrated history database schema to v2")
+    }
+
+    /// The current `PRAGMA user_version` (0 on a brand-new database).
+    private func userVersion() -> Int64 {
+        guard let db else { return 0 }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nil) == SQLITE_OK else { return 0 }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW ? sqlite3_column_int64(stmt, 0) : 0
+    }
+
+    /// The set of column names on `table` (empty if the table doesn't exist), read
+    /// via `PRAGMA table_info` — used to make the ALTER migration idempotent.
+    private func columnNames(of table: String) -> Set<String> {
+        guard let db else { return [] }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "PRAGMA table_info(\(table));", -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        var names: Set<String> = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            // Column 1 of table_info is the column's name.
+            if let c = sqlite3_column_text(stmt, 1) { names.insert(String(cString: c)) }
+        }
+        return names
     }
 
     // MARK: Writes
@@ -154,8 +245,8 @@ final class HistoryDatabase: @unchecked Sendable {
 
             let sql = """
             INSERT OR IGNORE INTO samples
-              (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?);
+              (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_down_bps, net_up_bps, cycle_count, max_capacity_pct)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -171,6 +262,10 @@ final class HistoryDatabase: @unchecked Sendable {
             self.bindOptional(stmt, 9, entry.batteryPercent)
             self.bindOptional(stmt, 10, entry.gpuUsage)
             self.bindOptional(stmt, 11, entry.gpuMemoryGB)
+            self.bindOptional(stmt, 12, entry.netDownBps)
+            self.bindOptional(stmt, 13, entry.netUpBps)
+            self.bindOptional(stmt, 14, entry.cycleCount)
+            self.bindOptional(stmt, 15, entry.maxCapacityPct)
             sqlite3_step(stmt)
         }
     }
@@ -208,7 +303,7 @@ final class HistoryDatabase: @unchecked Sendable {
             // inlining them is safe — and lets the thinned query also pin the true
             // first/last in-range rows, so the chart's endpoints are the real
             // newest/oldest readings, not just the nearest surviving sample.
-            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb FROM samples WHERE ts >= \(cutoff)"
+            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_down_bps, net_up_bps, cycle_count, max_capacity_pct FROM samples WHERE ts >= \(cutoff)"
             if stride > 1 {
                 sql += " AND (id % \(stride) = 0"
                     + " OR id = (SELECT MIN(id) FROM samples WHERE ts >= \(cutoff))"
@@ -233,7 +328,45 @@ final class HistoryDatabase: @unchecked Sendable {
                     thermalState: text(stmt, 7),
                     batteryPercent: optionalDouble(stmt, 8),
                     gpuUsage: optionalDouble(stmt, 9),
-                    gpuMemoryGB: optionalDouble(stmt, 10)
+                    gpuMemoryGB: optionalDouble(stmt, 10),
+                    netDownBps: optionalDouble(stmt, 11),
+                    netUpBps: optionalDouble(stmt, 12),
+                    cycleCount: optionalInt(stmt, 13),
+                    maxCapacityPct: optionalDouble(stmt, 14)
+                ))
+            }
+            return out
+        }
+    }
+
+    /// One row per calendar day with a battery-health reading — the day's LATEST
+    /// such reading, computed entirely in SQL so the degradation trend chart never
+    /// materializes the full (~3M-row) table in Swift just to thin it to ~365
+    /// points (see `BatteryDegradationCard`). `ts` is epoch **milliseconds**, so
+    /// the bucket is `(ts / 1000) / 86400` — integer division on unix-epoch
+    /// seconds, i.e. UTC calendar days; a day boundary can drift a few hours from
+    /// the user's local midnight, which is fine for a trend that moves over weeks.
+    /// SQLite's documented "bare column" behavior — exactly one `MAX()` aggregate
+    /// in the query — resolves `cycle_count`/`max_capacity_pct` to the values from
+    /// the same row that produced `MAX(ts)`, not an arbitrary row in the bucket.
+    func dailyBatteryHealth() -> [(time: Date, cycleCount: Int?, capacityPct: Double)] {
+        queue.sync {
+            guard let db else { return [] }
+            let sql = """
+            SELECT MAX(ts), cycle_count, max_capacity_pct FROM samples
+            WHERE max_capacity_pct IS NOT NULL
+            GROUP BY (ts / 1000) / 86400
+            ORDER BY ts ASC;
+            """
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            defer { sqlite3_finalize(stmt) }
+            var out: [(time: Date, cycleCount: Int?, capacityPct: Double)] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                out.append((
+                    time: Self.date(sqlite3_column_int64(stmt, 0)),
+                    cycleCount: optionalInt(stmt, 1),
+                    capacityPct: sqlite3_column_double(stmt, 2)
                 ))
             }
             return out
@@ -264,7 +397,7 @@ final class HistoryDatabase: @unchecked Sendable {
     func forEachSample(_ body: (HistorySample) -> Void) {
         queue.sync {
             guard let db else { return }
-            let sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb FROM samples ORDER BY ts ASC;"
+            let sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_down_bps, net_up_bps, cycle_count, max_capacity_pct FROM samples ORDER BY ts ASC;"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             defer { sqlite3_finalize(stmt) }
@@ -280,7 +413,11 @@ final class HistoryDatabase: @unchecked Sendable {
                     thermalState: text(stmt, 7),
                     batteryPercent: optionalDouble(stmt, 8),
                     gpuUsage: optionalDouble(stmt, 9),
-                    gpuMemoryGB: optionalDouble(stmt, 10)
+                    gpuMemoryGB: optionalDouble(stmt, 10),
+                    netDownBps: optionalDouble(stmt, 11),
+                    netUpBps: optionalDouble(stmt, 12),
+                    cycleCount: optionalInt(stmt, 13),
+                    maxCapacityPct: optionalDouble(stmt, 14)
                 ))
             }
         }
@@ -407,8 +544,8 @@ final class HistoryDatabase: @unchecked Sendable {
         guard let db else { return false }
         let sql = """
         INSERT OR IGNORE INTO samples
-          (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?);
+          (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_down_bps, net_up_bps, cycle_count, max_capacity_pct)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -424,6 +561,10 @@ final class HistoryDatabase: @unchecked Sendable {
         bindOptional(stmt, 9, s.batteryPercent)
         bindOptional(stmt, 10, s.gpuUsage)
         bindOptional(stmt, 11, s.gpuMemoryGB)
+        bindOptional(stmt, 12, s.netDownBps)
+        bindOptional(stmt, 13, s.netUpBps)
+        bindOptional(stmt, 14, s.cycleCount)
+        bindOptional(stmt, 15, s.maxCapacityPct)
         return sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0
     }
 
@@ -467,8 +608,16 @@ final class HistoryDatabase: @unchecked Sendable {
         if let value { sqlite3_bind_double(stmt, index, value) } else { sqlite3_bind_null(stmt, index) }
     }
 
+    private func bindOptional(_ stmt: OpaquePointer?, _ index: Int32, _ value: Int?) {
+        if let value { sqlite3_bind_int64(stmt, index, Int64(value)) } else { sqlite3_bind_null(stmt, index) }
+    }
+
     private func optionalDouble(_ stmt: OpaquePointer?, _ index: Int32) -> Double? {
         sqlite3_column_type(stmt, index) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, index)
+    }
+
+    private func optionalInt(_ stmt: OpaquePointer?, _ index: Int32) -> Int? {
+        sqlite3_column_type(stmt, index) == SQLITE_NULL ? nil : Int(sqlite3_column_int64(stmt, index))
     }
 
     private func text(_ stmt: OpaquePointer?, _ index: Int32) -> String {

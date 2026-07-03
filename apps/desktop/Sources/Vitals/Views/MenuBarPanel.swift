@@ -135,6 +135,24 @@ struct MenuBarPanel: View {
                     }
                 }
             }
+            if let network = model.network {
+                sparkline(
+                    title: "Net",
+                    value: byteRateText(network.downBps),
+                    color: .mint
+                ) {
+                    ForEach(data) { sample in
+                        if let down = sample.downBps {
+                            AreaMark(x: .value("t", sample.time), y: .value("v", down))
+                                .foregroundStyle(.mint.opacity(0.18))
+                                .interpolationMethod(.catmullRom)
+                            LineMark(x: .value("t", sample.time), y: .value("v", down))
+                                .foregroundStyle(.mint)
+                                .interpolationMethod(.catmullRom)
+                        }
+                    }
+                }
+            }
         }
     }
 

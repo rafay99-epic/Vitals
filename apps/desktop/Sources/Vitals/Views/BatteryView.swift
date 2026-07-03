@@ -26,6 +26,7 @@ struct BatteryView: View {
                     BatteryHistoryCard()
                 }
                 BatteryHealthCard(battery: battery)
+                BatteryDegradationCard(isActive: isActive)
                 BatteryDetailCard(battery: battery)
             } else {
                 EmptyStateView(
@@ -238,6 +239,100 @@ private struct BatteryHealthCard: View {
         switch health {
         case ..<80: return .orange
         default: return .green
+        }
+    }
+}
+
+// MARK: - Health over time (degradation trend)
+
+/// Maximum-capacity trend, thinned to one point per day — health moves over
+/// weeks, not ticks, so this queries the SQLite history off-main (mirrors
+/// `HistoryView.reload()`) rather than reading `model.chartHistory`, and
+/// re-queries at most once an hour via `lastFetch`.
+private struct BatteryDegradationCard: View {
+    @EnvironmentObject private var settings: AppSettings
+    /// Mirrors `BatteryHistoryCard`/other tabs: only load while the Battery tab
+    /// is the visible one.
+    let isActive: Bool
+
+    @State private var days: [DailyCapacity] = []
+    @State private var lastFetch: Date?
+
+    private struct DailyCapacity: Identifiable {
+        let day: Date
+        let capacityPct: Double
+        let cycleCount: Int?
+        var id: Date { day }
+    }
+
+    var body: some View {
+        SectionCard(title: "Health over time", symbol: "chart.line.uptrend.xyaxis") {
+            content
+        }
+        .task(id: isActive) { await reload() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if !settings.loggingEnabled {
+            note("Enable history logging to track battery health over time.")
+        } else if days.count >= 2 {
+            VStack(alignment: .leading, spacing: 8) {
+                Deferred { chart }.frame(height: 150)
+                if let cycles = days.last?.cycleCount {
+                    Text("\(cycles) cycles today")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } else {
+            note("Health logging just started — the trend appears after a few days of use.")
+        }
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundStyle(.secondary)
+    }
+
+    private var chart: some View {
+        Chart(days) { d in
+            AreaMark(x: .value("Day", d.day), y: .value("Capacity", d.capacityPct))
+                .foregroundStyle(LinearGradient(colors: [.mint.opacity(0.30), .mint.opacity(0.02)],
+                                                startPoint: .top, endPoint: .bottom))
+                .interpolationMethod(.catmullRom)
+            LineMark(x: .value("Day", d.day), y: .value("Capacity", d.capacityPct))
+                .foregroundStyle(.mint)
+                .interpolationMethod(.catmullRom)
+        }
+        .chartYScale(domain: yDomain)
+        .chartYAxisLabel("%")
+    }
+
+    private var yDomain: ClosedRange<Double> {
+        let dataMin = days.map(\.capacityPct).min() ?? 80
+        return min(dataMin - 2, 80)...100
+    }
+
+    /// Loads on appear and whenever `isActive` flips true; the `lastFetch` guard
+    /// stops a re-query on every tab revisit — this is slow-moving data.
+    private func reload() async {
+        guard isActive else { return }
+        if let lastFetch, Date().timeIntervalSince(lastFetch) < 3600 { return }
+        let result = await Task.detached(priority: .utility) {
+            Self.dailyPoints()
+        }.value
+        guard !Task.isCancelled else { return }
+        days = result
+        lastFetch = Date()
+    }
+
+    /// Off-main: the day-bucketing and "keep the latest reading" thinning both
+    /// happen in SQL now (`HistoryReader.dailyBatteryHealth`), so this no longer
+    /// loads the whole samples table (up to ~3M rows) just to reduce it to ~365
+    /// points.
+    private nonisolated static func dailyPoints() -> [DailyCapacity] {
+        HistoryReader.dailyBatteryHealth().map {
+            DailyCapacity(day: $0.time, capacityPct: $0.capacityPct, cycleCount: $0.cycleCount)
         }
     }
 }

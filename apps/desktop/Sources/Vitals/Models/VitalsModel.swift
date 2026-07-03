@@ -25,6 +25,8 @@ final class VitalsModel: ObservableObject {
         let swapUsed: Double    // bytes
         let batteryPercent: Double?  // charge %, nil when no battery
         let totalWatts: Double?      // SoC package power, nil until the 2nd sample
+        let downBps: Double?         // network download rate, nil until the 2nd sample
+        let upBps: Double?           // network upload rate, nil until the 2nd sample
     }
 
     @Published private(set) var cpuSensors: [Sensor] = []
@@ -62,6 +64,9 @@ final class VitalsModel: ObservableObject {
     /// The internal SSD's SMART health (wear, endurance, power-on hours…). Nil
     /// on a Mac/VM that doesn't expose SMART, or for the first tick or two.
     @Published private(set) var diskHealth: DiskHealthSnapshot?
+    /// Live network throughput + per-interface breakdown. Nil until the second
+    /// sample (a rate needs a prior counter) or on a total read failure.
+    @Published private(set) var network: NetworkSnapshot?
     /// Live SoC power draw (CPU/GPU/ANE rails). Nil until the second sample —
     /// power is an energy delta and needs a prior reading — and on the rare
     /// machine where IOReport is unavailable.
@@ -369,6 +374,7 @@ final class VitalsModel: ObservableObject {
         topMemoryProcesses = snapshot.topMemoryProcesses
         battery = snapshot.battery
         diskHealth = snapshot.diskHealth
+        network = snapshot.network
         // Only reassign GPU when it was actually sampled this tick. When the
         // window/widgets/metric don't need it, the sampler returns nil and we
         // hold the last reading — so reopening the window shows the prior value
@@ -399,7 +405,11 @@ final class VitalsModel: ObservableObject {
                 batteryPercent: battery?.percent,
                 // The fresh tick's reading (not the sticky `self.power`), so a
                 // missed IOReport sample is an honest gap, not a flat-held value.
-                totalWatts: snapshot.power?.total
+                totalWatts: snapshot.power?.total,
+                // Network history deliberately shares the temperature gate above:
+                // on a Mac with no CPU temp sensors no Sample is appended at all.
+                downBps: snapshot.network?.downBps,
+                upBps: snapshot.network?.upBps
             ))
             trimHistory()
 
@@ -416,7 +426,11 @@ final class VitalsModel: ObservableObject {
                     thermalState: thermalState.label,
                     batteryPercent: battery?.percent,
                     gpuUsage: gpu?.utilization,
-                    gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) }
+                    gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) },
+                    netDownBps: snapshot.network?.downBps,
+                    netUpBps: snapshot.network?.upBps,
+                    cycleCount: battery?.cycleCount,
+                    maxCapacityPct: battery?.healthPercent
                 ))
             }
         }
@@ -518,7 +532,10 @@ final class VitalsModel: ObservableObject {
             diskFreeGB: diskFreeGB,
             batteryPercent: battery?.percent,
             topProcessCPU: topProcess?.cpuPercent,
-            topProcessName: topProcess?.name
+            topProcessName: topProcess?.name,
+            downloadBytesPerSec: network?.downBps,
+            uploadBytesPerSec: network?.upBps,
+            batteryHealthPercent: battery?.healthPercent
         )
     }
 
@@ -545,9 +562,11 @@ final class VitalsModel: ObservableObject {
     private func formattedAlertValue(_ metric: AlertMetric, _ value: Double) -> String {
         if metric.isTemperature { return settings.formatWithUnit(value, decimals: 0) }
         switch metric {
-        case .fanRPM:   return "\(Int(value)) rpm"
-        case .diskFree: return String(format: "%.0f GB", value)
-        default:        return "\(Int(value))%"
+        case .fanRPM:                   return "\(Int(value)) rpm"
+        case .diskFree:                 return String(format: "%.0f GB", value)
+        case .networkDown, .networkUp:  return String(format: "%.1f MB/s", value)  // value is already MB/s
+        case .batteryHealth:            return "\(Int(value))%"
+        default:                        return "\(Int(value))%"
         }
     }
 

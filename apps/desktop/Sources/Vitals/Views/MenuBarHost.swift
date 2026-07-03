@@ -148,5 +148,8 @@ func menuBarValue(_ metric: MenuBarMetric, model: VitalsModel, settings: AppSett
     case .gpuUsage: return model.gpu?.utilization.map { "\(Int($0.rounded()))%" } ?? "–"
     case .memory:   return model.memory.map { String(format: "%.1fG", Double($0.used) / 1_073_741_824) } ?? "–"
     case .fan:      return model.fans.first.map { "\(Int($0.rpm))" } ?? "–"
+    case .network:
+        guard let network = model.network else { return "–" }
+        return "↓\(byteRateText(network.downBps, compact: true)) ↑\(byteRateText(network.upBps, compact: true))"
     }
 }

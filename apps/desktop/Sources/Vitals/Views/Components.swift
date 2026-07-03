@@ -537,3 +537,29 @@ func pressureColor(_ pressure: MemoryPressure) -> Color {
     case .critical: return .red
     }
 }
+
+/// Adaptive B/s → KB/s → MB/s → GB/s text, decimal base (KB=1000, MB=1e6,
+/// GB=1e9) — matching the network convention and the alert engine's MB/s
+/// threshold (`AlertRule.bytesPerMB`), one decimal at KB and above. The single
+/// throughput formatter shared by every surface that shows a byte rate (the
+/// Network tab hero/chart axis/interfaces, the Network widget, the menu-bar
+/// label, and the menu-bar dropdown's "Net" header) so they can't disagree on a
+/// rate's units the way four separate implementations once did.
+///
+/// `compact: true` drops the unit suffix and inner space for width-precious
+/// surfaces (menu bar / widgets) — "2.1M", "140K", "480B" instead of
+/// "2.1 MB/s", "140 KB/s", "480 B/s".
+func byteRateText(_ bytesPerSecond: Double, compact: Bool = false) -> String {
+    let value = max(bytesPerSecond, 0)
+    let kb = 1_000.0, mb = 1_000_000.0, gb = 1_000_000_000.0
+    switch value {
+    case ..<kb:
+        return compact ? String(format: "%.0fB", value) : String(format: "%.0f B/s", value)
+    case ..<mb:
+        return compact ? String(format: "%.0fK", value / kb) : String(format: "%.1f KB/s", value / kb)
+    case ..<gb:
+        return compact ? String(format: "%.1fM", value / mb) : String(format: "%.1f MB/s", value / mb)
+    default:
+        return compact ? String(format: "%.1fG", value / gb) : String(format: "%.1f GB/s", value / gb)
+    }
+}

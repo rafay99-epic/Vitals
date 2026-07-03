@@ -17,6 +17,7 @@ actor SensorSampler {
         let gpu: GPUSnapshot?
         let power: PowerSnapshot?
         let diskHealth: DiskHealthSnapshot?
+        let network: NetworkSnapshot?
     }
 
     private let hid = HIDSensors()
@@ -25,6 +26,7 @@ actor SensorSampler {
     private let processSampler = ProcessSampler()
     private let gpu = GPUSampler()
     private let power = SoCPowerSampler()
+    private let network = NetworkSampler()
 
     // macOS's smoothed Maximum Capacity, refreshed rarely (it changes over
     // weeks) on a background task so the per-tick sample never waits on the
@@ -67,7 +69,9 @@ actor SensorSampler {
             battery: battery,
             gpu: includeGPU ? gpu.sample() : nil,
             power: includePower ? power.sample() : nil,
-            diskHealth: diskHealth
+            diskHealth: diskHealth,
+            // A few sysctls per tick — cheap enough to run ungated in v1.
+            network: network.sample()
         )
     }
 

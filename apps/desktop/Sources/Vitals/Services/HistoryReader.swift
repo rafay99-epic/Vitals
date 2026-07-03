@@ -15,7 +15,35 @@ struct HistorySample: Identifiable, Codable {
     let batteryPercent: Double?
     let gpuUsage: Double?
     let gpuMemoryGB: Double?
+    /// Network throughput (bytes/s) + battery health. Trailing and optional (with
+    /// nil defaults) so pre-v2 rows and legacy CSV lines read them back as nil.
+    let netDownBps: Double?
+    let netUpBps: Double?
+    let cycleCount: Int?
+    let maxCapacityPct: Double?
     var id: Date { time }
+
+    init(time: Date, avgTemp: Double, hottestTemp: Double, gpuTemp: Double?, fanRPM: Double?,
+         cpuUsage: Double, memoryGB: Double, thermalState: String,
+         batteryPercent: Double?, gpuUsage: Double?, gpuMemoryGB: Double?,
+         netDownBps: Double? = nil, netUpBps: Double? = nil,
+         cycleCount: Int? = nil, maxCapacityPct: Double? = nil) {
+        self.time = time
+        self.avgTemp = avgTemp
+        self.hottestTemp = hottestTemp
+        self.gpuTemp = gpuTemp
+        self.fanRPM = fanRPM
+        self.cpuUsage = cpuUsage
+        self.memoryGB = memoryGB
+        self.thermalState = thermalState
+        self.batteryPercent = batteryPercent
+        self.gpuUsage = gpuUsage
+        self.gpuMemoryGB = gpuMemoryGB
+        self.netDownBps = netDownBps
+        self.netUpBps = netUpBps
+        self.cycleCount = cycleCount
+        self.maxCapacityPct = maxCapacityPct
+    }
 }
 
 /// Time windows the History tab can zoom to.
@@ -57,6 +85,15 @@ enum HistoryReader {
         return downsample(raw, to: maxPoints)
     }
 
+    /// Daily battery-health trend points — one per calendar day, each carrying
+    /// that day's LATEST logged reading. Delegates straight to
+    /// `HistoryDatabase.dailyBatteryHealth`, which does the filtering and
+    /// day-bucketing in SQL rather than loading the whole samples table (see
+    /// `BatteryDegradationCard`).
+    static func dailyBatteryHealth() -> [(time: Date, cycleCount: Int?, capacityPct: Double)] {
+        HistoryDatabase.shared.dailyBatteryHealth()
+    }
+
     /// Parses one legacy CSV row. Returns nil for the header and any malformed
     /// line, so those are skipped. Used by `HistoryDatabase`'s one-time CSV import.
     static func parse(_ line: Substring) -> HistorySample? {
@@ -67,11 +104,19 @@ enum HistoryReader {
               let cpu = Double(f[5]), let mem = Double(f[6])
         else { return nil }
         func optional(_ value: String) -> Double? { value.isEmpty ? nil : Double(value) }
+        func optionalInt(_ value: String) -> Int? { value.isEmpty ? nil : Int(value) }
+        // The v2 columns are trailing, so a legacy 11-field row parses exactly as
+        // before (new fields nil); a wider row reads them back when present.
+        let extended = f.count >= 15
         return HistorySample(
             time: time, avgTemp: avg, hottestTemp: hottest,
             gpuTemp: optional(f[3]), fanRPM: optional(f[4]),
             cpuUsage: cpu, memoryGB: mem, thermalState: f[7],
-            batteryPercent: optional(f[8]), gpuUsage: optional(f[9]), gpuMemoryGB: optional(f[10])
+            batteryPercent: optional(f[8]), gpuUsage: optional(f[9]), gpuMemoryGB: optional(f[10]),
+            netDownBps: extended ? optional(f[11]) : nil,
+            netUpBps: extended ? optional(f[12]) : nil,
+            cycleCount: extended ? optionalInt(f[13]) : nil,
+            maxCapacityPct: extended ? optional(f[14]) : nil
         )
     }
 
@@ -96,7 +141,7 @@ enum HistoryReader {
 enum HistoryExport {
     /// The CSV header — the legacy column order, kept stable so exports stay
     /// readable by the same tools and round-trip through `HistoryReader.parse`.
-    static let csvHeader = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"
+    static let csvHeader = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb,net_down_bps,net_up_bps,cycle_count,max_capacity_pct\n"
 
     /// Writes the whole database out as CSV (every row, no down-sampling); returns
     /// the new file, or nil if there's nothing logged yet. Streams row-by-row to a
@@ -127,7 +172,8 @@ enum HistoryExport {
     }
 
     /// One CSV row in the legacy format/precision (so round-trips with `parse`).
-    private static func csvLine(_ s: HistorySample) -> String {
+    /// Internal (not private) so the round-trip is test-locked against `parse`.
+    static func csvLine(_ s: HistorySample) -> String {
         let fields: [String] = [
             HistoryReader.isoFormatter.string(from: s.time),
             String(format: "%.1f", s.avgTemp),
@@ -140,6 +186,10 @@ enum HistoryExport {
             s.batteryPercent.map { String(format: "%.0f", $0) } ?? "",
             s.gpuUsage.map { String(format: "%.1f", $0) } ?? "",
             s.gpuMemoryGB.map { String(format: "%.2f", $0) } ?? "",
+            s.netDownBps.map { String(format: "%.0f", $0) } ?? "",
+            s.netUpBps.map { String(format: "%.0f", $0) } ?? "",
+            s.cycleCount.map { String($0) } ?? "",
+            s.maxCapacityPct.map { String(format: "%.1f", $0) } ?? "",
         ]
         return fields.joined(separator: ",") + "\n"
     }

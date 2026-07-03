@@ -951,9 +951,10 @@ private struct AlertRuleRow: View {
             return "\(Int(settings.display(rule.threshold).rounded()))\(settings.unit.symbol)"
         }
         switch rule.metric {
-        case .fanRPM:   return "\(Int(rule.threshold)) rpm"
-        case .diskFree: return "\(Int(rule.threshold)) GB"
-        default:        return "\(Int(rule.threshold))%"
+        case .fanRPM:                        return "\(Int(rule.threshold)) rpm"
+        case .diskFree:                      return "\(Int(rule.threshold)) GB"
+        case .networkDown, .networkUp:       return "\(Int(rule.threshold)) MB/s"
+        default:                             return "\(Int(rule.threshold))%"
         }
     }
 

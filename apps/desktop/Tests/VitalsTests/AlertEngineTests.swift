@@ -61,4 +61,42 @@ struct AlertEngineTests {
         #expect(!fire)
         #expect(state.trueSince == nil)
     }
+
+    // MARK: Network + battery-health metrics
+
+    @Test func readingsDispatchNewMetrics() {
+        // Throughput is carried in bytes/s and reported to the engine in MB/s.
+        let readings = AlertReadings(
+            downloadBytesPerSec: 6_000_000,  // 6 MB/s
+            uploadBytesPerSec: 2_500_000,    // 2.5 MB/s
+            batteryHealthPercent: 82)
+        #expect(readings.value(for: .networkDown) == 6)
+        #expect(readings.value(for: .networkUp) == 2.5)
+        #expect(readings.value(for: .batteryHealth) == 82)
+    }
+
+    @Test func downloadRuleComparesInMegabytes() {
+        // A 5 MB/s "above" rule: fires at a 6 MB/s reading, not at 4 MB/s.
+        let r = rule(.networkDown, .above, threshold: 5, sustained: 0)
+        let hot = AlertReadings(downloadBytesPerSec: 6_000_000)
+        let calm = AlertReadings(downloadBytesPerSec: 4_000_000)
+        #expect(AlertEngine.step(rule: r, value: hot.value(for: .networkDown), state: .init(), now: t0, cooldown: cooldown).fire)
+        #expect(!AlertEngine.step(rule: r, value: calm.value(for: .networkDown), state: .init(), now: t0, cooldown: cooldown).fire)
+    }
+
+    @Test func batteryHealthDefaultsToBelow() {
+        #expect(AlertMetric.batteryHealth.defaultComparison == .below)
+        // A "below 80%" default rule fires at 75% health, not at 90%.
+        var r = AlertRule(metric: .batteryHealth)
+        r.sustainedMinutes = 0
+        #expect(r.threshold == 80)
+        #expect(AlertEngine.step(rule: r, value: 75, state: .init(), now: t0, cooldown: cooldown).fire)
+        #expect(!AlertEngine.step(rule: r, value: 90, state: .init(), now: t0, cooldown: cooldown).fire)
+    }
+
+    @Test func newMetricUnits() {
+        #expect(AlertMetric.networkDown.unit == "MB/s")
+        #expect(AlertMetric.networkUp.unit == "MB/s")
+        #expect(AlertMetric.batteryHealth.unit == "%")
+    }
 }

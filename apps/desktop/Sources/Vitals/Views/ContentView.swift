@@ -7,7 +7,7 @@ import SwiftUI
 /// System/Applications sub-segment bars): one level, no tabs-in-tabs.
 enum NavSection: String, CaseIterable, Identifiable {
     case overview
-    case cpu, gpu, memory, battery, sensors, processes, history
+    case cpu, gpu, memory, battery, network, sensors, processes, history
     case storage, cleanup, applications, loginItems
     case settings
 
@@ -20,6 +20,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .gpu:          return "GPU"
         case .memory:       return "Memory"
         case .battery:      return "Battery"
+        case .network:      return "Network"
         case .sensors:      return "Temps & Fans"
         case .processes:    return "Processes"
         case .history:      return "History"
@@ -38,6 +39,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .gpu:          return "cpu.fill"
         case .memory:       return "memorychip"
         case .battery:      return "battery.100percent"
+        case .network:      return "network"
         case .sensors:      return "thermometer.medium"
         case .processes:    return "list.bullet"
         case .history:      return "chart.xyaxis.line"
@@ -78,7 +80,10 @@ struct ContentView: View {
     @StateObject private var cleanupModel = CleanupModel()
     @StateObject private var storageModel = StorageModel()
 
-    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .sensors, .processes, .history]
+    // Network sits right after Battery — a conscious, approved consequence:
+    // adding an 8th Monitor row pushes Storage past the ⌘1…⌘9 window, so it
+    // loses its ⌘9 shortcut (the `row` shortcut assignment is purely positional).
+    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .processes, .history]
     private static let maintain: [NavSection] = [.storage, .cleanup, .applications, .loginItems]
 
     var body: some View {
@@ -217,6 +222,7 @@ struct ContentView: View {
             if visited.contains(.gpu) { GPUView(isActive: active(.gpu)).tabVisibility(active(.gpu)) }
             if visited.contains(.memory) { MemoryView(isActive: active(.memory)).tabVisibility(active(.memory)) }
             if visited.contains(.battery) { BatteryView(isActive: active(.battery)).tabVisibility(active(.battery)) }
+            if visited.contains(.network) { NetworkView(isActive: active(.network)).tabVisibility(active(.network)) }
             if visited.contains(.sensors) { SensorsView().tabVisibility(active(.sensors)) }
             if visited.contains(.processes) {
                 ProcessesView(model: processesModel, isActive: active(.processes)).tabVisibility(active(.processes))

@@ -9,6 +9,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     case memory
     case fan
     case storage
+    case network
     case combined
 
     var id: String { rawValue }
@@ -21,6 +22,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .memory: return "Memory"
         case .fan: return "Fan"
         case .storage: return "Storage"
+        case .network: return "Network"
         case .combined: return "Vitals"
         }
     }
@@ -34,6 +36,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .memory: return "Memory"
         case .fan: return "Fan"
         case .storage: return "Storage"
+        case .network: return "Network"
         case .combined: return "Vitals"
         }
     }
@@ -46,6 +49,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .memory: return "memorychip"
         case .fan: return "fan"
         case .storage: return "internaldrive"
+        case .network: return "arrow.up.arrow.down"
         case .combined: return "gauge.with.dots.needle.50percent"
         }
     }
@@ -60,6 +64,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .memory: return .indigo
         case .fan: return .cyan
         case .storage: return .teal
+        case .network: return .mint
         case .combined: return .green
         }
     }

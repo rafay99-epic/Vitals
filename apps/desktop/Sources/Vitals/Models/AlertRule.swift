@@ -6,43 +6,53 @@ import Foundation
 /// fabricated value.
 enum AlertMetric: String, Codable, CaseIterable, Identifiable {
     case cpuTemp, cpuUsage, gpuUsage, memoryUsed, fanRPM, diskFree, battery, processCPU
+    case networkDown, networkUp, batteryHealth
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .cpuTemp:    return "CPU temperature"
-        case .cpuUsage:   return "CPU usage"
-        case .gpuUsage:   return "GPU usage"
-        case .memoryUsed: return "Memory used"
-        case .fanRPM:     return "Fan speed"
-        case .diskFree:   return "Free disk space"
-        case .battery:    return "Battery"
-        case .processCPU: return "A process's CPU"
+        case .cpuTemp:       return "CPU temperature"
+        case .cpuUsage:      return "CPU usage"
+        case .gpuUsage:      return "GPU usage"
+        case .memoryUsed:    return "Memory used"
+        case .fanRPM:        return "Fan speed"
+        case .diskFree:      return "Free disk space"
+        case .battery:       return "Battery"
+        case .processCPU:    return "A process's CPU"
+        case .networkDown:   return "Download rate"
+        case .networkUp:     return "Upload rate"
+        case .batteryHealth: return "Battery health"
         }
     }
 
     var symbol: String {
         switch self {
-        case .cpuTemp:    return "thermometer.medium"
-        case .cpuUsage:   return "cpu"
-        case .gpuUsage:   return "cpu.fill"
-        case .memoryUsed: return "memorychip"
-        case .fanRPM:     return "fan"
-        case .diskFree:   return "internaldrive"
-        case .battery:    return "battery.50percent"
-        case .processCPU: return "list.bullet"
+        case .cpuTemp:       return "thermometer.medium"
+        case .cpuUsage:      return "cpu"
+        case .gpuUsage:      return "cpu.fill"
+        case .memoryUsed:    return "memorychip"
+        case .fanRPM:        return "fan"
+        case .diskFree:      return "internaldrive"
+        case .battery:       return "battery.50percent"
+        case .processCPU:    return "list.bullet"
+        case .networkDown:   return "arrow.down.circle"
+        case .networkUp:     return "arrow.up.circle"
+        case .batteryHealth: return "heart"
         }
     }
 
     /// Canonical unit the threshold is stored in. Temperature is always °C
-    /// internally; the UI converts to the user's display unit.
+    /// internally; the UI converts to the user's display unit. Throughput
+    /// thresholds are stored in MB/s (matching the slider and the reading the
+    /// engine compares — see `AlertReadings.value(for:)`).
     var unit: String {
         switch self {
-        case .cpuTemp:    return "°C"
-        case .fanRPM:     return "rpm"
-        case .diskFree:   return "GB"
-        default:          return "%"
+        case .cpuTemp:                  return "°C"
+        case .fanRPM:                   return "rpm"
+        case .diskFree:                 return "GB"
+        case .networkDown, .networkUp:  return "MB/s"
+        default:                        return "%"
         }
     }
 
@@ -51,11 +61,13 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
     /// Slider bounds + step in the canonical unit.
     var range: ClosedRange<Double> {
         switch self {
-        case .cpuTemp:    return 40...110
-        case .fanRPM:     return 0...6000
-        case .diskFree:   return 1...200
-        case .processCPU: return 10...400   // 100% = one core, so this can exceed 100
-        default:          return 0...100
+        case .cpuTemp:                  return 40...110
+        case .fanRPM:                   return 0...6000
+        case .diskFree:                 return 1...200
+        case .processCPU:               return 10...400   // 100% = one core, so this can exceed 100
+        case .networkDown, .networkUp:  return 1...1000   // MB/s
+        case .batteryHealth:            return 50...95
+        default:                        return 0...100
         }
     }
 
@@ -70,19 +82,20 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
     /// A sensible starting rule when this metric is chosen.
     var defaultComparison: AlertComparison {
         switch self {
-        case .fanRPM, .diskFree, .battery: return .below  // low / stuck is the worry
-        default:                           return .above  // high is the worry
+        case .fanRPM, .diskFree, .battery, .batteryHealth: return .below  // low / stuck is the worry
+        default:                                           return .above  // high is the worry
         }
     }
 
     var defaultThreshold: Double {
         switch self {
-        case .cpuTemp:    return 90
-        case .fanRPM:     return 100   // effectively stopped
-        case .diskFree:   return 10
-        case .battery:    return 20
-        case .processCPU: return 100
-        default:          return 90
+        case .cpuTemp:       return 90
+        case .fanRPM:        return 100   // effectively stopped
+        case .diskFree:      return 10
+        case .battery:       return 20
+        case .processCPU:    return 100
+        case .batteryHealth: return 80
+        default:             return 90
         }
     }
 }
@@ -126,6 +139,10 @@ struct AlertRule: Identifiable, Codable, Equatable {
 /// Optionals are "not available on this Mac right now"; a rule on a nil reading
 /// can't fire.
 struct AlertReadings {
+    /// Bytes in a megabyte for the throughput conversion. Decimal MB (not MiB) —
+    /// the unit network speeds are conventionally quoted in.
+    static let bytesPerMB: Double = 1_000_000
+
     var cpuTemp: Double?
     var cpuUsage: Double?
     var gpuUsage: Double?
@@ -135,17 +152,25 @@ struct AlertReadings {
     var batteryPercent: Double?
     var topProcessCPU: Double?
     var topProcessName: String?
+    /// Live throughput in bytes/s. The engine compares in MB/s, so `value(for:)`
+    /// divides by `bytesPerMB` — the reading stays in honest raw units.
+    var downloadBytesPerSec: Double?
+    var uploadBytesPerSec: Double?
+    var batteryHealthPercent: Double?
 
     func value(for metric: AlertMetric) -> Double? {
         switch metric {
-        case .cpuTemp:    return cpuTemp
-        case .cpuUsage:   return cpuUsage
-        case .gpuUsage:   return gpuUsage
-        case .memoryUsed: return memoryUsedPercent
-        case .fanRPM:     return minFanRPM
-        case .diskFree:   return diskFreeGB
-        case .battery:    return batteryPercent
-        case .processCPU: return topProcessCPU
+        case .cpuTemp:       return cpuTemp
+        case .cpuUsage:      return cpuUsage
+        case .gpuUsage:      return gpuUsage
+        case .memoryUsed:    return memoryUsedPercent
+        case .fanRPM:        return minFanRPM
+        case .diskFree:      return diskFreeGB
+        case .battery:       return batteryPercent
+        case .processCPU:    return topProcessCPU
+        case .networkDown:   return downloadBytesPerSec.map { $0 / Self.bytesPerMB }
+        case .networkUp:     return uploadBytesPerSec.map { $0 / Self.bytesPerMB }
+        case .batteryHealth: return batteryHealthPercent
         }
     }
 }
