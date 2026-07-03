@@ -1,0 +1,105 @@
+apps/desktop/Sources/Vitals/Widgets/WidgetKind.swift
+  s_31c0954e2a7380::t_5fe8dc1980a991 12,25,39,52,67
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_31c0954e2a7380::t_4dc609079c2086 42
+  s_31c0954e2a7380::t_be23595ee62f6b 83-86
+  s_31c0954e2a7380::t_07fc2aea89ef70 10,23
+  s_31c0954e2a7380::t_c045f6aa5281a9 225
+apps/desktop/Tests/VitalsTests/AlertEngineTests.swift
+  s_31c0954e2a7380::t_cf2ceaab59d4ff 64-101
+apps/desktop/Sources/Vitals/Services/SensorSampler.swift
+  s_31c0954e2a7380::t_b5a6613e3e9bec 20,29
+  s_31c0954e2a7380::t_c3e6b46d135e0a 72-74
+apps/desktop/Sources/Vitals/Models/AlertRule.swift
+  s_31c0954e2a7380::t_4f16fe5741a8a3 9,15-25,31-41,46-48,51-55,64-70,85-86,92-98
+  s_31c0954e2a7380::t_208242962f56be 142-145,155-159,163-173
+apps/desktop/Sources/Vitals/Services/NetworkSampler.swift
+  s_31c0954e2a7380::t_d300b087fc140b 45-48
+  s_31c0954e2a7380::t_bb905cc589a4b7 76-85,105
+  s_31c0954e2a7380::t_fe32d4406024f4 86-88
+  s_31c0954e2a7380::t_7c8a767c3e3a90 248-253,255
+  s_31c0954e2a7380::t_1500ffdca2f09b 115
+  s_31c0954e2a7380::t_c36d166ab45127 226
+  s_31c0954e2a7380::t_0ce860e0e559d8 1-44,49-75,89-104,106-114,116-194,207-225,227-247,254,256-276
+  s_31c0954e2a7380::t_1970e5df24c53d 195-206
+apps/desktop/Sources/Vitals/Views/Components.swift
+  s_31c0954e2a7380::t_fa2ba746e666e4 540-565
+apps/desktop/Sources/Vitals/Widgets/Cards/NetworkWidget.swift
+  s_31c0954e2a7380::t_403bff386e700f 11,29
+  s_31c0954e2a7380::t_9931ad3adc2b8f 1-10,12-28,30-31
+apps/desktop/Sources/Vitals/Widgets/WidgetHost.swift
+  s_31c0954e2a7380::t_5d1e4213eef205 263
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_31c0954e2a7380::t_4d932fcfaf25be 954-957
+apps/desktop/Sources/Vitals/Services/HistoryReader.swift
+  s_31c0954e2a7380::t_9e16953638577d 144
+  s_31c0954e2a7380::t_8bccbb30e7948a 18-23,25-46
+  s_31c0954e2a7380::t_a09da4c324d8b9 88-96
+  s_31c0954e2a7380::t_2d775595498e12 107-110,115-119
+  s_31c0954e2a7380::t_6034032d29c097 189-192
+  s_31c0954e2a7380::t_aa32357b4d903a 175-176
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_31c0954e2a7380::t_81a4ed76050307 159-163
+  s_31c0954e2a7380::t_04d3620591a32a 342-369
+  s_31c0954e2a7380::t_6c19e42850981a 340,611-614,619-621
+  s_31c0954e2a7380::t_a6a848ab4bdcfd 306
+  s_31c0954e2a7380::t_afc8516e9a07b8 248-249,265-268
+  s_31c0954e2a7380::t_218c4489de8f41 547-548,564-567
+  s_31c0954e2a7380::t_65229fd99e3343 331-335
+  s_31c0954e2a7380::t_691a755b395ed0 126-131
+  s_31c0954e2a7380::t_fb7c8e90ea67ea 400,416-420
+  s_31c0954e2a7380::t_68511da4a91df8 36-63
+  s_31c0954e2a7380::t_9ec55565945fe0 179-232,339
+  s_31c0954e2a7380::t_b5efe02b1ce7db 336-338
+  s_31c0954e2a7380::t_eb686465988e05 341
+  s_31c0954e2a7380::t_f306ab03f5e8e6 622
+apps/desktop/Tests/VitalsTests/HistoryDatabaseTests.swift
+  s_31c0954e2a7380::t_96df232b9413b2 3,16-87
+  s_31c0954e2a7380::t_468c4284d1a73d 249-355
+  s_31c0954e2a7380::t_b2025633a9e613 137-168
+  s_31c0954e2a7380::t_f1fffd3ef56686 88
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_31c0954e2a7380::t_3a369917aac8e6 28-29
+  s_31c0954e2a7380::t_b500a24a75afd7 67-69
+  s_31c0954e2a7380::t_0c23b6e4b56927 408-412
+  s_31c0954e2a7380::t_0c06008544ec25 377
+  s_31c0954e2a7380::t_7c2393aea94f4a 429-433
+  s_31c0954e2a7380::t_358128157f0912 535-538
+  s_31c0954e2a7380::t_261d61318949fe 565-569
+apps/desktop/Tests/VitalsTests/DownsampleTests.swift
+  s_31c0954e2a7380::t_e74ad9f7ae537e 15-16
+apps/desktop/Sources/Vitals/Views/MenuBarHost.swift
+  s_31c0954e2a7380::t_56af391279b5da 153
+  s_31c0954e2a7380::t_3e5dc443393110 151-152
+apps/desktop/Tests/VitalsTests/NetworkSamplerTests.swift
+  s_31c0954e2a7380::t_bc9c20e5f549aa 210-211,213-217
+  s_31c0954e2a7380::t_b831e1f3c7d287 1-209,212,218-220
+apps/desktop/Sources/Vitals/Views/NetworkView.swift
+  s_31c0954e2a7380::t_2dd432969a38dd 1-289
+apps/desktop/Sources/Vitals/Settings/AppSettings.swift
+  s_31c0954e2a7380::t_480a4a77d84d04 79,90,102,114
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_31c0954e2a7380::t_705b6d33d792ba 29
+  s_31c0954e2a7380::t_1ab71033f43c80 329-332,334-335
+  s_31c0954e2a7380::t_9e09023baeeb00 333
+  s_31c0954e2a7380::t_e4510563bc7177 246-328,336-339
+apps/desktop/Sources/Vitals/Views/MenuBarPanel.swift
+  s_31c0954e2a7380::t_5c060fa93a1413 138-140,142-155
+  s_31c0954e2a7380::t_d8e013193a44cd 141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "97484fd981f3422fa47a21348f9075975cbf2c94",
+  "prompts": {},
+  "sessions": {
+    "s_31c0954e2a7380": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e09b434b-6265-4567-8982-86df0539232f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
