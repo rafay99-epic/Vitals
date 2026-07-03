@@ -32,6 +32,7 @@ final class WidgetManager: ObservableObject {
     private let settings: AppSettings
     private var panels: [WidgetKind: NSPanel] = [:]
     private let defaults = UserDefaults.standard
+    private var realignWork: DispatchWorkItem?
 
     private enum Keys {
         static let visible = "widgets.visible"
@@ -49,6 +50,52 @@ final class WidgetManager: ObservableObject {
             .compactMap(WidgetKind.init(rawValue:))
         DispatchQueue.main.async { [weak self] in
             restored.forEach { self?.show($0) }
+        }
+
+        // Displays come and go; `.stationary` panels are never rescued by the
+        // system, so a widget on an unplugged monitor stays stranded off-screen
+        // (invisible and unreachable) until we move it back ourselves.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(screensChanged),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        realignWork?.cancel()
+    }
+
+    /// A display configuration change fires this several times in a burst —
+    /// debounce, then realign once the layout has settled.
+    @objc private func screensChanged() {
+        realignWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.realignPanels() }
+        realignWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+    }
+
+    /// Puts every widget back where it belongs after a display change. A panel
+    /// whose saved spot exists again returns to it; a panel left stranded
+    /// off-screen is re-tucked into the default cascade. The saved spot is
+    /// never overwritten here (only a user drag persists), so unplugging and
+    /// replugging a monitor round-trips every widget to where the user put it.
+    private func realignPanels() {
+        let screens = NSScreen.screens.map(\.visibleFrame)
+        guard !screens.isEmpty else { return }
+        var rescued = 0
+        for (kind, panel) in panels.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            if let saved = WidgetPanel.savedFrame(for: kind),
+               WidgetPlacement.fitted(saved, within: screens) == saved {
+                if panel.frame != saved { panel.setFrame(saved, display: true) }
+                continue
+            }
+            if WidgetPlacement.fitted(panel.frame, within: screens) != panel.frame {
+                let spot = WidgetPanel.cascadeFrame(size: panel.frame.size, index: rescued)
+                    ?? WidgetPlacement.fitted(panel.frame, within: screens)
+                panel.setFrame(spot, display: true)
+                rescued += 1
+            }
         }
     }
 
