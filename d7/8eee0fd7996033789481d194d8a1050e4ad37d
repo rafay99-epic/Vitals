@@ -1,0 +1,38 @@
+apps/desktop/Sources/Vitals/Widgets/WidgetPanel.swift
+  s_c405ccf38e98ba::t_e34b23cf49cadf 9-18,22
+  s_c405ccf38e98ba::t_f9ce47c5534fc4 109
+  s_c405ccf38e98ba::t_3fd85b9bfd2a9d 71-75,79-81,83-87,92-101
+  s_e8fb00d5812ee1::t_33d400b1f53a5b 102-103
+apps/desktop/Sources/Vitals/Widgets/WidgetPlacement.swift
+  s_c405ccf38e98ba::t_3705e81a7fedcb 2-37
+  s_c405ccf38e98ba::t_5b9d98d00bb52a 1
+apps/desktop/Sources/Vitals/Widgets/WidgetManager.swift
+  s_c405ccf38e98ba::t_552bfff087bad7 35
+  s_c405ccf38e98ba::t_7234d2212efe89 54-99
+apps/desktop/Tests/VitalsTests/WidgetPlacementTests.swift
+  s_c405ccf38e98ba::t_5472ced9846243 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "d78eee0fd7996033789481d194d8a1050e4ad37d",
+  "prompts": {},
+  "sessions": {
+    "s_c405ccf38e98ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a028b5da-cb31-4b8c-999e-8d7c22ba5bc1",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    },
+    "s_e8fb00d5812ee1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bfe75a9-954c-4bf9-9d15-a920cb95fe1e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
