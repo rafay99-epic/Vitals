@@ -586,7 +586,14 @@ final class FileIconCache {
 
     func icon(for entry: StorageEntry) -> NSImage {
         if entry.isDirectory { return folderIcon }
-        let ext = entry.url.pathExtension.lowercased()
+        return icon(forFileExtension: entry.url.pathExtension)
+    }
+
+    /// Type icon for a file URL, keyed on its extension (same shared cache the
+    /// browser rows use). Reused by the Cleanup Files page so the icon lookup
+    /// lives in one place rather than being copied.
+    func icon(forFileExtension rawExtension: String) -> NSImage {
+        let ext = rawExtension.lowercased()
         if let cached = byExtension[ext] { return cached }
         let type = ext.isEmpty ? .data : (UTType(filenameExtension: ext) ?? .data)
         let image = NSWorkspace.shared.icon(for: type)

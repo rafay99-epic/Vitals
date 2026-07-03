@@ -413,9 +413,11 @@ struct DeviceCleanupTests {
         #expect(Set(DiskCleaner.scan(depth: .quick).map(\.kind)).contains(.deviceFirmware))
     }
 
-    @Test func onlyDeviceBackupsIsDestructive() {
+    @Test func destructiveKindsAreEnumerated() {
+        // The destructive set is consciously enumerated: irreversible-if-gone
+        // data only (device backups, and AI chat transcripts moved to the Trash).
         let destructive = CleanupCategory.Kind.allCases.filter(\.isDestructive)
-        #expect(destructive == [.deviceBackups])
+        #expect(destructive == [.deviceBackups, .aiHistory])
     }
 }
 

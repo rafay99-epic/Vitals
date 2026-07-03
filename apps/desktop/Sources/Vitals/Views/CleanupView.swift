@@ -1,16 +1,81 @@
 import SwiftUI
 
-/// The Cleanup tab: regenerable data as selectable cards, cleaned on explicit
-/// confirmation. A Quick/Deep switch chooses the reach — Quick stays in the
-/// user domain (no password); Deep adds age-gated system categories that need
-/// one administrator prompt. Scanning is manual; nothing runs until asked.
+/// The Cleanup tab: four pages behind one segmented picker — the classic Quick
+/// and Deep cache sweeps, per-project Developer junk, and a Large-&-Old Files
+/// review. Pages swap **in place** (the performance rule: navigation never
+/// changes window geometry); each page keeps its own hero, scroll, and footer.
 struct CleanupView: View {
     @ObservedObject var model: CleanupModel
     /// True only while Cleanup is the visible tab; the view stays mounted.
     var isActive: Bool
+    /// Persisted so the chosen page sticks across launches.
+    @AppStorage("cleanupPage") private var page: CleanupPage = .quick
+    /// The old two-value depth switch — migrated once into `page` so a user who
+    /// left Cleanup on Deep lands on the Deep page.
+    @AppStorage("cleanupDepth") private var legacyDepth: CleanDepth = .quick
+    @AppStorage("cleanupPageMigrated") private var pageMigrated = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            picker
+            Divider()
+                .opacity(0.5)
+            ZStack {
+                switch page {
+                case .quick:
+                    CleanupClassicPage(model: model, isActive: isActive, depth: .quick)
+                        .transition(.opacity)
+                case .deep:
+                    CleanupClassicPage(model: model, isActive: isActive, depth: .deep)
+                        .transition(.opacity)
+                case .developer:
+                    CleanupDeveloperPage(model: model)
+                        .transition(.opacity)
+                case .files:
+                    CleanupFilesPage(model: model)
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: page)
+        }
+        .onAppear {
+            guard !pageMigrated else { return }
+            if legacyDepth == .deep { page = .deep }
+            pageMigrated = true
+        }
+    }
+
+    private var picker: some View {
+        HStack {
+            Picker("", selection: $page) {
+                ForEach(CleanupPage.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .disabled(model.isCleaning || model.isDevCleaning || model.isFilesCleaning)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+    }
+}
+
+// MARK: - Quick / Deep page
+
+/// The classic cache sweep — today's Cleanup behavior, one page per depth. The
+/// old in-hero depth picker is gone; `depth` is fixed and the four-way page
+/// picker above chooses it. Quick stays in the user domain (no password); Deep
+/// adds age-gated system categories that need one administrator prompt.
+private struct CleanupClassicPage: View {
+    @ObservedObject var model: CleanupModel
+    /// True only while Cleanup is the visible tab.
+    var isActive: Bool
+    let depth: CleanDepth
     @EnvironmentObject private var settings: AppSettings
-    /// Persisted so the chosen depth sticks across launches.
-    @AppStorage("cleanupDepth") private var depth: CleanDepth = .quick
     @State private var confirming = false
     @State private var confirmingDestructive = false
 
@@ -37,13 +102,15 @@ struct CleanupView: View {
             footer
         }
         .onChange(of: isActive, initial: true) { _, active in
-            if active && settings.autoScanCleanup && !model.hasRun {
+            guard active else { return }
+            // Mounting this page (or re-activating the tab) measures for its
+            // depth: if a scan already ran at the other depth, re-measure for
+            // this one; otherwise honor auto-scan on the first run.
+            if model.hasRun && model.depth != depth {
+                model.scan(depth: depth)
+            } else if settings.autoScanCleanup && !model.hasRun {
                 model.scan(depth: depth)
             }
-        }
-        .onChange(of: depth) { _, newDepth in
-            // Switching depth re-measures for the new set of categories.
-            if model.hasRun { model.scan(depth: newDepth) }
         }
         .confirmationDialog(
             "Clean \(formatBytes(model.selectedBytes))?",
@@ -131,16 +198,6 @@ struct CleanupView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Picker("", selection: $depth) {
-                ForEach(CleanDepth.allCases) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .disabled(model.isCleaning)
-            .help("Quick cleans user caches; Deep adds system files (needs admin)")
             if model.isScanning {
                 ProgressView()
                     .controlSize(.small)
@@ -318,6 +375,8 @@ private extension CleanupCategory.Kind {
         case .logs: return .teal
         case .trash: return .red
         case .recentItems: return .indigo
+        case .aiCaches: return .purple
+        case .aiHistory: return .pink
         case .systemCaches: return .gray
         case .systemLogs: return .mint
         case .crashReports: return .red
