@@ -1,0 +1,52 @@
+apps/desktop/Sources/Vitals/Services/AIToolJunk.swift
+  s_31c0954e2a7380::t_522c82c7ff1933 270-271
+  s_31c0954e2a7380::t_d7dbf2dd09dd08 257-258
+  s_31c0954e2a7380::t_65382e3cbd710d 236-240,247-252
+  s_31c0954e2a7380::t_30ebbc6506e1e8 253-254
+apps/desktop/Tests/VitalsTests/LargeFileTests.swift
+  s_31c0954e2a7380::t_c2e448bc33ef3e 151-175
+apps/desktop/Sources/Vitals/Services/DevJunkScanner.swift
+  s_31c0954e2a7380::t_10fd30e79916bb 376
+  s_31c0954e2a7380::t_b7fd0089aebe17 199
+  s_31c0954e2a7380::t_cdb482d4d3c74d 67-69,76-82
+  s_31c0954e2a7380::t_cc359aa2e840e0 22-29
+  s_31c0954e2a7380::t_d1c9201d143f93 291-297
+  s_31c0954e2a7380::t_52b4e1c097fdfc 344-361
+  s_31c0954e2a7380::t_dd30877db993af 83-84
+apps/desktop/Tests/VitalsTests/DevJunkTests.swift
+  s_31c0954e2a7380::t_7866880a11a57e 190-215
+apps/desktop/Sources/Vitals/Models/CleanupModel.swift
+  s_31c0954e2a7380::t_1bf3d78d5ddd19 395
+  s_31c0954e2a7380::t_b4585004c4ffad 93-97
+  s_31c0954e2a7380::t_1aad76f8653c02 292,304-311
+apps/desktop/Sources/Vitals/Views/CleanupView.swift
+  s_31c0954e2a7380::t_5cceefe730eaaf 449-463
+  s_31c0954e2a7380::t_b31480aef811a2 137
+  s_31c0954e2a7380::t_96adf8ac907520 176-186,189-193,197-210
+apps/desktop/Sources/Vitals/Services/LargeFileScanner.swift
+  s_31c0954e2a7380::t_a1a717f03ff2cd 63,68-71
+  s_31c0954e2a7380::t_213b54a3d26cfe 104-106
+  s_31c0954e2a7380::t_0df8e7bd896204 170,174-178
+  s_31c0954e2a7380::t_ac8ce73844ff7e 72-73
+  s_31c0954e2a7380::t_b62f7acc54f4e0 179-180
+apps/desktop/Tests/VitalsTests/AIJunkTests.swift
+  s_31c0954e2a7380::t_4fd0258e0c41d8 157-161,164-165,168
+  s_31c0954e2a7380::t_99c89c58274190 155-156,162-163,166-167,169-171
+  s_31c0954e2a7380::t_7dc95ec9b46cc8 193-224
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "975b9de07ece707d8833c10c806943861aed9590",
+  "prompts": {},
+  "sessions": {
+    "s_31c0954e2a7380": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e09b434b-6265-4567-8982-86df0539232f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
