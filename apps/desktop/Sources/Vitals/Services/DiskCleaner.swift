@@ -27,9 +27,11 @@ struct CleanupCategory: Identifiable {
         case appCaches
         case logs
         case trash
+        case aiCaches
         // Deep, user domain (no admin)
         case recentItems
         case deviceBackups
+        case aiHistory
         // Deep, system (admin, age-gated)
         case systemCaches
         case systemLogs
@@ -53,7 +55,16 @@ struct CleanupCategory: Identifiable {
         /// confirmation that names exactly what will be destroyed.
         var isDestructive: Bool {
             switch self {
-            case .deviceBackups: return true
+            case .deviceBackups, .aiHistory: return true
+            default: return false
+            }
+        }
+
+        /// Removed by moving to the Trash (recoverable) rather than an in-place
+        /// delete — used for irreversible-if-gone user data like chat transcripts.
+        var movesToTrash: Bool {
+            switch self {
+            case .aiHistory: return true
             default: return false
             }
         }
@@ -62,7 +73,7 @@ struct CleanupCategory: Identifiable {
         var minimumDepth: CleanDepth {
             switch self {
             case .xcode, .devCaches, .deviceSupport, .browserCaches, .deviceFirmware,
-                 .homebrew, .appCaches, .logs, .trash: return .quick
+                 .homebrew, .appCaches, .logs, .trash, .aiCaches: return .quick
             default: return .deep
             }
         }
@@ -80,6 +91,8 @@ struct CleanupCategory: Identifiable {
             case .logs: return "Logs"
             case .trash: return "Trash"
             case .recentItems: return "Recent items"
+            case .aiCaches: return "AI Tool Junk"
+            case .aiHistory: return "Old AI Chat Sessions"
             case .systemCaches: return "System caches"
             case .systemLogs: return "System logs"
             case .crashReports: return "Crash reports"
@@ -101,6 +114,8 @@ struct CleanupCategory: Identifiable {
             case .logs: return "App logs in ~/Library/Logs"
             case .trash: return "Files already in the Trash, removed permanently"
             case .recentItems: return "Recently-opened file and server lists (the files stay)"
+            case .aiCaches: return "Old caches, logs and temp files from AI coding tools you've used"
+            case .aiHistory: return "AI conversation transcripts older than 30 days — moved to the Trash"
             case .systemCaches: return "Old .cache/.tmp/.log files in /Library/Caches (7+ days)"
             case .systemLogs: return "Old system logs in /private/var/log (7+ days)"
             case .crashReports: return "Crash and diagnostic reports older than 7 days"
@@ -122,6 +137,8 @@ struct CleanupCategory: Identifiable {
             case .logs: return "doc.text"
             case .trash: return "trash"
             case .recentItems: return "clock.arrow.circlepath"
+            case .aiCaches: return "sparkles"
+            case .aiHistory: return "bubble.left.and.bubble.right"
             case .systemCaches: return "gearshape"
             case .systemLogs: return "doc.badge.gearshape"
             case .crashReports: return "exclamationmark.triangle"
@@ -188,6 +205,18 @@ enum DiskCleaner {
         return categories
     }
 
+    /// The category kinds a scan at `depth` can offer — pure enum filtering, no
+    /// filesystem IO. Conditional categories (e.g. `.aiCaches`, which only
+    /// materializes when an AI tool is installed) are always included: a superset
+    /// is correct for pruning a stale selection via `formIntersection`, and cheap
+    /// enough to compute on the main actor.
+    static func kinds(at depth: CleanDepth) -> Set<CleanupCategory.Kind> {
+        switch depth {
+        case .quick: return Set(CleanupCategory.Kind.allCases.filter { $0.minimumDepth == .quick })
+        case .deep:  return Set(CleanupCategory.Kind.allCases)
+        }
+    }
+
     private static func quickCategories() -> [CleanupCategory] {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
@@ -199,7 +228,7 @@ enum DiskCleaner {
                 .filter { include($0.lastPathComponent) }
         }
 
-        return [
+        var categories: [CleanupCategory] = [
             .init(kind: .xcode, items: existing([
                 library.appendingPathComponent("Developer/Xcode/DerivedData"),
             ]), sizeBytes: 0),
@@ -268,11 +297,21 @@ enum DiskCleaner {
                   items: children(of: home.appendingPathComponent(".Trash")),
                   sizeBytes: 0),
         ]
+
+        // AI coding tools' junk — only when at least one such tool is actually
+        // installed, so the card never appears on a machine that has none.
+        if !AIToolJunk.detectedTools(home: home).isEmpty {
+            categories.append(.init(kind: .aiCaches,
+                                    items: AIToolJunk.cacheItems(home: home),
+                                    sizeBytes: 0))
+        }
+        return categories
     }
 
     private static func deepUserCategories() -> [CleanupCategory] {
         let fm = FileManager.default
-        let shared = fm.homeDirectoryForCurrentUser
+        let home = fm.homeDirectoryForCurrentUser
+        let shared = home
             .appendingPathComponent("Library/Application Support/com.apple.sharedfilelist")
         let recentLists = ["RecentApplications", "RecentDocuments", "RecentServers", "RecentHosts"]
             .flatMap { ["com.apple.LSSharedFileList.\($0).sfl2", "com.apple.LSSharedFileList.\($0).sfl"] }
@@ -283,15 +322,25 @@ enum DiskCleaner {
         // removal too (off by default, second confirmation). Each backup folder
         // under MobileSync/Backup is a separate item so a stale one can go
         // without taking a current one.
-        let backupRoot = fm.homeDirectoryForCurrentUser
+        let backupRoot = home
             .appendingPathComponent("Library/Application Support/MobileSync/Backup")
         let backups = ((try? fm.contentsOfDirectory(at: backupRoot, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? [])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
 
-        return [
+        var categories: [CleanupCategory] = [
             .init(kind: .recentItems, items: recentLists, sizeBytes: 0),
             .init(kind: .deviceBackups, items: backups, sizeBytes: 0),
         ]
+
+        // Old AI chat transcripts — destructive (moved to the Trash), so only
+        // offered when an AI tool is present and there's actually something aged.
+        if !AIToolJunk.detectedTools(home: home).isEmpty {
+            let history = AIToolJunk.historyItems(home: home)
+            if !history.isEmpty {
+                categories.append(.init(kind: .aiHistory, items: history, sizeBytes: 0))
+            }
+        }
+        return categories
     }
 
     /// Cached iOS/iPadOS/iPod firmware images (`.ipsw`) older than the firmware
@@ -498,10 +547,17 @@ enum DiskCleaner {
         let fm = FileManager.default
         var result = CleanResult()
         for category in categories where !category.kind.requiresAdmin {
+            let toTrash = category.kind.movesToTrash
             for url in category.items {
                 let size = AppInventory.directorySize(url)
                 do {
-                    try fm.removeItem(at: url)
+                    if toTrash {
+                        // Recoverable removal for irreversible-if-gone data. On
+                        // failure we record it and stop — never a permanent delete.
+                        try fm.trashItem(at: url, resultingItemURL: nil)
+                    } else {
+                        try fm.removeItem(at: url)
+                    }
                     result.freedBytes += size
                     result.removedItems += 1
                 } catch {

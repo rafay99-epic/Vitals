@@ -47,7 +47,7 @@ struct HelpView: View {
             symbol: "sparkles",
             tint: .orange,
             title: "Cleanup",
-            body: "Only regenerable data is offered: build products, package caches, app caches, and logs that apps rebuild automatically. Documents and settings are never touched. Emptying the Trash is the one permanent action, and the confirmation says so."
+            body: "Four pages. Quick and Deep offer only regenerable data — build products, package caches, app caches, and logs that apps rebuild automatically; documents and settings are never touched. Developer lists per-project build junk (node_modules, target, Pods, DerivedData) you can clear a project at a time. Files reviews your large and old files and moves the ones you pick to the Trash — recoverable from the Finder. Emptying the Trash and deleting build junk are permanent, and each confirmation says so."
         ),
         Topic(
             symbol: "internaldrive",
