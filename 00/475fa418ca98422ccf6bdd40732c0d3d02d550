@@ -1,0 +1,25 @@
+apps/desktop/Sources/Vitals/Widgets/WidgetPanel.swift
+  s_c405ccf38e98ba::t_7be5122b568997 71-80,83-84
+apps/desktop/Sources/Vitals/Widgets/WidgetManager.swift
+  s_c405ccf38e98ba::t_94a5389105fa12 79-83,87,94-98,101
+apps/desktop/Tests/VitalsTests/WidgetPlacementTests.swift
+  s_c405ccf38e98ba::t_6fc9918060eb0b 50-76
+apps/desktop/Sources/Vitals/Widgets/WidgetPlacement.swift
+  s_c405ccf38e98ba::t_81c264fdd82a93 21-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "00475fa418ca98422ccf6bdd40732c0d3d02d550",
+  "prompts": {},
+  "sessions": {
+    "s_c405ccf38e98ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a028b5da-cb31-4b8c-999e-8d7c22ba5bc1",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
