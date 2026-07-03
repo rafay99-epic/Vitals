@@ -1,0 +1,78 @@
+apps/desktop/Sources/Vitals/Services/LargeFileScanner.swift
+  s_31c0954e2a7380::t_007ae9ae854c71 1-224
+apps/desktop/Tests/VitalsTests/LargeFileTests.swift
+  s_31c0954e2a7380::t_6390a60570f4b6 1-223
+apps/desktop/Sources/Vitals/Services/DevJunkScanner.swift
+  s_31c0954e2a7380::t_1f44adeddfee75 109
+  s_31c0954e2a7380::t_407787075fc1bb 1-108,110-258,262-264,272-361
+  s_31c0954e2a7380::t_dfe6bddaf71a83 259-261,265-271
+apps/desktop/Tests/VitalsTests/AIJunkTests.swift
+  s_31c0954e2a7380::t_12568a46696844 96-124
+  s_31c0954e2a7380::t_f99d313163c4e1 1-66,68-75,77-95,125-203
+  s_31c0954e2a7380::t_23bbff50d427fe 76
+  s_31c0954e2a7380::t_57cc13a1f771d8 67
+apps/desktop/Sources/Vitals/Views/StorageView.swift
+  s_31c0954e2a7380::t_5d3cc81484d379 589-596
+apps/desktop/Sources/Vitals/Views/HelpView.swift
+  s_31c0954e2a7380::t_e25e309170eb10 50
+apps/desktop/Sources/Vitals/Services/AIToolJunk.swift
+  s_31c0954e2a7380::t_55f694cdfbcfbf 197-200,203,207-208
+  s_31c0954e2a7380::t_fdcd716ec2b7f7 100-108
+  s_31c0954e2a7380::t_227f42663f7f4b 32
+  s_31c0954e2a7380::t_1bc7d667df086a 1-31,33-99,109-196,201-202,204-206,209-262
+apps/desktop/Sources/Vitals/Services/DiskCleaner.swift
+  s_31c0954e2a7380::t_f27af220f1d570 550,554-560
+  s_31c0954e2a7380::t_ce668e9bd7908f 76
+  s_31c0954e2a7380::t_73b01627f9a8db 30,34
+  s_31c0954e2a7380::t_5248f813996cf6 58-67
+  s_31c0954e2a7380::t_9345d43ad670ea 94-95
+  s_31c0954e2a7380::t_9058b128275d7c 313-314
+  s_31c0954e2a7380::t_35c2a41f30f94f 325
+  s_31c0954e2a7380::t_cfb54a6cafa655 117-118
+  s_31c0954e2a7380::t_b39150482b828a 330,334-336,339-343
+  s_31c0954e2a7380::t_aff75c4d2785ec 208-219
+  s_31c0954e2a7380::t_f6d26960ee3517 337-338
+  s_31c0954e2a7380::t_0c6303c4db1c45 300-308
+  s_31c0954e2a7380::t_67e6508b91d8a9 140-141
+  s_31c0954e2a7380::t_10bbc044dbeb0c 231
+apps/desktop/Sources/Vitals/Views/CleanupView.swift
+  s_31c0954e2a7380::t_309653832a7c3c 3-6,11-77,105-111
+  s_31c0954e2a7380::t_67a3d6e8f07df8 378-379
+apps/desktop/Tests/VitalsTests/CleanupTests.swift
+  s_31c0954e2a7380::t_2445de6b0e9d16 416-418,420
+apps/desktop/Tests/VitalsTests/DevJunkTests.swift
+  s_31c0954e2a7380::t_9eb4d9a632e168 135
+  s_31c0954e2a7380::t_884a6bfd23b22a 190-215
+  s_31c0954e2a7380::t_2bb50a2c0248ff 1-134,136-189,216-292
+apps/desktop/Sources/Vitals/Models/CleanupModel.swift
+  s_31c0954e2a7380::t_1f5e80b4bec672 4-27
+  s_31c0954e2a7380::t_0d66c012342178 201-273,281,292-293,299,301-316,319-373,378,387-401,404-416,419-420
+  s_31c0954e2a7380::t_204b848a3abf45 274-280,282-291,294-298,300
+  s_31c0954e2a7380::t_7e1940fcb2b895 402-403
+  s_31c0954e2a7380::t_4178c20796a3d1 83-86
+  s_31c0954e2a7380::t_403fb4355bfd02 374-377,379-386
+  s_31c0954e2a7380::t_5191fd1de949a2 317-318
+apps/desktop/Sources/Vitals/Views/CleanupDevViews.swift
+  s_31c0954e2a7380::t_65e4bb8f5c004f 1-103,108-162,171-172,179-217,219,223-232,239-257,259-334,336,338-339,341-689
+  s_31c0954e2a7380::t_7104eacedf7daa 163-170,173-178
+  s_31c0954e2a7380::t_95a0ca5c08aafd 218,220-222,233-238
+  s_31c0954e2a7380::t_fb60696289c70a 258
+  s_31c0954e2a7380::t_4d770035e582ba 335,337,340
+  s_31c0954e2a7380::t_7706e2d1658ad0 104-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "a2b6f990bccd384aa172fcc899ffcb4ee39ad207",
+  "prompts": {},
+  "sessions": {
+    "s_31c0954e2a7380": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e09b434b-6265-4567-8982-86df0539232f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
