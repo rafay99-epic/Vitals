@@ -134,7 +134,7 @@ private struct CleanupClassicPage: View {
             isPresented: $confirmingDestructive,
             titleVisibility: .visible
         ) {
-            Button("Permanently Delete", role: .destructive) { model.clean() }
+            Button(destructiveButtonLabel, role: .destructive) { model.clean() }
         } message: {
             Text(destructiveMessage)
         }
@@ -173,16 +173,41 @@ private struct CleanupClassicPage: View {
         return lines
     }
 
+    /// Destructive categories that end up in the Trash (recoverable) rather
+    /// than deleted in place — split from the permanent ones so the second
+    /// confirmation never overstates what's about to happen.
+    private var destructiveTrashCategories: [CleanupCategory] {
+        model.selectedDestructiveCategories.filter { $0.kind.movesToTrash }
+    }
+
+    private var destructivePermanentCategories: [CleanupCategory] {
+        model.selectedDestructiveCategories.filter { !$0.kind.movesToTrash }
+    }
+
     private var destructiveTitle: String {
         let size = formatBytes(model.selectedDestructiveCategories.reduce(0) { $0 + $1.sizeBytes })
-        return "Permanently delete \(size)?"
+        return destructivePermanentCategories.isEmpty ? "Move \(size) to the Trash?" : "Permanently delete \(size)?"
+    }
+
+    private var destructiveButtonLabel: String {
+        destructivePermanentCategories.isEmpty ? "Move to Trash" : "Permanently Delete"
     }
 
     private var destructiveMessage: String {
-        let names = model.selectedDestructiveCategories
-            .map { "\($0.kind.title) (\(formatBytes($0.sizeBytes)))" }
-            .joined(separator: ", ")
-        return "This permanently deletes \(names). It is not regenerable and can't be recovered — make sure you have another copy. This can't be undone."
+        func names(_ categories: [CleanupCategory]) -> String {
+            categories
+                .map { "\($0.kind.title) (\(formatBytes($0.sizeBytes)))" }
+                .joined(separator: ", ")
+        }
+        let permanentNames = names(destructivePermanentCategories)
+        let trashNames = names(destructiveTrashCategories)
+        if destructivePermanentCategories.isEmpty {
+            return "This moves \(trashNames) to the Trash — recoverable until you empty it."
+        }
+        if destructiveTrashCategories.isEmpty {
+            return "This permanently deletes \(permanentNames). It is not regenerable and can't be recovered — make sure you have another copy. This can't be undone."
+        }
+        return "This permanently deletes \(permanentNames) — not regenerable and can't be recovered, make sure you have another copy. \(trashNames) is moved to the Trash instead — recoverable until you empty it."
     }
 
     // MARK: Hero
@@ -421,12 +446,21 @@ private struct CategoryCard: View {
                             .help("Removing these needs administrator rights")
                     }
                     if category.kind.isDestructive {
-                        Text("PERMANENT")
-                            .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(.red.opacity(0.16)))
-                            .foregroundStyle(.red)
-                            .help("Not regenerable — deleted permanently and can't be recovered")
+                        if category.kind.movesToTrash {
+                            Text("TO TRASH")
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Capsule().fill(.orange.opacity(0.16)))
+                                .foregroundStyle(.orange)
+                                .help("Moved to the Trash — recoverable until you empty it")
+                        } else {
+                            Text("PERMANENT")
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Capsule().fill(.red.opacity(0.16)))
+                                .foregroundStyle(.red)
+                                .help("Not regenerable — deleted permanently and can't be recovered")
+                        }
                     }
                     Spacer()
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")

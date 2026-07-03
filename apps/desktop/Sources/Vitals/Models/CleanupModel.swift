@@ -90,6 +90,11 @@ final class CleanupModel: ObservableObject {
             var scanned = await Task.detached(priority: .userInitiated) { DiskCleaner.scan(depth: depth) }.value
             if Task.isCancelled { isScanning = false; return }
             categories = scanned  // show structure immediately, sizes follow
+            // Prune again against the categories the real scan actually returned —
+            // the pre-scan prune above only knows the static superset, so a
+            // conditional kind (e.g. .aiCaches) absent this run would otherwise
+            // stay selected and counted in the footer with no visible row.
+            selected.formIntersection(Set(scanned.map(\.kind)))
             for index in scanned.indices {
                 if Task.isCancelled { isScanning = false; return }
                 let category = scanned[index]
@@ -284,6 +289,7 @@ final class CleanupModel: ObservableObject {
             if Task.isCancelled { return }
             let structure = projects
             await MainActor.run {
+                guard !Task.isCancelled else { return }
                 self.devRoots = roots
                 self.devProjects = structure  // structure now, sizes follow
                 // Drop any selection whose artifact no longer exists.
@@ -295,9 +301,15 @@ final class CleanupModel: ObservableObject {
                 projects[index] = DevJunkScanner.measured(projects[index])
                 if Task.isCancelled { return }
                 let snapshot = projects
-                await MainActor.run { self.devProjects = snapshot }
+                await MainActor.run {
+                    guard !Task.isCancelled else { return }
+                    self.devProjects = snapshot
+                }
             }
-            await MainActor.run { self.isDevScanning = false }
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                self.isDevScanning = false
+            }
         }
     }
 
@@ -380,6 +392,7 @@ final class CleanupModel: ObservableObject {
             let items = LargeFileScanner.scan(roots: roots, filter: filter, home: home)
             if Task.isCancelled { return }
             await MainActor.run {
+                guard !Task.isCancelled else { return }
                 self.largeFiles = items
                 self.filesSelection.formIntersection(Set(items.map(\.url)))
                 self.isFilesScanning = false

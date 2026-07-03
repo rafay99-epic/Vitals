@@ -187,6 +187,32 @@ struct DevJunkScannerTests {
             tree.root.appendingPathComponent("proj/src"), roots: roots))
     }
 
+    // MARK: (9a) isDeletableArtifact requires a project ancestor for name-allowlisted artifacts
+
+    @Test func isDeletableArtifactRequiresProjectAncestorForNameAllowlist() {
+        // No project indicator anywhere in the tree — an allowlisted name alone
+        // must not be enough (closes off a smuggled Artifact(url:) bypass).
+        let noIndicator = Tree()
+        let orphan = noIndicator.dir("misc/node_modules")
+        #expect(!DevJunkScanner.isDeletableArtifact(orphan, roots: [noIndicator.root]))
+
+        // A project indicator directly above the artifact — still accepted.
+        let withIndicator = Tree()
+        withIndicator.file("proj/package.json")
+        let owned = withIndicator.dir("proj/node_modules")
+        #expect(DevJunkScanner.isDeletableArtifact(owned, roots: [withIndicator.root]))
+
+        // Nested: repo carries the indicator, sub does not. `dist` still requires
+        // the indicator in its *direct* parent (the pre-existing rule) — an
+        // indicator two levels up doesn't satisfy that rule, so this stays
+        // rejected regardless of the new ancestor gate.
+        let nested = Tree()
+        nested.dir("repo/.git")
+        nested.dir("repo/sub/dist")
+        #expect(!DevJunkScanner.isDeletableArtifact(
+            nested.root.appendingPathComponent("repo/sub/dist"), roots: [nested.root]))
+    }
+
     // MARK: (9b) isDeletableArtifact rejects a symlinked intermediate directory
 
     @Test func rejectsArtifactThroughSymlinkedIntermediate() throws {

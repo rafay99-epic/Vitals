@@ -152,6 +152,23 @@ struct AIJunkTests {
         }
     }
 
+    @Test func memoryGuardsAreCaseInsensitive() throws {
+        try withFixture { f in
+            try f.dir(".codex")
+            let sessions = ".codex/sessions"
+            // Codex's history scan has no extension filter, so this exercises the
+            // name guards themselves rather than an extension mismatch.
+            let realSession = try f.file("\(sessions)/session1.log", ageDays: 60)
+            // Case variants of the guarded names — must be spared even though a
+            // case-sensitive volume would treat them as distinct from "memory"/"MEMORY.md".
+            try f.file("\(sessions)/Memory/index.jsonl", ageDays: 60)   // capital-M dir
+            try f.file("\(sessions)/MeMoRy.MD", ageDays: 60)            // mixed-case MEMORY.md
+
+            let items = paths(AIToolJunk.historyItems(home: f.home, now: Date()))
+            #expect(items == [realSession.standardizedFileURL.path])
+        }
+    }
+
     // MARK: Version keep-newest
 
     @Test func versionKeepKeepsNewestAndSymlinkTarget() throws {
@@ -170,6 +187,38 @@ struct AIJunkTests {
             #expect(items.contains(v2.standardizedFileURL.path))       // listed
             #expect(!items.contains(v1.standardizedFileURL.path))      // symlink target kept
             #expect(!items.contains(v3.standardizedFileURL.path))      // newest kept
+        }
+    }
+
+    @Test func versionShapedNameRequiredMetadataFileNeverKeptOrListed() throws {
+        try withFixture { f in
+            try f.dir(".claude")
+            let versions = try f.dir(".local/share/claude/versions")
+            let v1 = try f.dir("1.0.0", under: versions, ageDays: 20)          // older version → listed
+            let v2 = try f.dir("1.1.0", under: versions, ageDays: 10)          // newest version → kept
+            // Newer than both versions, but not version-shaped: must never be
+            // treated as the newest (which would shield v2.1.0 from listing)
+            // and must never itself be listed.
+            try f.file("manifest.json", under: versions, ageDays: 1)
+
+            let items = paths(AIToolJunk.cacheItems(home: f.home, tmpRoot: f.tmpRoot, now: Date()))
+            #expect(items.contains(v1.standardizedFileURL.path))
+            #expect(!items.contains(v2.standardizedFileURL.path))
+            #expect(!items.contains { $0.contains("manifest.json") })
+        }
+    }
+
+    @Test func versionShapedSingleVersionAlongsideMetadataIsKept() throws {
+        try withFixture { f in
+            try f.dir(".claude")
+            let versions = try f.dir(".local/share/claude/versions")
+            let onlyVersion = try f.dir("2.0.14", under: versions, ageDays: 5)
+            try f.file("manifest.json", under: versions, ageDays: 1)
+            try f.file(".DS_Store", under: versions, ageDays: 1)
+
+            let items = paths(AIToolJunk.cacheItems(home: f.home, tmpRoot: f.tmpRoot, now: Date()))
+            #expect(!items.contains(onlyVersion.standardizedFileURL.path))
+            #expect(!items.contains { $0.contains("manifest.json") || $0.contains(".DS_Store") })
         }
     }
 

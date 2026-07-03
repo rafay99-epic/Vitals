@@ -233,15 +233,29 @@ private func oldVersions(in versionsDir: URL, pointers: [URL]) -> [URL] {
         guard let v = try? entry.resourceValues(forKeys: keys) else { continue }
         if v.isSymbolicLink == true { continue }                            // never a symlink
         if protected.contains(entry.standardizedFileURL.path) { continue }  // active version
+        // Not restricted to directories: Claude Code's versions dir holds
+        // version binaries as plain files. Instead require a version-shaped
+        // name, so a stray metadata file (manifest.json, .DS_Store) can never
+        // be mistaken for the newest version and shield a real one from listing.
+        if !isVersionShaped(entry.lastPathComponent) { continue }
         candidates.append((entry, v.contentModificationDate ?? .distantPast))
     }
     guard candidates.count > 1 else { return [] }                           // keep the only/newest
     return candidates.sorted { $0.modified > $1.modified }.dropFirst().map(\.url)
 }
 
+/// True for names like `2.0.14` or `v2.0.14` — an optional leading `v` then a
+/// digit. Excludes hidden files (leading `.`) and non-version metadata.
+private func isVersionShaped(_ name: String) -> Bool {
+    var rest = Substring(name)
+    if rest.first == "v" { rest = rest.dropFirst() }
+    return rest.first?.isNumber == true
+}
+
 /// Regular files under `root` (recursive) older than `days`, optionally scoped
 /// by extension. Persistent memory is always spared: never a `MEMORY.md`, never
-/// anything inside a `memory` directory component.
+/// anything inside a `memory` directory component — both checks case-insensitive,
+/// since the volume underneath is usually case-insensitive too.
 private func agedFiles(under root: URL, extensions: Set<String>?, olderThanDays days: Int, now: Date) -> [URL] {
     let fm = FileManager.default
     guard fm.fileExists(atPath: root.path) else { return [] }
@@ -253,8 +267,8 @@ private func agedFiles(under root: URL, extensions: Set<String>?, olderThanDays 
     for case let url as URL in enumerator {
         guard let v = try? url.resourceValues(forKeys: keys), v.isRegularFile == true else { continue }
         if let extensions, !extensions.contains(url.pathExtension.lowercased()) { continue }
-        if url.lastPathComponent == "MEMORY.md" { continue }
-        if url.pathComponents.contains("memory") { continue }
+        if url.lastPathComponent.lowercased() == "memory.md" { continue }
+        if url.pathComponents.contains(where: { $0.lowercased() == "memory" }) { continue }
         guard let modified = v.contentModificationDate, modified < cutoff else { continue }
         result.append(url)
     }

@@ -148,6 +148,31 @@ struct LargeFileScannerTests {
         #expect(items.map(\.name) == ["real.bin"])   // the symlink is never listed
     }
 
+    @Test func symlinkedRootYieldsNothing() throws {
+        let home = TempHome()
+        try makeFile(home.url, "RealDocs/real.bin", bytes: big)
+        let linkRoot = home.url.appendingPathComponent("LinkedDocs")
+        try FileManager.default.createSymbolicLink(
+            at: linkRoot, withDestinationURL: home.url.appendingPathComponent("RealDocs"))
+
+        // The symlink itself is a valid root argument; the walk must refuse to
+        // follow it rather than silently traversing into the link's target.
+        let items = LargeFileScanner.scan(roots: [linkRoot], filter: anySize(), home: home.url)
+        #expect(items.isEmpty)
+    }
+
+    /// `isExcluded` boundary-matches rather than bare-`hasPrefix`-matches, so a
+    /// sibling that merely shares a string prefix with an excluded path (an
+    /// app-bundle backup, a "Foo 2" duplicate, …) is never swept up with it.
+    @Test func isUnderOrEqualIsPathBoundarySafe() {
+        let base = "/Applications/Vitals.app"
+        #expect(LargeFileScanner.isUnderOrEqual(base, base: base))                          // itself
+        #expect(LargeFileScanner.isUnderOrEqual("\(base)/Contents/Info.plist", base: base))  // nested
+        #expect(!LargeFileScanner.isUnderOrEqual("\(base).backup", base: base))              // sibling suffix
+        #expect(!LargeFileScanner.isUnderOrEqual("\(base) 2", base: base))                   // sibling "Foo 2"
+        #expect(!LargeFileScanner.isUnderOrEqual("/Applications/Vitals.app2", base: base))   // no separator
+    }
+
     @Test func hiddenFilesAreSkipped() throws {
         let home = TempHome()
         try makeFile(home.url, "Documents/.secret.bin", bytes: big)

@@ -60,9 +60,15 @@ enum LargeFileScanner {
             let url = home.appendingPathComponent(name, isDirectory: true)
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { return nil }
-            if (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true { return nil }
+            if isSymlink(url) { return nil }
             return url
         }
+    }
+
+    /// True when `url` itself is a symbolic link (not merely something reached
+    /// through one further down a walk).
+    private static func isSymlink(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
     }
 
     // MARK: Scanning
@@ -95,6 +101,9 @@ enum LargeFileScanner {
 
         var items: [Item] = []
         for root in roots {
+            // Same never-follow-symlinks contract as defaultRoots: a caller can
+            // hand us a symlinked root directly, so re-check it here too.
+            if isSymlink(root) { continue }
             guard let enumerator = fm.enumerator(
                 at: root,
                 includingPropertiesForKeys: Array(keys),
@@ -158,8 +167,15 @@ enum LargeFileScanner {
     /// Paths the scan refuses to enter: the app's own bundle/data and anything
     /// under a `.vitals*` directory (its channel data dirs).
     private static func isExcluded(_ url: URL, bundlePath: String) -> Bool {
-        if !bundlePath.isEmpty && url.path.hasPrefix(bundlePath) { return true }
+        if !bundlePath.isEmpty && isUnderOrEqual(url.path, base: bundlePath) { return true }
         return url.pathComponents.contains { $0.hasPrefix(".vitals") }
+    }
+
+    /// A path-boundary-safe `hasPrefix`: true when `path` equals `base` or lies
+    /// inside it, but not for an unrelated sibling that merely shares the
+    /// string prefix (`<base>.backup`, `<base> 2`, …).
+    static func isUnderOrEqual(_ path: String, base: String) -> Bool {
+        path == base || path.hasPrefix(base + "/")
     }
 
     // MARK: Suggestions
