@@ -18,6 +18,18 @@ enum WidgetPlacement {
         return f
     }
 
+    /// Where a remembered frame should go on the current screens: unchanged
+    /// when it fits, nudged fully on-screen when it merely pokes past an edge
+    /// (a Dock or resolution change must not cost the user their placement),
+    /// or nil when it's fully stranded — its display is gone — and the caller
+    /// should pick a fresh spot instead (clamping strands from the same dead
+    /// display would pile them onto one edge). No screens: unchanged.
+    static func rescued(_ frame: CGRect, within screens: [CGRect]) -> CGRect? {
+        guard !screens.isEmpty else { return frame }
+        guard screens.contains(where: { $0.intersects(frame) }) else { return nil }
+        return fitted(frame, within: screens)
+    }
+
     /// The screen containing most of the frame, else the closest one.
     private static func bestScreen(for frame: CGRect, in screens: [CGRect]) -> CGRect? {
         func overlap(_ s: CGRect) -> CGFloat {

@@ -68,18 +68,20 @@ enum WidgetPanel {
         host.autoresizingMask = [.width, .height]
         panel.contentView = host
 
-        // Restore the saved frame (position *and* size) if we have one — but
-        // only when it still lies on a connected screen (the display it was on
-        // may be gone; a stranded panel is invisible and unreachable). Anything
-        // else tucks into the top-right, cascading so multiple widgets don't
-        // stack on the exact same spot. We own this in UserDefaults rather
-        // than via `setFrameAutosaveName`: the AppKit autosave restored position
-        // but not size for these borderless panels, then re-saved the default
-        // size on close — clobbering a resize.
+        // Restore the saved frame (position *and* size) if we have one —
+        // nudged fully on-screen if a display change left it poking past an
+        // edge, so a Dock or resolution tweak never costs the user their spot.
+        // Only a frame stranded on a vanished display (invisible and
+        // unreachable) — or a widget never placed — tucks into the top-right,
+        // cascading so multiple widgets don't stack on the exact same spot.
+        // We own this in UserDefaults rather than via `setFrameAutosaveName`:
+        // the AppKit autosave restored position but not size for these
+        // borderless panels, then re-saved the default size on close —
+        // clobbering a resize.
         let screens = NSScreen.screens.map(\.visibleFrame)
         if let saved = savedFrame(for: kind),
-           WidgetPlacement.fitted(saved, within: screens) == saved {
-            panel.setFrame(saved, display: false)
+           let spot = WidgetPlacement.rescued(saved, within: screens) {
+            panel.setFrame(spot, display: false)
         } else {
             let size = savedFrame(for: kind)?.size ?? size
             if let cascade = cascadeFrame(size: size, index: index) {

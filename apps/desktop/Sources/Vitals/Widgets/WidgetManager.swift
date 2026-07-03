@@ -76,25 +76,29 @@ final class WidgetManager: ObservableObject {
     }
 
     /// Puts every widget back where it belongs after a display change. A panel
-    /// whose saved spot exists again returns to it; a panel left stranded
-    /// off-screen is re-tucked into the default cascade. The saved spot is
-    /// never overwritten here (only a user drag persists), so unplugging and
-    /// replugging a monitor round-trips every widget to where the user put it.
+    /// whose saved spot exists again returns to it; one nudged partway off an
+    /// edge is nudged back; only a panel fully stranded off-screen is
+    /// re-tucked into the default cascade. The saved spot is never overwritten
+    /// here (only a user drag persists), so unplugging and replugging a
+    /// monitor round-trips every widget to where the user put it.
     private func realignPanels() {
         let screens = NSScreen.screens.map(\.visibleFrame)
         guard !screens.isEmpty else { return }
-        var rescued = 0
+        var stranded = 0
         for (kind, panel) in panels.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             if let saved = WidgetPanel.savedFrame(for: kind),
                WidgetPlacement.fitted(saved, within: screens) == saved {
                 if panel.frame != saved { panel.setFrame(saved, display: true) }
                 continue
             }
-            if WidgetPlacement.fitted(panel.frame, within: screens) != panel.frame {
-                let spot = WidgetPanel.cascadeFrame(size: panel.frame.size, index: rescued)
+            guard WidgetPlacement.fitted(panel.frame, within: screens) != panel.frame else { continue }
+            if let spot = WidgetPlacement.rescued(panel.frame, within: screens) {
+                panel.setFrame(spot, display: true)
+            } else {
+                let spot = WidgetPanel.cascadeFrame(size: panel.frame.size, index: stranded)
                     ?? WidgetPlacement.fitted(panel.frame, within: screens)
                 panel.setFrame(spot, display: true)
-                rescued += 1
+                stranded += 1
             }
         }
     }

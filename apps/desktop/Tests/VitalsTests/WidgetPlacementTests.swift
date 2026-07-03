@@ -47,4 +47,31 @@ final class WidgetPlacementTests: XCTestCase {
         let frame = CGRect(x: 5000, y: 5000, width: 212, height: 118)
         XCTAssertEqual(WidgetPlacement.fitted(frame, within: []), frame)
     }
+
+    // MARK: rescued — keep, nudge, or give up
+
+    func testRescueKeepsAFittingFrame() {
+        let frame = CGRect(x: 500, y: 400, width: 212, height: 118)
+        XCTAssertEqual(WidgetPlacement.rescued(frame, within: [laptop]), frame)
+    }
+
+    func testRescueNudgesAPartlyOffscreenFrameInsteadOfDiscardingIt() {
+        // The Dock grew a little: the saved spot pokes 20 pt past the bottom.
+        let frame = CGRect(x: 500, y: -20, width: 212, height: 118)
+        let spot = WidgetPlacement.rescued(frame, within: [laptop])
+        XCTAssertEqual(spot, CGRect(x: 500, y: 0, width: 212, height: 118),
+                       "a nudge must preserve the user's placement, not reset it")
+    }
+
+    func testRescueGivesUpOnAFullyStrandedFrame() {
+        // Entirely on a display that is no longer connected.
+        let stranded = CGRect(x: 900, y: 1400, width: 212, height: 118)
+        XCTAssertNil(WidgetPlacement.rescued(stranded, within: [laptop]),
+                     "a stranded frame needs a fresh spot, not an edge pile-up")
+    }
+
+    func testRescueWithNoScreensLeavesFrameAlone() {
+        let frame = CGRect(x: 5000, y: 5000, width: 212, height: 118)
+        XCTAssertEqual(WidgetPlacement.rescued(frame, within: []), frame)
+    }
 }
