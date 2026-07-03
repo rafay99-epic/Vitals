@@ -6,16 +6,20 @@ import SwiftUI
 /// gets the shared `VitalsModel` / `AppSettings` injected, so it ticks live.
 @MainActor
 enum WidgetPanel {
-    /// Where a widget sits in the window stack. "Desktop" pins it to the real
-    /// desktop layer (just above the wallpaper, below icons and every app
-    /// window) so it composites *with* the desktop during a Space switch and
-    /// never pops above your windows. A level just below normal (e.g. -1) is
-    /// treated like an ordinary window mid-transition and flickers to the front
-    /// — the desktop layer doesn't. "Float" keeps it above everything.
+    /// Where a widget sits in the window stack. "Desktop" pins it to the
+    /// desktop layer — just *above* Finder's full-screen desktop-icons window,
+    /// below every app window — so it composites *with* the desktop during a
+    /// Space switch and never pops above your windows. It must sit above the
+    /// icons window: that window covers the whole screen and swallows every
+    /// mouse event, so a panel below it (the old `.desktopWindow + 1`) can
+    /// never be clicked, dragged, or resized. A level just below normal (e.g.
+    /// -1) is also wrong — it's treated like an ordinary window mid-transition
+    /// and flickers to the front; the desktop layers don't. "Float" keeps the
+    /// widget above everything.
     static func windowLevel(onTop: Bool) -> NSWindow.Level {
         onTop
             ? .floating
-            : NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
+            : NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
     }
 
     static func make(
@@ -64,22 +68,39 @@ enum WidgetPanel {
         host.autoresizingMask = [.width, .height]
         panel.contentView = host
 
-        // Restore the saved frame (position *and* size) if we have one;
-        // otherwise tuck it into the top-right, cascading so multiple widgets
-        // don't stack on the exact same spot. We own this in UserDefaults rather
-        // than via `setFrameAutosaveName`: the AppKit autosave restored position
-        // but not size for these borderless panels, then re-saved the default
-        // size on close — clobbering a resize.
-        if let saved = savedFrame(for: kind) {
-            panel.setFrame(saved, display: false)
-        } else if let visible = NSScreen.main?.visibleFrame {
-            let dy = CGFloat(index) * (size.height + 14)
-            panel.setFrameOrigin(NSPoint(
-                x: visible.maxX - size.width - 22,
-                y: visible.maxY - size.height - 22 - dy
-            ))
+        // Restore the saved frame (position *and* size) if we have one —
+        // nudged fully on-screen if a display change left it poking past an
+        // edge, so a Dock or resolution tweak never costs the user their spot.
+        // Only a frame stranded on a vanished display (invisible and
+        // unreachable) — or a widget never placed — tucks into the top-right,
+        // cascading so multiple widgets don't stack on the exact same spot.
+        // We own this in UserDefaults rather than via `setFrameAutosaveName`:
+        // the AppKit autosave restored position but not size for these
+        // borderless panels, then re-saved the default size on close —
+        // clobbering a resize.
+        let screens = NSScreen.screens.map(\.visibleFrame)
+        if let saved = savedFrame(for: kind),
+           let spot = WidgetPlacement.rescued(saved, within: screens) {
+            panel.setFrame(spot, display: false)
+        } else {
+            let size = savedFrame(for: kind)?.size ?? size
+            if let cascade = cascadeFrame(size: size, index: index) {
+                panel.setFrame(cascade, display: false)
+            }
         }
         return panel
+    }
+
+    /// The default spot for the `index`-th widget: tucked into the main
+    /// screen's top-right, cascading downward so widgets don't stack.
+    static func cascadeFrame(size: CGSize, index: Int) -> CGRect? {
+        guard let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return nil }
+        let dy = CGFloat(index) * (size.height + 14)
+        return CGRect(
+            x: visible.maxX - size.width - 22,
+            y: visible.maxY - size.height - 22 - dy,
+            width: size.width, height: size.height
+        )
     }
 
     /// UserDefaults key holding a widget's last `[x, y, width, height]`.
@@ -87,7 +108,7 @@ enum WidgetPanel {
 
     /// The persisted frame for a widget, clamped to its current size bounds, or
     /// nil if it has never been placed.
-    private static func savedFrame(for kind: WidgetKind) -> CGRect? {
+    static func savedFrame(for kind: WidgetKind) -> CGRect? {
         guard let values = UserDefaults.standard.array(forKey: frameKey(for: kind)) as? [Double],
               values.count == 4 else { return nil }
         let width = min(max(CGFloat(values[2]), kind.minSize.width), kind.maxSize.width)
