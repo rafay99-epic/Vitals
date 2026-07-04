@@ -54,6 +54,25 @@ struct AlertEngineTests {
         #expect(!AlertEngine.step(rule: r, value: 50, state: .init(), now: t0, cooldown: cooldown).fire)
     }
 
+    @Test func networkRulesReadTheirDirection() {
+        // The readings carry canonical MB/s; each network metric must map to
+        // its own direction, and a pre-baseline (nil) reading can never fire.
+        var readings = AlertReadings()
+        readings.networkDownMBps = 250
+        readings.networkUpMBps = 3
+        #expect(readings.value(for: .networkDownload) == 250)
+        #expect(readings.value(for: .networkUpload) == 3)
+
+        let down = rule(.networkDownload, .above, threshold: 100, sustained: 0)
+        #expect(AlertEngine.step(rule: down, value: readings.value(for: .networkDownload),
+                                 state: .init(), now: t0, cooldown: cooldown).fire)
+        let up = rule(.networkUpload, .above, threshold: 100, sustained: 0)
+        #expect(!AlertEngine.step(rule: up, value: readings.value(for: .networkUpload),
+                                  state: .init(), now: t0, cooldown: cooldown).fire)
+        #expect(!AlertEngine.step(rule: down, value: AlertReadings().value(for: .networkDownload),
+                                  state: .init(), now: t0, cooldown: cooldown).fire)
+    }
+
     @Test func unavailableReadingNeverFires() {
         let r = rule(sustained: 0)
         let (state, fire) = AlertEngine.step(

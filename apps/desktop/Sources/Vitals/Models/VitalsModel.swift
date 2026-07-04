@@ -548,7 +548,11 @@ final class VitalsModel: ObservableObject {
             diskFreeGB: diskFreeGB,
             batteryPercent: battery?.percent,
             topProcessCPU: topProcess?.cpuPercent,
-            topProcessName: topProcess?.name
+            topProcessName: topProcess?.name,
+            // Canonical MB/s to match the rule's stored threshold unit. Nil
+            // until the second sample — a rule can't fire on a placeholder.
+            networkDownMBps: network.map { $0.totalInPerSec / 1_000_000 },
+            networkUpMBps: network.map { $0.totalOutPerSec / 1_000_000 }
         )
     }
 
@@ -577,6 +581,8 @@ final class VitalsModel: ObservableObject {
         switch metric {
         case .fanRPM:   return "\(Int(value)) rpm"
         case .diskFree: return String(format: "%.0f GB", value)
+        // The reading is canonical MB/s; NetworkFormat speaks bytes/s.
+        case .networkDownload, .networkUpload: return NetworkFormat.rate(value * 1_000_000)
         default:        return "\(Int(value))%"
         }
     }

@@ -107,17 +107,16 @@ struct ContentView: View {
             sidebarHeader
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {
-                    row(.overview, shortcutIndex: 0)
+                    row(.overview, shortcut: Self.shortcut(1))
                     groupLabel("Monitor")
                     ForEach(Array(Self.monitor.enumerated()), id: \.element) { index, item in
-                        row(item, shortcutIndex: index + 1)
+                        row(item, shortcut: Self.shortcut(index + 2))
                     }
                     groupLabel("Maintain")
                     ForEach(Array(Self.maintain.enumerated()), id: \.element) { index, item in
-                        // Continue the running index across groups; Overview +
-                        // the eight Monitor rows now fill ⌘1–⌘9, and the row's
-                        // `< 9` guard drops shortcuts for the rest.
-                        row(item, shortcutIndex: 1 + Self.monitor.count + index)
+                        // Maintain gets its own ⌥⌘ tier so its shortcuts don't
+                        // shift (or fall off the ⌘1–9 ladder) as Monitor grows.
+                        row(item, shortcut: Self.shortcut(index + 1, modifiers: [.command, .option]))
                     }
                 }
                 .padding(.horizontal, 8)
@@ -129,7 +128,7 @@ struct ContentView: View {
             // Maintain.
             Divider().opacity(0.4).padding(.horizontal, 8)
             VStack(alignment: .leading, spacing: 1) {
-                row(.settings, shortcutIndex: nil)
+                row(.settings, shortcut: nil)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
@@ -167,12 +166,19 @@ struct ContentView: View {
             .padding(.bottom, 3)
     }
 
+    /// ⌘n / ⌥⌘n for the nth row of a group — digits only go to 9, so anything
+    /// past that has no shortcut rather than a wrong one.
+    private static func shortcut(_ n: Int, modifiers: EventModifiers = .command) -> KeyboardShortcut? {
+        guard (1...9).contains(n) else { return nil }
+        return KeyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: modifiers)
+    }
+
     /// A sidebar destination row — icon + label, the whole row a click target,
-    /// the selected one filled. ⌘1…⌘9 follow visible position for the first
-    /// nine. Switching never animates geometry — only the selection fill moves.
-    private func row(_ item: NavSection, shortcutIndex: Int?) -> some View {
+    /// the selected one filled. Overview + Monitor take ⌘1…⌘9 by visible
+    /// position; Maintain has its own ⌥⌘1…⌥⌘4 tier. Switching never animates
+    /// geometry — only the selection fill moves.
+    private func row(_ item: NavSection, shortcut: KeyboardShortcut?) -> some View {
         let selected = section == item
-        let shortcut = shortcutIndex.flatMap { $0 < 9 ? KeyEquivalent(Character("\($0 + 1)")) : nil }
         return Button {
             visited.insert(item)
             navigator.section = item
@@ -197,7 +203,7 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-        .keyboardShortcut(shortcut.map { KeyboardShortcut($0, modifiers: .command) })
+        .keyboardShortcut(shortcut)
         .help(item.title)
     }
 

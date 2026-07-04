@@ -69,16 +69,20 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         }
     }
 
+    // Combined's heights grew with its Network row (4 metric rows on a GPU
+    // Mac). Saved frames are clamped to these bounds on restore
+    // (`WidgetPanel.savedFrame`), so existing panels grow to fit rather than
+    // clipping the new row.
     var defaultSize: CGSize {
-        self == .combined ? CGSize(width: 320, height: 172) : CGSize(width: 212, height: 118)
+        self == .combined ? CGSize(width: 320, height: 206) : CGSize(width: 212, height: 118)
     }
 
     /// Resize bounds — a widget can't collapse to nothing or balloon off-screen.
     var minSize: CGSize {
-        self == .combined ? CGSize(width: 280, height: 152) : CGSize(width: 178, height: 104)
+        self == .combined ? CGSize(width: 280, height: 186) : CGSize(width: 178, height: 104)
     }
 
     var maxSize: CGSize {
-        self == .combined ? CGSize(width: 560, height: 280) : CGSize(width: 380, height: 240)
+        self == .combined ? CGSize(width: 560, height: 320) : CGSize(width: 380, height: 240)
     }
 }

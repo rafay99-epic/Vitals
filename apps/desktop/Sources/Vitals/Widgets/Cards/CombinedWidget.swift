@@ -25,6 +25,12 @@ struct CombinedWidget: View {
                         metric("GPU mem", gpuMemory(gpu), "memorychip", .purple)
                     }
                 }
+                if let network = model.network {
+                    GridRow {
+                        metric("Down", NetworkFormat.rate(network.totalInPerSec), "arrow.down", .mint)
+                        metric("Up", NetworkFormat.rate(network.totalOutPerSec), "arrow.up", .mint)
+                    }
+                }
             }
         }
     }
