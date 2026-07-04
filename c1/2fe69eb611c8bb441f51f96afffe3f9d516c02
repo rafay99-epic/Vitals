@@ -1,0 +1,27 @@
+apps/desktop/Sources/Vitals/Views/MenuBarHost.swift
+  s_31c0954e2a7380::t_e36393f3f2d488 156-175
+  s_31c0954e2a7380::t_a724478b025ab9 46-58
+  s_31c0954e2a7380::t_3b93b4f1e59071 100-105
+apps/desktop/Sources/Vitals/App/MenuBarController.swift
+  s_31c0954e2a7380::t_b7a1b18ca1801b 23-25
+  s_31c0954e2a7380::t_be7406b4fa8bfc 107-116,118-120,124,126-127
+  s_31c0954e2a7380::t_3543a0ce6ac55b 67-70
+  s_31c0954e2a7380::t_abebb9c1eda4cd 131-132
+  s_31c0954e2a7380::t_17845bf74b2590 58-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c12fe69eb611c8bb441f51f96afffe3f9d516c02",
+  "prompts": {},
+  "sessions": {
+    "s_31c0954e2a7380": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e09b434b-6265-4567-8982-86df0539232f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
