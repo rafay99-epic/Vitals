@@ -1,0 +1,38 @@
+apps/desktop/Tests/VitalsTests/AlertEngineTests.swift
+  s_e17bfc164ca791::t_69db645bc232a3 57-75
+apps/desktop/Sources/Vitals/Views/HelpView.swift
+  s_e17bfc164ca791::t_4a70b6e151fcb3 68
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_e17bfc164ca791::t_0969b7f881ae9e 206
+  s_e17bfc164ca791::t_c24fee9a5ef901 110,113,117-119
+  s_e17bfc164ca791::t_a65d2449c5b56c 131
+  s_e17bfc164ca791::t_b3012b16c516e2 169-175,177-180
+apps/desktop/Sources/Vitals/Models/AlertRule.swift
+  s_e17bfc164ca791::t_33e9bec67f5b74 64,73
+  s_e17bfc164ca791::t_1cfca8917562af 8-9,23-24,38-39,50
+  s_e17bfc164ca791::t_e61255deb8f051 147-148,160-161
+  s_e17bfc164ca791::t_99d2f238954f1b 93
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_e17bfc164ca791::t_d134094d526199 551-555
+  s_e17bfc164ca791::t_0001d59e4baac8 584-585
+apps/desktop/Sources/Vitals/Widgets/Cards/CombinedWidget.swift
+  s_e17bfc164ca791::t_c8256cdc51f991 28-33
+apps/desktop/Sources/Vitals/Widgets/WidgetKind.swift
+  s_e17bfc164ca791::t_caa4d0e8c1c380 72-75,77,82,86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1ebffdc65f8a3f6411018c65eac9521efceeb59e",
+  "prompts": {},
+  "sessions": {
+    "s_e17bfc164ca791": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "685940b6-307a-4715-b170-03cfb6cf055d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
