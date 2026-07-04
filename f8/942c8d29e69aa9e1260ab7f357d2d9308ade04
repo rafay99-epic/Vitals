@@ -1,0 +1,20 @@
+apps/desktop/Sources/Vitals/App/MenuBarController.swift
+  s_e17bfc164ca791::t_381b6d3b448906 40-52
+  s_e17bfc164ca791::t_bd0a81d27603c8 31-34,36,53-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f8942c8d29e69aa9e1260ab7f357d2d9308ade04",
+  "prompts": {},
+  "sessions": {
+    "s_e17bfc164ca791": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "685940b6-307a-4715-b170-03cfb6cf055d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
