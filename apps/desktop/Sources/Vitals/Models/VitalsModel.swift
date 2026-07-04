@@ -431,7 +431,9 @@ final class VitalsModel: ObservableObject {
                     thermalState: thermalState.label,
                     batteryPercent: battery?.percent,
                     gpuUsage: gpu?.utilization,
-                    gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) }
+                    gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) },
+                    netInBps: network?.totalInPerSec,
+                    netOutBps: network?.totalOutPerSec
                 ))
             }
         }

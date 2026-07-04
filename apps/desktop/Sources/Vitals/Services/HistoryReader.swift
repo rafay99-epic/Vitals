@@ -15,6 +15,8 @@ struct HistorySample: Identifiable, Codable {
     let batteryPercent: Double?
     let gpuUsage: Double?
     let gpuMemoryGB: Double?
+    let netInBps: Double?    // network download, bytes/s — nil for rows logged before v2
+    let netOutBps: Double?   // network upload, bytes/s
     var id: Date { time }
 }
 
@@ -71,7 +73,11 @@ enum HistoryReader {
             time: time, avgTemp: avg, hottestTemp: hottest,
             gpuTemp: optional(f[3]), fanRPM: optional(f[4]),
             cpuUsage: cpu, memoryGB: mem, thermalState: f[7],
-            batteryPercent: optional(f[8]), gpuUsage: optional(f[9]), gpuMemoryGB: optional(f[10])
+            batteryPercent: optional(f[8]), gpuUsage: optional(f[9]), gpuMemoryGB: optional(f[10]),
+            // Trailing columns added in v2 — a legacy 11-column line simply has
+            // no network readings, which is the honest nil, not 0.
+            netInBps: f.count > 11 ? optional(f[11]) : nil,
+            netOutBps: f.count > 12 ? optional(f[12]) : nil
         )
     }
 
@@ -96,7 +102,9 @@ enum HistoryReader {
 enum HistoryExport {
     /// The CSV header — the legacy column order, kept stable so exports stay
     /// readable by the same tools and round-trip through `HistoryReader.parse`.
-    static let csvHeader = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb\n"
+    /// The network columns are appended at the end (never inserted mid-row), so
+    /// the first 11 positions still match every legacy file.
+    static let csvHeader = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb,net_in_bps,net_out_bps\n"
 
     /// Writes the whole database out as CSV (every row, no down-sampling); returns
     /// the new file, or nil if there's nothing logged yet. Streams row-by-row to a
@@ -140,6 +148,8 @@ enum HistoryExport {
             s.batteryPercent.map { String(format: "%.0f", $0) } ?? "",
             s.gpuUsage.map { String(format: "%.1f", $0) } ?? "",
             s.gpuMemoryGB.map { String(format: "%.2f", $0) } ?? "",
+            s.netInBps.map { String(format: "%.0f", $0) } ?? "",
+            s.netOutBps.map { String(format: "%.0f", $0) } ?? "",
         ]
         return fields.joined(separator: ",") + "\n"
     }

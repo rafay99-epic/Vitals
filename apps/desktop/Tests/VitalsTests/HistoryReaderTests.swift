@@ -19,6 +19,19 @@ struct HistoryReaderTests {
         #expect(sample?.batteryPercent == 87)
         #expect(sample?.gpuUsage == 49.0)
         #expect(sample?.gpuMemoryGB == 0.79)
+        // A legacy 11-column line predates network logging — honest nil, not 0.
+        #expect(sample?.netInBps == nil)
+        #expect(sample?.netOutBps == nil)
+    }
+
+    @Test func parsesV2RowWithNetworkColumns() {
+        let line = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,125000,34000")
+        let sample = HistoryReader.parse(line)
+        #expect(sample?.netInBps == 125_000)
+        #expect(sample?.netOutBps == 34_000)
+        // Blank trailing columns (no network reading that tick) → nil.
+        let blank = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,,")
+        #expect(HistoryReader.parse(blank)?.netInBps == nil)
     }
 
     @Test func rejectsHeaderAndMalformed() {
