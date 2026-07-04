@@ -117,6 +117,24 @@ struct MenuBarPanel: View {
                         .interpolationMethod(.catmullRom)
                 }
             }
+            if let network = model.network {
+                sparkline(
+                    title: "Network",
+                    value: "↓ " + NetworkFormat.rate(network.totalInPerSec),
+                    color: .mint
+                ) {
+                    ForEach(data) { sample in
+                        if let down = sample.netInPerSec {
+                            AreaMark(x: .value("t", sample.time), y: .value("v", down))
+                                .foregroundStyle(.mint.opacity(0.18))
+                                .interpolationMethod(.catmullRom)
+                            LineMark(x: .value("t", sample.time), y: .value("v", down))
+                                .foregroundStyle(.mint)
+                                .interpolationMethod(.catmullRom)
+                        }
+                    }
+                }
+            }
             if let utilization = model.gpu?.utilization {
                 sparkline(
                     title: "GPU",

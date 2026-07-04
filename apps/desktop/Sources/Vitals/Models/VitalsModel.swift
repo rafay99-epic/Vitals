@@ -25,6 +25,8 @@ final class VitalsModel: ObservableObject {
         let swapUsed: Double    // bytes
         let batteryPercent: Double?  // charge %, nil when no battery
         let totalWatts: Double?      // SoC package power, nil until the 2nd sample
+        let netInPerSec: Double?     // network download, bytes/s — nil until the 2nd sample
+        let netOutPerSec: Double?    // network upload, bytes/s — nil until the 2nd sample
     }
 
     @Published private(set) var cpuSensors: [Sensor] = []
@@ -66,6 +68,14 @@ final class VitalsModel: ObservableObject {
     /// power is an energy delta and needs a prior reading — and on the rare
     /// machine where IOReport is unavailable.
     @Published private(set) var power: PowerSnapshot?
+    /// Live per-interface network throughput (Wi-Fi/Ethernet) plus Wi-Fi link
+    /// details. Nil until the second sample — the first reading has no prior
+    /// byte counters, so its 0 B/s rates would be placeholders, not
+    /// measurements (same rule as `memoryActivity`/`power`).
+    @Published private(set) var network: NetworkSnapshot?
+    /// True once the first network reading landed; publication starts with the
+    /// second (see `network`).
+    private var hasNetworkBaseline = false
     /// False until the first sample lands — drives the dashboard loading state.
     @Published private(set) var hasLoaded = false
     /// True when a sample overran the watchdog (a sensor syscall wedged). The
@@ -369,6 +379,7 @@ final class VitalsModel: ObservableObject {
         topMemoryProcesses = snapshot.topMemoryProcesses
         battery = snapshot.battery
         diskHealth = snapshot.diskHealth
+        updateNetwork(snapshot.network)
         // Only reassign GPU when it was actually sampled this tick. When the
         // window/widgets/metric don't need it, the sampler returns nil and we
         // hold the last reading — so reopening the window shows the prior value
@@ -399,7 +410,11 @@ final class VitalsModel: ObservableObject {
                 batteryPercent: battery?.percent,
                 // The fresh tick's reading (not the sticky `self.power`), so a
                 // missed IOReport sample is an honest gap, not a flat-held value.
-                totalWatts: snapshot.power?.total
+                totalWatts: snapshot.power?.total,
+                // The published reading (nil until the 2nd sample), so the
+                // first tick is an honest gap, never a fabricated 0 B/s.
+                netInPerSec: network?.totalInPerSec,
+                netOutPerSec: network?.totalOutPerSec
             ))
             trimHistory()
 
@@ -454,6 +469,19 @@ final class VitalsModel: ObservableObject {
             compressionsPerSec: rate(memory.compressions, previous.compressions),
             decompressionsPerSec: rate(memory.decompressions, previous.decompressions)
         )
+    }
+
+    /// Publishes the network reading from the second sample onward. The first
+    /// reading has no prior counters, so its 0 B/s rates are placeholders, not
+    /// measurements — a rate needs two readings. A skipped read (nil) holds the
+    /// last published snapshot rather than blanking live surfaces, like `gpu`.
+    private func updateNetwork(_ snapshot: NetworkSnapshot?) {
+        guard let snapshot else { return }
+        if hasNetworkBaseline {
+            network = snapshot
+        } else {
+            hasNetworkBaseline = true
+        }
     }
 
     /// Overheat: average CPU above the warning threshold for 2 minutes

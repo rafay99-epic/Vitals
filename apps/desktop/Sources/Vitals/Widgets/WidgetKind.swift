@@ -8,6 +8,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     case gpu
     case memory
     case fan
+    case network
     case storage
     case combined
 
@@ -20,6 +21,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .gpu: return "GPU"
         case .memory: return "Memory"
         case .fan: return "Fan"
+        case .network: return "Network"
         case .storage: return "Storage"
         case .combined: return "Vitals"
         }
@@ -33,6 +35,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .gpu: return "GPU"
         case .memory: return "Memory"
         case .fan: return "Fan"
+        case .network: return "Network"
         case .storage: return "Storage"
         case .combined: return "Vitals"
         }
@@ -45,6 +48,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .gpu: return "cpu.fill"
         case .memory: return "memorychip"
         case .fan: return "fan"
+        case .network: return "network"
         case .storage: return "internaldrive"
         case .combined: return "gauge.with.dots.needle.50percent"
         }
@@ -59,6 +63,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .gpu: return .purple
         case .memory: return .indigo
         case .fan: return .cyan
+        case .network: return .mint
         case .storage: return .teal
         case .combined: return .green
         }
