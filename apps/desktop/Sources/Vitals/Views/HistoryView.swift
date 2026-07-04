@@ -12,7 +12,7 @@ struct HistoryView: View {
     let isActive: Bool
 
     @State private var range: HistoryRange = .day
-    @State private var metric: Metric = .temp
+    @State private var metric: Metric = LaunchOverrides.historyMetric ?? .temp
     @State private var samples: [HistorySample] = []
     @State private var alertEvents: [AlertEvent] = []
     @State private var loading = false
