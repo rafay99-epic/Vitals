@@ -28,16 +28,38 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         self.navigator = navigator
         super.init()
 
-        // Show/hide with the preference.
+        // Show/hide with the preference — changes only. `dropFirst` matters:
+        // @Published replays the current value synchronously at subscribe, so
+        // without it the first install would run right here, mid `App.init`,
+        // and defeat the launch gate below.
         settings.$showMenuBar
+            .dropFirst()
             .removeDuplicates()
             .sink { [weak self] show in self?.setVisible(show) }
             .store(in: &cancellables)
-        // Defer the first build until the run loop is up — a status item can't
-        // be created before NSApp exists (mirrors WidgetManager).
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.setVisible(self.settings.showMenuBar)
+        // The first install waits until the app has FINISHED launching.
+        // Creating an NSStatusItem mid `App.init` — while NSApplicationMain is
+        // still registering with the window server — produces a zero-height
+        // NSStatusBarWindow (observed: frame (0, 0, 16, 0)) that AppKit must
+        // fix up later. This deferral is what the old `DispatchQueue.main
+        // .async` was *meant* to do, but the `$showMenuBar` subscription above
+        // replayed the current value at subscribe time and installed anyway
+        // (hence `dropFirst`), and main.async's first runloop turn is still
+        // inside the launch sequence. Note: this is launch hygiene, not a cure
+        // for macOS 26 parking the item off-screen (window screen == nil) on
+        // a lone notched display — that reproduces even with a fully-launched
+        // install, hits the shipped Stable build identically, and resolves on
+        // the next display-configuration change.
+        if NSApp?.isRunning == true {
+            setVisible(settings.showMenuBar)
+        } else {
+            NotificationCenter.default.publisher(for: NSApplication.didFinishLaunchingNotification)
+                .prefix(1)
+                .sink { [weak self] _ in
+                    guard let self else { return }
+                    self.setVisible(self.settings.showMenuBar)
+                }
+                .store(in: &cancellables)
         }
     }
 
