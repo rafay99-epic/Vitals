@@ -1,0 +1,23 @@
+apps/desktop/Sources/Vitals/App/Navigator.swift
+  s_e17bfc164ca791::t_0afb808612cc43 11-35
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_e17bfc164ca791::t_f29333f5a3c4a5 15
+apps/desktop/Tests/VitalsTests/LaunchOverridesTests.swift
+  s_e17bfc164ca791::t_34f759996db04c 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "145f3f72809276322e9ee4bc77a74197f3221c4c",
+  "prompts": {},
+  "sessions": {
+    "s_e17bfc164ca791": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "685940b6-307a-4715-b170-03cfb6cf055d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
