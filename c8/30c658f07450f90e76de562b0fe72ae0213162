@@ -1,0 +1,47 @@
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_e17bfc164ca791::t_4a34d7f15d877a 186-187,203-204
+  s_e17bfc164ca791::t_2fd5064de2378d 316-318
+  s_e17bfc164ca791::t_62d8ee2aec1fa9 36-37
+  s_e17bfc164ca791::t_c9df6e6b1ca635 242
+  s_e17bfc164ca791::t_7b5c244f354e7e 445-446,462-463
+  s_e17bfc164ca791::t_848ec11df19be1 127-129,132-138
+  s_e17bfc164ca791::t_4cad82f6f7c372 152-170
+  s_e17bfc164ca791::t_7332ea69ecc2ea 300
+  s_e17bfc164ca791::t_7e7d154c42592d 267-269
+apps/desktop/Tests/VitalsTests/HistoryReaderTests.swift
+  s_e17bfc164ca791::t_5d94ffc0e3ad73 22-34
+apps/desktop/Tests/VitalsTests/HistoryDatabaseTests.swift
+  s_e17bfc164ca791::t_1217db86781aa4 31-32,42-43
+  s_e17bfc164ca791::t_99209f58d92580 3
+  s_e17bfc164ca791::t_1f4a1c08906c59 90-135
+  s_e17bfc164ca791::t_ecb2a51b8a0b74 17-18,23-24
+apps/desktop/Sources/Vitals/Services/HistoryReader.swift
+  s_e17bfc164ca791::t_c97674a3892409 151-152
+  s_e17bfc164ca791::t_70146de5951860 76-80
+  s_e17bfc164ca791::t_c814efcae5b949 18-19
+  s_e17bfc164ca791::t_46329b74a9dd33 105-107
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_e17bfc164ca791::t_c3fb4a610ddc08 215-224,230,240-244
+  s_e17bfc164ca791::t_09f9b2dfdb0b0f 184-196,199-200
+  s_e17bfc164ca791::t_48f2ee88b0ecea 21,29
+  s_e17bfc164ca791::t_bb02bd039d64f8 278-279,282-286
+  s_e17bfc164ca791::t_0e6f11c284acd1 304
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_e17bfc164ca791::t_f330c202f65d25 434-436
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c830c658f07450f90e76de562b0fe72ae0213162",
+  "prompts": {},
+  "sessions": {
+    "s_e17bfc164ca791": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "685940b6-307a-4715-b170-03cfb6cf055d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
