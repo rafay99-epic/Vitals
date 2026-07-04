@@ -1,0 +1,19 @@
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_e17bfc164ca791::t_64d22f10051101 956
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9a573342ee181be80b4238e0db1c5b607776cf0f",
+  "prompts": {},
+  "sessions": {
+    "s_e17bfc164ca791": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "685940b6-307a-4715-b170-03cfb6cf055d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
