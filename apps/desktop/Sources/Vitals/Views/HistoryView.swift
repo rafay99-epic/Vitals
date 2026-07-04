@@ -18,7 +18,7 @@ struct HistoryView: View {
     @State private var loading = false
 
     enum Metric: String, CaseIterable, Identifiable {
-        case temp, cpu, gpu, memory
+        case temp, cpu, gpu, memory, network
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -26,6 +26,7 @@ struct HistoryView: View {
             case .cpu: return "CPU"
             case .gpu: return "GPU"
             case .memory: return "Memory"
+            case .network: return "Network"
             }
         }
     }
@@ -180,11 +181,23 @@ private struct HistoryChartCard: View {
                     LineMark(x: .value("Time", s.time), y: .value("GB", s.memoryGB))
                         .foregroundStyle(.indigo).interpolationMethod(.catmullRom)
                 }
+            case .network:
+                ForEach(samples) { s in
+                    if let down = s.netInBps {
+                        LineMark(x: .value("Time", s.time), y: .value("MB/s", down / 1_000_000),
+                                 series: .value("S", "Download"))
+                            .foregroundStyle(by: .value("S", "Download")).interpolationMethod(.catmullRom)
+                    }
+                    if let up = s.netOutBps {
+                        LineMark(x: .value("Time", s.time), y: .value("MB/s", up / 1_000_000),
+                                 series: .value("S", "Upload"))
+                            .foregroundStyle(by: .value("S", "Upload")).interpolationMethod(.catmullRom)
+                    }
+                }
             }
         }
-        .chartForegroundStyleScale(domain: metric == .temp ? ["Average", "Hottest"] : [],
-                                   range: [Color.orange, .red.opacity(0.7)])
-        .chartLegend(metric == .temp ? .visible : .hidden)
+        .chartForegroundStyleScale(domain: seriesStyle.domain, range: seriesStyle.range)
+        .chartLegend(metric == .temp || metric == .network ? .visible : .hidden)
         .chartYScale(domain: yDomain)
         .chartYAxisLabel(yLabel)
     }
@@ -199,11 +212,22 @@ private struct HistoryChartCard: View {
             .foregroundStyle(color).interpolationMethod(.catmullRom)
     }
 
+    /// Legend/color domain for the current metric (empty for the single-series
+    /// views, which colour their marks directly).
+    private var seriesStyle: (domain: [String], range: [Color]) {
+        switch metric {
+        case .temp:    return (["Average", "Hottest"], [.orange, .red.opacity(0.7)])
+        case .network: return (["Download", "Upload"], [.mint, .orange])
+        case .cpu, .gpu, .memory: return ([], [])
+        }
+    }
+
     private var yLabel: String {
         switch metric {
         case .temp: return settings.unit.symbol
         case .cpu, .gpu: return "%"
         case .memory: return "GB"
+        case .network: return "MB/s"
         }
     }
 
@@ -213,6 +237,11 @@ private struct HistoryChartCard: View {
         case .memory:
             let peak = samples.map(\.memoryGB).max() ?? 1
             return 0...max(peak * 1.1, 1)
+        case .network:
+            // Peak of either direction in MB/s; the small floor keeps an idle
+            // link's noise from stretching across the full chart height.
+            let rates = samples.flatMap { [$0.netInBps, $0.netOutBps].compactMap { $0 } }
+            return 0...max(((rates.max() ?? 0) / 1_000_000) * 1.1, 0.1)
         case .temp:
             let temps = samples.flatMap { [$0.avgTemp, $0.hottestTemp] }.map(settings.display)
             guard let lo = temps.min(), let hi = temps.max() else { return settings.display(30)...settings.display(90) }
@@ -246,13 +275,15 @@ private struct HistoryStatsCard: View {
         }
     }
 
-    /// The primary series for the selected metric.
+    /// The primary series for the selected metric (download, for network — the
+    /// chart shows both directions; the summary follows the headline one).
     private var values: [Double] {
         switch metric {
-        case .temp:   return samples.map(\.hottestTemp)
-        case .cpu:    return samples.map(\.cpuUsage)
-        case .gpu:    return samples.compactMap(\.gpuUsage)
-        case .memory: return samples.map(\.memoryGB)
+        case .temp:    return samples.map(\.hottestTemp)
+        case .cpu:     return samples.map(\.cpuUsage)
+        case .gpu:     return samples.compactMap(\.gpuUsage)
+        case .memory:  return samples.map(\.memoryGB)
+        case .network: return samples.compactMap(\.netInBps)
         }
     }
 
@@ -270,6 +301,7 @@ private struct HistoryStatsCard: View {
         case .temp:   return settings.format(value, decimals: 0)
         case .cpu, .gpu: return "\(Int(value.rounded()))%"
         case .memory: return String(format: "%.1f GB", value)
+        case .network: return NetworkFormat.rate(value)
         }
     }
 }
