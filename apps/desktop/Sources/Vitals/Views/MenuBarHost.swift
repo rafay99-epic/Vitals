@@ -43,10 +43,19 @@ struct MenuBarLabelView: View {
             MenuBarRow()
         } else {
             // Text style: short word + value, e.g. "Temp 57° · CPU 23% · RAM 12.8G".
-            Text(metrics.map { "\($0.shortLabel) \(menuBarValue($0, model: model, settings: settings))" }
-                .joined(separator: " · "))
-                .monospacedDigit()
-                .lineLimit(1)
+            // Built as an HStack (not one joined string) so each value can hold a
+            // fixed width — keeping the label's intrinsic width stable as readings
+            // tick, the same reason MenuBarRow does it.
+            HStack(spacing: 5) {
+                ForEach(Array(metrics.enumerated()), id: \.element) { index, metric in
+                    if index > 0 { Text("·").foregroundStyle(.tertiary) }
+                    Text(metric.shortLabel)
+                    Text(menuBarValue(metric, model: model, settings: settings))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .frame(width: metric.menuBarValueWidth, alignment: .leading)
+                }
+            }
         }
     }
 }
@@ -88,6 +97,12 @@ private struct MenuBarRow: View {
                     Text(menuBarValue(metric, model: model, settings: settings))
                         .monospacedDigit()
                         .lineLimit(1)   // a short value must stay on one line, never wrap (issue #45)
+                        // Reserve a fixed width per metric so the label's intrinsic
+                        // width never changes as values tick (esp. the network rate,
+                        // whose text changes width constantly). A stable intrinsic
+                        // width is what stops the status item's length-driven relayout
+                        // from churning — and re-entering SwiftUI's update — every tick.
+                        .frame(width: metric.menuBarValueWidth, alignment: .leading)
                 }
             }
         }
@@ -134,6 +149,26 @@ private struct MenuBarSymbol: View {
         guard spinning else { return }
         withAnimation(.linear(duration: period).repeatForever(autoreverses: false)) {
             angle = 360
+        }
+    }
+}
+
+extension MenuBarMetric {
+    /// Fixed point width reserved for this metric's value field in the menu-bar
+    /// label, sized for its widest realistic reading. Reserving a constant width
+    /// is what keeps the hosted label's `intrinsicContentSize` stable while the
+    /// numbers tick — so the status item never resizes (and re-enters SwiftUI's
+    /// layout) on a value change. The network rate is the widest and the most
+    /// volatile, so it gets the most room. Points are display-scale independent,
+    /// so these hold on internal and external monitors alike.
+    var menuBarValueWidth: CGFloat {
+        switch self {
+        case .cpuTemp:  return 42   // "212°F"
+        case .cpuUsage: return 34   // "100%"
+        case .gpuUsage: return 34
+        case .memory:   return 46   // "192.0G"
+        case .fan:      return 40   // "12000"
+        case .network:  return 84   // "↓99.9M ↑9.9M"
         }
     }
 }

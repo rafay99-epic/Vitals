@@ -20,6 +20,9 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var cancellables: Set<AnyCancellable> = []
+    /// Coalesces resize requests: many `invalidateIntrinsicContentSize` calls in
+    /// one runloop turn collapse into a single deferred length update.
+    private var pendingResize: DispatchWorkItem?
 
     init(model: VitalsModel, settings: AppSettings, fanControl: FanController, navigator: Navigator) {
         self.model = model
@@ -52,8 +55,19 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
             NSStatusBar.system.removeStatusItem(item)
             return
         }
+        // Force the item visible. macOS persists an item's visibility across
+        // launches; if it was ever hidden (e.g. ⌘-dragged off the menu bar, or
+        // squeezed off a notched bar and remembered), a freshly-created item
+        // comes back hidden and never appears — no matter its width — which reads
+        // as "the menu bar setting does nothing." Vitals' own Settings toggle is
+        // the intended control, so we assert visibility whenever it's installed.
+        item.isVisible = true
         button.target = self
         button.action = #selector(togglePopover)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak item] in
+            guard let b = item?.button else { return }
+            Log.notice(.app, "MENUBAR-DIAG post-layout window=\(String(describing: b.window?.frame)) screen=\(String(describing: b.window?.screen?.frame)) mainScreen=\(String(describing: NSScreen.main?.frame)) isVisible=\(item?.isVisible ?? false)")
+        }
 
         let label = MenuBarLabelView()
             .environmentObject(model)
@@ -90,19 +104,32 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
     private static let widthSlack: CGFloat = 2
 
     /// Size the status item to the label's ideal width, read off the hosting
-    /// view's `intrinsicContentSize`. Deferred to the next runloop so it reads the
-    /// post-update layout and never resizes the button mid-layout pass; guarded so
-    /// an unchanged width doesn't churn the status bar.
+    /// view's `intrinsicContentSize`.
+    ///
+    /// Setting `item.length` runs an AppKit constraint/layout pass that re-enters
+    /// the hosted `NSHostingView` and drives a SwiftUI update. Doing that *during*
+    /// another SwiftUI update aborts with AttributeGraph's "setting value during
+    /// update" precondition, so the work is always **deferred to the next runloop
+    /// turn** (never applied synchronously inside a layout/invalidation) and
+    /// **coalesced** — a burst of `invalidateIntrinsicContentSize` calls (metric
+    /// selection changing, a display attaching) collapses into one length update.
+    /// The width threshold ignores sub-point noise so a stable label never churns.
     private func resize(item: NSStatusItem, toFit host: NSView) {
-        DispatchQueue.main.async {
+        pendingResize?.cancel()
+        let work = DispatchWorkItem { [weak item, weak host] in
+            guard let item, let host else { return }
             let ideal = host.intrinsicContentSize.width
             guard ideal > 0 else { return }          // not laid out yet
             let target = (ideal + Self.widthSlack).rounded(.up)
-            if abs(item.length - target) > 0.5 { item.length = target }
+            if abs(item.length - target) > 1 { item.length = target }
         }
+        pendingResize = work
+        DispatchQueue.main.async(execute: work)
     }
 
     private func remove() {
+        pendingResize?.cancel()
+        pendingResize = nil
         popover?.performClose(nil)
         popover = nil
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
