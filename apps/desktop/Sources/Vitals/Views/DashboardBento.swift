@@ -136,6 +136,17 @@ struct DashboardTileGrid: View {
                 ) { drill(.battery) }
             }
 
+            if let network = model.network {
+                DashboardTile(
+                    title: "Network",
+                    value: "↓ " + NetworkFormat.rate(network.totalInPerSec),
+                    subtitle: networkSubtitle(network),
+                    symbol: "network",
+                    tint: .mint,
+                    series: recentCompact { $0.netInPerSec }
+                ) { drill(.network) }
+            }
+
             if let disk = model.diskHealth {
                 DashboardTile(
                     title: "Drive",
@@ -173,6 +184,16 @@ struct DashboardTileGrid: View {
     private var memorySubtitle: String {
         guard let memory = model.memory else { return "—" }
         return String(format: "of %.0f GB · %@", gigabytes(memory.total), memory.pressure.label)
+    }
+
+    /// Upload rate plus the link it's riding — the primary (default-route)
+    /// interface when known, else the first active one, else just the rate.
+    private func networkSubtitle(_ network: NetworkSnapshot) -> String {
+        let up = "↑ " + NetworkFormat.rate(network.totalOutPerSec)
+        let link = network.links.first { $0.name == network.primaryInterfaceName }
+            ?? network.links.first { $0.isActive }
+        guard let link else { return up }
+        return "\(up) · \(link.displayName)"
     }
 
     private func batterySubtitle(_ battery: BatterySnapshot) -> String {

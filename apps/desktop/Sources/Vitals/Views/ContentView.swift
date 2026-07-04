@@ -7,7 +7,7 @@ import SwiftUI
 /// System/Applications sub-segment bars): one level, no tabs-in-tabs.
 enum NavSection: String, CaseIterable, Identifiable {
     case overview
-    case cpu, gpu, memory, battery, sensors, processes, history
+    case cpu, gpu, memory, battery, network, sensors, processes, history
     case storage, cleanup, applications, loginItems
     case settings
 
@@ -20,6 +20,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .gpu:          return "GPU"
         case .memory:       return "Memory"
         case .battery:      return "Battery"
+        case .network:      return "Network"
         case .sensors:      return "Temps & Fans"
         case .processes:    return "Processes"
         case .history:      return "History"
@@ -38,6 +39,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .gpu:          return "cpu.fill"
         case .memory:       return "memorychip"
         case .battery:      return "battery.100percent"
+        case .network:      return "network"
         case .sensors:      return "thermometer.medium"
         case .processes:    return "list.bullet"
         case .history:      return "chart.xyaxis.line"
@@ -78,7 +80,7 @@ struct ContentView: View {
     @StateObject private var cleanupModel = CleanupModel()
     @StateObject private var storageModel = StorageModel()
 
-    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .sensors, .processes, .history]
+    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .processes, .history]
     private static let maintain: [NavSection] = [.storage, .cleanup, .applications, .loginItems]
 
     var body: some View {
@@ -112,8 +114,9 @@ struct ContentView: View {
                     }
                     groupLabel("Maintain")
                     ForEach(Array(Self.maintain.enumerated()), id: \.element) { index, item in
-                        // Continue the running index so the 9th visible row
-                        // (Storage) keeps ⌘9; the row's `< 9` guard drops the rest.
+                        // Continue the running index across groups; Overview +
+                        // the eight Monitor rows now fill ⌘1–⌘9, and the row's
+                        // `< 9` guard drops shortcuts for the rest.
                         row(item, shortcutIndex: 1 + Self.monitor.count + index)
                     }
                 }
@@ -217,6 +220,7 @@ struct ContentView: View {
             if visited.contains(.gpu) { GPUView(isActive: active(.gpu)).tabVisibility(active(.gpu)) }
             if visited.contains(.memory) { MemoryView(isActive: active(.memory)).tabVisibility(active(.memory)) }
             if visited.contains(.battery) { BatteryView(isActive: active(.battery)).tabVisibility(active(.battery)) }
+            if visited.contains(.network) { NetworkView(isActive: active(.network)).tabVisibility(active(.network)) }
             if visited.contains(.sensors) { SensorsView().tabVisibility(active(.sensors)) }
             if visited.contains(.processes) {
                 ProcessesView(model: processesModel, isActive: active(.processes)).tabVisibility(active(.processes))
