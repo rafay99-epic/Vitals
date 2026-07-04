@@ -953,6 +953,7 @@ private struct AlertRuleRow: View {
         switch rule.metric {
         case .fanRPM:   return "\(Int(rule.threshold)) rpm"
         case .diskFree: return "\(Int(rule.threshold)) GB"
+        case .networkDownload, .networkUpload: return "\(Int(rule.threshold)) MB/s"
         default:        return "\(Int(rule.threshold))%"
         }
     }
