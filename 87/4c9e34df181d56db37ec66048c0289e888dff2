@@ -1,0 +1,35 @@
+apps/desktop/Tests/VitalsTests/WidgetFrameStoreTests.swift
+  s_d6ee421fe6aff2::t_0d6c36f48f58a5 132-149
+apps/desktop/Sources/Vitals/Widgets/WidgetFrameStore.swift
+  s_d6ee421fe6aff2::t_a782ac940a6e14 87-98
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_d6ee421fe6aff2::t_0557b53747e18e 663-665
+apps/desktop/Tests/VitalsTests/WidgetPlacementTests.swift
+  s_d6ee421fe6aff2::t_76051c78c571d9 202-231
+apps/desktop/Sources/Vitals/Widgets/WidgetPlacement.swift
+  s_d6ee421fe6aff2::t_276d8dab5f4c1f 67-74,77
+apps/desktop/Sources/Vitals/Widgets/WidgetPanel.swift
+  s_d6ee421fe6aff2::t_d3a7258495483d 111,115
+  s_d6ee421fe6aff2::t_c67f54fcdaeba8 52-62,64,70-71
+apps/desktop/Sources/Vitals/Widgets/WidgetManager.swift
+  s_d6ee421fe6aff2::t_a984af10baa950 171,174,179-180,183
+  s_d6ee421fe6aff2::t_013f2afb28e4ef 146,148-149,151,154
+  s_d6ee421fe6aff2::t_86365926d2f690 107-108,115,119-123,125,128,130-134
+  s_d6ee421fe6aff2::t_6b023f34e15112 224-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "874c9e34df181d56db37ec66048c0289e888dff2",
+  "prompts": {},
+  "sessions": {
+    "s_d6ee421fe6aff2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c24c12e-574f-4d36-9d73-85af609892e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
