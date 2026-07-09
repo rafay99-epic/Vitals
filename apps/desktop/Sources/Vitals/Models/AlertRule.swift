@@ -60,8 +60,8 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
         case .cpuTemp:    return 40...110
         case .fanRPM:     return 0...6000
         case .diskFree:   return 1...200
-        case .processCPU: return 10...400   // 100% = one core, so this can exceed 100
-        case .networkDownload, .networkUpload: return 1...1000
+        case .processCPU: return 10...400   
+        case .networkDownload, .networkUpload: return 5...1000
         default:          return 0...100
         }
     }
