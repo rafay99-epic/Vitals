@@ -17,6 +17,7 @@ actor SensorSampler {
         let gpu: GPUSnapshot?
         let power: PowerSnapshot?
         let diskHealth: DiskHealthSnapshot?
+        let network: NetworkSnapshot?
     }
 
     private let hid = HIDSensors()
@@ -25,6 +26,9 @@ actor SensorSampler {
     private let processSampler = ProcessSampler()
     private let gpu = GPUSampler()
     private let power = SoCPowerSampler()
+    // Stateful: holds the previous tick's byte counters to diff into rates, so
+    // it must be the same instance every sample.
+    private let network = NetworkStats()
 
     // macOS's smoothed Maximum Capacity, refreshed rarely (it changes over
     // weeks) on a background task so the per-tick sample never waits on the
@@ -67,7 +71,11 @@ actor SensorSampler {
             battery: battery,
             gpu: includeGPU ? gpu.sample() : nil,
             power: includePower ? power.sample() : nil,
-            diskHealth: diskHealth
+            diskHealth: diskHealth,
+            // One sysctl + a few CoreWLAN reads — cheap enough to sample
+            // unconditionally (like memory), and the menu-bar panel and history
+            // chart want a continuous series anyway.
+            network: network.sample()
         )
     }
 

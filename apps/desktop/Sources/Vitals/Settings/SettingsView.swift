@@ -132,7 +132,7 @@ struct SettingsView: View {
                   view: AnyView(TabsCard())),
             .init(title: "Menu bar", keywords: "status item readings icons text animate menubar",
                   view: AnyView(MenuBarCard())),
-            .init(title: "Desktop Widgets", keywords: "widgets float on top animate desktop panels",
+            .init(title: "Desktop Widgets", keywords: "widgets float on top animate desktop panels placement behind icons",
                   view: AnyView(WidgetsCard())),
         ]),
         SettingsSectionModel(title: "Monitoring", cards: [
@@ -148,7 +148,7 @@ struct SettingsView: View {
                   view: AnyView(OverheatingCard())),
             .init(title: "Notifications", keywords: "notify overheat thermal pressure",
                   view: AnyView(NotificationsCard())),
-            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process threshold",
+            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process network download upload threshold",
                   view: AnyView(CustomAlertsCard())),
         ]),
         SettingsSectionModel(title: "Updates", cards: [
@@ -642,7 +642,7 @@ private struct WidgetsCard: View {
 
     var body: some View {
         SettingsCard(title: "Desktop Widgets", symbol: "square.grid.2x2", tint: .pink) {
-            Text("Live panels on your desktop, from the same readings as the app. They sit behind your windows; drag to place, close from the panel.")
+            Text("Live panels on your desktop, from the same readings as the app. Drag to place, resize from the corner — every display arrangement remembers its own layout.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ForEach(WidgetKind.allCases) { kind in
@@ -655,11 +655,24 @@ private struct WidgetsCard: View {
                 )
             }
             Divider().opacity(0.5)
-            SwitchRow(
-                label: "Float on top of windows",
-                caption: "Off: widgets stay on the desktop, behind your windows (default). On: they float above everything.",
-                isOn: Binding(get: { widgets.onTop }, set: { widgets.onTop = $0 })
-            )
+            // Label above the picker: three segments don't leave room for a
+            // side label in the card column (it wraps to a letter a line).
+            VStack(alignment: .leading, spacing: 6) {
+                HighlightLabel("Placement")
+                    .font(.system(size: 12.5))
+                // Titled for VoiceOver; `labelsHidden` keeps it visual-only
+                // (the HighlightLabel above is the visible, searchable label).
+                Picker("Placement", selection: $widgets.levelMode) {
+                    ForEach(WidgetLevelMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                HighlightLabel(widgets.levelMode.caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             SwitchRow(
                 label: "Animate widgets",
                 caption: "Widgets react to their readings: a rim glow that breathes with severity and a fan that spins faster as RPM climbs. Off: perfectly still panels.",
@@ -953,6 +966,7 @@ private struct AlertRuleRow: View {
         switch rule.metric {
         case .fanRPM:   return "\(Int(rule.threshold)) rpm"
         case .diskFree: return "\(Int(rule.threshold)) GB"
+        case .networkDownload, .networkUpload: return "\(Int(rule.threshold)) MB/s"
         default:        return "\(Int(rule.threshold))%"
         }
     }

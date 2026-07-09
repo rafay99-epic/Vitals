@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SQLite3
 @testable import Vitals
 
 /// Locks the SQLite history store: rows round-trip with their optionals intact,
@@ -13,19 +14,22 @@ struct HistoryDatabaseTests {
     }
 
     private func sample(_ secondsAgo: TimeInterval, now: Date, gpuTemp: Double? = nil,
-                        fanRPM: Double? = nil, battery: Double? = nil) -> HistorySample {
+                        fanRPM: Double? = nil, battery: Double? = nil,
+                        netIn: Double? = nil, netOut: Double? = nil) -> HistorySample {
         HistorySample(
             time: now.addingTimeInterval(-secondsAgo),
             avgTemp: 45.5, hottestTemp: 52.0, gpuTemp: gpuTemp, fanRPM: fanRPM,
             cpuUsage: 12.3, memoryGB: 10.4, thermalState: "Nominal",
-            batteryPercent: battery, gpuUsage: nil, gpuMemoryGB: nil)
+            batteryPercent: battery, gpuUsage: nil, gpuMemoryGB: nil,
+            netInBps: netIn, netOutBps: netOut)
     }
 
     @Test func roundTripsRowsAndOptionals() throws {
         let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
         let db = HistoryDatabase(file: url)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        db.insert(sample(20, now: now, gpuTemp: nil, fanRPM: 1200, battery: 87))
+        db.insert(sample(20, now: now, gpuTemp: nil, fanRPM: 1200, battery: 87,
+                         netIn: 125_000, netOut: 34_000))
 
         let rows = db.samples(range: .all, now: now, maxPoints: 600)
         #expect(rows.count == 1)
@@ -35,6 +39,8 @@ struct HistoryDatabaseTests {
         #expect(r.fanRPM == 1200)
         #expect(r.batteryPercent == 87)
         #expect(r.thermalState == "Nominal")
+        #expect(r.netInBps == 125_000)
+        #expect(r.netOutBps == 34_000)
         // Stored as epoch millis — round-trips to ms precision.
         #expect(abs(r.time.timeIntervalSince1970 - now.addingTimeInterval(-20).timeIntervalSince1970) < 0.001)
     }
@@ -79,6 +85,52 @@ struct HistoryDatabaseTests {
         db.recordAlert(message: "same", at: t)        // identical (ts, message) → ignored
         db.recordAlert(message: "different", at: t)   // same ts, new message → kept
         #expect(db.recentAlerts(limit: 10).count == 2)
+    }
+
+    /// The schema's first migration: a database created by v1 (no network
+    /// columns, `user_version=1`) must gain the columns in place — old rows keep
+    /// their data and read back honest nil network rates, new rows carry values.
+    @Test func migratesV1DatabaseInPlace() throws {
+        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let now = Date()
+
+        // Build a genuine v1 file by hand: the exact pre-network schema, one row,
+        // stamped user_version=1 — what every existing install has on disk.
+        var raw: OpaquePointer?
+        #expect(sqlite3_open(url.path, &raw) == SQLITE_OK)
+        let oldTs = Int64(now.addingTimeInterval(-60).timeIntervalSince1970 * 1000)
+        let v1 = """
+        CREATE TABLE samples (
+            id            INTEGER PRIMARY KEY,
+            ts            INTEGER NOT NULL UNIQUE,
+            avg_cpu       REAL NOT NULL,
+            hottest_cpu   REAL NOT NULL,
+            gpu_temp      REAL,
+            fan_rpm       REAL,
+            cpu_usage     REAL NOT NULL,
+            memory_gb     REAL NOT NULL,
+            thermal_state TEXT NOT NULL,
+            battery_pct   REAL,
+            gpu_usage     REAL,
+            gpu_mem_gb    REAL
+        );
+        INSERT INTO samples (ts, avg_cpu, hottest_cpu, cpu_usage, memory_gb, thermal_state)
+            VALUES (\(oldTs), 45.5, 52.0, 12.3, 10.4, 'Nominal');
+        PRAGMA user_version=1;
+        """
+        #expect(sqlite3_exec(raw, v1, nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(raw)
+
+        let db = HistoryDatabase(file: url)
+        db.waitUntilReady()
+        db.insert(sample(20, now: now, netIn: 125_000, netOut: 34_000))
+
+        let rows = db.samples(range: .all, now: now, maxPoints: 600)
+        #expect(rows.count == 2)                       // the v1 row survived
+        #expect(rows.first?.avgTemp == 45.5)
+        #expect(rows.first?.netInBps == nil)           // pre-migration row: honest nil
+        #expect(rows.last?.netInBps == 125_000)        // post-migration row: logged
+        #expect(rows.last?.netOutBps == 34_000)
     }
 
     @Test func importsLegacyCSVAndRenamesIt() throws {

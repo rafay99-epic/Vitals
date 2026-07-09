@@ -88,6 +88,13 @@ private struct MenuBarRow: View {
                     Text(menuBarValue(metric, model: model, settings: settings))
                         .monospacedDigit()
                         .lineLimit(1)   // a short value must stay on one line, never wrap (issue #45)
+                        // Throughput strings churn width every tick ("↓983B" →
+                        // "↓91.2K" → "↓3.1M"), and every change re-fits the
+                        // status item — observed oscillating ±35 pt per sample,
+                        // reflowing the whole status bar each time. A reserved
+                        // slot sized for the common case ("↓88.8M") absorbs the
+                        // churn; a rarer longer value still grows it.
+                        .frame(minWidth: metric == .network ? 44 : 0, alignment: .leading)
                 }
             }
         }
@@ -148,5 +155,6 @@ func menuBarValue(_ metric: MenuBarMetric, model: VitalsModel, settings: AppSett
     case .gpuUsage: return model.gpu?.utilization.map { "\(Int($0.rounded()))%" } ?? "–"
     case .memory:   return model.memory.map { String(format: "%.1fG", Double($0.used) / 1_073_741_824) } ?? "–"
     case .fan:      return model.fans.first.map { "\(Int($0.rpm))" } ?? "–"
+    case .network:  return model.network.map { "↓" + NetworkFormat.compactRate($0.totalInPerSec) } ?? "–"
     }
 }

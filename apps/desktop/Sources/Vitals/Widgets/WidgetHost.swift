@@ -134,6 +134,10 @@ private struct WidgetIconTile: View {
 struct WidgetHost: View {
     let kind: WidgetKind
     let onClose: () -> Void
+    /// Reports a finished move/resize so the manager can remember the frame
+    /// in the *current display arrangement's* layout (the host has no idea
+    /// which arrangement it's on — that seam lives in `WidgetManager`).
+    let onFrameChanged: (CGRect) -> Void
     @EnvironmentObject private var settings: AppSettings
     @State private var hovering = false
 
@@ -244,11 +248,7 @@ struct WidgetHost: View {
 
     private func persistFrame() {
         guard let window else { return }
-        let frame = window.frame
-        UserDefaults.standard.set(
-            [frame.origin.x, frame.origin.y, frame.width, frame.height],
-            forKey: WidgetPanel.frameKey(for: kind)
-        )
+        onFrameChanged(window.frame)
     }
 
     @ViewBuilder
@@ -259,6 +259,7 @@ struct WidgetHost: View {
         case .gpu: GPUWidget()
         case .memory: MemoryWidget()
         case .fan: FanWidget()
+        case .network: NetworkWidget()
         case .storage: StorageWidget()
         case .combined: CombinedWidget()
         }

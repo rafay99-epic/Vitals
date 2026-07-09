@@ -30,6 +30,58 @@ enum WidgetPlacement {
         return fitted(frame, within: screens)
     }
 
+    /// Where a frame from an *old* display arrangement should land on a *new*
+    /// one it has never seen: the same fractional spot on the corresponding
+    /// screen, with the size scaled by the screen ratio — so a widget laid out
+    /// on a 24″ monitor arrives on the 14″ panel proportionally smaller, at
+    /// the matching corner, instead of oversized in a pile. Screens pair by
+    /// *size* first (a monitor that survived the change keeps its widgets even
+    /// though closing the lid re-anchored every global coordinate), falling
+    /// back to list position (callers pass `NSScreen.screens` order, primary
+    /// first) — so widgets from a vanished laptop panel land on the new
+    /// primary. Nil when either arrangement is empty — the caller should
+    /// cascade instead.
+    static func migrated(_ frame: CGRect, from oldScreens: [CGRect], to newScreens: [CGRect]) -> CGRect? {
+        guard !newScreens.isEmpty,
+              let source = bestScreen(for: frame, in: oldScreens),
+              source.width > 0, source.height > 0,
+              let sourceIndex = oldScreens.firstIndex(of: source) else { return nil }
+        let target = matchedScreen(for: source, at: sourceIndex, in: newScreens)
+        // Uniform scale (no distortion), bounded so an extreme resolution jump
+        // can't collapse or balloon a widget past recognition.
+        let scale = min(max(min(target.width / source.width, target.height / source.height), 0.5), 2)
+        let size = CGSize(width: frame.width * scale, height: frame.height * scale)
+        // Anchor by fractional center so "top-right of my monitor" stays
+        // top-right of the screen it moves to.
+        let fx = (frame.midX - source.minX) / source.width
+        let fy = (frame.midY - source.minY) / source.height
+        let spot = CGRect(
+            x: target.minX + fx * target.width - size.width / 2,
+            y: target.minY + fy * target.height - size.height / 2,
+            width: size.width, height: size.height
+        )
+        return fitted(spot, within: [target])
+    }
+
+    /// The new-arrangement screen a source screen's widgets should follow.
+    /// Same size (within a Dock/menu-bar tolerance, since these are visible
+    /// frames: the Dock steals up to ~150 pt of width on a side, ~100 pt of
+    /// height on the bottom) means it's almost certainly the same physical
+    /// display — ties break toward the same list position. The height
+    /// tolerance stays under 120 pt so a 1920×1080 and a 1920×1200 — a common
+    /// pairing — never match each other. No size match means the display is
+    /// gone; its widgets fall back to the position-matched screen (a vanished
+    /// primary hands its widgets to the new primary).
+    private static func matchedScreen(for source: CGRect, at sourceIndex: Int, in newScreens: [CGRect]) -> CGRect {
+        let sameSize = newScreens.enumerated().filter {
+            abs($0.element.width - source.width) <= 150 && abs($0.element.height - source.height) <= 100
+        }
+        if let match = sameSize.min(by: { abs($0.offset - sourceIndex) < abs($1.offset - sourceIndex) }) {
+            return match.element
+        }
+        return newScreens[min(sourceIndex, newScreens.count - 1)]
+    }
+
     /// The screen containing most of the frame, else the closest one.
     private static func bestScreen(for frame: CGRect, in screens: [CGRect]) -> CGRect? {
         func overlap(_ s: CGRect) -> CGFloat {

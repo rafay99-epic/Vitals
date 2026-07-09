@@ -5,7 +5,8 @@ import Foundation
 /// can't satisfy its rule, so such a rule never fires rather than firing on a
 /// fabricated value.
 enum AlertMetric: String, Codable, CaseIterable, Identifiable {
-    case cpuTemp, cpuUsage, gpuUsage, memoryUsed, fanRPM, diskFree, battery, processCPU
+    case cpuTemp, cpuUsage, gpuUsage, memoryUsed, fanRPM, diskFree, battery, processCPU,
+         networkDownload, networkUpload
 
     var id: String { rawValue }
 
@@ -19,6 +20,8 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
         case .diskFree:   return "Free disk space"
         case .battery:    return "Battery"
         case .processCPU: return "A process's CPU"
+        case .networkDownload: return "Network download"
+        case .networkUpload:   return "Network upload"
         }
     }
 
@@ -32,6 +35,8 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
         case .diskFree:   return "internaldrive"
         case .battery:    return "battery.50percent"
         case .processCPU: return "list.bullet"
+        case .networkDownload: return "arrow.down.circle"
+        case .networkUpload:   return "arrow.up.circle"
         }
     }
 
@@ -42,6 +47,7 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
         case .cpuTemp:    return "°C"
         case .fanRPM:     return "rpm"
         case .diskFree:   return "GB"
+        case .networkDownload, .networkUpload: return "MB/s"
         default:          return "%"
         }
     }
@@ -54,7 +60,8 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
         case .cpuTemp:    return 40...110
         case .fanRPM:     return 0...6000
         case .diskFree:   return 1...200
-        case .processCPU: return 10...400   // 100% = one core, so this can exceed 100
+        case .processCPU: return 10...400   
+        case .networkDownload, .networkUpload: return 5...1000
         default:          return 0...100
         }
     }
@@ -63,6 +70,7 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .fanRPM:     return 50
         case .processCPU: return 10
+        case .networkDownload, .networkUpload: return 5
         default:          return 1
         }
     }
@@ -82,6 +90,7 @@ enum AlertMetric: String, Codable, CaseIterable, Identifiable {
         case .diskFree:   return 10
         case .battery:    return 20
         case .processCPU: return 100
+        case .networkDownload, .networkUpload: return 100   // MB/s — sustained heavy transfer
         default:          return 90
         }
     }
@@ -135,6 +144,8 @@ struct AlertReadings {
     var batteryPercent: Double?
     var topProcessCPU: Double?
     var topProcessName: String?
+    var networkDownMBps: Double?
+    var networkUpMBps: Double?
 
     func value(for metric: AlertMetric) -> Double? {
         switch metric {
@@ -146,6 +157,8 @@ struct AlertReadings {
         case .diskFree:   return diskFreeGB
         case .battery:    return batteryPercent
         case .processCPU: return topProcessCPU
+        case .networkDownload: return networkDownMBps
+        case .networkUpload:   return networkUpMBps
         }
     }
 }
