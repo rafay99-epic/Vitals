@@ -4,41 +4,69 @@ import SwiftUI
 /// Builds the floating `NSPanel` that hosts a widget: borderless, non-opaque,
 /// drag-anywhere, never steals focus, shows on every Space. The SwiftUI content
 /// gets the shared `VitalsModel` / `AppSettings` injected, so it ticks live.
+/// Placement is the `WidgetManager`'s job (it knows the per-arrangement saved
+/// frames); this file only knows how to build a panel and stack it.
 @MainActor
 enum WidgetPanel {
-    /// Where a widget sits in the window stack. "Desktop" pins it to the
-    /// desktop layer — just *above* Finder's full-screen desktop-icons window,
-    /// below every app window — so it composites *with* the desktop during a
-    /// Space switch and never pops above your windows. It must sit above the
-    /// icons window: that window covers the whole screen and swallows every
-    /// mouse event, so a panel below it (the old `.desktopWindow + 1`) can
-    /// never be clicked, dragged, or resized. A level just below normal (e.g.
-    /// -1) is also wrong — it's treated like an ordinary window mid-transition
-    /// and flickers to the front; the desktop layers don't. "Float" keeps the
-    /// widget above everything.
-    static func windowLevel(onTop: Bool) -> NSWindow.Level {
-        onTop
-            ? .floating
-            : NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+    /// Where a widget sits in the window stack for a mode. "On desktop" pins
+    /// it just *above* Finder's full-screen desktop-icons window — below every
+    /// app window — so it composites *with* the desktop during a Space switch
+    /// and never pops above your windows; being above the icons window is what
+    /// keeps it clickable (that window covers the whole screen and swallows
+    /// every mouse event). "Behind icons" drops *below* the icons window, onto
+    /// the wallpaper layer — desktop files always render on top — which also
+    /// means the icons window would swallow every click, so that mode is
+    /// paired with `ignoresMouseEvents` and surfaces to the interactive
+    /// desktop level only while Vitals is the active app (that's how the user
+    /// arranges them). A level just below normal (e.g. -1) is not an option —
+    /// it's treated like an ordinary window mid-Space-transition and flickers
+    /// to the front; the desktop layers don't.
+    static func windowLevel(mode: WidgetLevelMode, appActive: Bool) -> NSWindow.Level {
+        switch mode {
+        case .floating:
+            return .floating
+        case .desktop:
+            return NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+        case .behindIcons:
+            return appActive
+                ? NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+                : NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
+        }
+    }
+
+    /// Applies a mode to a live panel. Re-orders afterwards because changing
+    /// `.level` on a visible window doesn't restack until it's ordered (this
+    /// is why the old on-top toggle needed an app restart);
+    /// `orderFrontRegardless` respects the level, so a desktop-layer panel
+    /// still settles onto the desktop rather than over your windows.
+    static func apply(mode: WidgetLevelMode, appActive: Bool, to panel: NSPanel) {
+        panel.isFloatingPanel = mode == .floating
+        panel.level = windowLevel(mode: mode, appActive: appActive)
+        // Behind the icons the panel can't receive clicks anyway (the icons
+        // window swallows them) — declaring it click-through keeps the whole
+        // stack honest and cheap.
+        panel.ignoresMouseEvents = mode == .behindIcons && !appActive
+        panel.orderFrontRegardless()
     }
 
     static func make(
         kind: WidgetKind,
-        onTop: Bool,
-        index: Int,
+        mode: WidgetLevelMode,
+        appActive: Bool,
+        frame initialFrame: CGRect?,
+        cascadeIndex: Int,
         model: VitalsModel,
         settings: AppSettings,
-        onClose: @escaping () -> Void
+        onClose: @escaping () -> Void,
+        onFrameChanged: @escaping (CGRect) -> Void
     ) -> NSPanel {
-        let size = kind.defaultSize
+        let size = initialFrame?.size ?? kind.defaultSize
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        panel.isFloatingPanel = onTop
-        panel.level = windowLevel(onTop: onTop)
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
@@ -60,7 +88,7 @@ enum WidgetPanel {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
         let host = NSHostingView(
-            rootView: WidgetHost(kind: kind, onClose: onClose)
+            rootView: WidgetHost(kind: kind, onClose: onClose, onFrameChanged: onFrameChanged)
                 .environmentObject(model)
                 .environmentObject(settings)
         )
@@ -68,26 +96,15 @@ enum WidgetPanel {
         host.autoresizingMask = [.width, .height]
         panel.contentView = host
 
-        // Restore the saved frame (position *and* size) if we have one —
-        // nudged fully on-screen if a display change left it poking past an
-        // edge, so a Dock or resolution tweak never costs the user their spot.
-        // Only a frame stranded on a vanished display (invisible and
-        // unreachable) — or a widget never placed — tucks into the top-right,
-        // cascading so multiple widgets don't stack on the exact same spot.
-        // We own this in UserDefaults rather than via `setFrameAutosaveName`:
-        // the AppKit autosave restored position but not size for these
-        // borderless panels, then re-saved the default size on close —
-        // clobbering a resize.
-        let screens = NSScreen.screens.map(\.visibleFrame)
-        if let saved = savedFrame(for: kind),
-           let spot = WidgetPlacement.rescued(saved, within: screens) {
+        // The manager resolved where this widget belongs (its spot in the
+        // current display arrangement, migrated or legacy). No resolved spot —
+        // a widget never placed anywhere — tucks into the main screen's
+        // top-right, cascading so multiple new widgets don't stack.
+        if let spot = initialFrame ?? cascadeFrame(size: size, index: cascadeIndex) {
             panel.setFrame(spot, display: false)
-        } else {
-            let size = savedFrame(for: kind)?.size ?? size
-            if let cascade = cascadeFrame(size: size, index: index) {
-                panel.setFrame(cascade, display: false)
-            }
         }
+        // Level + ordering last, so the panel first appears at its real spot.
+        apply(mode: mode, appActive: appActive, to: panel)
         return panel
     }
 
@@ -101,18 +118,5 @@ enum WidgetPanel {
             y: visible.maxY - size.height - 22 - dy,
             width: size.width, height: size.height
         )
-    }
-
-    /// UserDefaults key holding a widget's last `[x, y, width, height]`.
-    static func frameKey(for kind: WidgetKind) -> String { "vitals.widget.frame.\(kind.rawValue)" }
-
-    /// The persisted frame for a widget, clamped to its current size bounds, or
-    /// nil if it has never been placed.
-    static func savedFrame(for kind: WidgetKind) -> CGRect? {
-        guard let values = UserDefaults.standard.array(forKey: frameKey(for: kind)) as? [Double],
-              values.count == 4 else { return nil }
-        let width = min(max(CGFloat(values[2]), kind.minSize.width), kind.maxSize.width)
-        let height = min(max(CGFloat(values[3]), kind.minSize.height), kind.maxSize.height)
-        return CGRect(x: values[0], y: values[1], width: width, height: height)
     }
 }
