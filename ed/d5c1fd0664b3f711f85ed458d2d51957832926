@@ -1,0 +1,43 @@
+apps/desktop/Sources/Vitals/Widgets/WidgetManager.swift
+  s_d6ee421fe6aff2::t_f43907211da9b1 130-137,144
+  s_d6ee421fe6aff2::t_0758d72de3284d 7-9,13-16,18-19,27,29-31,35-36,42-49,66-75,83-89,99-105,107-110,113-120,122-129,138-142,145-156,159-207,218-221,224-225,228-230
+apps/desktop/Tests/VitalsTests/WidgetPlacementTests.swift
+  s_d6ee421fe6aff2::t_51f48e1a29ded6 77-214
+apps/desktop/Sources/Vitals/Widgets/WidgetLevelMode.swift
+  s_d6ee421fe6aff2::t_ed2d5d9a1feaa9 1-38
+apps/desktop/Sources/Vitals/Widgets/WidgetHost.swift
+  s_d6ee421fe6aff2::t_f38477a453e21e 251
+  s_d6ee421fe6aff2::t_ae6d0c1991d7a2 137-140
+apps/desktop/Tests/VitalsTests/WidgetFrameStoreTests.swift
+  s_d6ee421fe6aff2::t_8b0e2ba70c1f4d 1-154
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_d6ee421fe6aff2::t_29d5327bc4175a 135
+  s_d6ee421fe6aff2::t_209841df65f4ed 658-665,668-669
+  s_d6ee421fe6aff2::t_ca82349bf00cf7 666-667,670-673
+  s_d6ee421fe6aff2::t_84254141f95d5e 645
+apps/desktop/Sources/Vitals/Widgets/WidgetFrameStore.swift
+  s_d6ee421fe6aff2::t_ace179236c06f7 1-117
+apps/desktop/Sources/Vitals/Widgets/WidgetPlacement.swift
+  s_d6ee421fe6aff2::t_94d39e855aa4c7 66-81
+  s_d6ee421fe6aff2::t_8b2f9f09fb85f8 33-37,43-48,50-65
+  s_d6ee421fe6aff2::t_b26c2540377c8e 38-42,49
+apps/desktop/Sources/Vitals/Widgets/WidgetPanel.swift
+  s_d6ee421fe6aff2::t_0e2639d9f2de91 7-8,11-49,54-57,60-61,63,91,99-103
+  s_d6ee421fe6aff2::t_4743739aa5b05b 106-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "edd5c1fd0664b3f711f85ed458d2d51957832926",
+  "prompts": {},
+  "sessions": {
+    "s_d6ee421fe6aff2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c24c12e-574f-4d36-9d73-85af609892e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
