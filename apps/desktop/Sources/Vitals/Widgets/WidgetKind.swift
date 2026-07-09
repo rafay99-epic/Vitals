@@ -71,8 +71,8 @@ enum WidgetKind: String, CaseIterable, Identifiable {
 
     // Combined's heights grew with its Network row (4 metric rows on a GPU
     // Mac). Saved frames are clamped to these bounds on restore
-    // (`WidgetPanel.savedFrame`), so existing panels grow to fit rather than
-    // clipping the new row.
+    // (`WidgetFrameStore` clamps every read), so existing panels grow to fit
+    // rather than clipping the new row.
     var defaultSize: CGSize {
         self == .combined ? CGSize(width: 320, height: 206) : CGSize(width: 212, height: 118)
     }
