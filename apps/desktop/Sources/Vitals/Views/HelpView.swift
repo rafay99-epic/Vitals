@@ -65,7 +65,7 @@ struct HelpView: View {
             symbol: "keyboard",
             tint: .teal,
             title: "Shortcuts",
-            body: "⌘1 Dashboard · ⌘2 System · ⌘3 Storage · ⌘4 Cleanup · ⌘5 Applications · ⌘, Settings. The header drags the window."
+            body: "⌘1 Overview · ⌘2–⌘9 the Monitor sections (CPU through History) · ⌥⌘1–⌥⌘4 the Maintain sections (Storage, Cleanup, Applications, Login Items) · ⌘, Settings. The sidebar header drags the window."
         ),
     ]
 

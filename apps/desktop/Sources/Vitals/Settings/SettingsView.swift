@@ -148,7 +148,7 @@ struct SettingsView: View {
                   view: AnyView(OverheatingCard())),
             .init(title: "Notifications", keywords: "notify overheat thermal pressure",
                   view: AnyView(NotificationsCard())),
-            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process threshold",
+            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process network download upload threshold",
                   view: AnyView(CustomAlertsCard())),
         ]),
         SettingsSectionModel(title: "Updates", cards: [
@@ -966,6 +966,7 @@ private struct AlertRuleRow: View {
         switch rule.metric {
         case .fanRPM:   return "\(Int(rule.threshold)) rpm"
         case .diskFree: return "\(Int(rule.threshold)) GB"
+        case .networkDownload, .networkUpload: return "\(Int(rule.threshold)) MB/s"
         default:        return "\(Int(rule.threshold))%"
         }
     }
