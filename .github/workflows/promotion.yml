@@ -19,15 +19,8 @@ name: Promotion
 # .github/workflows, which needs the Workflows scope. The PAT (or the bot it
 # belongs to) must also be allowed to push to the protected `main` branch.
 #
-# Cron is UTC and can be delayed under heavy GitHub load, so workflow_dispatch is
-# also available for catch-up + manual runs. Scheduled triggers only fire from the
-# workflow file on the DEFAULT branch (main), so this takes effect once it lands
-# on main (via the first promotion after merge).
+# Manual-only trigger via workflow_dispatch.
 on:
-  schedule:
-    # Saturday 15:00 PKT = 10:00 UTC. PKT is UTC+5 with no DST, so this is fixed
-    # year-round and the user's local "3 PM Saturday" never drifts.
-    - cron: "0 10 * * 6"
   workflow_dispatch:
 
 # Read-only by default — the jobs use the PROMOTION_TOKEN PAT for any writes.
