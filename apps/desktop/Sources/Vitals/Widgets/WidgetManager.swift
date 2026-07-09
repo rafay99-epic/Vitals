@@ -104,27 +104,34 @@ final class WidgetManager: ObservableObject {
     /// survived, else the matching screen at the same fractional spot, scaled
     /// to the new screen's size — and recorded, so it's exact from then on.
     private func realignPanels() {
-        let visible = NSScreen.screens.map(\.visibleFrame)
-        guard !visible.isEmpty else { return }
+        let screenFrames = NSScreen.screens.map(\.visibleFrame)
+        guard !screenFrames.isEmpty else { return }
         let key = arrangementKey
         let known = frameStore.layout(for: key) != nil
         var stranded = 0
         for (kind, panel) in panels.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             if known {
                 if let saved = frameStore.frame(for: kind, arrangement: key),
-                   let spot = WidgetPlacement.rescued(saved, within: visible) {
+                   let spot = WidgetPlacement.rescued(saved, within: screenFrames) {
                     if panel.frame != spot { panel.setFrame(spot, display: true) }
                     continue
                 }
-                // Known arrangement but this widget has no entry yet (it was
-                // opened elsewhere): fall through to migrate it in.
+                // Fall through when this widget has no entry yet (it was
+                // opened elsewhere) — or its saved frame is entirely
+                // off-screen (`rescued` gave up). Migrating replaces the
+                // stored spot below: an unreachable frame must land somewhere,
+                // and the reachable spot it lands on becomes the memory.
             }
-            let spot = migratedSpot(for: kind, panel: panel, within: visible, stranded: &stranded)
+            let spot = migratedSpot(for: kind, panel: panel, within: screenFrames, stranded: &stranded)
             if panel.frame != spot { panel.setFrame(spot, display: true) }
             // Record it so this arrangement restores exactly from now on.
-            frameStore.save(spot, for: kind, arrangement: key, screens: visible)
+            frameStore.save(spot, for: kind, arrangement: key, screens: screenFrames)
         }
-        lastScreens = visible
+        // Entering an arrangement makes it the most recently used one, even
+        // when nothing needed saving — migration must seed from the layout
+        // the user was actually just in, and pruning must never evict it.
+        frameStore.touch(key)
+        lastScreens = screenFrames
     }
 
     /// Where a panel should land on screens it has no saved spot for.
@@ -136,15 +143,15 @@ final class WidgetManager: ObservableObject {
     /// keep-if-on-a-live-screen rescue apply; fully stranded, the default
     /// cascade.
     private func migratedSpot(
-        for kind: WidgetKind, panel: NSPanel, within visible: [CGRect], stranded: inout Int
+        for kind: WidgetKind, panel: NSPanel, within screenFrames: [CGRect], stranded: inout Int
     ) -> CGRect {
-        if let spot = WidgetPlacement.migrated(panel.frame, from: lastScreens, to: visible) {
-            return WidgetPlacement.fitted(clamped(spot, to: kind), within: visible)
+        if let spot = WidgetPlacement.migrated(panel.frame, from: lastScreens, to: screenFrames) {
+            return WidgetPlacement.fitted(clamped(spot, to: kind), within: screenFrames)
         }
-        if let spot = WidgetPlacement.rescued(panel.frame, within: visible) { return spot }
+        if let spot = WidgetPlacement.rescued(panel.frame, within: screenFrames) { return spot }
         defer { stranded += 1 }
         return WidgetPanel.cascadeFrame(size: panel.frame.size, index: stranded)
-            ?? WidgetPlacement.fitted(panel.frame, within: visible)
+            ?? WidgetPlacement.fitted(panel.frame, within: screenFrames)
     }
 
     /// Migration scales a frame by the screen ratio; the widget's own resize
@@ -161,19 +168,19 @@ final class WidgetManager: ObservableObject {
     /// migrated over, else the pre-arrangement legacy frame — nil (caller
     /// cascades) only for a widget never placed anywhere.
     private func restoredFrame(for kind: WidgetKind) -> CGRect? {
-        let visible = NSScreen.screens.map(\.visibleFrame)
+        let screenFrames = NSScreen.screens.map(\.visibleFrame)
         let key = arrangementKey
         if let saved = frameStore.frame(for: kind, arrangement: key),
-           let spot = WidgetPlacement.rescued(saved, within: visible) {
+           let spot = WidgetPlacement.rescued(saved, within: screenFrames) {
             return spot
         }
         if let recent = frameStore.mostRecentLayout(excluding: key),
            let old = recent.frame(for: kind),
-           let spot = WidgetPlacement.migrated(old, from: recent.screenRects, to: visible) {
-            return WidgetPlacement.fitted(clamped(spot, to: kind), within: visible)
+           let spot = WidgetPlacement.migrated(old, from: recent.screenRects, to: screenFrames) {
+            return WidgetPlacement.fitted(clamped(spot, to: kind), within: screenFrames)
         }
         if let legacy = frameStore.legacyFrame(for: kind),
-           let spot = WidgetPlacement.rescued(legacy, within: visible) {
+           let spot = WidgetPlacement.rescued(legacy, within: screenFrames) {
             return spot
         }
         return nil
@@ -214,11 +221,13 @@ final class WidgetManager: ObservableObject {
     func show(_ kind: WidgetKind) {
         guard panels[kind] == nil else { return }
         let panel = WidgetPanel.make(
-            kind: kind,
-            mode: levelMode,
-            appActive: NSApp.isActive,
-            frame: restoredFrame(for: kind),
-            cascadeIndex: panels.count,
+            WidgetPanel.Spec(
+                kind: kind,
+                mode: levelMode,
+                appActive: NSApp.isActive,
+                frame: restoredFrame(for: kind),
+                cascadeIndex: panels.count
+            ),
             model: model,
             settings: settings,
             onClose: { [weak self] in self?.hide(kind) },

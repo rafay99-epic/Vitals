@@ -49,18 +49,26 @@ enum WidgetPanel {
         panel.orderFrontRegardless()
     }
 
+    /// What a widget panel is and where it belongs, resolved by the manager:
+    /// identity, stacking mode + current app activity, and the frame it should
+    /// restore to (nil → the default cascade spot for `cascadeIndex`).
+    struct Spec {
+        let kind: WidgetKind
+        let mode: WidgetLevelMode
+        let appActive: Bool
+        let frame: CGRect?
+        let cascadeIndex: Int
+    }
+
     static func make(
-        kind: WidgetKind,
-        mode: WidgetLevelMode,
-        appActive: Bool,
-        frame initialFrame: CGRect?,
-        cascadeIndex: Int,
+        _ spec: Spec,
         model: VitalsModel,
         settings: AppSettings,
         onClose: @escaping () -> Void,
         onFrameChanged: @escaping (CGRect) -> Void
     ) -> NSPanel {
-        let size = initialFrame?.size ?? kind.defaultSize
+        let kind = spec.kind
+        let size = spec.frame?.size ?? kind.defaultSize
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -100,11 +108,11 @@ enum WidgetPanel {
         // current display arrangement, migrated or legacy). No resolved spot —
         // a widget never placed anywhere — tucks into the main screen's
         // top-right, cascading so multiple new widgets don't stack.
-        if let spot = initialFrame ?? cascadeFrame(size: size, index: cascadeIndex) {
+        if let spot = spec.frame ?? cascadeFrame(size: size, index: spec.cascadeIndex) {
             panel.setFrame(spot, display: false)
         }
         // Level + ordering last, so the panel first appears at its real spot.
-        apply(mode: mode, appActive: appActive, to: panel)
+        apply(mode: spec.mode, appActive: spec.appActive, to: panel)
         return panel
     }
 

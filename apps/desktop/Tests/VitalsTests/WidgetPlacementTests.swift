@@ -199,6 +199,36 @@ final class WidgetPlacementTests: XCTestCase {
         XCTAssertNil(WidgetPlacement.migrated(frame, from: [laptop], to: []))
     }
 
+    func testSimilarHeightMonitorsAreNeverMistakenForEachOther() {
+        // A 1920×1080 and a 1920×1200 (visible heights 1055/1175, 120 pt
+        // apart) are distinct physical displays — a widget must follow its
+        // own monitor even when the arrangement re-anchors and reorders.
+        let old1080 = CGRect(x: 0, y: 0, width: 1920, height: 1055)
+        let old1200 = CGRect(x: 1920, y: 0, width: 1920, height: 1175)
+        let new1200 = CGRect(x: 0, y: 0, width: 1920, height: 1175)
+        let new1080 = CGRect(x: 1920, y: 0, width: 1920, height: 1055)
+        let onThe1200 = CGRect(x: 3500, y: 1000, width: 212, height: 118) // top-right of the old 1200p
+        guard let spot = WidgetPlacement.migrated(onThe1200, from: [old1080, old1200], to: [new1200, new1080]) else {
+            return XCTFail("expected a migrated frame")
+        }
+        XCTAssertTrue(new1200.contains(spot), "the widget must follow the 1200p display, not the same-width 1080p")
+    }
+
+    func testSideDockWidthInsetDoesNotBreakScreenPairing() {
+        // The Dock moved to the surviving screen's edge, shaving ~90 pt off
+        // its visible width. Still the same physical display — its widget
+        // must not fall back to a position-matched different screen.
+        let oldA = CGRect(x: 0, y: 0, width: 1920, height: 1055)
+        let oldB = CGRect(x: 1920, y: 0, width: 1920, height: 1175)
+        let newBWithDock = CGRect(x: 0, y: 0, width: 1830, height: 1175)
+        let newA = CGRect(x: 1830, y: 0, width: 1920, height: 1055)
+        let onB = CGRect(x: 3500, y: 1000, width: 212, height: 118)
+        guard let spot = WidgetPlacement.migrated(onB, from: [oldA, oldB], to: [newBWithDock, newA]) else {
+            return XCTFail("expected a migrated frame")
+        }
+        XCTAssertTrue(newBWithDock.contains(spot), "a side Dock must not unpair a widget from its own display")
+    }
+
     func testMigratedResultAlwaysFitsInsideTheTargetScreen() {
         // A widget flush against the old screen's top-right corner, migrated
         // to a short-and-wide target: the naive fractional-anchor placement

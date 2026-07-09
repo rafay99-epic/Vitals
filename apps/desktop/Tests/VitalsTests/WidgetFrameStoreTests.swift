@@ -129,6 +129,24 @@ final class WidgetFrameStoreTests: XCTestCase {
         XCTAssertNotNil(store.layout(for: keys[17]!), "the arrangement just saved must never be pruned")
     }
 
+    func testTouchReStampsALayoutWithoutChangingFrames() {
+        let screens = [CGRect(x: 0, y: 0, width: 1512, height: 948)]
+        let frame = CGRect(x: 40, y: 40, width: 212, height: 118)
+        store.save(frame, for: .cpu, arrangement: "a", screens: screens, now: Date(timeIntervalSince1970: 100))
+        store.save(frame, for: .cpu, arrangement: "b", screens: screens, now: Date(timeIntervalSince1970: 200))
+
+        // Returning to A without dragging anything must still make A the
+        // migration source for the next new arrangement.
+        store.touch("a", now: Date(timeIntervalSince1970: 300))
+        XCTAssertEqual(store.mostRecentLayout(excluding: "z")?.stamp, 300)
+        XCTAssertEqual(store.frame(for: .cpu, arrangement: "a"), frame, "touch must not alter frames")
+    }
+
+    func testTouchOnUnknownArrangementIsANoOp() {
+        store.touch("never-seen", now: Date(timeIntervalSince1970: 300))
+        XCTAssertNil(store.layout(for: "never-seen"))
+    }
+
     // MARK: legacyFrame
 
     func testLegacyFrameReadsTheOldSingleFrameKey() {

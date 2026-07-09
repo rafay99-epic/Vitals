@@ -84,6 +84,18 @@ struct WidgetFrameStore {
         persist(layouts)
     }
 
+    /// Re-stamps an arrangement most-recent without changing its frames —
+    /// called when the user *returns* to an arrangement (no drag involved), so
+    /// migration seeds from the layout actually used last and pruning never
+    /// evicts a layout that's merely stable. No-op for an unknown key.
+    func touch(_ key: String, now: Date = Date()) {
+        var layouts = allLayouts()
+        guard var layout = layouts[key] else { return }
+        layout.stamp = now.timeIntervalSince1970
+        layouts[key] = layout
+        persist(layouts)
+    }
+
     /// The pre-arrangement single saved frame (`vitals.widget.frame.<kind>`),
     /// kept as a read-only fallback so an update doesn't cost anyone their
     /// existing placement. Clamped to the kind's size bounds like every read.

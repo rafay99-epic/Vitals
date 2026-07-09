@@ -64,14 +64,17 @@ enum WidgetPlacement {
     }
 
     /// The new-arrangement screen a source screen's widgets should follow.
-    /// Same size (height within a Dock/menu-bar tolerance, since these are
-    /// visible frames) means it's almost certainly the same physical display —
-    /// ties break toward the same list position. No size match means the
-    /// display is gone; its widgets fall back to the position-matched screen
-    /// (a vanished primary hands its widgets to the new primary).
+    /// Same size (within a Dock/menu-bar tolerance, since these are visible
+    /// frames: the Dock steals up to ~150 pt of width on a side, ~100 pt of
+    /// height on the bottom) means it's almost certainly the same physical
+    /// display — ties break toward the same list position. The height
+    /// tolerance stays under 120 pt so a 1920×1080 and a 1920×1200 — a common
+    /// pairing — never match each other. No size match means the display is
+    /// gone; its widgets fall back to the position-matched screen (a vanished
+    /// primary hands its widgets to the new primary).
     private static func matchedScreen(for source: CGRect, at sourceIndex: Int, in newScreens: [CGRect]) -> CGRect {
         let sameSize = newScreens.enumerated().filter {
-            $0.element.width == source.width && abs($0.element.height - source.height) <= 200
+            abs($0.element.width - source.width) <= 150 && abs($0.element.height - source.height) <= 100
         }
         if let match = sameSize.min(by: { abs($0.offset - sourceIndex) < abs($1.offset - sourceIndex) }) {
             return match.element

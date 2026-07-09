@@ -660,7 +660,9 @@ private struct WidgetsCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HighlightLabel("Placement")
                     .font(.system(size: 12.5))
-                Picker("", selection: Binding(get: { widgets.levelMode }, set: { widgets.levelMode = $0 })) {
+                // Titled for VoiceOver; `labelsHidden` keeps it visual-only
+                // (the HighlightLabel above is the visible, searchable label).
+                Picker("Placement", selection: $widgets.levelMode) {
                     ForEach(WidgetLevelMode.allCases) { mode in
                         Text(mode.label).tag(mode)
                     }
