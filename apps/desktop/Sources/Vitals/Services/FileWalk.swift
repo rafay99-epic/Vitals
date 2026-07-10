@@ -11,12 +11,16 @@ import Foundation
 enum FileWalk {
     /// One thing the walk surfaces: a regular file or a file package. Directories
     /// are traversed, never yielded. `regularFileSize` is the honest allocated
-    /// size for a regular file; for a package it is 0 — the caller sizes the
-    /// bundle whole if it cares (callers that don't simply skip packages).
+    /// (on-disk) size for a regular file — the figure that matters for "space
+    /// used" and reclaim; for a package it is 0 (the caller sizes the bundle whole
+    /// if it cares). `logicalSize` is the file's byte length — the right key for
+    /// *content* comparisons, since a sparse file and a full copy of the same
+    /// bytes share a logical size but not an allocated one.
     struct Entry {
         let url: URL
         let isPackage: Bool
         let regularFileSize: UInt64
+        let logicalSize: UInt64
         let modified: Date?
     }
 
@@ -68,7 +72,7 @@ enum FileWalk {
         let fm = FileManager.default
         let keys: Set<URLResourceKey> = [
             .isDirectoryKey, .isPackageKey, .isSymbolicLinkKey, .isRegularFileKey,
-            .totalFileAllocatedSizeKey, .contentModificationDateKey,
+            .totalFileAllocatedSizeKey, .fileSizeKey, .contentModificationDateKey,
         ]
         let bundlePath = Bundle.main.bundlePath
 
@@ -105,10 +109,11 @@ enum FileWalk {
                 let entry: Entry
                 if isPackage {
                     entry = Entry(url: url, isPackage: true, regularFileSize: 0,
-                                  modified: values.contentModificationDate)
+                                  logicalSize: 0, modified: values.contentModificationDate)
                 } else if values.isRegularFile == true {
                     entry = Entry(url: url, isPackage: false,
                                   regularFileSize: UInt64(values.totalFileAllocatedSize ?? 0),
+                                  logicalSize: UInt64(values.fileSize ?? 0),
                                   modified: values.contentModificationDate)
                 } else {
                     continue  // sockets, fifos, and other non-files

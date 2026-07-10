@@ -145,7 +145,7 @@ struct DuplicateScannerTests {
 
     @Test func wastedBytesIsSizeTimesCountMinusOne() {
         func f(_ n: String) -> DuplicateScanner.File {
-            .init(url: URL(fileURLWithPath: "/tmp/\(n)"), name: n, sizeBytes: 100, modified: nil)
+            .init(url: URL(fileURLWithPath: "/tmp/\(n)"), name: n, sizeBytes: 100, modified: nil, contentHash: "h")
         }
         let g = DuplicateScanner.Group(id: "h", sizeBytes: 100, files: [f("a"), f("b"), f("c")])
         #expect(g.wastedBytes == 200)   // keep one of three
@@ -160,7 +160,10 @@ struct DuplicateScannerTests {
         let url = fm.temporaryDirectory.appendingPathComponent("vitals-duptrash-\(UUID().uuidString).bin")
         try Data(count: 500_000).write(to: url)
         let size = UInt64((try url.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0)
-        let file = DuplicateScanner.File(url: url, name: url.lastPathComponent, sizeBytes: size, modified: nil)
+        // contentHash matches the file on disk, so revalidation passes.
+        let hash = DuplicateScanner.fullHash(of: url)
+        let file = DuplicateScanner.File(url: url, name: url.lastPathComponent,
+                                         sizeBytes: size, modified: nil, contentHash: hash ?? "")
 
         let result = DuplicateScanner.trash([file])
         if result.failures.isEmpty {
@@ -171,5 +174,44 @@ struct DuplicateScannerTests {
             #expect(result.failures.first?.url == url)
             try? fm.removeItem(at: url)
         }
+    }
+
+    /// TOCTOU guard: a file whose contents changed since the scan must not be
+    /// trashed on stale info — it's recorded as a failure and left in place.
+    @Test func fileChangedSinceScanIsNotTrashed() throws {
+        let fm = FileManager.default
+        let url = fm.temporaryDirectory.appendingPathComponent("vitals-dupchanged-\(UUID().uuidString).bin")
+        try Data(repeating: 0xAB, count: 200_000).write(to: url)
+        defer { try? fm.removeItem(at: url) }
+        // A hash that deliberately doesn't match the file's real content.
+        let file = DuplicateScanner.File(url: url, name: url.lastPathComponent,
+                                         sizeBytes: 200_000, modified: nil,
+                                         contentHash: "staleHashThatWillNotMatch")
+        let result = DuplicateScanner.trash([file])
+        #expect(result.freedBytes == 0)
+        #expect(result.failures.first?.reason == "changed since scan")
+        #expect(fm.fileExists(atPath: url.path))   // still there — never trashed
+    }
+
+    /// Sparse-file bucketing: a sparse file and a full copy of the same content
+    /// share a *logical* size but not an allocated one. Bucketing by logical size
+    /// (the fix) groups them; bucketing by allocated size would have missed it.
+    @Test func sparseAndFullCopyOfSameContentAreGrouped() throws {
+        let home = TempHome()
+        let len = 1_000_000
+        // A sparse file: a hole of `len` zero bytes (small allocation, full logical size).
+        let sparse = home.url.appendingPathComponent("Documents/sparse.bin")
+        try FileManager.default.createDirectory(at: sparse.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: sparse.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: sparse)
+        try handle.truncate(atOffset: UInt64(len))   // logical = len, mostly unallocated
+        try handle.close()
+        // A full, non-sparse copy of the same content (len zero bytes).
+        try write(home.url, "Documents/full.bin", bytes: [UInt8](repeating: 0, count: len))
+
+        let groups = DuplicateScanner.scan(roots: docs(home.url), minSizeBytes: anySize)
+        #expect(groups.count == 1)
+        #expect(Set(groups[0].files.map(\.name)) == ["sparse.bin", "full.bin"])
     }
 }

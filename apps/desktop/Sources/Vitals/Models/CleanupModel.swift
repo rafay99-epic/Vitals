@@ -443,13 +443,22 @@ final class CleanupModel: ObservableObject {
 
     private var dupScanTask: Task<Void, Never>?
 
+    /// The files that will actually be trashed — the single source the footer and
+    /// the trash op both read. Enforces the page's promise that one copy of every
+    /// set always survives: if every copy in a group is selected (possible via
+    /// per-row toggles), the keeper (oldest) is dropped from the trash set, so the
+    /// last copy is never removed and the count/bytes reflect what really happens.
     var selectedDuplicates: [DuplicateScanner.File] {
-        duplicateGroups.flatMap { group in
-            group.files.filter { dupSelection.contains($0.url) }
+        duplicateGroups.flatMap { group -> [DuplicateScanner.File] in
+            let selected = group.files.filter { dupSelection.contains($0.url) }
+            if selected.count == group.files.count, let keeper = group.keeper {
+                return selected.filter { $0.url != keeper.url }
+            }
+            return selected
         }
     }
     var dupSelectedBytes: UInt64 { selectedDuplicates.reduce(0) { $0 + $1.sizeBytes } }
-    var dupSelectedCount: Int { dupSelection.count }
+    var dupSelectedCount: Int { selectedDuplicates.count }
     /// Total reclaimable bytes across every set if one copy of each is kept.
     var dupTotalWastedBytes: UInt64 { duplicateGroups.reduce(0) { $0 + $1.wastedBytes } }
 

@@ -215,7 +215,9 @@ struct CleanupDuplicatesPage: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(model.dupSelection.isEmpty || model.isDupCleaning)
+            // A scan supersedes any prior selection — don't let a stale pick be
+            // trashed against freshly-regrouped results.
+            .disabled(model.dupSelection.isEmpty || model.isDupCleaning || model.isDupScanning)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -338,15 +340,19 @@ private struct DuplicateFileRow: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(parentPath)
-                            .font(.system(size: 12))
+                        // The filename disambiguates copies that share a folder —
+                        // two copies in one directory necessarily have different names.
+                        Text(file.name)
+                            .font(.system(size: 12, weight: .medium))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         if isKeeper && !selected { keeperBadge }
                     }
-                    Text(modifiedCaption)
+                    Text("\(parentPath) · \(modifiedCaption)")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")

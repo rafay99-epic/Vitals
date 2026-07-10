@@ -16,27 +16,34 @@ import CryptoKit
 /// `LargeFileScanner`. The safe walk (symlinks, hidden files, packages, the app's
 /// own data, depth bound) is shared via `FileWalk`, so the two finders can't drift.
 enum DuplicateScanner {
-    /// One file that participates in a duplicate set.
+    /// One file that participates in a duplicate set. `sizeBytes` is the allocated
+    /// on-disk size (what trashing this copy actually reclaims). `contentHash` is
+    /// its full SHA-256 at scan time — re-checked immediately before trashing, so
+    /// a file that changed since the scan is never removed as a stale "duplicate".
     struct File: Identifiable, Hashable {
         let url: URL
         let name: String
         let sizeBytes: UInt64
         let modified: Date?
+        let contentHash: String
 
         var id: URL { url }
     }
 
     /// A set of ≥2 byte-for-byte identical files. `files` is ordered oldest-first,
     /// so `keeper` (the oldest) is the copy kept by default and `redundant` is the
-    /// rest. `id` is the content hash — stable across rescans.
+    /// rest. `id` is the content hash — stable across rescans. `sizeBytes` is the
+    /// files' shared logical size (for the "N copies · X each" label).
     struct Group: Identifiable, Hashable {
         let id: String
         let sizeBytes: UInt64
         let files: [File]
 
         var count: Int { files.count }
-        /// Bytes reclaimable by keeping exactly one copy of the set.
-        var wastedBytes: UInt64 { sizeBytes * UInt64(max(0, files.count - 1)) }
+        /// Bytes reclaimable by keeping exactly one copy — the sum of the redundant
+        /// copies' *allocated* sizes (not size × count, since sparse copies of the
+        /// same content can occupy different amounts on disk).
+        var wastedBytes: UInt64 { redundant.reduce(0) { $0 + $1.sizeBytes } }
         /// The copy kept by default (the oldest); never suggested for removal.
         var keeper: File? { files.first }
         /// The copies safe to trash while still keeping one.
@@ -62,31 +69,34 @@ enum DuplicateScanner {
     /// packages are never hashed, and files below the floor rarely matter for
     /// space and would only slow the scan.
     static func scan(roots: [URL], minSizeBytes: UInt64, limit: Int = 200) -> [Group] {
-        // 1. Collect qualifying regular files, bucketed by exact size. Only a size
-        //    shared by ≥2 files can possibly hold duplicates, so this is the first
-        //    (free) discriminator.
-        var bySize: [UInt64: [File]] = [:]
+        // 1. Collect qualifying regular files, bucketed by **logical** size. Two
+        //    copies of the same content always share a logical size (even if one is
+        //    sparse and occupies less on disk), so this is the correct free first
+        //    discriminator; allocated size is kept for reclaim reporting.
+        var bySize: [UInt64: [Candidate]] = [:]
         FileWalk.enumerate(roots: roots) { entry in
             if Task.isCancelled { return false }
-            guard !entry.isPackage, entry.regularFileSize >= minSizeBytes else { return true }
-            let file = File(url: entry.url, name: entry.url.lastPathComponent,
-                            sizeBytes: entry.regularFileSize, modified: entry.modified)
-            bySize[entry.regularFileSize, default: []].append(file)
+            guard !entry.isPackage, entry.logicalSize >= minSizeBytes else { return true }
+            bySize[entry.logicalSize, default: []].append(
+                Candidate(url: entry.url, name: entry.url.lastPathComponent,
+                          allocatedBytes: entry.regularFileSize, modified: entry.modified))
             return true
         }
 
         var groups: [Group] = []
-        for (size, sameSize) in bySize where sameSize.count >= 2 {
+        for (logicalSize, sameSize) in bySize where sameSize.count >= 2 {
             if Task.isCancelled { break }
             // 2. Narrow by a cheap head hash before paying for the full hash.
             for headBucket in bucketed(sameSize, by: { headHash(of: $0.url) }) where headBucket.count >= 2 {
                 if Task.isCancelled { break }
-                // 3. Confirm true duplicates with the full-content hash.
+                // 3. Confirm true duplicates with the full-content hash, and stamp
+                //    it onto each file so trashing can revalidate later.
                 for (hash, identical) in keyed(headBucket, by: { fullHash(of: $0.url) }) where identical.count >= 2 {
-                    let ordered = identical.sorted {
-                        ($0.modified ?? .distantFuture) < ($1.modified ?? .distantFuture)
-                    }
-                    groups.append(Group(id: hash, sizeBytes: size, files: ordered))
+                    let files = identical
+                        .sorted { ($0.modified ?? .distantFuture) < ($1.modified ?? .distantFuture) }
+                        .map { File(url: $0.url, name: $0.name, sizeBytes: $0.allocatedBytes,
+                                    modified: $0.modified, contentHash: hash) }
+                    groups.append(Group(id: hash, sizeBytes: logicalSize, files: files))
                 }
             }
         }
@@ -96,11 +106,20 @@ enum DuplicateScanner {
         return limit < sorted.count ? Array(sorted.prefix(limit)) : sorted
     }
 
-    /// Buckets files by a hash key, dropping any whose key can't be computed (an
-    /// unreadable file is never lumped in with others). Order within a bucket
+    /// A file in the pre-hash phase — identity plus the sizes we already know,
+    /// before the content hash that turns it into a `File`.
+    private struct Candidate {
+        let url: URL
+        let name: String
+        let allocatedBytes: UInt64
+        let modified: Date?
+    }
+
+    /// Buckets candidates by a hash key, dropping any whose key can't be computed
+    /// (an unreadable file is never lumped in with others). Order within a bucket
     /// follows input order.
-    private static func keyed(_ files: [File], by key: (File) -> String?) -> [String: [File]] {
-        var out: [String: [File]] = [:]
+    private static func keyed(_ files: [Candidate], by key: (Candidate) -> String?) -> [String: [Candidate]] {
+        var out: [String: [Candidate]] = [:]
         for file in files {
             if Task.isCancelled { break }
             guard let k = key(file) else { continue }
@@ -108,7 +127,7 @@ enum DuplicateScanner {
         }
         return out
     }
-    private static func bucketed(_ files: [File], by key: (File) -> String?) -> [[File]] {
+    private static func bucketed(_ files: [Candidate], by key: (Candidate) -> String?) -> [[Candidate]] {
         Array(keyed(files, by: key).values)
     }
 
@@ -146,13 +165,22 @@ enum DuplicateScanner {
     // MARK: Trashing
 
     /// Moves each file to the Trash — the only deletion this type performs, and a
-    /// recoverable one. After trashing we confirm the original path is gone before
-    /// crediting its bytes; anything that fails is recorded with a reason and left
-    /// in place, never force-deleted.
+    /// recoverable one. Before trashing, each file's current content is re-hashed
+    /// and compared to the hash captured at scan time: a file that changed or was
+    /// replaced since the scan is **not** a duplicate any more, so it's left in
+    /// place and recorded as a failure rather than trashed on stale information.
+    /// After trashing we confirm the original path is gone before crediting its
+    /// bytes; anything that fails is recorded with a reason, never force-deleted.
     static func trash(_ files: [File]) -> TrashResult {
         let fm = FileManager.default
         var result = TrashResult(freedBytes: 0, failures: [])
         for file in files {
+            // Time-of-check/time-of-use guard: only remove what still matches the
+            // content we identified as a duplicate.
+            guard fullHash(of: file.url) == file.contentHash else {
+                result.failures.append((url: file.url, reason: "changed since scan"))
+                continue
+            }
             do {
                 try fm.trashItem(at: file.url, resultingItemURL: nil)
                 if fm.fileExists(atPath: file.url.path) {
