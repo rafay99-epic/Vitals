@@ -1,0 +1,20 @@
+apps/desktop/Sources/Vitals/Views/DashboardBento.swift
+  s_d6ee421fe6aff2::t_321584268e69fb 199-203,205-207,209
+  s_d6ee421fe6aff2::t_1092a941cd715c 134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "944b3a73a98ca6e36fc6421279f1a98adeed3db8",
+  "prompts": {},
+  "sessions": {
+    "s_d6ee421fe6aff2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c24c12e-574f-4d36-9d73-85af609892e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
