@@ -28,6 +28,9 @@ struct StorageView: View {
     /// re-reads the volume on activation rather than on appear.
     var isActive: Bool
     @EnvironmentObject private var settings: AppSettings
+    /// The internal SSD's SMART health (wear, endurance, TRIM, lifetime) is drive
+    /// info, so it belongs next to disk space — read from the shared VitalsModel.
+    @EnvironmentObject private var vitals: VitalsModel
     @State private var confirmWholeDisk = false
     /// In-app Quick Look target — a file row sets this instead of opening the
     /// file, so a click previews consistently rather than sometimes launching
@@ -74,6 +77,7 @@ struct StorageView: View {
                     volumeErrorState
                 } else {
                     capacityHero
+                    driveHealthSection
                     if !model.hasFullDiskAccess {
                         fdaBanner
                     }
@@ -86,6 +90,18 @@ struct StorageView: View {
                 }
             }
             .padding(20)
+        }
+    }
+
+    /// The internal SSD's SMART health — the same shared cards, rendered here in
+    /// Storage (drive info) rather than Temps & Fans. Omitted entirely when SMART
+    /// is unavailable (a VM/external drive), never shown as a fabricated state.
+    @ViewBuilder
+    private var driveHealthSection: some View {
+        if let disk = vitals.diskHealth {
+            DiskHealthHeroCard(disk: disk)
+            DiskEnduranceCard(disk: disk)
+            DiskLifetimeCard(disk: disk)
         }
     }
 
