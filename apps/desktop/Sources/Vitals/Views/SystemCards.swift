@@ -315,6 +315,32 @@ struct BatteryContent: View {
         }
     }
 
+    // One wording, one tint rule, one clock format for every battery surface
+    // (Battery tab, dashboard card, battery widget) — shared here so the
+    // copies can't drift apart.
+
+    /// "Charging" / "On power adapter" / "On battery" — the charge-state line.
+    static func stateLine(for battery: BatterySnapshot) -> String {
+        if battery.isCharging { return "Charging" }
+        if battery.externalPower { return battery.fullyCharged ? "Fully charged, on power adapter" : "On power adapter" }
+        return "On battery"
+    }
+
+    /// Green when charging or healthy, orange under 50%, red under 20%.
+    static func chargeTint(for battery: BatterySnapshot) -> Color {
+        if battery.isCharging { return .green }
+        switch battery.percent {
+        case ..<20: return .red
+        case ..<50: return .orange
+        default: return .green
+        }
+    }
+
+    /// "42 min" / "3 h 12 min".
+    static func timeText(_ minutes: Int) -> String {
+        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
+    }
+
     var body: some View {
         Group {
             if let battery = model.battery {
@@ -323,12 +349,12 @@ struct BatteryContent: View {
                         Text("\(Int(battery.percent))%")
                             .font(.system(size: 28, weight: .semibold, design: .rounded))
                             .numericTransition()
-                        Text(stateLine(for: battery))
+                        Text(Self.stateLine(for: battery))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Gauge(value: battery.percent / 100) { EmptyView() }
                             .gaugeStyle(.accessoryLinearCapacity)
-                            .tint(chargeTint(battery))
+                            .tint(Self.chargeTint(for: battery))
                             .frame(width: 200)
                     }
 
@@ -354,8 +380,8 @@ struct BatteryContent: View {
                             detailRow(
                                 symbol: "clock",
                                 text: battery.externalPower
-                                    ? "About \(timeText(minutes)) until full"
-                                    : "About \(timeText(minutes)) remaining"
+                                    ? "About \(Self.timeText(minutes)) until full"
+                                    : "About \(Self.timeText(minutes)) remaining"
                             )
                         }
                     }
@@ -367,12 +393,6 @@ struct BatteryContent: View {
                     .frame(maxWidth: .infinity, minHeight: 60)
             }
         }
-    }
-
-    private func stateLine(for battery: BatterySnapshot) -> String {
-        if battery.isCharging { return "Charging" }
-        if battery.externalPower { return battery.fullyCharged ? "Fully charged, on power adapter" : "On power adapter" }
-        return "On battery"
     }
 
     private func healthLine(health: Double, cycles: Int?) -> String {
@@ -391,18 +411,6 @@ struct BatteryContent: View {
         .font(.callout)
     }
 
-    private func chargeTint(_ battery: BatterySnapshot) -> Color {
-        if battery.isCharging { return .green }
-        switch battery.percent {
-        case ..<20: return .red
-        case ..<50: return .orange
-        default: return .green
-        }
-    }
-
-    private func timeText(_ minutes: Int) -> String {
-        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
-    }
 }
 
 /// SoC power at a glance on the Dashboard — total package draw plus the CPU /

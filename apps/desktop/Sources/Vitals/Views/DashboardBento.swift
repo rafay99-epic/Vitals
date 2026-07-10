@@ -131,7 +131,7 @@ struct DashboardTileGrid: View {
                     value: "\(Int(battery.percent))%",
                     subtitle: batterySubtitle(battery),
                     symbol: BatteryContent.symbol(for: battery),
-                    tint: batteryTint(battery),
+                    tint: BatteryContent.chargeTint(for: battery),
                     series: recentCompact { $0.batteryPercent }
                 ) { drill(.battery) }
             }
@@ -209,22 +209,17 @@ struct DashboardTileGrid: View {
         return "\(up) · \(link.displayName)"
     }
 
+    /// The tile's one-liner composes differently from the other battery
+    /// surfaces — while discharging the time estimate replaces the state, and
+    /// the fully-charged case drops the adapter suffix to fit a tile — but the
+    /// words and the clock format are `BatteryContent`'s shared pieces, so the
+    /// wording can't drift from the tab or the widget.
     private func batterySubtitle(_ battery: BatterySnapshot) -> String {
-        if battery.isCharging { return "Charging" }
-        if battery.externalPower { return battery.fullyCharged ? "Fully charged" : "On power adapter" }
-        if let minutes = battery.timeRemainingMinutes {
-            return minutes < 60 ? "\(minutes) min left" : "\(minutes / 60) h \(minutes % 60) min left"
+        if battery.externalPower, battery.fullyCharged, !battery.isCharging { return "Fully charged" }
+        if !battery.isCharging, !battery.externalPower, let minutes = battery.timeRemainingMinutes {
+            return "\(BatteryContent.timeText(minutes)) left"
         }
-        return "On battery"
-    }
-
-    private func batteryTint(_ battery: BatterySnapshot) -> Color {
-        if battery.isCharging { return .green }
-        switch battery.percent {
-        case ..<20: return .red
-        case ..<50: return .orange
-        default: return .green
-        }
+        return BatteryContent.stateLine(for: battery)
     }
 }
 
