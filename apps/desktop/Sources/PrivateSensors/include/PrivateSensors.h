@@ -133,6 +133,13 @@ typedef struct {
     uint64_t power_on_hours;
     uint64_t unsafe_shutdowns;
     uint64_t media_errors;
+    // TRIM (NVMe Dataset Management / Deallocate) support. This is NOT a SMART
+    // field — it comes from the Identify Controller ONCS bitfield, the same
+    // source system_profiler reports "TRIM Support" from. Read on the same user
+    // client after the SMART log. `trim_known` is 0 when the drive/VM refused the
+    // Identify command, so the caller shows "Unknown" rather than guessing "No".
+    uint8_t  trim_known;                // 1 when Identify Controller was read
+    uint8_t  trim_supported;            // 1 when ONCS bit 2 (Dataset Management) is set
 } VitalsDiskSMART;
 
 // Reads the internal SSD's SMART health log. Returns 1 and fills `out` on

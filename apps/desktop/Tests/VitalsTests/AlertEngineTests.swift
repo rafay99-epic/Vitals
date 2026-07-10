@@ -73,6 +73,25 @@ struct AlertEngineTests {
                                   state: .init(), now: t0, cooldown: cooldown).fire)
     }
 
+    @Test func diskRulesReadTheirDirection() {
+        // Same shape as the network test: canonical MB/s, each disk metric maps
+        // to its own direction, and a pre-baseline (nil) reading can never fire.
+        var readings = AlertReadings()
+        readings.diskReadMBps = 800
+        readings.diskWriteMBps = 30
+        #expect(readings.value(for: .diskRead) == 800)
+        #expect(readings.value(for: .diskWrite) == 30)
+
+        let read = rule(.diskRead, .above, threshold: 500, sustained: 0)
+        #expect(AlertEngine.step(rule: read, value: readings.value(for: .diskRead),
+                                 state: .init(), now: t0, cooldown: cooldown).fire)
+        let write = rule(.diskWrite, .above, threshold: 500, sustained: 0)
+        #expect(!AlertEngine.step(rule: write, value: readings.value(for: .diskWrite),
+                                  state: .init(), now: t0, cooldown: cooldown).fire)
+        #expect(!AlertEngine.step(rule: read, value: AlertReadings().value(for: .diskRead),
+                                  state: .init(), now: t0, cooldown: cooldown).fire)
+    }
+
     @Test func unavailableReadingNeverFires() {
         let r = rule(sustained: 0)
         let (state, fire) = AlertEngine.step(

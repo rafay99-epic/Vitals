@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// The Cleanup tab: four pages behind one segmented picker — the classic Quick
-/// and Deep cache sweeps, per-project Developer junk, and a Large-&-Old Files
-/// review. Pages swap **in place** (the performance rule: navigation never
-/// changes window geometry); each page keeps its own hero, scroll, and footer.
+/// The Cleanup tab: five pages behind one segmented picker — the classic Quick
+/// and Deep cache sweeps, per-project Developer junk, a Large-&-Old Files review,
+/// and a content-verified Duplicates finder. Pages swap **in place** (the
+/// performance rule: navigation never changes window geometry); each page keeps
+/// its own hero, scroll, and footer.
 struct CleanupView: View {
     @ObservedObject var model: CleanupModel
     /// True only while Cleanup is the visible tab; the view stays mounted.
@@ -34,6 +35,9 @@ struct CleanupView: View {
                 case .files:
                     CleanupFilesPage(model: model)
                         .transition(.opacity)
+                case .duplicates:
+                    CleanupDuplicatesPage(model: model)
+                        .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -56,7 +60,7 @@ struct CleanupView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            .disabled(model.isCleaning || model.isDevCleaning || model.isFilesCleaning)
+            .disabled(model.isCleaning || model.isDevCleaning || model.isFilesCleaning || model.isDupCleaning)
             Spacer()
         }
         .padding(.horizontal, 20)

@@ -27,6 +27,17 @@ struct DiskHealthSnapshot {
     let temperature: Double?
     /// NVMe critical-warning bitfield; 0 = no warning.
     let criticalWarning: Int
+    /// Whether the drive supports TRIM (NVMe Dataset Management), read from the
+    /// Identify Controller ONCS field — the same source `system_profiler` reports
+    /// "TRIM Support" from. `nil` when the drive didn't answer the Identify query,
+    /// so the UI shows "Unknown" rather than guessing.
+    let trimSupported: Bool?
+
+    /// Human label for the TRIM row — honest about the unknown case.
+    var trimText: String {
+        guard let trimSupported else { return "Unknown" }
+        return trimSupported ? "Supported" : "Not supported"
+    }
 
     /// NVMe reports endurance in 512 000-byte "data units". Pure, for testing.
     static func bytes(dataUnits: UInt64) -> Int64 {
@@ -73,6 +84,8 @@ enum DiskHealth {
         let (model, capacity) = identity()
         // Composite temperature is in Kelvin; 0 means "not reported" → show nothing.
         let temperature = raw.temperature_k > 0 ? Double(raw.temperature_k) - 273.15 : nil
+        // TRIM: honest tri-state — nil when the drive refused the Identify query.
+        let trim: Bool? = raw.trim_known == 1 ? (raw.trim_supported == 1) : nil
 
         func clampInt(_ value: UInt64) -> Int { Int(min(value, UInt64(Int.max))) }
 
@@ -89,7 +102,8 @@ enum DiskHealth {
             availableSpareThreshold: Int(raw.available_spare_threshold),
             mediaErrors: clampInt(raw.media_errors),
             temperature: temperature,
-            criticalWarning: Int(raw.critical_warning)
+            criticalWarning: Int(raw.critical_warning),
+            trimSupported: trim
         )
     }
 

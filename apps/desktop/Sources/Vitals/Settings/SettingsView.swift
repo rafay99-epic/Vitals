@@ -132,7 +132,7 @@ struct SettingsView: View {
                   view: AnyView(TabsCard())),
             .init(title: "Menu bar", keywords: "status item readings icons text animate menubar",
                   view: AnyView(MenuBarCard())),
-            .init(title: "Desktop Widgets", keywords: "widgets float on top animate desktop panels placement behind icons",
+            .init(title: "Desktop Widgets", keywords: "widgets float on top animate desktop panels placement behind icons battery disk",
                   view: AnyView(WidgetsCard())),
         ]),
         SettingsSectionModel(title: "Monitoring", cards: [
@@ -148,7 +148,7 @@ struct SettingsView: View {
                   view: AnyView(OverheatingCard())),
             .init(title: "Notifications", keywords: "notify overheat thermal pressure",
                   view: AnyView(NotificationsCard())),
-            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process network download upload threshold",
+            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process network download upload threshold disk read disk write",
                   view: AnyView(CustomAlertsCard())),
         ]),
         SettingsSectionModel(title: "Updates", cards: [
@@ -967,6 +967,7 @@ private struct AlertRuleRow: View {
         case .fanRPM:   return "\(Int(rule.threshold)) rpm"
         case .diskFree: return "\(Int(rule.threshold)) GB"
         case .networkDownload, .networkUpload: return "\(Int(rule.threshold)) MB/s"
+        case .diskRead, .diskWrite: return "\(Int(rule.threshold)) MB/s"
         default:        return "\(Int(rule.threshold))%"
         }
     }

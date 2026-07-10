@@ -9,9 +9,23 @@ final class LoginItemsModel: ObservableObject {
     @Published private(set) var items: [LaunchItem] = []
     @Published private(set) var loading = false
     @Published private(set) var loaded = false
+    /// The live resource cost of each item, keyed by `LaunchItem.id`. Populated
+    /// after a scan; user agents get a real footprint/CPU or "Not running",
+    /// system items stay `.notMeasured`. Honest by construction — no fake numbers.
+    @Published private(set) var impact: [LaunchItem.ID: StartupImpact.State] = [:]
 
     var userItems: [LaunchItem] { items.filter { $0.kind == .userAgent } }
     var systemItems: [LaunchItem] { items.filter { $0.kind != .userAgent } }
+
+    /// Total live footprint of the user's running login agents — the honest
+    /// "this is what auto-start is costing you" figure. nil when nothing readable.
+    var userFootprintBytes: UInt64? {
+        let total = userItems.reduce(UInt64(0)) { sum, item in
+            if case .running(let cost) = impact[item.id] { return sum + cost.memoryBytes }
+            return sum
+        }
+        return total > 0 ? total : nil
+    }
 
     func loadIfNeeded() async {
         guard !loaded, !loading else { return }
@@ -23,6 +37,29 @@ final class LoginItemsModel: ObservableObject {
         items = await Task.detached { LaunchItemScanner.scan() }.value
         loading = false
         loaded = true
+        await refreshImpact()
+    }
+
+    /// Attributes each item to its live process and reads the real cost, off the
+    /// main actor. Cheap (one `launchctl list` + a `proc_pid_rusage` per running
+    /// user agent). Private — driven only by the model's own scan/mutation cycle,
+    /// so `impact` always corresponds to the currently-published `items`.
+    private func refreshImpact() async {
+        let current = items
+        let map = await Task.detached { () -> [LaunchItem.ID: StartupImpact.State] in
+            // nil = `launchctl list` was unavailable → every item is unknown, not
+            // a false "Not running".
+            let pids = LaunchItemScanner.runningPIDs()
+            var out: [LaunchItem.ID: StartupImpact.State] = [:]
+            for item in current {
+                out[item.id] = pids.map { StartupImpact.state(for: item, runningPIDs: $0) } ?? .notMeasured
+            }
+            return out
+        }.value
+        // A newer scan/mutation may have replaced `items` while we were reading;
+        // don't publish an impact map computed against a stale snapshot.
+        guard items == current else { return }
+        impact = map
     }
 
     func setDisabled(_ disabled: Bool, _ item: LaunchItem) async {
@@ -45,6 +82,9 @@ final class LoginItemsModel: ObservableObject {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].disabled = disabled
         }
+        // Disabling stops the process now, so its live cost/badge changed —
+        // re-attribute rather than leave a stale footprint until the next scan.
+        await refreshImpact()
     }
 
     func remove(_ item: LaunchItem) async {
@@ -66,6 +106,10 @@ final class LoginItemsModel: ObservableObject {
         } else {
             removed = await Task.detached { LaunchItemScanner.trashUserAgent(item: item) }.value
         }
-        if removed { items.removeAll { $0.id == item.id } }
+        if removed {
+            items.removeAll { $0.id == item.id }
+            // Keep the footprint total honest after the item leaves the list.
+            await refreshImpact()
+        }
     }
 }

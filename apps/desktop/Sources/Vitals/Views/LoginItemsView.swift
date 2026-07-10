@@ -49,8 +49,17 @@ struct LoginItemsView: View {
     }
 
     private var intro: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Text("\(model.items.count) launch items").font(.callout.weight(.medium))
+            if let bytes = model.userFootprintBytes {
+                Text("·").foregroundStyle(.tertiary)
+                Text("\(formatMemory(bytes)) in use")
+                    .font(.system(.callout, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(.secondary)
+                    .help("Live memory footprint of your running login agents right now")
+            }
             Spacer()
             Button { Task { await model.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 .controlSize(.small)
@@ -165,6 +174,9 @@ private struct LaunchItemRow: View {
 
             Spacer(minLength: 8)
 
+            impactMetric
+                .fixedSize()
+
             if item.disabled {
                 Text("Disabled").font(.caption.weight(.medium)).foregroundStyle(.secondary)
             }
@@ -192,4 +204,70 @@ private struct LaunchItemRow: View {
         }
         .padding(.vertical, 7)
     }
+
+    /// The live resource cost — a real footprint + impact tier for a running user
+    /// agent, or an honest "Not running" / "Running". System items (`notMeasured`)
+    /// show nothing rather than a fabricated figure. A disabled item won't be
+    /// running, so its state naturally reads idle.
+    @ViewBuilder
+    private var impactMetric: some View {
+        switch model.impact[item.id] ?? .notMeasured {
+        case .running(let cost):
+            HStack(spacing: 6) {
+                Text(formatMemory(cost.memoryBytes))
+                    .font(.system(.caption, design: .rounded, weight: .medium))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(.secondary)
+                    .help("\(formatMemory(cost.memoryBytes)) · \(cpuText(cost.cpuSeconds)) of CPU time since it launched")
+                ImpactCapsule(level: StartupImpact.level(.running(cost)))
+            }
+        case .runningUnreadable:
+            Text("Running").font(.caption).foregroundStyle(.secondary)
+        case .idle:
+            Text("Not running").font(.caption).foregroundStyle(.tertiary)
+        case .notMeasured:
+            EmptyView()
+        }
+    }
+}
+
+/// A small High / Medium / Low impact badge. Higher footprint reads warmer — the
+/// standing cost of keeping the item resident. Idle/unknown states show nothing.
+private struct ImpactCapsule: View {
+    let level: StartupImpact.Level
+
+    var body: some View {
+        if let descriptor {
+            Text(descriptor.label)
+                .font(.system(size: 9, weight: .semibold))
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(Capsule().fill(descriptor.tint.opacity(0.16)))
+                .foregroundStyle(descriptor.tint)
+        }
+    }
+
+    private var descriptor: (label: String, tint: Color)? {
+        switch level {
+        case .high:   return ("High", .orange)
+        case .medium: return ("Medium", .yellow)
+        case .low:    return ("Low", .green)
+        case .idle, .unknown: return nil
+        }
+    }
+}
+
+/// Physical-memory footprint, formatted the way Activity Monitor's "Memory" is.
+private func formatMemory(_ bytes: UInt64) -> String {
+    ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
+}
+
+/// Cumulative CPU time as a compact, honest duration.
+private func cpuText(_ seconds: Double) -> String {
+    if seconds < 1 { return "<1s" }
+    if seconds < 60 { return "\(Int(seconds))s" }
+    if seconds < 3600 { return "\(Int(seconds / 60))m" }
+    let hours = Int(seconds / 3600)
+    let minutes = Int(seconds.truncatingRemainder(dividingBy: 3600) / 60)
+    return "\(hours)h \(minutes)m"
 }

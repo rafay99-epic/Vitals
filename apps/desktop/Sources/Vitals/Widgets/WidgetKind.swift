@@ -7,8 +7,10 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     case cpuUsage
     case gpu
     case memory
+    case battery
     case fan
     case network
+    case disk
     case storage
     case combined
 
@@ -20,8 +22,10 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .cpuUsage: return "CPU Usage"
         case .gpu: return "GPU"
         case .memory: return "Memory"
+        case .battery: return "Battery"
         case .fan: return "Fan"
         case .network: return "Network"
+        case .disk: return "Disk I/O"
         case .storage: return "Storage"
         case .combined: return "Vitals"
         }
@@ -34,8 +38,10 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .cpuUsage: return "CPU Usage"
         case .gpu: return "GPU"
         case .memory: return "Memory"
+        case .battery: return "Battery"
         case .fan: return "Fan"
         case .network: return "Network"
+        case .disk: return "Disk"
         case .storage: return "Storage"
         case .combined: return "Vitals"
         }
@@ -47,8 +53,10 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .cpuUsage: return "gauge.with.dots.needle.50percent"
         case .gpu: return "cpu.fill"
         case .memory: return "memorychip"
+        case .battery: return "battery.100percent"
         case .fan: return "fan"
         case .network: return "network"
+        case .disk: return "internaldrive"
         case .storage: return "internaldrive"
         case .combined: return "gauge.with.dots.needle.50percent"
         }
@@ -62,27 +70,29 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .cpuUsage: return .blue
         case .gpu: return .purple
         case .memory: return .indigo
+        case .battery: return .green
         case .fan: return .cyan
         case .network: return .mint
+        case .disk: return .yellow
         case .storage: return .teal
         case .combined: return .green
         }
     }
 
-    // Combined's heights grew with its Network row (4 metric rows on a GPU
-    // Mac). Saved frames are clamped to these bounds on restore
-    // (`WidgetFrameStore` clamps every read), so existing panels grow to fit
-    // rather than clipping the new row.
+    // Combined's heights grew with its Network row, then again with its Disk
+    // row (5 metric rows on a GPU Mac). Saved frames are clamped to these
+    // bounds on restore (`WidgetFrameStore` clamps every read), so existing
+    // panels grow to fit rather than clipping the new row.
     var defaultSize: CGSize {
-        self == .combined ? CGSize(width: 320, height: 206) : CGSize(width: 212, height: 118)
+        self == .combined ? CGSize(width: 320, height: 240) : CGSize(width: 212, height: 118)
     }
 
     /// Resize bounds — a widget can't collapse to nothing or balloon off-screen.
     var minSize: CGSize {
-        self == .combined ? CGSize(width: 280, height: 186) : CGSize(width: 178, height: 104)
+        self == .combined ? CGSize(width: 280, height: 220) : CGSize(width: 178, height: 104)
     }
 
     var maxSize: CGSize {
-        self == .combined ? CGSize(width: 560, height: 320) : CGSize(width: 380, height: 240)
+        self == .combined ? CGSize(width: 560, height: 352) : CGSize(width: 380, height: 240)
     }
 }

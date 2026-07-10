@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Shared mapping from a drive's wear severity to a gauge colour, so the Disk
-/// tab and the Dashboard SSD card can never drift apart (and a flagged drive
-/// shows orange/red, not green).
+/// Shared mapping from a drive's wear severity to a gauge colour, so the Storage
+/// SSD-health cards and the Dashboard SSD card can never drift apart (and a
+/// flagged drive shows orange/red, not green).
 func diskWearTint(_ level: DiskHealthSnapshot.WearLevel) -> Color {
     switch level {
     case .normal:   return .green
@@ -11,31 +11,12 @@ func diskWearTint(_ level: DiskHealthSnapshot.WearLevel) -> Color {
     }
 }
 
-/// The Disk tab: the internal SSD's health, straight from its own NVMe SMART
-/// log — wear, lifetime data written, power-on time, cycles, unsafe shutdowns,
-/// spare blocks and temperature. Every figure is a counter the drive reports;
-/// nothing is estimated or invented. A Mac (or VM) that doesn't expose SMART
-/// says so rather than showing a fake "100% healthy".
-struct DiskView: View {
-    @EnvironmentObject private var model: VitalsModel
-
-    var body: some View {
-        MetricScroll {
-            if let disk = model.diskHealth {
-                DiskHealthHeroCard(disk: disk)
-                DiskEnduranceCard(disk: disk)
-                DiskLifetimeCard(disk: disk)
-            } else {
-                EmptyStateView(
-                    symbol: "internaldrive.badge.exclamationmark",
-                    tint: .blue,
-                    title: "SMART unavailable",
-                    message: "This Mac doesn't expose detailed SSD health — some hardware, virtual machines, and external drives don't. When it's available, wear, data written and power-on history appear here."
-                ) { EmptyView() }
-            }
-        }
-    }
-}
+/// The internal SSD's health cards, straight from its own NVMe SMART log — wear,
+/// lifetime data written, TRIM, power-on time, cycles, unsafe shutdowns, spare
+/// blocks and temperature. Every figure is a counter the drive reports; nothing
+/// is estimated or invented. These are rendered in the **Storage** section (drive
+/// info, next to disk space); a Mac (or VM) without SMART simply omits them
+/// rather than showing a fake "100% healthy".
 
 // MARK: - Wear / health hero
 
@@ -105,6 +86,7 @@ struct DiskEnduranceCard: View {
                 MetricRowGrid(rows: [
                     MetricRow(symbol: "square.and.arrow.up", label: "Data read", value: formatBytes(UInt64(disk.bytesRead))),
                     MetricRow(symbol: "shield.lefthalf.filled", label: "Spare blocks", value: "\(disk.availableSpare)%"),
+                    MetricRow(symbol: "scissors", label: "TRIM", value: disk.trimText),
                 ])
             }
         }

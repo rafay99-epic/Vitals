@@ -18,6 +18,7 @@ actor SensorSampler {
         let power: PowerSnapshot?
         let diskHealth: DiskHealthSnapshot?
         let network: NetworkSnapshot?
+        let diskIO: DiskIOSnapshot?
     }
 
     private let hid = HIDSensors()
@@ -29,6 +30,8 @@ actor SensorSampler {
     // Stateful: holds the previous tick's byte counters to diff into rates, so
     // it must be the same instance every sample.
     private let network = NetworkStats()
+    // Same statefulness rule: per-driver disk counters diff into rates.
+    private let disk = DiskStats()
 
     // macOS's smoothed Maximum Capacity, refreshed rarely (it changes over
     // weeks) on a background task so the per-tick sample never waits on the
@@ -75,7 +78,10 @@ actor SensorSampler {
             // One sysctl + a few CoreWLAN reads — cheap enough to sample
             // unconditionally (like memory), and the menu-bar panel and history
             // chart want a continuous series anyway.
-            network: network.sample()
+            network: network.sample(),
+            // A handful of IORegistry property reads — same cheap-and-
+            // continuous reasoning as network.
+            diskIO: disk.sample()
         )
     }
 
