@@ -1,0 +1,34 @@
+apps/desktop/Sources/Vitals/Services/FileWalk.swift
+  s_b59d1dac2ef154::t_6d679561428701 75
+  s_b59d1dac2ef154::t_3ff553f69e3b2f 112,116
+  s_b59d1dac2ef154::t_0c8a55ab7be71f 14-18,23
+apps/desktop/Sources/Vitals/Services/DuplicateScanner.swift
+  s_b59d1dac2ef154::t_c41122437302fb 168-173,178-183
+  s_b59d1dac2ef154::t_eaf351eae01149 19-22,28
+  s_b59d1dac2ef154::t_61cf977c28adc5 35-36,43-46
+  s_b59d1dac2ef154::t_70c21d42190292 72-76,79-82,87,92-93,95-99,109-119,121-122,130
+apps/desktop/Sources/Vitals/Views/CleanupDuplicatesView.swift
+  s_b59d1dac2ef154::t_14123f8fb30e4c 218-220
+  s_b59d1dac2ef154::t_8fdcb00c9dcd07 343-346,351,354-355
+apps/desktop/Sources/Vitals/Models/CleanupModel.swift
+  s_b59d1dac2ef154::t_4dd0478d966671 446-450,452-457,461
+apps/desktop/Tests/VitalsTests/DuplicateScannerTests.swift
+  s_b59d1dac2ef154::t_ace41b8a89b09c 163-166,178-216
+  s_b59d1dac2ef154::t_73532b9461d8c4 148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "7e5371e7a30c902a6d08694fb743e9d951c31fcc",
+  "prompts": {},
+  "sessions": {
+    "s_b59d1dac2ef154": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20525871-0d71-414b-93ca-68c8be6570fe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
