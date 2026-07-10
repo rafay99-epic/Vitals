@@ -1,0 +1,25 @@
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_d6ee421fe6aff2::t_644d7eadce23df 151
+apps/desktop/Tests/VitalsTests/HistoryReaderTests.swift
+  s_d6ee421fe6aff2::t_cd0efbe308a1f0 47,50
+apps/desktop/Sources/Vitals/Services/DiskStats.swift
+  s_d6ee421fe6aff2::t_3e98c08fa4573f 5-7
+  s_d6ee421fe6aff2::t_cc373f82653883 29-30
+  s_d6ee421fe6aff2::t_1263780da22c6a 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f61c9d1d0b507b0a6be5bb99c7adc92b40172040",
+  "prompts": {},
+  "sessions": {
+    "s_d6ee421fe6aff2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c24c12e-574f-4d36-9d73-85af609892e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
