@@ -52,11 +52,11 @@ private struct BatteryHeroCard: View {
                         .font(.system(size: 40, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .numericTransition()
-                    Text(stateLine).font(.title3).foregroundStyle(.secondary)
+                    Text(BatteryContent.stateLine(for: battery)).font(.title3).foregroundStyle(.secondary)
                     Spacer()
                     if let minutes = battery.timeRemainingMinutes {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(timeText(minutes)).font(.headline).monospacedDigit()
+                            Text(BatteryContent.timeText(minutes)).font(.headline).monospacedDigit()
                             Text(battery.externalPower ? "until full" : "remaining")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
@@ -64,28 +64,9 @@ private struct BatteryHeroCard: View {
                 }
                 Gauge(value: battery.percent / 100) { EmptyView() }
                     .gaugeStyle(.accessoryLinearCapacity)
-                    .tint(chargeTint)
+                    .tint(BatteryContent.chargeTint(for: battery))
             }
         }
-    }
-
-    private var stateLine: String {
-        if battery.isCharging { return "Charging" }
-        if battery.externalPower { return battery.fullyCharged ? "Fully charged, on power adapter" : "On power adapter" }
-        return "On battery"
-    }
-
-    private var chargeTint: Color {
-        if battery.isCharging { return .green }
-        switch battery.percent {
-        case ..<20: return .red
-        case ..<50: return .orange
-        default: return .green
-        }
-    }
-
-    private func timeText(_ minutes: Int) -> String {
-        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) min"
     }
 }
 

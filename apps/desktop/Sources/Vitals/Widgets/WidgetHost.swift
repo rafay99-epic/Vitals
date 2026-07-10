@@ -258,6 +258,7 @@ struct WidgetHost: View {
         case .cpuUsage: CPUUsageWidget()
         case .gpu: GPUWidget()
         case .memory: MemoryWidget()
+        case .battery: BatteryWidget()
         case .fan: FanWidget()
         case .network: NetworkWidget()
         case .storage: StorageWidget()
