@@ -1,0 +1,26 @@
+apps/desktop/Sources/Vitals/Views/DiskHealthCards.swift
+  s_b59d1dac2ef154::t_ff8a5c9b08b13e 3-5,14-19
+apps/desktop/Sources/Vitals/Views/StorageView.swift
+  s_b59d1dac2ef154::t_d7bbfec46e70f7 80
+  s_b59d1dac2ef154::t_3c6fd2d1ad893e 96-104
+  s_b59d1dac2ef154::t_a9c31a96f93ceb 31-33
+  s_b59d1dac2ef154::t_de081d3f670643 105-107
+apps/desktop/Sources/Vitals/Views/SensorsView.swift
+  s_b59d1dac2ef154::t_2f23ef66c8eb77 3-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c4ef54b04a4c0216bf77ff63aef0abce5a958da6",
+  "prompts": {},
+  "sessions": {
+    "s_b59d1dac2ef154": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20525871-0d71-414b-93ca-68c8be6570fe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
