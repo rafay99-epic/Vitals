@@ -145,7 +145,8 @@ struct DuplicateScannerTests {
 
     @Test func wastedBytesIsSizeTimesCountMinusOne() {
         func f(_ n: String) -> DuplicateScanner.File {
-            .init(url: URL(fileURLWithPath: "/tmp/\(n)"), name: n, sizeBytes: 100, modified: nil, contentHash: "h")
+            .init(url: URL(fileURLWithPath: "/tmp/\(n)"), name: n, sizeBytes: 100, modified: nil,
+                  contentHash: "h", fileID: nil)
         }
         let g = DuplicateScanner.Group(id: "h", sizeBytes: 100, files: [f("a"), f("b"), f("c")])
         #expect(g.wastedBytes == 200)   // keep one of three
@@ -160,10 +161,11 @@ struct DuplicateScannerTests {
         let url = fm.temporaryDirectory.appendingPathComponent("vitals-duptrash-\(UUID().uuidString).bin")
         try Data(count: 500_000).write(to: url)
         let size = UInt64((try url.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0)
-        // contentHash matches the file on disk, so revalidation passes.
+        // contentHash + fileID match the file on disk, so revalidation passes.
         let hash = DuplicateScanner.fullHash(of: url)
         let file = DuplicateScanner.File(url: url, name: url.lastPathComponent,
-                                         sizeBytes: size, modified: nil, contentHash: hash ?? "")
+                                         sizeBytes: size, modified: nil, contentHash: hash ?? "",
+                                         fileID: DuplicateScanner.fileID(of: url))
 
         let result = DuplicateScanner.trash([file])
         if result.failures.isEmpty {
@@ -186,11 +188,38 @@ struct DuplicateScannerTests {
         // A hash that deliberately doesn't match the file's real content.
         let file = DuplicateScanner.File(url: url, name: url.lastPathComponent,
                                          sizeBytes: 200_000, modified: nil,
-                                         contentHash: "staleHashThatWillNotMatch")
+                                         contentHash: "staleHashThatWillNotMatch", fileID: nil)
         let result = DuplicateScanner.trash([file])
         #expect(result.freedBytes == 0)
         #expect(result.failures.first?.reason == "changed since scan")
         #expect(fm.fileExists(atPath: url.path))   // still there — never trashed
+    }
+
+    /// Path-swap guard: even when the content hash still matches, a file replaced
+    /// at the same path (new inode) since the scan must not be trashed — the
+    /// identity check catches it where a content re-hash alone would not.
+    @Test func fileReplacedAtSamePathIsNotTrashed() throws {
+        let fm = FileManager.default
+        let url = fm.temporaryDirectory.appendingPathComponent("vitals-dupswap-\(UUID().uuidString).bin")
+        let content = Data(repeating: 0xCD, count: 120_000)
+        try content.write(to: url)
+        defer { try? fm.removeItem(at: url) }
+        // Capture identity + hash of the original file.
+        let file = DuplicateScanner.File(url: url, name: url.lastPathComponent,
+                                         sizeBytes: 120_000, modified: nil,
+                                         contentHash: DuplicateScanner.fullHash(of: url) ?? "",
+                                         fileID: DuplicateScanner.fileID(of: url))
+        // Replace with a *different* file of identical content → same hash, new
+        // inode. Moving a distinct file over the path guarantees a fresh inode
+        // (delete+recreate could reuse the original's).
+        let impostor = fm.temporaryDirectory.appendingPathComponent("vitals-dupswap2-\(UUID().uuidString).bin")
+        try content.write(to: impostor)
+        try fm.removeItem(at: url)
+        try fm.moveItem(at: impostor, to: url)
+
+        let result = DuplicateScanner.trash([file])
+        #expect(result.failures.first?.reason == "changed since scan")
+        #expect(fm.fileExists(atPath: url.path))   // the impostor is left untouched
     }
 
     /// Sparse-file bucketing: a sparse file and a full copy of the same content

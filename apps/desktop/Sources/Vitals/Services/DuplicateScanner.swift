@@ -18,14 +18,17 @@ import CryptoKit
 enum DuplicateScanner {
     /// One file that participates in a duplicate set. `sizeBytes` is the allocated
     /// on-disk size (what trashing this copy actually reclaims). `contentHash` is
-    /// its full SHA-256 at scan time — re-checked immediately before trashing, so
-    /// a file that changed since the scan is never removed as a stale "duplicate".
+    /// its full SHA-256 at scan time and `fileID` its filesystem identity (inode);
+    /// both are re-checked immediately before trashing, so a file that changed —
+    /// or was replaced at the same path — since the scan is never removed as a
+    /// stale "duplicate".
     struct File: Identifiable, Hashable {
         let url: URL
         let name: String
         let sizeBytes: UInt64
         let modified: Date?
         let contentHash: String
+        let fileID: UInt64?
 
         var id: URL { url }
     }
@@ -95,7 +98,7 @@ enum DuplicateScanner {
                     let files = identical
                         .sorted { ($0.modified ?? .distantFuture) < ($1.modified ?? .distantFuture) }
                         .map { File(url: $0.url, name: $0.name, sizeBytes: $0.allocatedBytes,
-                                    modified: $0.modified, contentHash: hash) }
+                                    modified: $0.modified, contentHash: hash, fileID: fileID(of: $0.url)) }
                     groups.append(Group(id: hash, sizeBytes: logicalSize, files: files))
                 }
             }
@@ -162,22 +165,34 @@ enum DuplicateScanner {
         digest.map { String(format: "%02x", $0) }.joined()
     }
 
+    /// The file's filesystem identity (inode) at `url`, or nil if it can't be
+    /// read. A file replaced at the same path gets a new inode, so comparing this
+    /// catches a path swap that a content re-hash alone might miss.
+    static func fileID(of url: URL) -> UInt64? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let inode = attrs[.systemFileNumber] as? Int else { return nil }
+        return UInt64(inode)
+    }
+
     // MARK: Trashing
 
     /// Moves each file to the Trash — the only deletion this type performs, and a
-    /// recoverable one. Before trashing, each file's current content is re-hashed
-    /// and compared to the hash captured at scan time: a file that changed or was
-    /// replaced since the scan is **not** a duplicate any more, so it's left in
-    /// place and recorded as a failure rather than trashed on stale information.
-    /// After trashing we confirm the original path is gone before crediting its
-    /// bytes; anything that fails is recorded with a reason, never force-deleted.
+    /// recoverable one. Before trashing, each file is re-validated against the scan:
+    /// its filesystem identity (inode) **and** its full content hash must both still
+    /// match, so a file that changed — or was swapped for a different file at the
+    /// same path — since the scan is left in place and recorded as a failure rather
+    /// than trashed on stale information. The Trash API is path-based, so a
+    /// perfectly atomic guarantee isn't possible; this narrows the window to the
+    /// microseconds around the move, and a Trash is recoverable regardless. After
+    /// trashing we confirm the original path is gone before crediting its bytes;
+    /// anything that fails is recorded with a reason, never force-deleted.
     static func trash(_ files: [File]) -> TrashResult {
         let fm = FileManager.default
         var result = TrashResult(freedBytes: 0, failures: [])
         for file in files {
-            // Time-of-check/time-of-use guard: only remove what still matches the
-            // content we identified as a duplicate.
-            guard fullHash(of: file.url) == file.contentHash else {
+            // Time-of-check/time-of-use guard: only remove what is still the same
+            // file (same inode) with the same content we identified as a duplicate.
+            guard fileID(of: file.url) == file.fileID, fullHash(of: file.url) == file.contentHash else {
                 result.failures.append((url: file.url, reason: "changed since scan"))
                 continue
             }
