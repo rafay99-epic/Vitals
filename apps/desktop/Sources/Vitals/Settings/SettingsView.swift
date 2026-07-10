@@ -132,7 +132,7 @@ struct SettingsView: View {
                   view: AnyView(TabsCard())),
             .init(title: "Menu bar", keywords: "status item readings icons text animate menubar",
                   view: AnyView(MenuBarCard())),
-            .init(title: "Desktop Widgets", keywords: "widgets float on top animate desktop panels placement behind icons",
+            .init(title: "Desktop Widgets", keywords: "widgets float on top animate desktop panels placement behind icons battery",
                   view: AnyView(WidgetsCard())),
         ]),
         SettingsSectionModel(title: "Monitoring", cards: [
