@@ -1,0 +1,35 @@
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_d6ee421fe6aff2::t_d632ec6eba9bcd 135
+apps/desktop/Sources/Vitals/Widgets/Cards/BatteryWidget.swift
+  s_d6ee421fe6aff2::t_9e5386d9acbd71 1-61
+apps/desktop/Sources/Vitals/Views/SystemCards.swift
+  s_d6ee421fe6aff2::t_26a43c48739b49 383-384
+  s_d6ee421fe6aff2::t_c3a71be1c44251 352,357
+  s_d6ee421fe6aff2::t_f8d03fb338a7ac 318-343
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_d6ee421fe6aff2::t_3ce50d6c5ae66a 55,59,67
+apps/desktop/Sources/Vitals/Widgets/WidgetKind.swift
+  s_d6ee421fe6aff2::t_bb5cd51ad4d525 10
+  s_d6ee421fe6aff2::t_1a4e11a514e74e 24
+  s_d6ee421fe6aff2::t_a0595bede72a3e 53
+  s_d6ee421fe6aff2::t_22342559b1fac1 69
+  s_d6ee421fe6aff2::t_ba81e415a01811 39
+apps/desktop/Sources/Vitals/Widgets/WidgetHost.swift
+  s_d6ee421fe6aff2::t_455f211f98a0c6 261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5f10900cfefd381cb38b01d6e07fc6314b374d6a",
+  "prompts": {},
+  "sessions": {
+    "s_d6ee421fe6aff2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c24c12e-574f-4d36-9d73-85af609892e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
