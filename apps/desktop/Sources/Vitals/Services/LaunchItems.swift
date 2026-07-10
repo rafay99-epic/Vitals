@@ -202,18 +202,25 @@ enum LaunchItemScanner {
     /// `launchctl list`. Authoritative for the user's own login agents (no root),
     /// which is exactly the set whose resource cost we can also read — so it's the
     /// honest attribution key, never a fragile match on the program path.
-    static func runningPIDs() -> [String: Int32] {
-        parseList(run("/bin/launchctl", ["list"]))
+    ///
+    /// Returns nil when the command produced no usable output (it failed or was
+    /// blocked) — a working `launchctl list` always lists many jobs. Callers must
+    /// treat nil as "unknown", NOT as "nothing is running", so a failed read never
+    /// mislabels every agent "Not running".
+    static func runningPIDs() -> [String: Int32]? {
+        let map = parseList(run("/bin/launchctl", ["list"]))
+        return map.isEmpty ? nil : map
     }
 
-    /// Parses `launchctl list` output (tab-separated `PID<TAB>Status<TAB>Label`)
+    /// Parses `launchctl list` output (`PID<whitespace>Status<whitespace>Label`)
     /// into `label → pid`, keeping only running jobs. The header row ("PID …") and
-    /// idle jobs (PID "-") both fail the numeric-pid guard, so they're skipped —
-    /// no need to special-case the header. Pure, for testing.
+    /// idle jobs (PID "-") both fail the numeric-pid guard, so they're skipped — no
+    /// need to special-case the header. Splits on any whitespace (tabs or spaces),
+    /// since launchd labels never contain whitespace. Pure, for testing.
     static func parseList(_ text: String) -> [String: Int32] {
         var map: [String: Int32] = [:]
         for line in text.split(separator: "\n") {
-            let cols = line.split(separator: "\t")
+            let cols = line.split(whereSeparator: \.isWhitespace)
             guard cols.count >= 3, let pid = Int32(cols[0]), pid > 0 else { continue }
             map[String(cols[2])] = pid
         }

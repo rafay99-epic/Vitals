@@ -58,6 +58,16 @@ enum StartupImpact {
         }
     }
 
+    /// Mach absolute-time units → nanoseconds. `ri_user_time`/`ri_system_time`
+    /// are recorded in mach time units (like `mach_absolute_time`), NOT
+    /// nanoseconds — on Apple Silicon the timebase is 125/3 (~41.67 ns/unit), so
+    /// treating them as nanoseconds under-reports CPU by ~42×.
+    private static let nanosPerMachUnit: Double = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return Double(info.numer) / Double(info.denom)
+    }()
+
     /// Reads a pid's live footprint + cumulative CPU seconds via `proc_pid_rusage`
     /// (the same call `ProcessInventory` uses). Returns nil when the process is
     /// gone or we lack permission to inspect it (another user / root) — the caller
@@ -70,9 +80,9 @@ enum StartupImpact {
             }
         }
         guard ok == 0 else { return nil }
-        let cpuNanos = usage.ri_user_time + usage.ri_system_time
-        return Cost(memoryBytes: usage.ri_phys_footprint,
-                    cpuSeconds: Double(cpuNanos) / 1_000_000_000)
+        let machUnits = usage.ri_user_time + usage.ri_system_time
+        let cpuSeconds = Double(machUnits) * Self.nanosPerMachUnit / 1_000_000_000
+        return Cost(memoryBytes: usage.ri_phys_footprint, cpuSeconds: cpuSeconds)
     }
 
     /// The state of one launch item given the live label→pid map. Only user agents

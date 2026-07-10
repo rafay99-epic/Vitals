@@ -31,6 +31,16 @@ struct StartupImpactTests {
         #expect(map.count == 2)
     }
 
+    @Test func parseListIsRobustToSpacesNotJustTabs() {
+        // launchctl output should tab-delimit, but the parser tolerates spaces so
+        // a formatting quirk can't silently drop every row.
+        let text = "PID   Status  Label\n1234  0   com.example.agent\n-  0   com.example.idle"
+        let map = LaunchItemScanner.parseList(text)
+        #expect(map["com.example.agent"] == 1234)
+        #expect(map["com.example.idle"] == nil)
+        #expect(map.count == 1)
+    }
+
     // MARK: Attribution state machine
 
     @Test func systemItemsAreNeverGuessed() {

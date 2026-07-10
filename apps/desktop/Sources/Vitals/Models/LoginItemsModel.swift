@@ -42,15 +42,24 @@ final class LoginItemsModel: ObservableObject {
 
     /// Attributes each item to its live process and reads the real cost, off the
     /// main actor. Cheap (one `launchctl list` + a `proc_pid_rusage` per running
-    /// user agent), so it re-runs on every scan and manual refresh.
-    func refreshImpact() async {
+    /// user agent). Private — driven only by the model's own scan/mutation cycle,
+    /// so `impact` always corresponds to the currently-published `items`.
+    private func refreshImpact() async {
         let current = items
-        impact = await Task.detached { () -> [LaunchItem.ID: StartupImpact.State] in
+        let map = await Task.detached { () -> [LaunchItem.ID: StartupImpact.State] in
+            // nil = `launchctl list` was unavailable → every item is unknown, not
+            // a false "Not running".
             let pids = LaunchItemScanner.runningPIDs()
             var out: [LaunchItem.ID: StartupImpact.State] = [:]
-            for item in current { out[item.id] = StartupImpact.state(for: item, runningPIDs: pids) }
+            for item in current {
+                out[item.id] = pids.map { StartupImpact.state(for: item, runningPIDs: $0) } ?? .notMeasured
+            }
             return out
         }.value
+        // A newer scan/mutation may have replaced `items` while we were reading;
+        // don't publish an impact map computed against a stale snapshot.
+        guard items == current else { return }
+        impact = map
     }
 
     func setDisabled(_ disabled: Bool, _ item: LaunchItem) async {
@@ -73,6 +82,9 @@ final class LoginItemsModel: ObservableObject {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].disabled = disabled
         }
+        // Disabling stops the process now, so its live cost/badge changed —
+        // re-attribute rather than leave a stale footprint until the next scan.
+        await refreshImpact()
     }
 
     func remove(_ item: LaunchItem) async {
@@ -94,6 +106,10 @@ final class LoginItemsModel: ObservableObject {
         } else {
             removed = await Task.detached { LaunchItemScanner.trashUserAgent(item: item) }.value
         }
-        if removed { items.removeAll { $0.id == item.id } }
+        if removed {
+            items.removeAll { $0.id == item.id }
+            // Keep the footprint total honest after the item leaves the list.
+            await refreshImpact()
+        }
     }
 }

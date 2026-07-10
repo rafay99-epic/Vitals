@@ -54,7 +54,10 @@ struct LoginItemsView: View {
             if let bytes = model.userFootprintBytes {
                 Text("·").foregroundStyle(.tertiary)
                 Text("\(formatMemory(bytes)) in use")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.system(.callout, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(.secondary)
                     .help("Live memory footprint of your running login agents right now")
             }
             Spacer()
@@ -214,6 +217,7 @@ private struct LaunchItemRow: View {
                 Text(formatMemory(cost.memoryBytes))
                     .font(.system(.caption, design: .rounded, weight: .medium))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
                     .foregroundStyle(.secondary)
                     .help("\(formatMemory(cost.memoryBytes)) · \(cpuText(cost.cpuSeconds)) of CPU time since it launched")
                 ImpactCapsule(level: StartupImpact.level(.running(cost)))
