@@ -1,0 +1,26 @@
+package.json
+  s_b59d1dac2ef154::t_7022491e42464e 30
+apps/website/eslint.config.js
+  s_b59d1dac2ef154::t_784562e7071ad9 1-8
+apps/website/package.json
+  s_b59d1dac2ef154::t_79eb66018b6bac 9
+  s_b59d1dac2ef154::t_7022491e42464e 36
+bun.lock
+  s_b59d1dac2ef154::t_e0c081f9488c3a 14,45,312-351,620
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "ace641825cf9e3f6fa47ed1764a5e4125fa24925",
+  "prompts": {},
+  "sessions": {
+    "s_b59d1dac2ef154": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20525871-0d71-414b-93ca-68c8be6570fe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
