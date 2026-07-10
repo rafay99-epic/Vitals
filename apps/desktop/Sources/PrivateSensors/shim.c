@@ -251,7 +251,6 @@ int vitals_nvme_smart_read(VitalsDiskSMART *out) {
         memset(&idc, 0, sizeof(idc));
         if ((*smart)->GetIdentifyData(smart, &idc, 0) == kIOReturnSuccess) {
             out->trim_known     = 1;
-            out->oncs           = idc.OPTIONAL_NVM_COMMAND_SUPPORT;
             out->trim_supported = (idc.OPTIONAL_NVM_COMMAND_SUPPORT & (1u << 2)) ? 1 : 0;
         }
     }

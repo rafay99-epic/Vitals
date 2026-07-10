@@ -7,8 +7,6 @@ import SwiftUI
 /// space; only the drive temperature belongs here. Reuses `FanCard` and the
 /// diagnostics card verbatim rather than re-deriving them.
 struct SensorsView: View {
-    @EnvironmentObject private var model: VitalsModel
-
     var body: some View {
         MetricScroll {
             TemperaturesCard()

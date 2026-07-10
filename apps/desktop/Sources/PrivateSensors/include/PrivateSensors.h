@@ -140,7 +140,6 @@ typedef struct {
     // Identify command, so the caller shows "Unknown" rather than guessing "No".
     uint8_t  trim_known;                // 1 when Identify Controller was read
     uint8_t  trim_supported;            // 1 when ONCS bit 2 (Dataset Management) is set
-    uint16_t oncs;                      // raw Optional NVM Command Support bitfield
 } VitalsDiskSMART;
 
 // Reads the internal SSD's SMART health log. Returns 1 and fills `out` on
