@@ -22,12 +22,27 @@ enum OverviewChart: String, CaseIterable, Identifiable {
     var symbol: String { self == .bar ? "chart.bar.xaxis" : "chart.pie.fill" }
 }
 
+/// The Storage tab's two pages: **Analyze** (what's using your space) and
+/// **Health** (the SSD's own SMART report — wear, endurance, TRIM, lifetime).
+/// They swap in place behind one segmented control so window geometry never
+/// changes. Health is deliberately independent of the volume read: SMART is
+/// readable even when the boot-volume capacity isn't.
+enum StoragePage: String, CaseIterable, Identifiable {
+    case analyze, health
+    var id: String { rawValue }
+    var title: String { self == .analyze ? "Analyze" : "Health" }
+    var symbol: String { self == .analyze ? "chart.pie" : "waveform.path.ecg" }
+}
+
 struct StorageView: View {
     @ObservedObject var model: StorageModel
     /// True only while Storage is the visible tab; the view stays mounted, so it
     /// re-reads the volume on activation rather than on appear.
     var isActive: Bool
     @EnvironmentObject private var settings: AppSettings
+    /// The internal SSD's SMART health (wear, endurance, TRIM, lifetime) is drive
+    /// info, so it belongs next to disk space — read from the shared VitalsModel.
+    @EnvironmentObject private var vitals: VitalsModel
     @State private var confirmWholeDisk = false
     /// In-app Quick Look target — a file row sets this instead of opening the
     /// file, so a click previews consistently rather than sometimes launching
@@ -35,8 +50,61 @@ struct StorageView: View {
     @State private var previewURL: URL?
     /// Persisted so the chosen graphic sticks across launches.
     @AppStorage("storageOverviewChart") private var overviewChart: OverviewChart = .bar
+    /// Persisted so the chosen page (Analyze / Health) sticks across launches.
+    @AppStorage("storagePage") private var page: StoragePage = .analyze
 
     var body: some View {
+        VStack(spacing: 0) {
+            pagePicker
+            Divider()
+                .opacity(0.5)
+            ZStack {
+                switch page {
+                case .analyze:
+                    analyzeTab
+                        .transition(.opacity)
+                case .health:
+                    healthTab
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: page)
+        }
+        .onChange(of: isActive, initial: true) { _, active in
+            guard active else { return }
+            // Capacity and the access check are instant; the disk-walking
+            // analysis waits for the button unless auto-analyze is on.
+            model.loadVolume()
+            model.refreshAccess()
+            if settings.autoAnalyzeStorage && !model.hasRun {
+                model.analyze(includeHidden: settings.analyzerIncludesHidden)
+            }
+        }
+    }
+
+    private var pagePicker: some View {
+        HStack {
+            Picker("", selection: $page) {
+                ForEach(StoragePage.allCases) { option in
+                    Label(option.title, systemImage: option.symbol).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: Analyze tab
+
+    /// "What's using your space" — the capacity hero, the space breakdown, and
+    /// the drill-down browser, with the read-only footer. Unchanged behaviour,
+    /// now living behind the Analyze segment.
+    private var analyzeTab: some View {
         VStack(spacing: 0) {
             ZStack {
                 if model.isBrowsing {
@@ -53,15 +121,29 @@ struct StorageView: View {
                 .opacity(0.5)
             footer
         }
-        .onChange(of: isActive, initial: true) { _, active in
-            guard active else { return }
-            // Capacity and the access check are instant; the disk-walking
-            // analysis waits for the button unless auto-analyze is on.
-            model.loadVolume()
-            model.refreshAccess()
-            if settings.autoAnalyzeStorage && !model.hasRun {
-                model.analyze(includeHidden: settings.analyzerIncludesHidden)
+    }
+
+    // MARK: Health tab
+
+    /// The internal SSD's SMART report — the shared health cards, shown here in
+    /// Storage. Independent of the volume read (SMART works even when capacity
+    /// can't be read), and honest when SMART is absent: a VM or external-only
+    /// setup gets an explicit empty state, never a fabricated "100% healthy".
+    @ViewBuilder
+    private var healthTab: some View {
+        if let disk = vitals.diskHealth {
+            MetricScroll {
+                DiskHealthHeroCard(disk: disk)
+                DiskEnduranceCard(disk: disk)
+                DiskLifetimeCard(disk: disk)
             }
+        } else {
+            EmptyStateView(
+                symbol: "internaldrive.badge.exclamationmark",
+                tint: .blue,
+                title: "SSD health unavailable",
+                message: "This Mac doesn't expose detailed SSD health — some hardware, virtual machines, and external drives don't. When it's available, wear, endurance, TRIM and power-on history appear here."
+            ) { EmptyView() }
         }
     }
 

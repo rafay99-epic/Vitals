@@ -50,14 +50,22 @@ struct DiskHealthTests {
         #expect(make(powerOnHours: 1012).poweredOnText == "42 days")
     }
 
+    @Test func trimTextIsHonestAboutTheUnknownCase() {
+        #expect(make(trim: true).trimText == "Supported")
+        #expect(make(trim: false).trimText == "Not supported")
+        #expect(make(trim: nil).trimText == "Unknown")   // drive refused Identify → never guessed
+    }
+
     // A snapshot with only the fields a test cares about set.
     private func make(percentUsed: Int = 0, criticalWarning: Int = 0,
-                      spare: Int = 100, threshold: Int = 10, powerOnHours: Int = 0) -> DiskHealthSnapshot {
+                      spare: Int = 100, threshold: Int = 10, powerOnHours: Int = 0,
+                      trim: Bool? = nil) -> DiskHealthSnapshot {
         DiskHealthSnapshot(
             model: nil, capacityBytes: nil, percentUsed: percentUsed,
             bytesWritten: 0, bytesRead: 0, powerOnHours: powerOnHours, powerCycles: 0,
             unsafeShutdowns: 0, availableSpare: spare, availableSpareThreshold: threshold,
-            mediaErrors: 0, temperature: nil, criticalWarning: criticalWarning
+            mediaErrors: 0, temperature: nil, criticalWarning: criticalWarning,
+            trimSupported: trim
         )
     }
 

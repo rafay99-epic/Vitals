@@ -241,6 +241,18 @@ int vitals_nvme_smart_read(VitalsDiskSMART *out) {
         out->power_on_hours           = d.POWER_ON_HOURS[0];
         out->unsafe_shutdowns         = d.UNSAFE_SHUTDOWNS[0];
         out->media_errors             = d.MEDIA_ERRORS[0];
+
+        // TRIM support lives in the Identify Controller ONCS bitfield (bit 2 =
+        // Dataset Management), not the SMART log — the same source system_profiler
+        // reports "TRIM Support" from. Read it on the same interface; a drive or
+        // VM that refuses Identify leaves trim_known = 0 and the caller shows
+        // "Unknown" rather than fabricating a "No".
+        NVMeIdentifyControllerStruct idc;
+        memset(&idc, 0, sizeof(idc));
+        if ((*smart)->GetIdentifyData(smart, &idc, 0) == kIOReturnSuccess) {
+            out->trim_known     = 1;
+            out->trim_supported = (idc.OPTIONAL_NVM_COMMAND_SUPPORT & (1u << 2)) ? 1 : 0;
+        }
     }
 
     (*smart)->Release(smart);
