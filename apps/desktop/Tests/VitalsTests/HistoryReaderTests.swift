@@ -44,9 +44,10 @@ struct HistoryReaderTests {
         #expect(sample?.netOutBps == 34_000)
         #expect(sample?.diskReadBps == 52_000_000)
         #expect(sample?.diskWriteBps == 9_500_000)
-        // Blank trailing columns (no disk reading that tick) → nil.
+        // Blank trailing columns (no disk reading that tick) → nil for both.
         let blank = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,125000,34000,,")
         #expect(HistoryReader.parse(blank)?.diskReadBps == nil)
+        #expect(HistoryReader.parse(blank)?.diskWriteBps == nil)
     }
 
     @Test func rejectsHeaderAndMalformed() {

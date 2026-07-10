@@ -2,15 +2,12 @@ import Foundation
 import IOKit
 
 /// A whole-machine disk I/O reading for one tick: per-second read/write
-/// throughput plus running totals, summed over every block-storage driver
-/// (internal SSD and any attached external drives). Rates only exist relative
-/// to a previous reading, so the first sample carries 0 rates — never a
-/// fabricated spike.
+/// throughput summed over every block-storage driver (internal SSD and any
+/// attached external drives). Rates only exist relative to a previous
+/// reading, so the first sample carries 0 rates — never a fabricated spike.
 struct DiskIOSnapshot: Sendable {
     var readPerSec: Double      // bytes/s, summed over drivers
     var writePerSec: Double
-    var totalBytesRead: UInt64  // since boot/attach, from the drivers' counters
-    var totalBytesWritten: UInt64
 }
 
 /// Live disk throughput from IOKit's `IOBlockStorageDriver` statistics — the
@@ -29,8 +26,8 @@ final class DiskStats {
     private var previousTimestamp: UInt64?  // CLOCK_UPTIME_RAW nanoseconds
 
     /// One reading. Rates are deltas versus the previous call; the first call
-    /// reports 0 rates. Always returns a snapshot (all zeros when IOKit has
-    /// no drivers to report), never nil.
+    /// reports 0 rates. Always returns a snapshot (0 rates when IOKit has no
+    /// drivers to report), never nil.
     func sample() -> DiskIOSnapshot {
         let counters = Self.readDriverCounters()
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
@@ -40,27 +37,18 @@ final class DiskStats {
 
         var readPerSec = 0.0
         var writePerSec = 0.0
-        var totalRead: UInt64 = 0
-        var totalWritten: UInt64 = 0
         for counter in counters {
             if let previous = previousCounters[counter.id] {
                 readPerSec += CounterRate.perSecond(previous: previous.read, current: counter.read, elapsed: elapsed)
                 writePerSec += CounterRate.perSecond(previous: previous.written, current: counter.written, elapsed: elapsed)
             }
-            totalRead &+= counter.read
-            totalWritten &+= counter.written
         }
 
         previousCounters = Dictionary(counters.map { ($0.id, (read: $0.read, written: $0.written)) },
                                       uniquingKeysWith: { first, _ in first })
         previousTimestamp = now
 
-        return DiskIOSnapshot(
-            readPerSec: readPerSec,
-            writePerSec: writePerSec,
-            totalBytesRead: totalRead,
-            totalBytesWritten: totalWritten
-        )
+        return DiskIOSnapshot(readPerSec: readPerSec, writePerSec: writePerSec)
     }
 
     /// Property keys from `<IOKit/storage/IOBlockStorageDriver.h>` —

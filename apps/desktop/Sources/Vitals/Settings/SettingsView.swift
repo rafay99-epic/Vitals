@@ -148,7 +148,7 @@ struct SettingsView: View {
                   view: AnyView(OverheatingCard())),
             .init(title: "Notifications", keywords: "notify overheat thermal pressure",
                   view: AnyView(NotificationsCard())),
-            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process network download upload threshold disk read write",
+            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process network download upload threshold read write",
                   view: AnyView(CustomAlertsCard())),
         ]),
         SettingsSectionModel(title: "Updates", cards: [
