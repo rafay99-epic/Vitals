@@ -1,0 +1,27 @@
+apps/desktop/Sources/Vitals/Models/LoginItemsModel.swift
+  s_b59d1dac2ef154::t_e554b3c9d79a53 12-15,20-29,40-53
+apps/desktop/Sources/Vitals/Services/LaunchItems.swift
+  s_b59d1dac2ef154::t_7f5258597da9be 201-222
+apps/desktop/Sources/Vitals/Services/StartupImpact.swift
+  s_b59d1dac2ef154::t_fe3f9456565de6 1-88
+apps/desktop/Tests/VitalsTests/StartupImpactTests.swift
+  s_b59d1dac2ef154::t_e43194d7374357 1-87
+apps/desktop/Sources/Vitals/Views/LoginItemsView.swift
+  s_b59d1dac2ef154::t_8dfd4633b33cc0 52,54-59,174-176,204-268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ee4ac8980a76212d51626314b08ae87924be786c",
+  "prompts": {},
+  "sessions": {
+    "s_b59d1dac2ef154": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20525871-0d71-414b-93ca-68c8be6570fe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
