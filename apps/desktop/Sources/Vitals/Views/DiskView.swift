@@ -105,6 +105,7 @@ struct DiskEnduranceCard: View {
                 MetricRowGrid(rows: [
                     MetricRow(symbol: "square.and.arrow.up", label: "Data read", value: formatBytes(UInt64(disk.bytesRead))),
                     MetricRow(symbol: "shield.lefthalf.filled", label: "Spare blocks", value: "\(disk.availableSpare)%"),
+                    MetricRow(symbol: "sparkles", label: "TRIM", value: disk.trimText),
                 ])
             }
         }
