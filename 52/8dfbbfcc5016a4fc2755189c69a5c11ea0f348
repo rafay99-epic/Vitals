@@ -1,0 +1,29 @@
+apps/desktop/Sources/PrivateSensors/shim.c
+  s_b59d1dac2ef154::t_09004591527096 244-256
+apps/desktop/Sources/PrivateSensors/include/PrivateSensors.h
+  s_b59d1dac2ef154::t_bd5252852ee4cf 136-143
+apps/desktop/Sources/Vitals/Services/DiskHealth.swift
+  s_b59d1dac2ef154::t_85de7a0718e7c8 30-40
+  s_b59d1dac2ef154::t_acf02314894199 87-88
+  s_b59d1dac2ef154::t_507c50b4c03e39 105-106
+apps/desktop/Tests/VitalsTests/DiskHealthTests.swift
+  s_b59d1dac2ef154::t_ec966ad789defc 53-58,61-62,67-68
+apps/desktop/Sources/Vitals/Views/DiskView.swift
+  s_b59d1dac2ef154::t_a87d942001ebfe 108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "528dfbbfcc5016a4fc2755189c69a5c11ea0f348",
+  "prompts": {},
+  "sessions": {
+    "s_b59d1dac2ef154": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20525871-0d71-414b-93ca-68c8be6570fe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
