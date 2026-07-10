@@ -9,32 +9,32 @@ import Foundation
 /// double-counting traffic. None of these touch the kernel, CoreWLAN, or the
 /// network, so they run anywhere `swift test` does.
 struct NetworkStatsTests {
-    // MARK: computeRate
+    // MARK: CounterRate.perSecond (shared by NetworkStats + DiskStats)
 
     @Test func normalDeltaIsBytesOverElapsed() {
         // 1000 bytes over 2 seconds → 500 B/s.
-        #expect(NetworkStats.computeRate(previous: 1000, current: 2000, elapsed: 2) == 500)
+        #expect(CounterRate.perSecond(previous: 1000, current: 2000, elapsed: 2) == 500)
     }
 
     @Test func zeroElapsedIsZero() {
         // No time passed → no honest rate to report.
-        #expect(NetworkStats.computeRate(previous: 0, current: 5000, elapsed: 0) == 0)
+        #expect(CounterRate.perSecond(previous: 0, current: 5000, elapsed: 0) == 0)
     }
 
     @Test func counterDecreaseIsZero() {
         // Interface re-created / counter reset: report 0, never a negative.
-        #expect(NetworkStats.computeRate(previous: 9000, current: 100, elapsed: 1) == 0)
+        #expect(CounterRate.perSecond(previous: 9000, current: 100, elapsed: 1) == 0)
     }
 
     @Test func equalCountersAreZero() {
-        #expect(NetworkStats.computeRate(previous: 4242, current: 4242, elapsed: 1) == 0)
+        #expect(CounterRate.perSecond(previous: 4242, current: 4242, elapsed: 1) == 0)
     }
 
     @Test func largeValuesDoNotOverflow() {
         // ~10 GB delta over 1 s — well within Double range, no wraparound.
         let previous: UInt64 = 5_000_000_000
         let current: UInt64 = 15_000_000_000
-        #expect(NetworkStats.computeRate(previous: previous, current: current, elapsed: 1) == 10_000_000_000)
+        #expect(CounterRate.perSecond(previous: previous, current: current, elapsed: 1) == 10_000_000_000)
     }
 
     // MARK: NetworkFormat.rate

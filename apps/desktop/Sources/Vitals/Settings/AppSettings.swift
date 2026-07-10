@@ -76,7 +76,7 @@ enum TabSize: String, CaseIterable, Identifiable {
 /// A live reading the menu-bar item can show next to the icon. Any number can
 /// be enabled at once; an empty set means "icon only".
 enum MenuBarMetric: String, CaseIterable, Identifiable {
-    case cpuTemp, cpuUsage, gpuUsage, memory, fan, network
+    case cpuTemp, cpuUsage, gpuUsage, memory, fan, network, disk
     var id: String { rawValue }
 
     /// Label shown in the Settings picker.
@@ -88,6 +88,7 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
         case .memory:   return "Memory used"
         case .fan:      return "Fan speed"
         case .network:  return "Network download"
+        case .disk:     return "Disk read"
         }
     }
 
@@ -100,6 +101,7 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
         case .memory:   return "memorychip"
         case .fan:      return "fan"
         case .network:  return "network"
+        case .disk:     return "internaldrive"
         }
     }
 
@@ -112,6 +114,7 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
         case .memory:   return "RAM"
         case .fan:      return "Fan"
         case .network:  return "Net"
+        case .disk:     return "Disk"
         }
     }
 }

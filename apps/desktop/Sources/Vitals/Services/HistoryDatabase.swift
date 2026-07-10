@@ -35,6 +35,8 @@ final class HistoryDatabase: @unchecked Sendable {
         let gpuMemoryGB: Double?
         let netInBps: Double?
         let netOutBps: Double?
+        let diskReadBps: Double?
+        let diskWriteBps: Double?
     }
 
     private let queue = DispatchQueue(label: "com.vitals.history-db")
@@ -126,16 +128,21 @@ final class HistoryDatabase: @unchecked Sendable {
             gpu_usage     REAL,
             gpu_mem_gb    REAL,
             net_in_bps    REAL,
-            net_out_bps   REAL
+            net_out_bps   REAL,
+            disk_read_bps  REAL,
+            disk_write_bps REAL
         );
         """)
-        // v1 → v2 (the schema's first migration): v1 shipped `samples` without
-        // the network columns, and CREATE TABLE IF NOT EXISTS won't touch an
-        // existing table. Column *presence* is the gate — not `user_version` —
-        // so a crash between the ALTER and the version stamp can't wedge a
-        // half-migrated database, and re-running is always a no-op.
+        // Migrations (v1 → v2 network, v2 → v3 disk I/O): earlier versions
+        // shipped `samples` without the newer columns, and CREATE TABLE IF NOT
+        // EXISTS won't touch an existing table. Column *presence* is the gate —
+        // not `user_version` — so a crash between the ALTER and the version
+        // stamp can't wedge a half-migrated database, and re-running is always
+        // a no-op.
         addSampleColumnIfMissing("net_in_bps")
         addSampleColumnIfMissing("net_out_bps")
+        addSampleColumnIfMissing("disk_read_bps")
+        addSampleColumnIfMissing("disk_write_bps")
         // UNIQUE(ts, message): a fired alert is identified by when + what, so
         // re-importing the alert log (e.g. a crash between import and retire) can't
         // duplicate rows — INSERT OR IGNORE makes it idempotent. Distinct alerts
@@ -149,7 +156,7 @@ final class HistoryDatabase: @unchecked Sendable {
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);")
-        exec("PRAGMA user_version=2;")
+        exec("PRAGMA user_version=3;")
     }
 
     /// Adds a `REAL` column to `samples` if it isn't there yet. SQLite's ALTER
@@ -167,7 +174,7 @@ final class HistoryDatabase: @unchecked Sendable {
         sqlite3_finalize(stmt)
         guard !exists else { return }
         exec("ALTER TABLE samples ADD COLUMN \(column) REAL;")
-        Log.notice(.history, "history db: added \(column) column (schema v2)")
+        Log.notice(.history, "history db: added \(column) column")
     }
 
     // MARK: Writes
@@ -183,8 +190,8 @@ final class HistoryDatabase: @unchecked Sendable {
 
             let sql = """
             INSERT OR IGNORE INTO samples
-              (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?);
+              (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -202,6 +209,8 @@ final class HistoryDatabase: @unchecked Sendable {
             self.bindOptional(stmt, 11, entry.gpuMemoryGB)
             self.bindOptional(stmt, 12, entry.netInBps)
             self.bindOptional(stmt, 13, entry.netOutBps)
+            self.bindOptional(stmt, 14, entry.diskReadBps)
+            self.bindOptional(stmt, 15, entry.diskWriteBps)
             sqlite3_step(stmt)
         }
     }
@@ -239,7 +248,7 @@ final class HistoryDatabase: @unchecked Sendable {
             // inlining them is safe — and lets the thinned query also pin the true
             // first/last in-range rows, so the chart's endpoints are the real
             // newest/oldest readings, not just the nearest surviving sample.
-            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps FROM samples WHERE ts >= \(cutoff)"
+            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps FROM samples WHERE ts >= \(cutoff)"
             if stride > 1 {
                 sql += " AND (id % \(stride) = 0"
                     + " OR id = (SELECT MIN(id) FROM samples WHERE ts >= \(cutoff))"
@@ -266,7 +275,9 @@ final class HistoryDatabase: @unchecked Sendable {
                     gpuUsage: optionalDouble(stmt, 9),
                     gpuMemoryGB: optionalDouble(stmt, 10),
                     netInBps: optionalDouble(stmt, 11),
-                    netOutBps: optionalDouble(stmt, 12)
+                    netOutBps: optionalDouble(stmt, 12),
+                    diskReadBps: optionalDouble(stmt, 13),
+                    diskWriteBps: optionalDouble(stmt, 14)
                 ))
             }
             return out
@@ -297,7 +308,7 @@ final class HistoryDatabase: @unchecked Sendable {
     func forEachSample(_ body: (HistorySample) -> Void) {
         queue.sync {
             guard let db else { return }
-            let sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps FROM samples ORDER BY ts ASC;"
+            let sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps FROM samples ORDER BY ts ASC;"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             defer { sqlite3_finalize(stmt) }
@@ -315,7 +326,9 @@ final class HistoryDatabase: @unchecked Sendable {
                     gpuUsage: optionalDouble(stmt, 9),
                     gpuMemoryGB: optionalDouble(stmt, 10),
                     netInBps: optionalDouble(stmt, 11),
-                    netOutBps: optionalDouble(stmt, 12)
+                    netOutBps: optionalDouble(stmt, 12),
+                    diskReadBps: optionalDouble(stmt, 13),
+                    diskWriteBps: optionalDouble(stmt, 14)
                 ))
             }
         }
@@ -442,8 +455,8 @@ final class HistoryDatabase: @unchecked Sendable {
         guard let db else { return false }
         let sql = """
         INSERT OR IGNORE INTO samples
-          (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?);
+          (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -461,6 +474,8 @@ final class HistoryDatabase: @unchecked Sendable {
         bindOptional(stmt, 11, s.gpuMemoryGB)
         bindOptional(stmt, 12, s.netInBps)
         bindOptional(stmt, 13, s.netOutBps)
+        bindOptional(stmt, 14, s.diskReadBps)
+        bindOptional(stmt, 15, s.diskWriteBps)
         return sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0
     }
 

@@ -147,6 +147,19 @@ struct DashboardTileGrid: View {
                 ) { drill(.network) }
             }
 
+            // Disk has no dedicated tab — its charts live in History, so this
+            // tile drills there rather than into a System segment of its own.
+            if let diskIO = model.diskIO {
+                DashboardTile(
+                    title: "Disk",
+                    value: "R " + NetworkFormat.rate(diskIO.readPerSec),
+                    subtitle: "W " + NetworkFormat.rate(diskIO.writePerSec),
+                    symbol: "internaldrive",
+                    tint: .yellow,
+                    series: recentCompact { $0.diskReadPerSec }
+                ) { drill(.history) }
+            }
+
             if let disk = model.diskHealth {
                 DashboardTile(
                     title: "Drive",

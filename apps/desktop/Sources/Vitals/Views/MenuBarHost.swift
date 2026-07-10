@@ -94,7 +94,7 @@ private struct MenuBarRow: View {
                         // reflowing the whole status bar each time. A reserved
                         // slot sized for the common case ("↓88.8M") absorbs the
                         // churn; a rarer longer value still grows it.
-                        .frame(minWidth: metric == .network ? 44 : 0, alignment: .leading)
+                        .frame(minWidth: [.network, .disk].contains(metric) ? 44 : 0, alignment: .leading)
                 }
             }
         }
@@ -156,5 +156,6 @@ func menuBarValue(_ metric: MenuBarMetric, model: VitalsModel, settings: AppSett
     case .memory:   return model.memory.map { String(format: "%.1fG", Double($0.used) / 1_073_741_824) } ?? "–"
     case .fan:      return model.fans.first.map { "\(Int($0.rpm))" } ?? "–"
     case .network:  return model.network.map { "↓" + NetworkFormat.compactRate($0.totalInPerSec) } ?? "–"
+    case .disk:     return model.diskIO.map { "R" + NetworkFormat.compactRate($0.readPerSec) } ?? "–"
     }
 }

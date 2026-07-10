@@ -27,6 +27,8 @@ final class VitalsModel: ObservableObject {
         let totalWatts: Double?      // SoC package power, nil until the 2nd sample
         let netInPerSec: Double?     // network download, bytes/s — nil until the 2nd sample
         let netOutPerSec: Double?    // network upload, bytes/s — nil until the 2nd sample
+        let diskReadPerSec: Double?  // disk read, bytes/s — nil until the 2nd sample
+        let diskWritePerSec: Double? // disk write, bytes/s — nil until the 2nd sample
     }
 
     @Published private(set) var cpuSensors: [Sensor] = []
@@ -76,6 +78,12 @@ final class VitalsModel: ObservableObject {
     /// True once the first network reading landed; publication starts with the
     /// second (see `network`).
     private var hasNetworkBaseline = false
+    /// Whole-machine disk read/write throughput. Nil until the second sample —
+    /// the first reading has no prior byte counters (same rule as `network`).
+    @Published private(set) var diskIO: DiskIOSnapshot?
+    /// True once the first disk reading landed; publication starts with the
+    /// second (see `diskIO`).
+    private var hasDiskIOBaseline = false
     /// False until the first sample lands — drives the dashboard loading state.
     @Published private(set) var hasLoaded = false
     /// True when a sample overran the watchdog (a sensor syscall wedged). The
@@ -380,6 +388,7 @@ final class VitalsModel: ObservableObject {
         battery = snapshot.battery
         diskHealth = snapshot.diskHealth
         updateNetwork(snapshot.network)
+        updateDiskIO(snapshot.diskIO)
         // Only reassign GPU when it was actually sampled this tick. When the
         // window/widgets/metric don't need it, the sampler returns nil and we
         // hold the last reading — so reopening the window shows the prior value
@@ -414,7 +423,9 @@ final class VitalsModel: ObservableObject {
                 // The published reading (nil until the 2nd sample), so the
                 // first tick is an honest gap, never a fabricated 0 B/s.
                 netInPerSec: network?.totalInPerSec,
-                netOutPerSec: network?.totalOutPerSec
+                netOutPerSec: network?.totalOutPerSec,
+                diskReadPerSec: diskIO?.readPerSec,
+                diskWritePerSec: diskIO?.writePerSec
             ))
             trimHistory()
 
@@ -433,7 +444,9 @@ final class VitalsModel: ObservableObject {
                     gpuUsage: gpu?.utilization,
                     gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) },
                     netInBps: network?.totalInPerSec,
-                    netOutBps: network?.totalOutPerSec
+                    netOutBps: network?.totalOutPerSec,
+                    diskReadBps: diskIO?.readPerSec,
+                    diskWriteBps: diskIO?.writePerSec
                 ))
             }
         }
@@ -483,6 +496,18 @@ final class VitalsModel: ObservableObject {
             network = snapshot
         } else {
             hasNetworkBaseline = true
+        }
+    }
+
+    /// Same second-sample rule as `updateNetwork`: the first disk reading has
+    /// no prior counters, so its 0 B/s rates are placeholders, not
+    /// measurements. A skipped read (nil) holds the last published snapshot.
+    private func updateDiskIO(_ snapshot: DiskIOSnapshot?) {
+        guard let snapshot else { return }
+        if hasDiskIOBaseline {
+            diskIO = snapshot
+        } else {
+            hasDiskIOBaseline = true
         }
     }
 
@@ -552,7 +577,9 @@ final class VitalsModel: ObservableObject {
             // Canonical MB/s to match the rule's stored threshold unit. Nil
             // until the second sample — a rule can't fire on a placeholder.
             networkDownMBps: network.map { $0.totalInPerSec / 1_000_000 },
-            networkUpMBps: network.map { $0.totalOutPerSec / 1_000_000 }
+            networkUpMBps: network.map { $0.totalOutPerSec / 1_000_000 },
+            diskReadMBps: diskIO.map { $0.readPerSec / 1_000_000 },
+            diskWriteMBps: diskIO.map { $0.writePerSec / 1_000_000 }
         )
     }
 
@@ -582,7 +609,8 @@ final class VitalsModel: ObservableObject {
         case .fanRPM:   return "\(Int(value)) rpm"
         case .diskFree: return String(format: "%.0f GB", value)
         // The reading is canonical MB/s; NetworkFormat speaks bytes/s.
-        case .networkDownload, .networkUpload: return NetworkFormat.rate(value * 1_000_000)
+        case .networkDownload, .networkUpload, .diskRead, .diskWrite:
+            return NetworkFormat.rate(value * 1_000_000)
         default:        return "\(Int(value))%"
         }
     }

@@ -31,6 +31,12 @@ struct CombinedWidget: View {
                         metric("Up", NetworkFormat.rate(network.totalOutPerSec), "arrow.up", .mint)
                     }
                 }
+                if let diskIO = model.diskIO {
+                    GridRow {
+                        metric("Read", NetworkFormat.rate(diskIO.readPerSec), "internaldrive", .yellow)
+                        metric("Write", NetworkFormat.rate(diskIO.writePerSec), "internaldrive.fill", .yellow)
+                    }
+                }
             }
         }
     }

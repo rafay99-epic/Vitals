@@ -135,6 +135,24 @@ struct MenuBarPanel: View {
                     }
                 }
             }
+            if let diskIO = model.diskIO {
+                sparkline(
+                    title: "Disk",
+                    value: "R " + NetworkFormat.rate(diskIO.readPerSec),
+                    color: .yellow
+                ) {
+                    ForEach(data) { sample in
+                        if let read = sample.diskReadPerSec {
+                            AreaMark(x: .value("t", sample.time), y: .value("v", read))
+                                .foregroundStyle(.yellow.opacity(0.18))
+                                .interpolationMethod(.catmullRom)
+                            LineMark(x: .value("t", sample.time), y: .value("v", read))
+                                .foregroundStyle(.yellow)
+                                .interpolationMethod(.catmullRom)
+                        }
+                    }
+                }
+            }
             if let utilization = model.gpu?.utilization {
                 sparkline(
                     title: "GPU",
