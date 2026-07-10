@@ -13,7 +13,7 @@ struct DownsampleTests {
             return VitalsModel.Sample(
                 id: t, time: t, averageCPU: 40, hottestCPU: 45, gpu: nil,
                 gpuUsage: nil, usage: 10, memoryUsed: 0, swapUsed: 0, batteryPercent: nil, totalWatts: nil,
-                netInPerSec: nil, netOutPerSec: nil
+                netInPerSec: nil, netOutPerSec: nil, diskReadPerSec: nil, diskWritePerSec: nil
             )
         }
     }

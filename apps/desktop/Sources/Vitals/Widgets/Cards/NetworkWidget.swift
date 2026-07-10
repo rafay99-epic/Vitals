@@ -10,8 +10,8 @@ struct NetworkWidget: View {
     var body: some View {
         WidgetCard(title: "Network", symbol: "network", tint: .mint) {
             HStack(alignment: .firstTextBaseline, spacing: 12 * scale) {
-                rate("arrow.down", model.network?.totalInPerSec, tint: .mint)
-                rate("arrow.up", model.network?.totalOutPerSec, tint: .orange)
+                WidgetRateRow(symbol: "arrow.down", value: model.network?.totalInPerSec, tint: .mint)
+                WidgetRateRow(symbol: "arrow.up", value: model.network?.totalOutPerSec, tint: .orange)
                 Spacer(minLength: 0)
             }
             // Download trend — the same series the in-app chart leads with.
@@ -24,19 +24,6 @@ struct NetworkWidget: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
-        }
-    }
-
-    private func rate(_ symbol: String, _ value: Double?, tint: Color) -> some View {
-        HStack(spacing: 3 * scale) {
-            Image(systemName: symbol)
-                .scaledFont(11, weight: .semibold)
-                .foregroundStyle(tint)
-            Text(value.map(NetworkFormat.rate) ?? "—")
-                .scaledFont(15, weight: .semibold, design: .rounded)
-                .monospacedDigit()
-                .numericTransition()
-                .foregroundStyle(tint)
         }
     }
 

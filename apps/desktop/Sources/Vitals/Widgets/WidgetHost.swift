@@ -260,6 +260,7 @@ struct WidgetHost: View {
         case .memory: MemoryWidget()
         case .fan: FanWidget()
         case .network: NetworkWidget()
+        case .disk: DiskWidget()
         case .storage: StorageWidget()
         case .combined: CombinedWidget()
         }

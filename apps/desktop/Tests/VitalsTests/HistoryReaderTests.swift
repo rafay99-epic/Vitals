@@ -29,9 +29,24 @@ struct HistoryReaderTests {
         let sample = HistoryReader.parse(line)
         #expect(sample?.netInBps == 125_000)
         #expect(sample?.netOutBps == 34_000)
+        // A v2 (13-column) row predates disk logging — honest nil, not 0.
+        #expect(sample?.diskReadBps == nil)
+        #expect(sample?.diskWriteBps == nil)
         // Blank trailing columns (no network reading that tick) → nil.
         let blank = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,,")
         #expect(HistoryReader.parse(blank)?.netInBps == nil)
+    }
+
+    @Test func parsesV3RowWithDiskColumns() {
+        let line = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,125000,34000,52000000,9500000")
+        let sample = HistoryReader.parse(line)
+        #expect(sample?.netInBps == 125_000)
+        #expect(sample?.netOutBps == 34_000)
+        #expect(sample?.diskReadBps == 52_000_000)
+        #expect(sample?.diskWriteBps == 9_500_000)
+        // Blank trailing columns (no disk reading that tick) → nil.
+        let blank = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,125000,34000,,")
+        #expect(HistoryReader.parse(blank)?.diskReadBps == nil)
     }
 
     @Test func rejectsHeaderAndMalformed() {

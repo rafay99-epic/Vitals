@@ -86,15 +86,6 @@ final class NetworkStats {
         !excludedPrefixes.contains { name.hasPrefix($0) }
     }
 
-    /// Per-second byte rate from two counter readings. Returns 0 rather than a
-    /// negative or absurd value when the counter went **backwards** (the
-    /// interface was re-created / its counters reset) or when no time elapsed —
-    /// honesty over a fabricated spike. Pure and internal so it's unit-testable.
-    static func computeRate(previous: UInt64, current: UInt64, elapsed: TimeInterval) -> Double {
-        guard elapsed > 0, current >= previous else { return 0 }
-        return Double(current - previous) / elapsed
-    }
-
     /// One reading. Rates are deltas versus the previous call; the first call
     /// reports 0 rates. Always returns a snapshot (empty links on total failure),
     /// never nil — the model can display "no interfaces" honestly.
@@ -102,17 +93,17 @@ final class NetworkStats {
         let counters = Self.readInterfaceCounters().filter { Self.isCountedInterface($0.name) }
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         // Elapsed since the last reading; 0 on the first call (no prior stamp),
-        // which drives every rate to 0 via `computeRate`.
+        // which drives every rate to 0 via `CounterRate.perSecond`.
         let elapsed: TimeInterval = previousTimestamp.map { Double(now - $0) / 1_000_000_000 } ?? 0
 
         var links: [NetworkLink] = []
         for counter in counters {
             let previous = previousCounters[counter.name]
             let inRate = previous.map {
-                Self.computeRate(previous: $0.bytesIn, current: counter.bytesIn, elapsed: elapsed)
+                CounterRate.perSecond(previous: $0.bytesIn, current: counter.bytesIn, elapsed: elapsed)
             } ?? 0
             let outRate = previous.map {
-                Self.computeRate(previous: $0.bytesOut, current: counter.bytesOut, elapsed: elapsed)
+                CounterRate.perSecond(previous: $0.bytesOut, current: counter.bytesOut, elapsed: elapsed)
             } ?? 0
             let kind = classify(counter)
             links.append(NetworkLink(
