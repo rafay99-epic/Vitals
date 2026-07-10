@@ -1,0 +1,31 @@
+apps/desktop/Sources/Vitals/Views/DashboardBento.swift
+  s_d6ee421fe6aff2::t_0cbc165ec0e9f4 134,212-216,218-220,222
+apps/desktop/Sources/Vitals/Widgets/Cards/BatteryWidget.swift
+  s_d6ee421fe6aff2::t_0cbc165ec0e9f4 1-61
+apps/desktop/Sources/Vitals/Widgets/WidgetHost.swift
+  s_d6ee421fe6aff2::t_0cbc165ec0e9f4 261
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_d6ee421fe6aff2::t_cee88efaeacfc6 135
+apps/desktop/Sources/Vitals/Views/SystemCards.swift
+  s_d6ee421fe6aff2::t_0cbc165ec0e9f4 318-343,352,357,383-384
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_d6ee421fe6aff2::t_0cbc165ec0e9f4 55,59,67
+apps/desktop/Sources/Vitals/Widgets/WidgetKind.swift
+  s_d6ee421fe6aff2::t_0cbc165ec0e9f4 10,25,41,56,73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "594f611896172d762c206ff7f4a9ee945e485c35",
+  "prompts": {},
+  "sessions": {
+    "s_d6ee421fe6aff2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c24c12e-574f-4d36-9d73-85af609892e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
