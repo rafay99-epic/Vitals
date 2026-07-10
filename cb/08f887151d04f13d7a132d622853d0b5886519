@@ -1,0 +1,30 @@
+apps/desktop/Sources/Vitals/Services/LaunchItems.swift
+  s_b59d1dac2ef154::t_53e8195c4764c5 205-212,215,217-219,223
+apps/desktop/Tests/VitalsTests/StartupImpactTests.swift
+  s_b59d1dac2ef154::t_f1715e294f015d 34-43
+apps/desktop/Sources/Vitals/Services/StartupImpact.swift
+  s_b59d1dac2ef154::t_fb1137b4cc6514 61-70,83-85
+apps/desktop/Sources/Vitals/Models/LoginItemsModel.swift
+  s_b59d1dac2ef154::t_3bbb76d8a19cc9 109-113
+  s_b59d1dac2ef154::t_ca77d1a25bcc57 85-87
+  s_b59d1dac2ef154::t_a7f28e2c698e8e 45-47,49-51,54-56,59-62
+apps/desktop/Sources/Vitals/Views/LoginItemsView.swift
+  s_b59d1dac2ef154::t_5039c9cfe00f12 57-60
+  s_b59d1dac2ef154::t_f8818538bfb6cc 220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "cb08f887151d04f13d7a132d622853d0b5886519",
+  "prompts": {},
+  "sessions": {
+    "s_b59d1dac2ef154": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20525871-0d71-414b-93ca-68c8be6570fe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
