@@ -684,6 +684,7 @@ private struct FileRow: View {
     }
 }
 
-@MainActor private func revealFileInFinder(_ url: URL) {
+/// Shared by the Files and Duplicates pages — selects the item in a Finder window.
+@MainActor func revealFileInFinder(_ url: URL) {
     NSWorkspace.shared.activateFileViewerSelecting([url])
 }
