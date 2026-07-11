@@ -1,0 +1,20 @@
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_b0c71c62297d6a::t_d2a72f392414cc 142-143,149-157,159
+  s_b0c71c62297d6a::t_bbd001346a3099 35-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "b1eba3f5d4fa6c85995e5879036bfacc39ddd093",
+  "prompts": {},
+  "sessions": {
+    "s_b0c71c62297d6a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a92c33c7-5c57-4c51-a10b-8bd41310df93",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
