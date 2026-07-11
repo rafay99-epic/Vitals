@@ -1,0 +1,45 @@
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_b0c71c62297d6a::t_ea9a86d4dd12f3 333-337,339
+  s_b0c71c62297d6a::t_86ae3a13449948 372-375,377
+  s_b0c71c62297d6a::t_984060f0ada7ba 414-417
+apps/desktop/Tests/VitalsTests/AppEnergyTests.swift
+  s_b0c71c62297d6a::t_4433ac872f2fe4 46-70
+apps/desktop/Sources/Vitals/Services/ProcessInventory.swift
+  s_b0c71c62297d6a::t_a93ce317cd51a0 87-93,95,99,115-137
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_b0c71c62297d6a::t_517b94d81252a1 295-296,306,311-316
+apps/desktop/Sources/Vitals/Services/HistoryReader.swift
+  s_b0c71c62297d6a::t_6f61fe78aaa328 213
+apps/desktop/Tests/VitalsTests/HistoryDatabaseTests.swift
+  s_b0c71c62297d6a::t_8ed1d75fe77132 310,326-341
+  s_b0c71c62297d6a::t_b97ecd46d1b908 342
+apps/desktop/Sources/Vitals/Services/SensorSampler.swift
+  s_b0c71c62297d6a::t_ee02a922ecac8d 120-123
+apps/desktop/Sources/Vitals/Services/AppEnergy.swift
+  s_b0c71c62297d6a::t_fc1a52a0978978 64-69
+apps/desktop/Tests/VitalsTests/HistoryReaderTests.swift
+  s_b0c71c62297d6a::t_c0b2f4af0929ab 70-71
+apps/desktop/Tests/VitalsTests/PowerAssertionsTests.swift
+  s_b0c71c62297d6a::t_7bedae6236df01 36-45
+apps/desktop/Sources/Vitals/Services/PowerAssertions.swift
+  s_b0c71c62297d6a::t_08537065257c64 70
+  s_b0c71c62297d6a::t_4f0ddd2e4e41d6 38
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_b0c71c62297d6a::t_bcd6a69fff3864 60-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "36269b853790f8de45b7cce35f1750f5b574bc38",
+  "prompts": {},
+  "sessions": {
+    "s_b0c71c62297d6a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a92c33c7-5c57-4c51-a10b-8bd41310df93",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
