@@ -13,6 +13,16 @@ struct RunningProcess: Identifiable {
     let bundleURL: URL?
     let memoryBytes: UInt64
     var cpuPercent: Double
+    /// Average power drawn since the previous sample, in watts, from the
+    /// process's own energy counter (`rusage_info_v6.ri_energy_nj`). A real
+    /// hardware reading — nil until a second sample yields a delta, or when the
+    /// OS reports no energy for this process (then the Energy-Impact index is
+    /// used instead of inventing a wattage).
+    var avgWatts: Double?
+    /// Idle + interrupt wakeups per second since the previous sample. Each
+    /// wakeup pulls the CPU out of a low-power state, so this is a real driver of
+    /// battery drain and the basis for the Energy-Impact fallback.
+    var wakeupsPerSec: Double
     /// Owned by the user running Vitals → killable without admin rights.
     let ownedByCurrentUser: Bool
 }
@@ -34,6 +44,12 @@ actor ProcessInventory {
 
     private var staticCache: [pid_t: StaticInfo] = [:]
     private var previousCPUTime: [pid_t: UInt64] = [:]
+    private var previousEnergy: [pid_t: UInt64] = [:]
+    private var previousWakeups: [pid_t: UInt64] = [:]
+    /// Per-pid process-start time (`ri_proc_start_abstime`). If it changes, the
+    /// pid was reused by a different process and last sample's cumulative
+    /// counters must not be diffed against this one.
+    private var previousStart: [pid_t: UInt64] = [:]
     private var previousSampleAt: UInt64 = 0
     private let currentUID = getuid()
 
@@ -61,6 +77,9 @@ actor ProcessInventory {
         let hadPrevious = previousSampleAt > 0 && now > previousSampleAt
         let wallNanos = Double(now - previousSampleAt) * Self.nanosPerTick
         var currentCPUTime: [pid_t: UInt64] = [:]
+        var currentEnergy: [pid_t: UInt64] = [:]
+        var currentWakeups: [pid_t: UInt64] = [:]
+        var currentStart: [pid_t: UInt64] = [:]
         var liveStatic: [pid_t: StaticInfo] = [:]
         var processes: [RunningProcess] = []
 
@@ -93,19 +112,41 @@ actor ProcessInventory {
             }
             liveStatic[pid] = info
 
-            var usage = rusage_info_v4()
+            // v6 (the current rusage revision) adds the per-process energy
+            // counter and wakeup tallies on top of every v4 field.
+            var usage = rusage_info_v6()
             let ok = withUnsafeMutablePointer(to: &usage) {
                 $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
-                    proc_pid_rusage(pid, RUSAGE_INFO_V4, $0)
+                    proc_pid_rusage(pid, RUSAGE_INFO_V6, $0)
                 }
             }
             guard ok == 0 else { continue }
 
             let cpuTime = usage.ri_user_time + usage.ri_system_time
+            let energy = usage.ri_energy_nj
+            let wakeups = usage.ri_pkg_idle_wkups + usage.ri_interrupt_wkups
+            let start = usage.ri_proc_start_abstime
             currentCPUTime[pid] = cpuTime
+            currentEnergy[pid] = energy
+            currentWakeups[pid] = wakeups
+            currentStart[pid] = start
+
+            // Only diff cumulative counters when the previous sample was the
+            // *same* process at this pid (start time unchanged).
+            let sameProcess = previousStart[pid] == start
             var cpuPercent = 0.0
-            if hadPrevious, wallNanos > 0, let before = previousCPUTime[pid], cpuTime >= before {
-                cpuPercent = Double(cpuTime - before) * Self.nanosPerTick / wallNanos * 100
+            var avgWatts: Double? = nil
+            var wakeupsPerSec = 0.0
+            if hadPrevious, wallNanos > 0, sameProcess {
+                if let before = previousCPUTime[pid], cpuTime >= before {
+                    cpuPercent = Double(cpuTime - before) * Self.nanosPerTick / wallNanos * 100
+                }
+                if let before = previousEnergy[pid], energy > before {
+                    avgWatts = EnergyRate.watts(energyDeltaNanojoules: energy - before, overNanoseconds: wallNanos)
+                }
+                if let before = previousWakeups[pid], wakeups >= before {
+                    wakeupsPerSec = EnergyRate.perSecond(delta: wakeups - before, overNanoseconds: wallNanos)
+                }
             }
 
             processes.append(RunningProcess(
@@ -115,11 +156,16 @@ actor ProcessInventory {
                 bundleURL: info.bundleURL,
                 memoryBytes: usage.ri_phys_footprint,
                 cpuPercent: cpuPercent,
+                avgWatts: avgWatts,
+                wakeupsPerSec: wakeupsPerSec,
                 ownedByCurrentUser: ownedByMe
             ))
         }
 
         previousCPUTime = currentCPUTime
+        previousEnergy = currentEnergy
+        previousWakeups = currentWakeups
+        previousStart = currentStart
         previousSampleAt = now
         staticCache = liveStatic // drop dead pids
         return processes
@@ -165,5 +211,55 @@ actor ProcessInventory {
             return String(components[components.count - 2])
         }
         return executable.isEmpty ? "Process" : executable
+    }
+}
+
+/// Turns cumulative rusage counter deltas into per-second rates. Pure, so the
+/// energy/wakeup math is verified without live sampling.
+enum EnergyRate {
+    /// Average watts from an energy delta (nanojoules) over a wall interval
+    /// (nanoseconds): nJ/ns == J/s == W. nil when the interval is non-positive
+    /// or the counter didn't advance.
+    static func watts(energyDeltaNanojoules: UInt64, overNanoseconds ns: Double) -> Double? {
+        guard ns > 0, energyDeltaNanojoules > 0 else { return nil }
+        return Double(energyDeltaNanojoules) / ns
+    }
+
+    /// A count delta as a per-second rate (e.g. wakeups/s).
+    static func perSecond(delta: UInt64, overNanoseconds ns: Double) -> Double {
+        guard ns > 0 else { return 0 }
+        return Double(delta) * 1_000_000_000 / ns
+    }
+
+    /// Activity-Monitor-style relative Energy-Impact index, used *only* as a
+    /// fallback when the OS reports no real per-process energy: CPU load plus a
+    /// wakeup penalty. Unitless and relative — never shown as watts.
+    /// ponytail: 0.4 wakeup weight is a heuristic (Apple's real formula is
+    /// private); tune this constant if the ranking looks off against Activity Monitor.
+    static func impactIndex(cpuPercent: Double, wakeupsPerSec: Double) -> Double {
+        cpuPercent + wakeupsPerSec * 0.4
+    }
+}
+
+/// Buckets processes by the `.app` they belong to (helper processes folded under
+/// their app), or by pid when ungrouped or bundle-less — preserving first-seen
+/// order. `combine` builds one row per bucket from its lead process and members.
+/// Shared by the Processes tab and the Battery hub's app-energy list so both
+/// agree on what counts as "one app".
+func groupProcessesByApp<Row>(
+    _ processes: [RunningProcess],
+    groupHelpers: Bool,
+    combine: (_ key: String, _ lead: RunningProcess, _ items: [RunningProcess]) -> Row
+) -> [Row] {
+    var buckets: [String: [RunningProcess]] = [:]
+    var order: [String] = []
+    for process in processes {
+        let key = (groupHelpers ? process.bundleURL?.path : nil) ?? "pid:\(process.id)"
+        if buckets[key] == nil { order.append(key) }
+        buckets[key, default: []].append(process)
+    }
+    return order.map { key in
+        let items = buckets[key]!
+        return combine(key, items[0], items)
     }
 }

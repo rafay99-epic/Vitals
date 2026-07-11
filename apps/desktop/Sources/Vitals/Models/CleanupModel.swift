@@ -18,6 +18,16 @@ enum CleanupPage: String, CaseIterable, Identifiable {
         case .duplicates: return "Duplicates"
         }
     }
+    /// SF Symbol shown beside each mode in the picker menu.
+    var symbol: String {
+        switch self {
+        case .quick: return "sparkles"
+        case .deep: return "sparkles.rectangle.stack"
+        case .developer: return "hammer"
+        case .files: return "doc.text.magnifyingglass"
+        case .duplicates: return "doc.on.doc"
+        }
+    }
 }
 
 /// Outcome of a Developer/Files sweep, surfaced to the view as an alert. Bytes

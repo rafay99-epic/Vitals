@@ -131,17 +131,8 @@ final class ProcessesModel: ObservableObject {
     }
 
     private static func grouped(_ processes: [RunningProcess], groupHelpers: Bool) -> [Group] {
-        var buckets: [String: [RunningProcess]] = [:]
-        var order: [String] = []
-        for process in processes {
-            let key = (groupHelpers ? process.bundleURL?.path : nil) ?? "pid:\(process.id)"
-            if buckets[key] == nil { order.append(key) }
-            buckets[key, default: []].append(process)
-        }
-        return order.map { key in
-            let items = buckets[key]!
-            let lead = items[0]
-            return Group(
+        groupProcessesByApp(processes, groupHelpers: groupHelpers) { key, lead, items in
+            Group(
                 id: key,
                 name: lead.name,
                 bundleURL: lead.bundleURL,

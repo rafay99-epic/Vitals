@@ -25,6 +25,7 @@ final class VitalsModel: ObservableObject {
         let swapUsed: Double    // bytes
         let batteryPercent: Double?  // charge %, nil when no battery
         let totalWatts: Double?      // SoC package power, nil until the 2nd sample
+        let batteryWatts: Double?    // battery load watts (signed: + charging, − draining), nil off battery
         let netInPerSec: Double?     // network download, bytes/s — nil until the 2nd sample
         let netOutPerSec: Double?    // network upload, bytes/s — nil until the 2nd sample
         let diskReadPerSec: Double?  // disk read, bytes/s — nil until the 2nd sample
@@ -333,7 +334,8 @@ final class VitalsModel: ObservableObject {
             guard let self else { return }
             let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses,
                                                      includeGPU: includeGPU,
-                                                     includePower: includePower)
+                                                     includePower: includePower,
+                                                     includeAppEnergy: self.settings.loggingEnabled)
             guard !Task.isCancelled else { return }
             self.apply(snapshot, sampledGPU: includeGPU)
             self.assignIfChanged(&self.sensorsStalled, to: false)
@@ -420,6 +422,7 @@ final class VitalsModel: ObservableObject {
                 // The fresh tick's reading (not the sticky `self.power`), so a
                 // missed IOReport sample is an honest gap, not a flat-held value.
                 totalWatts: snapshot.power?.total,
+                batteryWatts: battery?.watts,
                 // The published reading (nil until the 2nd sample), so the
                 // first tick is an honest gap, never a fabricated 0 B/s.
                 netInPerSec: network?.totalInPerSec,
@@ -446,9 +449,19 @@ final class VitalsModel: ObservableObject {
                     netInBps: network?.totalInPerSec,
                     netOutBps: network?.totalOutPerSec,
                     diskReadBps: diskIO?.readPerSec,
-                    diskWriteBps: diskIO?.writePerSec
+                    diskWriteBps: diskIO?.writePerSec,
+                    // Fresh readings (nil until the 2nd power/battery sample), so a
+                    // gap is honest, never a flat-held value.
+                    socWatts: snapshot.power?.total,
+                    batteryWatts: battery?.watts
                 ))
             }
+        }
+
+        // Per-app energy is refreshed on its own cadence inside the sampler; when a
+        // fresh batch arrives, persist it (still gated on the logging setting).
+        if settings.loggingEnabled, let rows = snapshot.appEnergy {
+            HistoryDatabase.shared.appendAppEnergy(rows, at: Date())
         }
     }
 

@@ -9,6 +9,9 @@ import Charts
 /// than showing zeros.
 struct BatteryView: View {
     @EnvironmentObject private var model: VitalsModel
+    /// The live per-app energy list — owned by ContentView so its sampling
+    /// survives tab switches, sampled only while this tab is active.
+    @ObservedObject var appEnergyModel: AppEnergyModel
     /// True only while the Battery tab is visible — gates the history chart so it
     /// doesn't rebuild marks every tick while mounted in the background (mirrors GPUView).
     let isActive: Bool
@@ -32,9 +35,20 @@ struct BatteryView: View {
                     symbol: "bolt.slash",
                     tint: .green,
                     title: "No battery",
-                    message: "This Mac runs on wall power — there's no battery to report on. Charge, health and power figures appear here on a notebook."
+                    message: "This Mac runs on wall power — there's no battery to report on. Charge, health and power figures appear here on a notebook. Energy use and sleep are tracked below regardless."
                 ) { EmptyView() }
             }
+            // Energy telemetry is relevant on wall power too (a plugged-in Mac
+            // still has runaway apps and sleep blockers), so these sit outside the
+            // battery gate.
+            if isActive, model.chartHistory.contains(where: { $0.totalWatts != nil }) {
+                BatteryPowerDrawCard()
+            }
+            AppEnergyCard(model: appEnergyModel)
+            SleepBlockersCard(model: appEnergyModel)
+        }
+        .onChange(of: isActive, initial: true) { _, active in
+            if active { appEnergyModel.start() } else { appEnergyModel.stop() }
         }
     }
 }
@@ -256,6 +270,166 @@ private struct BatteryDetailCard: View {
             rows.append(MetricRow(symbol: "thermometer.medium", label: "Temperature", value: settings.formatWithUnit(temp)))
         }
         return rows
+    }
+}
+
+// MARK: - Power draw over time
+
+private struct BatteryPowerDrawCard: View {
+    @EnvironmentObject private var model: VitalsModel
+
+    var body: some View {
+        SectionCard(title: "Power draw", symbol: "bolt.fill") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Total system-on-chip package power — the live pull on the battery or adapter.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Deferred { chart }.frame(height: 150)
+            }
+        }
+    }
+
+    private var chart: some View {
+        Chart(model.chartHistory) { sample in
+            if let watts = sample.totalWatts {
+                AreaMark(x: .value("Time", sample.time), y: .value("Watts", watts))
+                    .foregroundStyle(LinearGradient(colors: [.orange.opacity(0.32), .orange.opacity(0.02)],
+                                                    startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.catmullRom)
+                LineMark(x: .value("Time", sample.time), y: .value("Watts", watts))
+                    .foregroundStyle(.orange)
+                    .interpolationMethod(.catmullRom)
+            }
+        }
+        .chartYAxisLabel("W")
+    }
+}
+
+// MARK: - Per-app energy
+
+private struct AppEnergyCard: View {
+    @ObservedObject var model: AppEnergyModel
+    private static let maxRows = 12
+
+    var body: some View {
+        SectionCard(title: "App energy", symbol: "bolt.badge.checkmark") {
+            content
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        if !model.hasLoaded {
+            HStack { ProgressView().controlSize(.small); Text("Measuring…").font(.callout).foregroundStyle(.secondary) }
+        } else if model.loadFailed {
+            Text("Couldn't read the process list on this system.")
+                .font(.callout).foregroundStyle(.secondary)
+        } else if model.apps.isEmpty {
+            Text("Nothing found").font(.callout).foregroundStyle(.secondary)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(model.usesRealWatts
+                     ? "Average power each app is drawing right now."
+                     : "Relative energy impact (CPU + wakeups) — this Mac isn't reporting real per-app energy, so these rank apps rather than show watts.")
+                    .font(.caption).foregroundStyle(.secondary)
+                let maxRank = max(model.apps.first?.rankValue ?? 1, 0.0001)
+                ForEach(model.apps.prefix(Self.maxRows)) { app in
+                    AppEnergyRowView(app: app, fraction: app.rankValue / maxRank, usesRealWatts: model.usesRealWatts)
+                }
+            }
+        }
+    }
+}
+
+private struct AppEnergyRowView: View {
+    let app: AppEnergyUsage
+    let fraction: Double
+    let usesRealWatts: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            AppEnergyIcon(bundleURL: app.bundleURL)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(app.name).font(.callout).lineLimit(1)
+                utilizationBar(fraction: min(fraction, 1), tint: barTint)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(valueText)
+                    .font(.system(.callout, design: .rounded, weight: .medium))
+                    .monospacedDigit().numericTransition()
+                if app.preventsSystemSleep {
+                    Label("Awake", systemImage: "moon.stars.fill")
+                        .font(.caption2).foregroundStyle(.orange)
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        }
+    }
+
+    /// Real watts when the OS provides them; otherwise the relative index shown as
+    /// a plain number (never suffixed "W", so it's never misread as a wattage).
+    private var valueText: String {
+        if let watts = app.avgWatts { return wattsText(watts) }
+        return String(format: "%.0f", app.impactIndex)
+    }
+
+    private var barTint: Color {
+        app.preventsSystemSleep ? .orange : .green
+    }
+}
+
+/// The app's icon, or a neutral symbol tile for bundle-less processes (daemons,
+/// helpers with no `.app`).
+private struct AppEnergyIcon: View {
+    let bundleURL: URL?
+
+    var body: some View {
+        if let bundleURL {
+            AppIconView(url: bundleURL, size: 26)
+        } else {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.secondary.opacity(0.14))
+                .frame(width: 26, height: 26)
+                .overlay(Image(systemName: "gearshape.fill").font(.system(size: 12)).foregroundStyle(.secondary))
+        }
+    }
+}
+
+// MARK: - Sleep & wake (power assertions)
+
+private struct SleepBlockersCard: View {
+    @ObservedObject var model: AppEnergyModel
+
+    var body: some View {
+        SectionCard(title: "Sleep & wake", symbol: "moon.zzz.fill") {
+            let blockers = model.sleepBlockers
+            if !model.hasLoaded {
+                HStack { ProgressView().controlSize(.small); Text("Checking…").font(.callout).foregroundStyle(.secondary) }
+            } else if blockers.isEmpty {
+                Label("Nothing is preventing sleep — your Mac can idle to sleep normally.",
+                      systemImage: "checkmark.circle.fill")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(blockers) { app in
+                        HStack(spacing: 10) {
+                            AppEnergyIcon(bundleURL: app.bundleURL)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.name).font(.callout).lineLimit(1)
+                                if let reason = app.assertionReason, !reason.isEmpty {
+                                    Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            Text(app.preventsSystemSleep ? "System" : "Display")
+                                .font(.caption.weight(.medium))
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Capsule().fill(Color.orange.opacity(0.18)))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

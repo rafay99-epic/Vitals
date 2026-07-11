@@ -19,6 +19,9 @@ actor SensorSampler {
         let diskHealth: DiskHealthSnapshot?
         let network: NetworkSnapshot?
         let diskIO: DiskIOSnapshot?
+        /// Per-app energy rows to log, refreshed at most once a minute off the
+        /// tick. nil on the ticks in between (nothing new to persist).
+        let appEnergy: [HistoryDatabase.AppEnergyRow]?
     }
 
     private let hid = HIDSensors()
@@ -47,6 +50,16 @@ actor SensorSampler {
     private var diskHealthCheckedAt = Date.distantPast
     private static let diskHealthInterval: TimeInterval = 300
 
+    // Per-app energy for the history log. The full per-pid energy sweep is heavy,
+    // so it runs at most once a minute off the tick (its own inventory, separate
+    // from the Battery hub's live one), and the rows it produces are handed to the
+    // next sample to persist. Skipped entirely when logging is off.
+    private let appEnergyInventory = ProcessInventory()
+    private var pendingAppEnergy: [HistoryDatabase.AppEnergyRow]?
+    private var appEnergyCheckedAt = Date.distantPast
+    private static let appEnergyInterval: TimeInterval = 60
+    private static let ownBundlePath = Bundle.main.bundleURL.standardizedFileURL.path
+
     /// `includeTopProcesses` gates the per-process rusage sweep — the heaviest
     /// part of a tick (a syscall per PID). It's only needed when the window is
     /// open or a process-CPU alert is armed; skipping it idle (menu-bar only)
@@ -58,10 +71,16 @@ actor SensorSampler {
     /// alert). When skipped, the snapshot carries nil and `VitalsModel` holds
     /// the last reading — so reopening the window shows the prior value until
     /// the next sample refreshes it, never a fabricated zero.
-    func sample(includeTopProcesses: Bool, includeGPU: Bool = true, includePower: Bool = true) -> Snapshot {
+    func sample(includeTopProcesses: Bool, includeGPU: Bool = true, includePower: Bool = true,
+                includeAppEnergy: Bool = false) -> Snapshot {
         let battery = Battery.read(officialHealth: batteryHealth)
         if battery != nil { refreshBatteryHealthIfStale() }
         refreshDiskHealthIfStale()
+        if includeAppEnergy { refreshAppEnergyIfStale() }
+        // Hand off any rows the background sweep produced, then clear so they're
+        // logged exactly once.
+        let appEnergy = pendingAppEnergy
+        pendingAppEnergy = nil
         let processes = includeTopProcesses ? processSampler.sample(top: 5) : .empty
         return Snapshot(
             readings: hid.readAll(),
@@ -81,8 +100,30 @@ actor SensorSampler {
             network: network.sample(),
             // A handful of IORegistry property reads — same cheap-and-
             // continuous reasoning as network.
-            diskIO: disk.sample()
+            diskIO: disk.sample(),
+            appEnergy: appEnergy
         )
+    }
+
+    /// Kicks off the per-app energy sweep if it's stale, off the sampling actor so
+    /// the heavy per-pid scan never sits on the tick. The first sweep only primes
+    /// the delta baseline (no wattage yet), so a batch with no signal at all is
+    /// dropped rather than logged as a row of zeros.
+    private func refreshAppEnergyIfStale() {
+        guard Date().timeIntervalSince(appEnergyCheckedAt) >= Self.appEnergyInterval else { return }
+        appEnergyCheckedAt = Date()
+        Task.detached { [weak self] in
+            guard let self, let processes = await self.appEnergyInventory.sample(includeSystem: false) else { return }
+            let usage = AppEnergy.usage(from: processes,
+                                        assertions: PowerAssertions.current(),
+                                        ownBundlePath: Self.ownBundlePath)
+            guard usage.contains(where: { $0.rankValue > 0 }) else { return }  // priming sample — no deltas yet
+            await self.storeAppEnergy(AppEnergy.loggable(usage))
+        }
+    }
+
+    private func storeAppEnergy(_ rows: [HistoryDatabase.AppEnergyRow]) {
+        if !rows.isEmpty { pendingAppEnergy = rows }
     }
 
     /// Refreshes the cached SSD SMART snapshot off the sampling actor if it's
