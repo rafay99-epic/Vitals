@@ -292,7 +292,8 @@ final class HistoryDatabase: @unchecked Sendable {
             """
             self.exec("BEGIN;")
             var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            var ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK
+            if ok {
                 for row in rows {
                     sqlite3_bind_int64(stmt, 1, ts)
                     if let bundleID = row.bundleID { sqlite3_bind_text(stmt, 2, bundleID, -1, Self.transient) }
@@ -302,12 +303,17 @@ final class HistoryDatabase: @unchecked Sendable {
                     sqlite3_bind_double(stmt, 5, row.cpuPercent)
                     sqlite3_bind_double(stmt, 6, row.wakeupsPerSec)
                     sqlite3_bind_int(stmt, 7, row.preventsSleep ? 1 : 0)
-                    sqlite3_step(stmt)
+                    if sqlite3_step(stmt) != SQLITE_DONE { ok = false; break }
                     sqlite3_reset(stmt)
                 }
                 sqlite3_finalize(stmt)
             }
-            self.exec("COMMIT;")
+            // A batch is all-or-nothing: one bad INSERT rolls back the whole
+            // timestamp rather than leaving a partial, misleading snapshot.
+            self.exec(ok ? "COMMIT;" : "ROLLBACK;")
+            // Enforce the retention window during the session, not only at open —
+            // a long-running Mac would otherwise keep every minute batch forever.
+            if ok { self.pruneTable("app_energy", olderThan: Self.appEnergyRetention) }
         }
     }
 

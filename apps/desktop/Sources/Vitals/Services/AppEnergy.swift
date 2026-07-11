@@ -61,7 +61,12 @@ enum AppEnergy {
                 assertionReason: held.first(where: { $0.preventsSystemSleep })?.name ?? held.first?.name
             )
         }
-        return rows.sorted { $0.rankValue > $1.rankValue }
+        // Order in a single unit so the list never mixes scales: when the OS
+        // reports real energy for any app, rank everyone by watts (unmeasured rows
+        // fall to the bottom at 0); otherwise rank everyone by the impact index.
+        let real = rows.contains { $0.avgWatts != nil }
+        func rank(_ u: AppEnergyUsage) -> Double { real ? (u.avgWatts ?? 0) : u.impactIndex }
+        return rows.sorted { rank($0) > rank($1) }
     }
 
     /// The rows worth persisting to history: the top `limit` by rank, plus every

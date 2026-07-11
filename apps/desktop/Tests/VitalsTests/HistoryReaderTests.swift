@@ -67,6 +67,8 @@ struct HistoryReaderTests {
         #expect(HistoryExport.csvEscape("Safari") == "Safari")
         #expect(HistoryExport.csvEscape("Numbers, Pages") == "\"Numbers, Pages\"")
         #expect(HistoryExport.csvEscape("say \"hi\"") == "\"say \"\"hi\"\"\"")
+        // A carriage return must also force quoting or it splits the record.
+        #expect(HistoryExport.csvEscape("a\rb") == "\"a\rb\"")
     }
 
     @Test func rejectsHeaderAndMalformed() {

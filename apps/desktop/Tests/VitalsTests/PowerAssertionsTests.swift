@@ -33,6 +33,16 @@ struct PowerAssertionsTests {
         #expect(result[2]?.first?.kind == .system)
     }
 
+    @Test func recognisesLegacyDisplaySleepType() {
+        // The legacy `NoDisplaySleepAssertion` must classify as a display blocker,
+        // not be dropped as unknown.
+        let result = PowerAssertions.parse(raw([
+            3: [["AssertType": "NoDisplaySleepAssertion"]],
+        ]))
+        #expect(result[3]?.first?.kind == .display)
+        #expect(result[3]?.first?.preventsSystemSleep == false)
+    }
+
     @Test func ignoresUnrelatedAndMalformedEntries() {
         let result = PowerAssertions.parse(raw([
             10: [["AssertType": "SomeUnrelatedAssertion"]],  // not a sleep type

@@ -117,7 +117,10 @@ actor SensorSampler {
             let usage = AppEnergy.usage(from: processes,
                                         assertions: PowerAssertions.current(),
                                         ownBundlePath: Self.ownBundlePath)
-            guard usage.contains(where: { $0.rankValue > 0 }) else { return }  // priming sample — no deltas yet
+            // Skip the priming sweep (no deltas yet → all zero), but keep a batch
+            // that holds a sleep blocker even if every app is otherwise idle — the
+            // blocker history is the whole point and must survive an idle machine.
+            guard usage.contains(where: { $0.rankValue > 0 || $0.preventsSystemSleep }) else { return }
             await self.storeAppEnergy(AppEnergy.loggable(usage))
         }
     }

@@ -57,6 +57,10 @@ struct HistoryView: View {
             if !alertEvents.isEmpty {
                 AlertHistoryCard(events: alertEvents)
             }
+            // Export lives outside the samples gate: per-app energy is logged
+            // independently of CPU-temp samples, so its CSV must stay reachable
+            // even on a Mac whose main history chart is empty.
+            HistoryExportCard()
         }
         .task(id: ReloadKey(active: isActive, range: range, logging: settings.loggingEnabled)) {
             await reload()
@@ -72,7 +76,6 @@ struct HistoryView: View {
             HistoryControls(range: $range, metric: $metric)
             HistoryChartCard(samples: samples, metric: metric, range: range)
             HistoryStatsCard(samples: samples, metric: metric)
-            HistoryExportCard()
         } else if loading {
             emptyState
         } else if !settings.loggingEnabled {

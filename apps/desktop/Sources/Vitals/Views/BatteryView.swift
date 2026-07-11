@@ -330,9 +330,13 @@ private struct AppEnergyCard: View {
                      ? "Average power each app is drawing right now."
                      : "Relative energy impact (CPU + wakeups) — this Mac isn't reporting real per-app energy, so these rank apps rather than show watts.")
                     .font(.caption).foregroundStyle(.secondary)
-                let maxRank = max(model.apps.first?.rankValue ?? 1, 0.0001)
+                // Bars share the list's single unit — watts when measured, else the
+                // impact index — so their lengths match the values shown.
+                let real = model.usesRealWatts
+                let value: (AppEnergyUsage) -> Double = { real ? ($0.avgWatts ?? 0) : $0.impactIndex }
+                let maxValue = max(model.apps.map(value).max() ?? 0, 0.0001)
                 ForEach(model.apps.prefix(Self.maxRows)) { app in
-                    AppEnergyRowView(app: app, fraction: app.rankValue / maxRank, usesRealWatts: model.usesRealWatts)
+                    AppEnergyRowView(app: app, fraction: value(app) / maxValue, usesRealWatts: real)
                 }
             }
         }
@@ -365,10 +369,12 @@ private struct AppEnergyRowView: View {
         }
     }
 
-    /// Real watts when the OS provides them; otherwise the relative index shown as
-    /// a plain number (never suffixed "W", so it's never misread as a wattage).
+    /// When the OS reports real energy, every row shows watts (or "—" for an app
+    /// still establishing its baseline) — never the impact index alongside watts,
+    /// which would mix two scales. When it doesn't, every row shows the relative
+    /// index as a plain number (never suffixed "W", so it's never misread as watts).
     private var valueText: String {
-        if let watts = app.avgWatts { return wattsText(watts) }
+        if usesRealWatts { return app.avgWatts.map(wattsText) ?? "—" }
         return String(format: "%.0f", app.impactIndex)
     }
 
@@ -405,7 +411,10 @@ private struct SleepBlockersCard: View {
             if !model.hasLoaded {
                 HStack { ProgressView().controlSize(.small); Text("Checking…").font(.callout).foregroundStyle(.secondary) }
             } else if blockers.isEmpty {
-                Label("Nothing is preventing sleep — your Mac can idle to sleep normally.",
+                // Scoped to apps, not the whole machine: this list covers the
+                // user's own processes, so a system daemon holding an assertion
+                // wouldn't appear here — don't promise the Mac will sleep.
+                Label("No apps are keeping your Mac awake.",
                       systemImage: "checkmark.circle.fill")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
