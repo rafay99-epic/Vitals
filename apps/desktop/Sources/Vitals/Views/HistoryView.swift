@@ -32,6 +32,19 @@ struct HistoryView: View {
             case .power: return "Power"
             }
         }
+        /// SF Symbol matching the sidebar, so the metric menu reads at a glance.
+        var symbol: String {
+            switch self {
+            case .temp: return "thermometer.medium"
+            case .cpu: return "cpu"
+            case .gpu: return "cpu.fill"
+            case .memory: return "memorychip"
+            case .network: return "network"
+            case .disk: return "internaldrive"
+            case .battery: return "battery.100percent"
+            case .power: return "bolt.fill"
+            }
+        }
     }
 
     private struct ReloadKey: Equatable { let active: Bool; let range: HistoryRange; let logging: Bool }
@@ -126,15 +139,24 @@ private struct HistoryControls: View {
 
     var body: some View {
         HStack {
+            // Time range stays a segmented control — only four options, and quick
+            // side-by-side switching is the common action.
             Picker("", selection: $range) {
                 ForEach(HistoryRange.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             Spacer()
-            Picker("", selection: $metric) {
-                ForEach(HistoryView.Metric.allCases) { Text($0.title).tag($0) }
+            // Metric is a menu, not a segment row: eight-plus metrics would crowd
+            // (and eventually overflow) a segmented control. The menu scales to any
+            // number and shows the current pick with its icon.
+            Picker(selection: $metric) {
+                ForEach(HistoryView.Metric.allCases) { m in
+                    Label(m.title, systemImage: m.symbol).tag(m)
+                }
+            } label: {
+                Label(metric.title, systemImage: metric.symbol)
             }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .pickerStyle(.menu).labelsHidden().fixedSize()
         }
     }
 }
