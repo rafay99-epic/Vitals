@@ -1,0 +1,102 @@
+apps/desktop/Sources/Vitals/Models/ProcessesModel.swift
+  s_b0c71c62297d6a::t_cb7383c122a3d7 134-135
+apps/desktop/Sources/Vitals/Services/AppEnergy.swift
+  s_b0c71c62297d6a::t_8f1e8f86afec82 1-82
+apps/desktop/Sources/Vitals/Services/PowerAssertions.swift
+  s_b0c71c62297d6a::t_746667cc461a32 1-76
+apps/desktop/Tests/VitalsTests/AppEnergyTests.swift
+  s_b0c71c62297d6a::t_37b56393f47d35 1-64
+apps/desktop/Tests/VitalsTests/PowerAssertionsTests.swift
+  s_b0c71c62297d6a::t_c37d4033c26ec4 1-66
+apps/desktop/Sources/Vitals/Services/HistoryReader.swift
+  s_b0c71c62297d6a::t_c26dbf89a72177 22-23
+  s_b0c71c62297d6a::t_860c31651e7345 171-172,174-194,196-211,213-216
+  s_b0c71c62297d6a::t_9718832842a073 212
+  s_b0c71c62297d6a::t_be6974ca6629b7 165-166
+  s_b0c71c62297d6a::t_891e639e1f68e9 117
+  s_b0c71c62297d6a::t_3794a9d3f5ba00 173
+  s_b0c71c62297d6a::t_eb44b3d877acbe 234,237
+  s_b0c71c62297d6a::t_e9a6da88bbd155 87-90
+  s_b0c71c62297d6a::t_69c974a485b870 195
+apps/desktop/Tests/VitalsTests/DownsampleTests.swift
+  s_b0c71c62297d6a::t_e35f250c2cd11f 16
+apps/desktop/Sources/Vitals/Services/SensorSampler.swift
+  s_b0c71c62297d6a::t_a41e492c17143d 22-24
+  s_b0c71c62297d6a::t_5889f90c8117b4 74-75,79-83
+  s_b0c71c62297d6a::t_24c7a47d9d7fd0 53-62
+  s_b0c71c62297d6a::t_8f5021a381840b 103-104,108-127
+  s_b0c71c62297d6a::t_f92cdb5a8726ed 128
+apps/desktop/Sources/Vitals/Services/ProcessInventory.swift
+  s_b0c71c62297d6a::t_965374846f30a2 16-25
+  s_b0c71c62297d6a::t_6bfe9f66ebb75d 145,148
+  s_b0c71c62297d6a::t_186e9264dd5a6f 47-52
+  s_b0c71c62297d6a::t_b04180162fbac9 115-117,120,126-128,130-136,138-144,146-147,149,159-160,166-168
+  s_b0c71c62297d6a::t_1c43d857223af4 217-243
+  s_b0c71c62297d6a::t_3444021c6bef4c 216,244-265
+  s_b0c71c62297d6a::t_7d2ffc60c9794f 80-82
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_b0c71c62297d6a::t_32156f65af86f2 429,440
+  s_b0c71c62297d6a::t_c56cfbf6c55fe4 155-157
+  s_b0c71c62297d6a::t_bb40da3eb5d9a5 237-238,258-259
+  s_b0c71c62297d6a::t_87d2ceec7cc36b 170-172
+  s_b0c71c62297d6a::t_ce10536540c9f6 290,303
+  s_b0c71c62297d6a::t_e4a444a5f9ae66 421,423-428,430-439,441,449,452-456,458-459,461
+  s_b0c71c62297d6a::t_d2d2e6dca36928 362-364,415-417
+  s_b0c71c62297d6a::t_2be01fa190d99c 53
+  s_b0c71c62297d6a::t_5e33144ebd0414 278-289,291-302,304-313,419-420
+  s_b0c71c62297d6a::t_ba000e02c9a40f 395
+  s_b0c71c62297d6a::t_196eb626eab801 40-52,54
+  s_b0c71c62297d6a::t_2d9b498705b89e 75-77
+  s_b0c71c62297d6a::t_1551231c744548 196-199
+  s_b0c71c62297d6a::t_a8fa0325b0b6b0 67-70
+  s_b0c71c62297d6a::t_a45eb6cfdac143 574-575,595-596
+  s_b0c71c62297d6a::t_d099f76b5f972f 333
+  s_b0c71c62297d6a::t_b3a05fcb2843f1 186-195,200-203
+  s_b0c71c62297d6a::t_e312d94ce50a3f 418
+  s_b0c71c62297d6a::t_5998bae7b9c7e6 422
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_b0c71c62297d6a::t_2b3806ea6cae05 28
+  s_b0c71c62297d6a::t_f5052b7113f875 337-338
+  s_b0c71c62297d6a::t_ffe2c8b8d69dce 425
+  s_b0c71c62297d6a::t_bf5a5fd8c40f5f 452-456,460-464
+  s_b0c71c62297d6a::t_ecdd27633033c5 465
+apps/desktop/Tests/VitalsTests/HistoryDatabaseTests.swift
+  s_b0c71c62297d6a::t_04eb8ca0bb5aaa 253-270,272,274-275,277-284,286-325
+  s_b0c71c62297d6a::t_cf89ee96378b8b 19-20,27-28
+  s_b0c71c62297d6a::t_b3f9f0819e9285 271,273,276,285
+apps/desktop/Sources/Vitals/Models/AppEnergyModel.swift
+  s_b0c71c62297d6a::t_7791f7285b6d38 1-81
+apps/desktop/Tests/VitalsTests/HistoryReaderTests.swift
+  s_b0c71c62297d6a::t_ec0c9616581ec9 53-71
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_b0c71c62297d6a::t_4aa109f3fe32b5 78
+  s_b0c71c62297d6a::t_32ef84212b3bcf 229
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_b0c71c62297d6a::t_63cad97f41ded1 276-435
+  s_b0c71c62297d6a::t_14d5270f171209 12-14,38,41-51
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_b0c71c62297d6a::t_3b934ae1423029 21,31-32
+  s_b0c71c62297d6a::t_25d67193448cc7 254,257
+  s_b0c71c62297d6a::t_d444ff92747c9b 263-266
+  s_b0c71c62297d6a::t_32e7bc312b39e4 213-221
+  s_b0c71c62297d6a::t_c1ca338c6fc10c 324-325
+  s_b0c71c62297d6a::t_6c2d2bcf4e758d 359,371,376-380
+  s_b0c71c62297d6a::t_e25a9f7b5d46fa 341,344
+  s_b0c71c62297d6a::t_2ba879682baa31 247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "467b0dd78e52348d195c4b5b46bd8aa07cf4f158",
+  "prompts": {},
+  "sessions": {
+    "s_b0c71c62297d6a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a92c33c7-5c57-4c51-a10b-8bd41310df93",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
