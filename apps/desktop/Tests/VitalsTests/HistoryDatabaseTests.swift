@@ -307,7 +307,7 @@ struct HistoryDatabaseTests {
     @Test func appEnergyRoundTripsAndThrottles() throws {
         let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
         let db = HistoryDatabase(file: url)
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let now = Date()   // real now, so the on-write retention prune keeps these rows
         let batch: [HistoryDatabase.AppEnergyRow] = [
             .init(bundleID: "com.a", name: "A", avgWatts: 2.5, cpuPercent: 30, wakeupsPerSec: 50, preventsSleep: false),
             .init(bundleID: nil, name: "daemon", avgWatts: nil, cpuPercent: 1, wakeupsPerSec: 5, preventsSleep: true),
@@ -322,5 +322,22 @@ struct HistoryDatabaseTests {
         #expect(rows.count == 2)                            // only the first batch landed
         #expect(rows.contains { $0.avgWatts == nil && $0.name == "daemon" })   // honest nil watts
         #expect(rows.contains { $0.bundleID == "com.a" && $0.avgWatts == 2.5 })
+    }
+
+    @Test func appEnergyRetentionPrunesOnWrite() throws {
+        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let db = HistoryDatabase(file: url)
+        let now = Date()
+        // A batch stamped 20 days ago is past the 14-day app-energy retention; the
+        // on-write prune must drop it rather than waiting for the next app open.
+        db.appendAppEnergy([.init(bundleID: nil, name: "Old", avgWatts: 1, cpuPercent: 1,
+                                  wakeupsPerSec: 1, preventsSleep: false)], at: now.addingTimeInterval(-20 * 86_400))
+        db.appendAppEnergy([.init(bundleID: nil, name: "New", avgWatts: 1, cpuPercent: 1,
+                                  wakeupsPerSec: 1, preventsSleep: false)], at: now)
+        db.waitUntilReady()
+
+        var names: [String] = []
+        db.forEachAppEnergy { _, row in names.append(row.name) }
+        #expect(names == ["New"])   // old batch pruned by the retention window
     }
 }

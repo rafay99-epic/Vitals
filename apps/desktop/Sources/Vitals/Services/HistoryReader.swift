@@ -210,7 +210,7 @@ enum HistoryExport {
     /// Quote a field that may contain a comma/quote (app names can). Only wraps
     /// when needed so plain fields round-trip unchanged.
     static func csvEscape(_ value: String) -> String {
-        guard value.contains(",") || value.contains("\"") || value.contains("\n") else { return value }
+        guard value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r") else { return value }
         return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 

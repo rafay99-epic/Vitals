@@ -35,6 +35,7 @@ enum PowerAssertions {
         static let system      = "PreventSystemSleep"           // kIOPMAssertionTypePreventSystemSleep
         static let noIdle      = "NoIdleSleepAssertion"         // kIOPMAssertionTypeNoIdleSleep
         static let idleDisplay = "PreventUserIdleDisplaySleep"  // kIOPMAssertPreventUserIdleDisplaySleep
+        static let noDisplay   = "NoDisplaySleepAssertion"      // kIOPMAssertionTypeNoDisplaySleep (legacy)
     }
 
     /// Assertions currently held, keyed by owning pid. Empty when nothing is
@@ -66,7 +67,7 @@ enum PowerAssertions {
         switch type {
         case AssertType.idleSystem, AssertType.system, AssertType.noIdle:
             kind = .system
-        case AssertType.idleDisplay:
+        case AssertType.idleDisplay, AssertType.noDisplay:
             kind = .display
         default:
             return nil   // not a sleep assertion — ignore

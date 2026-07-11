@@ -84,33 +84,19 @@ actor ProcessInventory {
         var processes: [RunningProcess] = []
 
         for pid in pids.prefix(Int(filled)) where pid > 0 {
-            // Owner first (cheap) so others' processes are skipped before the
-            // costlier path/name lookups.
-            let uid: uid_t
-            if let cached = staticCache[pid] {
-                uid = cached.uid
+            // Cheap owner gate first (from cache when we have it) so most of
+            // another user's processes are skipped before the costlier rusage and
+            // path/name lookups.
+            let cached = staticCache[pid]
+            let gateUID: uid_t
+            if let cached {
+                gateUID = cached.uid
             } else if let looked = ownerUID(of: pid) {
-                uid = looked
+                gateUID = looked
             } else {
                 continue
             }
-            let ownedByMe = uid == currentUID
-            if !includeSystem && !ownedByMe { continue }
-
-            // Resolve identity once per pid; reuse it on later samples.
-            let info: StaticInfo
-            if let cached = staticCache[pid] {
-                info = cached
-            } else {
-                let path = executablePath(of: pid)
-                info = StaticInfo(
-                    name: Self.displayName(path: path),
-                    executablePath: path,
-                    bundleURL: Self.bundleURL(forExecutablePath: path),
-                    uid: uid
-                )
-            }
-            liveStatic[pid] = info
+            if !includeSystem && gateUID != currentUID { continue }
 
             // v6 (the current rusage revision) adds the per-process energy
             // counter and wakeup tallies on top of every v4 field.
@@ -126,14 +112,34 @@ actor ProcessInventory {
             let energy = usage.ri_energy_nj
             let wakeups = usage.ri_pkg_idle_wkups + usage.ri_interrupt_wkups
             let start = usage.ri_proc_start_abstime
+
+            // A pid can be recycled by a new process. When the start time moves,
+            // last sample's cached identity + owner belong to the *old* process,
+            // so resolve them fresh and re-apply the owner filter with the new uid
+            // (a recycled pid may even change users).
+            let sameProcess = previousStart[pid] == start
+            let info: StaticInfo
+            if let cached, sameProcess {
+                info = cached
+            } else {
+                let uid = (cached != nil) ? (ownerUID(of: pid) ?? gateUID) : gateUID
+                let path = executablePath(of: pid)
+                info = StaticInfo(
+                    name: Self.displayName(path: path),
+                    executablePath: path,
+                    bundleURL: Self.bundleURL(forExecutablePath: path),
+                    uid: uid
+                )
+            }
+            if !includeSystem && info.uid != currentUID { continue }
+            let ownedByMe = info.uid == currentUID
+            liveStatic[pid] = info
+
             currentCPUTime[pid] = cpuTime
             currentEnergy[pid] = energy
             currentWakeups[pid] = wakeups
             currentStart[pid] = start
 
-            // Only diff cumulative counters when the previous sample was the
-            // *same* process at this pid (start time unchanged).
-            let sameProcess = previousStart[pid] == start
             var cpuPercent = 0.0
             var avgWatts: Double? = nil
             var wakeupsPerSec = 0.0

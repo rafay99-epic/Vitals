@@ -43,6 +43,31 @@ struct AppEnergyTests {
         #expect(chatty > idle)
     }
 
+    private func proc(_ id: pid_t, _ name: String, watts: Double?, cpu: Double = 0, wakeups: Double = 0) -> RunningProcess {
+        RunningProcess(id: id, name: name, executablePath: "/A/\(name).app/x",
+                       bundleURL: URL(fileURLWithPath: "/A/\(name).app"), memoryBytes: 0,
+                       cpuPercent: cpu, avgWatts: watts, wakeupsPerSec: wakeups, ownedByCurrentUser: true)
+    }
+
+    @Test func rankingUsesWattsWhenRealEnergyPresent() {
+        // "Idle" has no real watts but a high impact index; in real-watts mode it
+        // must rank by watts (0) and fall below measured apps, not jump the list.
+        let procs = [
+            proc(1, "Low", watts: 0.5),
+            proc(2, "Idle", watts: nil, cpu: 99, wakeups: 500),
+            proc(3, "High", watts: 2.0),
+        ]
+        let usage = AppEnergy.usage(from: procs, assertions: [:], ownBundlePath: "/nonexistent")
+        #expect(usage.map(\.name) == ["High", "Low", "Idle"])
+    }
+
+    @Test func rankingUsesImpactWhenNoRealEnergy() {
+        // With no app reporting real watts, rank by the impact index instead.
+        let procs = [proc(1, "A", watts: nil, cpu: 10), proc(2, "B", watts: nil, cpu: 90)]
+        let usage = AppEnergy.usage(from: procs, assertions: [:], ownBundlePath: "/nonexistent")
+        #expect(usage.first?.name == "B")
+    }
+
     @Test func groupingFoldsHelpersUnderTheApp() {
         let brave = URL(fileURLWithPath: "/Applications/Brave.app")
         let procs = [
