@@ -18,7 +18,7 @@ struct HistoryView: View {
     @State private var loading = false
 
     enum Metric: String, CaseIterable, Identifiable {
-        case temp, cpu, gpu, memory, network, disk
+        case temp, cpu, gpu, memory, network, disk, battery, power
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -28,6 +28,8 @@ struct HistoryView: View {
             case .memory: return "Memory"
             case .network: return "Network"
             case .disk: return "Disk"
+            case .battery: return "Battery"
+            case .power: return "Power"
             }
         }
     }
@@ -208,6 +210,15 @@ private struct HistoryChartCard: View {
                             .foregroundStyle(by: .value("S", "Write")).interpolationMethod(.catmullRom)
                     }
                 }
+            case .battery:
+                ForEach(samples) { s in if let b = s.batteryPercent { areaLine(s.time, b, .green) } }
+            case .power:
+                ForEach(samples) { s in
+                    if let w = s.socWatts {
+                        LineMark(x: .value("Time", s.time), y: .value("W", w))
+                            .foregroundStyle(.orange).interpolationMethod(.catmullRom)
+                    }
+                }
             }
         }
         .chartForegroundStyleScale(domain: seriesStyle.domain, range: seriesStyle.range)
@@ -233,22 +244,26 @@ private struct HistoryChartCard: View {
         case .temp:    return (["Average", "Hottest"], [.orange, .red.opacity(0.7)])
         case .network: return (["Download", "Upload"], [.mint, .orange])
         case .disk:    return (["Read", "Write"], [.yellow, .orange])
-        case .cpu, .gpu, .memory: return ([], [])
+        case .cpu, .gpu, .memory, .battery, .power: return ([], [])
         }
     }
 
     private var yLabel: String {
         switch metric {
         case .temp: return settings.unit.symbol
-        case .cpu, .gpu: return "%"
+        case .cpu, .gpu, .battery: return "%"
         case .memory: return "GB"
         case .network, .disk: return "MB/s"
+        case .power: return "W"
         }
     }
 
     private var yDomain: ClosedRange<Double> {
         switch metric {
-        case .cpu, .gpu: return 0...100
+        case .cpu, .gpu, .battery: return 0...100
+        case .power:
+            let peak = samples.compactMap(\.socWatts).max() ?? 1
+            return 0...max(peak * 1.1, 1)
         case .memory:
             let peak = samples.map(\.memoryGB).max() ?? 1
             return 0...max(peak * 1.1, 1)
@@ -306,6 +321,8 @@ private struct HistoryStatsCard: View {
         case .memory:  return samples.map(\.memoryGB)
         case .network: return samples.compactMap(\.netInBps)
         case .disk:    return samples.compactMap(\.diskReadBps)
+        case .battery: return samples.compactMap(\.batteryPercent)
+        case .power:   return samples.compactMap(\.socWatts)
         }
     }
 
@@ -321,9 +338,10 @@ private struct HistoryStatsCard: View {
     private func format(_ value: Double) -> String {
         switch metric {
         case .temp:   return settings.format(value, decimals: 0)
-        case .cpu, .gpu: return "\(Int(value.rounded()))%"
+        case .cpu, .gpu, .battery: return "\(Int(value.rounded()))%"
         case .memory: return String(format: "%.1f GB", value)
         case .network, .disk: return NetworkFormat.rate(value)
+        case .power:  return String(format: "%.1f W", value)
         }
     }
 }
@@ -338,6 +356,7 @@ private struct HistoryExportCard: View {
             HStack(spacing: 8) {
                 Button("Export CSV") { export(.csv) }
                 Button("Export JSON") { export(.json) }
+                Button("App Energy CSV") { export(.appEnergy) }
                 if let message {
                     Text(message).font(.caption).foregroundStyle(.secondary)
                 }
@@ -349,12 +368,16 @@ private struct HistoryExportCard: View {
         }
     }
 
-    private enum Format { case csv, json }
+    private enum Format { case csv, json, appEnergy }
 
     private func export(_ format: Format) {
         Task {
             let url = await Task.detached(priority: .userInitiated) {
-                format == .csv ? HistoryExport.csv() : HistoryExport.json()
+                switch format {
+                case .csv: return HistoryExport.csv()
+                case .json: return HistoryExport.json()
+                case .appEnergy: return HistoryExport.appEnergyCSV()
+                }
             }.value
             if let url {
                 NSWorkspace.shared.activateFileViewerSelecting([url])

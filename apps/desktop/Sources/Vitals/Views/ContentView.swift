@@ -75,6 +75,7 @@ struct ContentView: View {
     // Per-section models, owned here so a scan started in one section survives
     // switching sections (Processes, Apps, Login Items, Cleanup, Storage).
     @StateObject private var processesModel = ProcessesModel()
+    @StateObject private var appEnergyModel = AppEnergyModel()
     @StateObject private var appsModel = AppsModel()
     @StateObject private var loginItemsModel = LoginItemsModel()
     @StateObject private var cleanupModel = CleanupModel()
@@ -225,7 +226,7 @@ struct ContentView: View {
             if visited.contains(.cpu) { CPUView().tabVisibility(active(.cpu)) }
             if visited.contains(.gpu) { GPUView(isActive: active(.gpu)).tabVisibility(active(.gpu)) }
             if visited.contains(.memory) { MemoryView(isActive: active(.memory)).tabVisibility(active(.memory)) }
-            if visited.contains(.battery) { BatteryView(isActive: active(.battery)).tabVisibility(active(.battery)) }
+            if visited.contains(.battery) { BatteryView(appEnergyModel: appEnergyModel, isActive: active(.battery)).tabVisibility(active(.battery)) }
             if visited.contains(.network) { NetworkView(isActive: active(.network)).tabVisibility(active(.network)) }
             if visited.contains(.sensors) { SensorsView().tabVisibility(active(.sensors)) }
             if visited.contains(.processes) {
