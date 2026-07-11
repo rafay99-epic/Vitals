@@ -16,14 +16,16 @@ struct HistoryDatabaseTests {
     private func sample(_ secondsAgo: TimeInterval, now: Date, gpuTemp: Double? = nil,
                         fanRPM: Double? = nil, battery: Double? = nil,
                         netIn: Double? = nil, netOut: Double? = nil,
-                        diskRead: Double? = nil, diskWrite: Double? = nil) -> HistorySample {
+                        diskRead: Double? = nil, diskWrite: Double? = nil,
+                        socWatts: Double? = nil, batteryWatts: Double? = nil) -> HistorySample {
         HistorySample(
             time: now.addingTimeInterval(-secondsAgo),
             avgTemp: 45.5, hottestTemp: 52.0, gpuTemp: gpuTemp, fanRPM: fanRPM,
             cpuUsage: 12.3, memoryGB: 10.4, thermalState: "Nominal",
             batteryPercent: battery, gpuUsage: nil, gpuMemoryGB: nil,
             netInBps: netIn, netOutBps: netOut,
-            diskReadBps: diskRead, diskWriteBps: diskWrite)
+            diskReadBps: diskRead, diskWriteBps: diskWrite,
+            socWatts: socWatts, batteryWatts: batteryWatts)
     }
 
     @Test func roundTripsRowsAndOptionals() throws {
@@ -247,5 +249,95 @@ struct HistoryDatabaseTests {
 
         #expect(!fm.fileExists(atPath: stale.path))   // stale backup auto-removed
         #expect(fm.fileExists(atPath: fresh.path))    // fresh backup kept (still in grace)
+    }
+
+    // MARK: v4 — power columns + per-app energy
+
+    @Test func roundTripsPowerColumns() throws {
+        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let db = HistoryDatabase(file: url)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        db.insert(sample(20, now: now, socWatts: 14.2, batteryWatts: -8.5))
+
+        let r = try #require(db.samples(range: .all, now: now, maxPoints: 600).first)
+        #expect(r.socWatts == 14.2)
+        #expect(r.batteryWatts == -8.5)
+    }
+
+    /// An older database created at schema v3 (no soc_watts/battery_watts, no
+    /// app_energy table) must migrate cleanly on open and then accept v4 rows.
+    @Test func migratesV3DatabaseToV4() throws {
+        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let now = Date()   // real now, so the retention prune at open keeps these rows
+
+        // Build a minimal v3 `samples` table by hand (a recent row so it survives prune).
+        var raw: OpaquePointer?
+        #expect(sqlite3_open(url.path, &raw) == SQLITE_OK)
+        let oldTs = Int64(now.addingTimeInterval(-60).timeIntervalSince1970 * 1000)
+        let v3 = """
+        CREATE TABLE samples (
+          id INTEGER PRIMARY KEY, ts INTEGER NOT NULL UNIQUE,
+          avg_cpu REAL NOT NULL, hottest_cpu REAL NOT NULL, gpu_temp REAL, fan_rpm REAL,
+          cpu_usage REAL NOT NULL, memory_gb REAL NOT NULL, thermal_state TEXT NOT NULL,
+          battery_pct REAL, gpu_usage REAL, gpu_mem_gb REAL,
+          net_in_bps REAL, net_out_bps REAL, disk_read_bps REAL, disk_write_bps REAL);
+        INSERT INTO samples (ts, avg_cpu, hottest_cpu, cpu_usage, memory_gb, thermal_state)
+          VALUES (\(oldTs), 40, 50, 10, 8, 'Nominal');
+        PRAGMA user_version=3;
+        """
+        #expect(sqlite3_exec(raw, v3, nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(raw)
+
+        // Open with the current code → migration adds the new columns + table.
+        let db = HistoryDatabase(file: url)
+        db.insert(sample(0, now: now, socWatts: 12.0, batteryWatts: -5.0))
+        db.appendAppEnergy([.init(bundleID: "com.x", name: "X", avgWatts: 3.0,
+                                  cpuPercent: 20, wakeupsPerSec: 100, preventsSleep: true)], at: now)
+        db.waitUntilReady()
+
+        let rows = db.samples(range: .all, now: now, maxPoints: 600)
+        #expect(rows.count == 2)                                // old row survived, new row added
+        #expect(rows.contains { $0.socWatts == 12.0 })          // v4 column readable
+        var appRows: [(Date, HistoryDatabase.AppEnergyRow)] = []
+        db.forEachAppEnergy { appRows.append(($0, $1)) }
+        #expect(appRows.count == 1)                             // app_energy table created + written
+        #expect(appRows.first?.1.preventsSleep == true)
+    }
+
+    @Test func appEnergyRoundTripsAndThrottles() throws {
+        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let db = HistoryDatabase(file: url)
+        let now = Date()   // real now, so the on-write retention prune keeps these rows
+        let batch: [HistoryDatabase.AppEnergyRow] = [
+            .init(bundleID: "com.a", name: "A", avgWatts: 2.5, cpuPercent: 30, wakeupsPerSec: 50, preventsSleep: false),
+            .init(bundleID: nil, name: "daemon", avgWatts: nil, cpuPercent: 1, wakeupsPerSec: 5, preventsSleep: true),
+        ]
+        db.appendAppEnergy(batch, at: now)
+        // A second batch 30s later is inside the 60s throttle → dropped.
+        db.appendAppEnergy(batch, at: now.addingTimeInterval(30))
+        db.waitUntilReady()
+
+        var rows: [HistoryDatabase.AppEnergyRow] = []
+        db.forEachAppEnergy { _, row in rows.append(row) }
+        #expect(rows.count == 2)                            // only the first batch landed
+        #expect(rows.contains { $0.avgWatts == nil && $0.name == "daemon" })   // honest nil watts
+        #expect(rows.contains { $0.bundleID == "com.a" && $0.avgWatts == 2.5 })
+    }
+
+    @Test func appEnergyRetentionPrunesOnWrite() throws {
+        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let db = HistoryDatabase(file: url)
+        let now = Date()
+        // A batch stamped 20 days ago is past the 14-day app-energy retention; the
+        // on-write prune must drop it rather than waiting for the next app open.
+        db.appendAppEnergy([.init(bundleID: nil, name: "Old", avgWatts: 1, cpuPercent: 1,
+                                  wakeupsPerSec: 1, preventsSleep: false)], at: now.addingTimeInterval(-20 * 86_400))
+        db.appendAppEnergy([.init(bundleID: nil, name: "New", avgWatts: 1, cpuPercent: 1,
+                                  wakeupsPerSec: 1, preventsSleep: false)], at: now)
+        db.waitUntilReady()
+
+        var names: [String] = []
+        db.forEachAppEnergy { _, row in names.append(row.name) }
+        #expect(names == ["New"])   // old batch pruned by the retention window
     }
 }

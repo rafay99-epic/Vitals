@@ -52,12 +52,17 @@ struct CleanupView: View {
 
     private var picker: some View {
         HStack {
-            Picker("", selection: $page) {
+            // A pull-down menu, not a segment row: the mode label shows the current
+            // page with its icon, and the list scales without crowding the bar
+            // (matches the History metric picker).
+            Picker(selection: $page) {
                 ForEach(CleanupPage.allCases) { option in
-                    Text(option.title).tag(option)
+                    Label(option.title, systemImage: option.symbol).tag(option)
                 }
+            } label: {
+                Label(page.title, systemImage: page.symbol)
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
             .disabled(model.isCleaning || model.isDevCleaning || model.isFilesCleaning || model.isDupCleaning)

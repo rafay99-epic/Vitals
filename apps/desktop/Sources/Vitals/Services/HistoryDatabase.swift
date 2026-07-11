@@ -37,6 +37,21 @@ final class HistoryDatabase: @unchecked Sendable {
         let netOutBps: Double?
         let diskReadBps: Double?
         let diskWriteBps: Double?
+        let socWatts: Double?
+        let batteryWatts: Double?
+    }
+
+    /// One per-app energy row, logged in batches at a coarse cadence. `bundleID`
+    /// is nil for processes not inside an `.app`. `avgWatts` is a real reading
+    /// (nil when the OS reported no energy); `preventsSleep` marks apps holding a
+    /// system-sleep assertion.
+    struct AppEnergyRow {
+        let bundleID: String?
+        let name: String
+        let avgWatts: Double?
+        let cpuPercent: Double
+        let wakeupsPerSec: Double
+        let preventsSleep: Bool
     }
 
     private let queue = DispatchQueue(label: "com.vitals.history-db")
@@ -49,10 +64,17 @@ final class HistoryDatabase: @unchecked Sendable {
     /// faster sampling tick can call `append` freely without bloating the table.
     private static let minimumWriteInterval: TimeInterval = 10
     private var lastWrite: Date = .distantPast
+    /// App-energy rows are many-per-tick, so they're logged on their own coarse
+    /// cadence (once a minute) to keep the table bounded.
+    private static let appEnergyWriteInterval: TimeInterval = 60
+    private var lastAppEnergyWrite: Date = .distantPast
     /// Drop readings older than this so a machine left running for years can't
     /// grow the table without bound. Generous — a year at one row / 10 s is only
     /// ~3M rows. Alerts are tiny and never pruned.
     private static let retention: TimeInterval = 365 * 86_400
+    /// App-energy rows are many-per-sample (top apps × once a minute), so they're
+    /// kept for a shorter window than the single-row `samples` series.
+    private static let appEnergyRetention: TimeInterval = 14 * 86_400
     /// How long the imported legacy files (`*.imported`) are kept after migration
     /// as a safety net before being deleted automatically, so they don't linger
     /// in the data home and confuse the user. Measured from the migration moment.
@@ -130,7 +152,9 @@ final class HistoryDatabase: @unchecked Sendable {
             net_in_bps    REAL,
             net_out_bps   REAL,
             disk_read_bps  REAL,
-            disk_write_bps REAL
+            disk_write_bps REAL,
+            soc_watts      REAL,
+            battery_watts  REAL
         );
         """)
         // Migrations (v1 → v2 network, v2 → v3 disk I/O): earlier versions
@@ -143,6 +167,9 @@ final class HistoryDatabase: @unchecked Sendable {
         addSampleColumnIfMissing("net_out_bps")
         addSampleColumnIfMissing("disk_read_bps")
         addSampleColumnIfMissing("disk_write_bps")
+        // v3 → v4: system-on-chip package watts + battery load watts.
+        addSampleColumnIfMissing("soc_watts")
+        addSampleColumnIfMissing("battery_watts")
         // UNIQUE(ts, message): a fired alert is identified by when + what, so
         // re-importing the alert log (e.g. a crash between import and retire) can't
         // duplicate rows — INSERT OR IGNORE makes it idempotent. Distinct alerts
@@ -156,7 +183,24 @@ final class HistoryDatabase: @unchecked Sendable {
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);")
-        exec("PRAGMA user_version=3;")
+
+        // Per-app energy history. One row per logged app per batch (a batch shares
+        // one `ts`), so this is one-to-many where `samples` is one row per tick.
+        // Indexed on ts for range scans and retention pruning.
+        exec("""
+        CREATE TABLE IF NOT EXISTS app_energy (
+            id             INTEGER PRIMARY KEY,
+            ts             INTEGER NOT NULL,
+            bundle_id      TEXT,
+            name           TEXT NOT NULL,
+            avg_watts       REAL,
+            cpu_pct         REAL,
+            wakeups_per_sec REAL,
+            prevents_sleep  INTEGER NOT NULL DEFAULT 0
+        );
+        """)
+        exec("CREATE INDEX IF NOT EXISTS idx_app_energy_ts ON app_energy(ts);")
+        exec("PRAGMA user_version=4;")
     }
 
     /// Adds a `REAL` column to `samples` if it isn't there yet. SQLite's ALTER
@@ -190,8 +234,8 @@ final class HistoryDatabase: @unchecked Sendable {
 
             let sql = """
             INSERT OR IGNORE INTO samples
-              (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+              (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps, soc_watts, battery_watts)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -211,6 +255,8 @@ final class HistoryDatabase: @unchecked Sendable {
             self.bindOptional(stmt, 13, entry.netOutBps)
             self.bindOptional(stmt, 14, entry.diskReadBps)
             self.bindOptional(stmt, 15, entry.diskWriteBps)
+            self.bindOptional(stmt, 16, entry.socWatts)
+            self.bindOptional(stmt, 17, entry.batteryWatts)
             sqlite3_step(stmt)
         }
     }
@@ -226,6 +272,48 @@ final class HistoryDatabase: @unchecked Sendable {
             sqlite3_bind_int64(stmt, 1, Self.millis(time))
             sqlite3_bind_text(stmt, 2, message, -1, Self.transient)
             sqlite3_step(stmt)
+        }
+    }
+
+    /// Append a batch of per-app energy rows sharing one timestamp. Throttled to
+    /// one batch per minute; fire-and-forget on the serial queue. `rows` should
+    /// already be capped to the interesting apps (top consumers + sleep blockers)
+    /// by the caller.
+    func appendAppEnergy(_ rows: [AppEnergyRow], at time: Date) {
+        guard !rows.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self, let db = self.db else { return }
+            guard time.timeIntervalSince(self.lastAppEnergyWrite) >= Self.appEnergyWriteInterval else { return }
+            self.lastAppEnergyWrite = time
+            let ts = Self.millis(time)
+            let sql = """
+            INSERT INTO app_energy (ts, bundle_id, name, avg_watts, cpu_pct, wakeups_per_sec, prevents_sleep)
+            VALUES (?,?,?,?,?,?,?);
+            """
+            self.exec("BEGIN;")
+            var stmt: OpaquePointer?
+            var ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK
+            if ok {
+                for row in rows {
+                    sqlite3_bind_int64(stmt, 1, ts)
+                    if let bundleID = row.bundleID { sqlite3_bind_text(stmt, 2, bundleID, -1, Self.transient) }
+                    else { sqlite3_bind_null(stmt, 2) }
+                    sqlite3_bind_text(stmt, 3, row.name, -1, Self.transient)
+                    self.bindOptional(stmt, 4, row.avgWatts)
+                    sqlite3_bind_double(stmt, 5, row.cpuPercent)
+                    sqlite3_bind_double(stmt, 6, row.wakeupsPerSec)
+                    sqlite3_bind_int(stmt, 7, row.preventsSleep ? 1 : 0)
+                    if sqlite3_step(stmt) != SQLITE_DONE { ok = false; break }
+                    sqlite3_reset(stmt)
+                }
+                sqlite3_finalize(stmt)
+            }
+            // A batch is all-or-nothing: one bad INSERT rolls back the whole
+            // timestamp rather than leaving a partial, misleading snapshot.
+            self.exec(ok ? "COMMIT;" : "ROLLBACK;")
+            // Enforce the retention window during the session, not only at open —
+            // a long-running Mac would otherwise keep every minute batch forever.
+            if ok { self.pruneTable("app_energy", olderThan: Self.appEnergyRetention) }
         }
     }
 
@@ -248,7 +336,7 @@ final class HistoryDatabase: @unchecked Sendable {
             // inlining them is safe — and lets the thinned query also pin the true
             // first/last in-range rows, so the chart's endpoints are the real
             // newest/oldest readings, not just the nearest surviving sample.
-            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps FROM samples WHERE ts >= \(cutoff)"
+            var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps, soc_watts, battery_watts FROM samples WHERE ts >= \(cutoff)"
             if stride > 1 {
                 sql += " AND (id % \(stride) = 0"
                     + " OR id = (SELECT MIN(id) FROM samples WHERE ts >= \(cutoff))"
@@ -277,7 +365,9 @@ final class HistoryDatabase: @unchecked Sendable {
                     netInBps: optionalDouble(stmt, 11),
                     netOutBps: optionalDouble(stmt, 12),
                     diskReadBps: optionalDouble(stmt, 13),
-                    diskWriteBps: optionalDouble(stmt, 14)
+                    diskWriteBps: optionalDouble(stmt, 14),
+                    socWatts: optionalDouble(stmt, 15),
+                    batteryWatts: optionalDouble(stmt, 16)
                 ))
             }
             return out
@@ -308,7 +398,7 @@ final class HistoryDatabase: @unchecked Sendable {
     func forEachSample(_ body: (HistorySample) -> Void) {
         queue.sync {
             guard let db else { return }
-            let sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps FROM samples ORDER BY ts ASC;"
+            let sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps, soc_watts, battery_watts FROM samples ORDER BY ts ASC;"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             defer { sqlite3_finalize(stmt) }
@@ -328,7 +418,33 @@ final class HistoryDatabase: @unchecked Sendable {
                     netInBps: optionalDouble(stmt, 11),
                     netOutBps: optionalDouble(stmt, 12),
                     diskReadBps: optionalDouble(stmt, 13),
-                    diskWriteBps: optionalDouble(stmt, 14)
+                    diskWriteBps: optionalDouble(stmt, 14),
+                    socWatts: optionalDouble(stmt, 15),
+                    batteryWatts: optionalDouble(stmt, 16)
+                ))
+            }
+        }
+    }
+
+    /// Stream every per-app energy row, oldest→newest, to `body` (with its batch
+    /// timestamp) — without materializing the table. Used by CSV export. Runs on
+    /// the serial queue; call off the main thread.
+    func forEachAppEnergy(_ body: (Date, AppEnergyRow) -> Void) {
+        queue.sync {
+            guard let db else { return }
+            let sql = "SELECT ts, bundle_id, name, avg_watts, cpu_pct, wakeups_per_sec, prevents_sleep FROM app_energy ORDER BY ts ASC, id ASC;"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            defer { sqlite3_finalize(stmt) }
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let bundleID = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : text(stmt, 1)
+                body(Self.date(sqlite3_column_int64(stmt, 0)), AppEnergyRow(
+                    bundleID: bundleID,
+                    name: text(stmt, 2),
+                    avgWatts: optionalDouble(stmt, 3),
+                    cpuPercent: sqlite3_column_double(stmt, 4),
+                    wakeupsPerSec: sqlite3_column_double(stmt, 5),
+                    preventsSleep: sqlite3_column_int(stmt, 6) != 0
                 ))
             }
         }
@@ -336,13 +452,19 @@ final class HistoryDatabase: @unchecked Sendable {
 
     // MARK: Maintenance
 
-    /// Drop readings older than the retention window. Cheap (indexed delete);
+    /// Drop rows older than their retention window. Cheap (indexed deletes);
     /// runs once at open.
     private func prune() {
+        pruneTable("samples", olderThan: Self.retention)
+        pruneTable("app_energy", olderThan: Self.appEnergyRetention)
+    }
+
+    private func pruneTable(_ table: String, olderThan retention: TimeInterval) {
         guard let db else { return }
-        let cutoff = Self.millis(Date().addingTimeInterval(-Self.retention))
+        let cutoff = Self.millis(Date().addingTimeInterval(-retention))
+        // `table` is always one of our own constant names, never input.
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "DELETE FROM samples WHERE ts < ?;", -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, "DELETE FROM \(table) WHERE ts < ?;", -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_int64(stmt, 1, cutoff)
         sqlite3_step(stmt)
@@ -455,8 +577,8 @@ final class HistoryDatabase: @unchecked Sendable {
         guard let db else { return false }
         let sql = """
         INSERT OR IGNORE INTO samples
-          (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+          (ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps, soc_watts, battery_watts)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -476,6 +598,8 @@ final class HistoryDatabase: @unchecked Sendable {
         bindOptional(stmt, 13, s.netOutBps)
         bindOptional(stmt, 14, s.diskReadBps)
         bindOptional(stmt, 15, s.diskWriteBps)
+        bindOptional(stmt, 16, s.socWatts)
+        bindOptional(stmt, 17, s.batteryWatts)
         return sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0
     }
 

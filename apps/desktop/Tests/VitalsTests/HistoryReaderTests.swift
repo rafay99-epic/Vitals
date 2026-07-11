@@ -50,6 +50,27 @@ struct HistoryReaderTests {
         #expect(HistoryReader.parse(blank)?.diskWriteBps == nil)
     }
 
+    @Test func parsesV4RowWithPowerColumns() {
+        let line = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,125000,34000,52000000,9500000,14.20,-8.50")
+        let sample = HistoryReader.parse(line)
+        #expect(sample?.socWatts == 14.20)
+        #expect(sample?.batteryWatts == -8.50)
+        // A v3 (15-column) row predates power logging — honest nil, not 0.
+        let v3 = Substring("2026-06-16T01:02:03Z,43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79,125000,34000,52000000,9500000")
+        #expect(HistoryReader.parse(v3)?.socWatts == nil)
+        #expect(HistoryReader.parse(v3)?.batteryWatts == nil)
+    }
+
+    @Test func appEnergyCSVEscapesCommasInNames() {
+        // App names can contain commas ("Numbers, Pages") — must be quoted so the
+        // exported CSV round-trips.
+        #expect(HistoryExport.csvEscape("Safari") == "Safari")
+        #expect(HistoryExport.csvEscape("Numbers, Pages") == "\"Numbers, Pages\"")
+        #expect(HistoryExport.csvEscape("say \"hi\"") == "\"say \"\"hi\"\"\"")
+        // A carriage return must also force quoting or it splits the record.
+        #expect(HistoryExport.csvEscape("a\rb") == "\"a\rb\"")
+    }
+
     @Test func rejectsHeaderAndMalformed() {
         let header = Substring("timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb")
         #expect(HistoryReader.parse(header) == nil)
