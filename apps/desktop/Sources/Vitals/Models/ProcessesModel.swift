@@ -96,6 +96,13 @@ final class ProcessesModel: ObservableObject {
         timer = nil
     }
 
+    /// Belt-and-suspenders: the view calls `stop()` on disappear, but if it's
+    /// torn down without that, kill the repeating timer here so it doesn't keep
+    /// firing. Matches `VitalsModel`'s deinit.
+    deinit {
+        timer?.invalidate()
+    }
+
     /// Reported by the view on scroll-phase changes. Pauses refreshes while
     /// scrolling and takes one immediately when it stops, so the list is live
     /// when still and rock-steady while moving.
