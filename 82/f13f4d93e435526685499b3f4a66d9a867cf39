@@ -1,0 +1,19 @@
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_1b69206d5452f9::t_28fee58f87af4a 33,82,84-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "82f13f4d93e435526685499b3f4a66d9a867cf39",
+  "prompts": {},
+  "sessions": {
+    "s_1b69206d5452f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f9fc6-4d37-7e83-a841-21108112addf",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
