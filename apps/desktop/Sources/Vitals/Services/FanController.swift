@@ -100,9 +100,11 @@ final class FanController: ObservableObject {
             launchctl bootstrap system '\(FanControl.daemonPlistPath)'
             """
             try await PrivilegedShell.runAsAdmin(script, prompt: "Vitals needs to install its fan-control helper.")
-            // Seed an empty state file the user can write to from now on. Do
-            // not swallow this failure: a partial repair must be visible.
-            try FanControl.writeCommands([])
+            // Seed only a missing state file. Re-enabling after the plist was
+            // removed must preserve any manual targets that were already saved.
+            if !FileManager.default.fileExists(atPath: FanControl.stateURL.path) {
+                try FanControl.writeCommands([])
+            }
         }
         refreshInstalled()
     }

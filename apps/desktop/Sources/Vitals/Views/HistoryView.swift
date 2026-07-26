@@ -9,43 +9,10 @@ import AppKit
 /// back on.
 struct HistoryView: View {
     @EnvironmentObject private var settings: AppSettings
+    @ObservedObject var model: HistoryModel
     let isActive: Bool
 
-    @State private var range: HistoryRange = .day
-    @State private var metric: Metric = LaunchOverrides.historyMetric ?? .temp
-    @State private var samples: [HistorySample] = []
-    @State private var alertEvents: [AlertEvent] = []
-    @State private var loading = false
-
-    enum Metric: String, CaseIterable, Identifiable {
-        case temp, cpu, gpu, memory, network, disk, battery, power
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .temp: return "Temp"
-            case .cpu: return "CPU"
-            case .gpu: return "GPU"
-            case .memory: return "Memory"
-            case .network: return "Network"
-            case .disk: return "Disk"
-            case .battery: return "Battery"
-            case .power: return "Power"
-            }
-        }
-        /// SF Symbol matching the sidebar, so the metric menu reads at a glance.
-        var symbol: String {
-            switch self {
-            case .temp: return "thermometer.medium"
-            case .cpu: return "cpu"
-            case .gpu: return "cpu.fill"
-            case .memory: return "memorychip"
-            case .network: return "network"
-            case .disk: return "internaldrive"
-            case .battery: return "battery.100percent"
-            case .power: return "bolt.fill"
-            }
-        }
-    }
+    typealias Metric = HistoryMetric
 
     private struct ReloadKey: Equatable { let active: Bool; let range: HistoryRange; let logging: Bool }
 
@@ -54,48 +21,35 @@ struct HistoryView: View {
             timeline
             // Fired alerts are independent of the metric log, so they show even
             // when logging is off and the chart is empty.
-            if !alertEvents.isEmpty {
-                AlertHistoryCard(events: alertEvents)
+            if !model.alertEvents.isEmpty {
+                AlertHistoryCard(events: model.alertEvents)
             }
             // Export lives outside the samples gate: per-app energy is logged
             // independently of CPU-temp samples, so its CSV must stay reachable
             // even on a Mac whose main history chart is empty.
             HistoryExportCard()
         }
-        .task(id: ReloadKey(active: isActive, range: range, logging: settings.loggingEnabled)) {
-            await reload()
+        .task(id: ReloadKey(active: isActive, range: model.range, logging: settings.loggingEnabled)) {
+            await model.reload()
         }
     }
 
     @ViewBuilder
     private var timeline: some View {
-        if !samples.isEmpty {
+        if !model.samples.isEmpty {
             // Existing history is browsable even if logging was since turned
             // off — flag that it won't keep growing.
             if !settings.loggingEnabled { loggingPausedNote }
-            HistoryControls(range: $range, metric: $metric)
-            HistoryChartCard(samples: samples, metric: metric, range: range)
-            HistoryStatsCard(samples: samples, metric: metric)
-        } else if loading {
+            HistoryControls(range: $model.range, metric: $model.metric)
+            HistoryChartCard(samples: model.samples, metric: model.metric, range: model.range)
+            HistoryStatsCard(samples: model.samples, metric: model.metric)
+        } else if model.loading {
             emptyState
         } else if !settings.loggingEnabled {
             loggingOffState
         } else {
             emptyState
         }
-    }
-
-    private func reload() async {
-        guard isActive else { return }              // keep what we have when off-tab
-        loading = true
-        let range = self.range
-        let result = await Task.detached(priority: .userInitiated) {
-            (HistoryReader.load(range: range, now: Date()), AlertLog.recent(limit: 30))
-        }.value
-        guard !Task.isCancelled else { return }     // a newer reload superseded this one
-        samples = result.0
-        alertEvents = result.1
-        loading = false
     }
 
     private var loggingPausedNote: some View {

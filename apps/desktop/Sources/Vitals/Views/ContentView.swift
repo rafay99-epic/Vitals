@@ -75,6 +75,7 @@ struct ContentView: View {
     @StateObject private var loginItemsModel = LoginItemsModel()
     @StateObject private var cleanupModel = CleanupModel()
     @StateObject private var storageModel = StorageModel()
+    @StateObject private var historyModel = HistoryModel()
 
     private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .processes, .history]
     private static let maintain: [NavSection] = [.storage, .cleanup, .applications, .loginItems]
@@ -229,7 +230,7 @@ struct ContentView: View {
             case .processes:
                 ProcessesView(model: processesModel, isActive: true)
             case .history:
-                HistoryView(isActive: true)
+                HistoryView(model: historyModel, isActive: true)
             case .storage:
                 StorageView(model: storageModel, isActive: true)
             case .cleanup:

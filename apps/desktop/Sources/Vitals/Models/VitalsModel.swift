@@ -155,7 +155,7 @@ final class VitalsModel: ObservableObject {
     internal var isSamplingTimerActive: Bool { timer != nil }
 
     private var needsTopProcesses: Bool {
-        ["overview", "memory", "processes"].contains(visibleSectionID)
+        mainWindowVisible && ["overview", "memory", "processes"].contains(visibleSectionID)
             || settings.alertRules.contains { $0.enabled && $0.metric == .processCPU }
     }
     /// Whether the IOReport GPU sample is needed this tick. The GPU reading is
@@ -164,7 +164,7 @@ final class VitalsModel: ObservableObject {
     /// alert. Menu-bar-only with no GPU metric → skip the read and hold the last
     /// value, cutting an IOReport round-trip every tick.
     private var needsGPU: Bool {
-        ["overview", "gpu", "history"].contains(visibleSectionID)
+        mainWindowVisible && ["overview", "gpu", "history"].contains(visibleSectionID)
             || gpuWidgetVisible
             || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage))
             || settings.alertRules.contains { $0.enabled && $0.metric == .gpuUsage }
