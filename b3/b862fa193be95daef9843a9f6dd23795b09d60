@@ -1,0 +1,28 @@
+apps/desktop/README.md
+  s_1b69206d5452f9::t_8f4a3c48203c19 62-64
+apps/desktop/Sources/Vitals/App/Hardware.swift
+  s_1b69206d5452f9::t_c3b600d9e0198d 7-9,45-46
+apps/desktop/build.sh
+  s_1b69206d5452f9::t_8f4a3c48203c19 12-24,54-59
+  s_1b69206d5452f9::t_c3b600d9e0198d 48-52
+apps/desktop/Sources/Vitals/App/Main.swift
+  s_1b69206d5452f9::t_35c78ef3804643 10-11
+.github/workflows/ci.yml
+  s_1b69206d5452f9::t_c3b600d9e0198d 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "b3b862fa193be95daef9843a9f6dd23795b09d60",
+  "prompts": {},
+  "sessions": {
+    "s_1b69206d5452f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f9fc6-4d37-7e83-a841-21108112addf",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
