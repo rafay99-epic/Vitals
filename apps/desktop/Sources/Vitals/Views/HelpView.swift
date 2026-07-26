@@ -41,7 +41,7 @@ struct HelpView: View {
             symbol: "square.grid.2x2",
             tint: .purple,
             title: "Applications",
-            body: "Two segments: Installed and Startup. Uninstalling moves the app and its leftover files (caches, preferences, containers, launch agents) to the Trash — nothing is deleted permanently, so you can always recover from the Finder. System apps and Apple software are never listed. Startup shows everything that launches itself at login; you can disable or remove your own items, while Apple's stay read-only."
+            body: "Two segments: Installed and Startup. Uninstalling moves the app and its leftover files (caches, preferences, containers, launch agents) to the Trash — nothing is deleted permanently, so you can always recover from the Finder. Protected system apps and Apple software remain visible for storage accounting but cannot be selected. Startup shows everything that launches itself at login; you can disable or remove your own items, while Apple's stay read-only."
         ),
         Topic(
             symbol: "sparkles",

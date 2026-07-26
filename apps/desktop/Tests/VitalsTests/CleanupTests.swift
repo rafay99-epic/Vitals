@@ -26,6 +26,13 @@ struct AppProtectionTests {
         ))
     }
 
+    @Test func everyVitalsChannelIsProtected() {
+        #expect(AppInventory.isProtected(
+            bundleID: "com.syntaxlabtechnology.vitals.dev",
+            url: URL(fileURLWithPath: "/Applications/Vitals Dev.app")
+        ))
+    }
+
     @Test func ordinaryAppsAreNot() {
         #expect(!AppInventory.isProtected(
             bundleID: "com.spotify.client",
@@ -299,6 +306,20 @@ struct UninstallSystemTests {
         #expect(LeftoverScanner.homebrewCask(appName: "Google Chrome", installedCasks: casks) == "google-chrome")
         #expect(LeftoverScanner.homebrewCask(appName: "Slack", installedCasks: casks) == "slack")
         #expect(LeftoverScanner.homebrewCask(appName: "Some Unknown App", installedCasks: casks) == nil)
+    }
+
+    @Test func homebrewCaskOwnershipRequiresExactBundlePath() {
+        let app = URL(fileURLWithPath: "/Applications/Docker.app")
+        #expect(!LeftoverScanner.caskOwns(
+            appURL: app,
+            token: "docker",
+            listOutput: "/Applications/Other.app\n"
+        ))
+        #expect(LeftoverScanner.caskOwns(
+            appURL: app,
+            token: "docker",
+            listOutput: "/Applications/Docker.app\n"
+        ))
     }
 }
 

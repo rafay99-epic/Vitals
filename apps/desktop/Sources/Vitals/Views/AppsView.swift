@@ -186,7 +186,7 @@ struct AppsView: View {
                 symbol: "square.grid.2x2",
                 tint: .purple,
                 title: "Nothing to manage",
-                message: "Vitals didn't find any user-removable apps. System software and Apple apps are never listed here.",
+                message: "Vitals didn't find any applications in the scanned folders.",
                 hints: [
                     .init(symbol: "folder", label: "/Applications"),
                     .init(symbol: "person.crop.square", label: "~/Applications"),
@@ -234,8 +234,9 @@ struct AppsView: View {
 
     private func selectionBinding(for app: InstalledApp) -> Binding<Bool> {
         Binding(
-            get: { model.selection.contains(app.id) },
+            get: { app.protectedReason == nil && model.selection.contains(app.id) },
             set: { selected in
+                guard app.protectedReason == nil else { return }
                 if selected {
                     model.selection.insert(app.id)
                 } else {
@@ -246,7 +247,9 @@ struct AppsView: View {
     }
 
     private var allVisibleSelected: Bool {
-        let visible = model.filteredApps.map(\.id)
+        let visible = model.filteredApps
+            .filter { $0.protectedReason == nil }
+            .map(\.id)
         return !visible.isEmpty && visible.allSatisfy(model.selection.contains)
     }
 
@@ -257,7 +260,9 @@ struct AppsView: View {
             Toggle("Select all", isOn: Binding(
                 get: { allVisibleSelected },
                 set: { selectAll in
-                    let visible = model.filteredApps.map(\.id)
+                    let visible = model.filteredApps
+                        .filter { $0.protectedReason == nil }
+                        .map(\.id)
                     if selectAll {
                         model.selection.formUnion(visible)
                     } else {
@@ -321,11 +326,17 @@ private struct AppRow: View {
                                 .background(Capsule().fill(.green.opacity(0.16)))
                                 .foregroundStyle(.green)
                         }
-                        if app.requiresAdmin {
+                        if app.requiresAdmin && app.protectedReason == nil {
                             Image(systemName: "lock")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                                 .help("Removing this app needs administrator rights")
+                        }
+                        if let protectedReason = app.protectedReason {
+                            Image(systemName: "lock.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .help("Protected: \(protectedReason)")
                         }
                     }
                     Text(app.bundleID ?? app.id.path)
@@ -351,6 +362,7 @@ private struct AppRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(app.protectedReason != nil)
         .background(rowBackground)
         .onHover { hovered = $0 }
     }

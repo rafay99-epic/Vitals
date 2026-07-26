@@ -115,7 +115,7 @@ final class AppsModel: ObservableObject {
     }
 
     var selectedApps: [InstalledApp] {
-        apps.filter { selection.contains($0.id) }
+        apps.filter { $0.protectedReason == nil && selection.contains($0.id) }
     }
 
     var selectedBytes: UInt64 {
@@ -225,9 +225,13 @@ final class AppsModel: ObservableObject {
                 if !extensions.isEmpty { systemExtensions[url] = extensions }
             }
             for app in targets {
-                if let cask = LeftoverScanner.homebrewCask(appName: app.name, installedCasks: casksList) {
-                    casks[app.id] = cask
-                }
+                guard let candidate = LeftoverScanner.homebrewCask(
+                    appName: app.name, installedCasks: casksList
+                ) else { continue }
+                let ownsBundle = await Task.detached(priority: .userInitiated) {
+                    LeftoverScanner.caskOwns(appURL: app.id, token: candidate)
+                }.value
+                if ownsBundle { casks[app.id] = candidate }
             }
             // A root-owned bundle (installed by a pkg) can't be trashed — flag it
             // so the sheet shows it's admin/permanent, and the cask-handled ones
@@ -248,6 +252,13 @@ final class AppsModel: ObservableObject {
     /// administrator prompt at the end.
     func executeStagedUninstall() {
         guard let staged, uninstallProgress == nil else { return }
+        guard staged.apps.allSatisfy({
+            $0.protectedReason == nil && !AppInventory.isProtected(bundleID: $0.bundleID, url: $0.id)
+        }) else {
+            Log.error(.uninstall, "refusing to uninstall a protected application")
+            self.staged = nil
+            return
+        }
         // Keep `staged` set so the sheet stays up and swaps to the progress view
         // (no blank gap between confirm and the final summary).
         // Seed with the first app's real phase so the sheet never flashes
