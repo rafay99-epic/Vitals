@@ -1,0 +1,27 @@
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_1b69206d5452f9::t_6ce876dfad49e8 12,15,24-25,32-33,39,43-46
+apps/desktop/Sources/Vitals/Services/FanController.swift
+  s_1b69206d5452f9::t_6ce876dfad49e8 103-107
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_1b69206d5452f9::t_6ce876dfad49e8 78,233
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_1b69206d5452f9::t_6ce876dfad49e8 158,167
+apps/desktop/Sources/Vitals/Models/HistoryModel.swift
+  s_1b69206d5452f9::t_6ce876dfad49e8 1-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "06e306c6a4d4ee4148230390633238dea4746961",
+  "prompts": {},
+  "sessions": {
+    "s_1b69206d5452f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f9fc6-4d37-7e83-a841-21108112addf",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
