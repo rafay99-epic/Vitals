@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vitals — App Inventory &amp; Homebrew Safety Plan v2</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f5f7; --card:rgba(255,255,255,.8); --ink:#1d1d1f; --muted:#6e6e73; --line:rgba(60,60,67,.18); --blue:#0071e3; --green:#248a3d; --orange:#ad6800; --red:#c9342b; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#171719; --card:rgba(40,40,43,.82); --ink:#f5f5f7; --muted:#a1a1a6; --line:rgba(235,235,245,.18); --blue:#2997ff; --green:#30d158; --orange:#ffb340; --red:#ff6961; } }
+    * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif; }
+    main { max-width:960px; margin:0 auto; padding:54px 24px 78px; } header { margin-bottom:34px; } .eyebrow { color:var(--blue); font-size:12px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; } h1 { font-size:clamp(32px,5vw,52px); line-height:1.04; letter-spacing:-.045em; margin:12px 0; } h2 { font-size:24px; line-height:1.2; letter-spacing:-.025em; margin:40px 0 12px; } h3 { font-size:17px; margin:22px 0 6px; } p { margin:8px 0 14px; } .lede { max-width:760px; color:var(--muted); font-size:18px; } .meta,.small { color:var(--muted); font-size:13px; } .callout { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:19px 21px; box-shadow:0 8px 30px rgba(0,0,0,.04); } .callout strong { color:var(--blue); } .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; } .grid > * { min-width:0; } ul,ol { padding-left:22px; } li { margin:6px 0; } table { width:100%; border-collapse:collapse; margin:14px 0 18px; font-size:14px; } th,td { text-align:left; vertical-align:top; padding:10px; border-bottom:1px solid var(--line); } th { color:var(--muted); font-size:12px; letter-spacing:.05em; text-transform:uppercase; } code { font:12px ui-monospace,SFMono-Regular,Menlo,monospace; background:rgba(127,127,127,.12); padding:2px 5px; border-radius:5px; } .tag { display:inline-block; padding:3px 8px; border-radius:99px; font-size:12px; font-weight:650; background:rgba(0,113,227,.12); color:var(--blue); } .tag.green { color:var(--green); background:rgba(36,138,61,.13); } .tag.orange { color:var(--orange); background:rgba(173,104,0,.14); } .tag.red { color:var(--red); background:rgba(201,52,43,.13); } .decision { border-left:3px solid var(--blue); padding:4px 0 4px 16px; } a { color:var(--blue); } footer { margin-top:46px; color:var(--muted); font-size:13px; } @media (max-width:700px) { main { padding:34px 16px 58px; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } th,td { min-width:170px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Vitals · revised review plan · 27 July 2026</div>
+    <h1>App visibility with a safe Homebrew path</h1>
+    <p class="lede">A deliberately narrow plan: fix the destructive Homebrew cask false positive first, then expose protected application bundles with the smallest possible model/UI change. CLI package management is explicitly out of scope.</p>
+    <p class="meta">Revision 2 · implementation intentionally not started.</p>
+  </header>
+
+  <section class="callout">
+    <div class="decision"><strong>Ship order.</strong> PR 1 is the Homebrew ownership proof and its regression test, alone. PR 2 is the protected-application visibility change. Do not combine either with a package-manager or inventory-platform rewrite.</div>
+    <p>The current Applications surface remains the Applications surface. It does not become a general developer-package manager.</p>
+  </section>
+
+  <h2>1. P0 safety bug — Homebrew cask false positive</h2>
+  <p>Current flow: <code>LeftoverScanner.homebrewCask(appName:installedCasks:)</code> guesses a cask from the app display name, then <code>AppUninstaller.homebrewUninstall</code> runs <code>brew uninstall --cask --zap</code>. That is unsafe.</p>
+  <div class="callout">
+    <span class="tag red">Data-loss risk</span>
+    <p>A manually downloaded <code>Docker.app</code> plus an unrelated installed <code>docker</code> cask can pass the name guess. Vitals then asks Homebrew to zap the cask and may remove the user’s Docker configuration/data even though Homebrew did not install the displayed app.</p>
+    <p>This is not an “ownership uncertain” metadata quality issue. A name match is not permission to invoke zap.</p>
+  </div>
+
+  <h3>Minimal fix</h3>
+  <ol>
+    <li>Keep <code>homebrewCask</code> only as a candidate-token lookup.</li>
+    <li>Add <code>caskOwns(appURL:token:)</code> beside the existing Homebrew helpers.</li>
+    <li>Validate the token against the existing lowercase-alphanumeric-hyphen grammar.</li>
+    <li>Run the user’s absolute <code>brew</code> executable with <code>brew list --cask &lt;token&gt;</code>.</li>
+    <li>Parse the reported artifact paths and require one canonical/standardized path to equal the displayed app bundle URL.</li>
+    <li>Only if the path proof succeeds should <code>prepareUninstall</code> place the app in the cask map and allow the existing <code>brew uninstall --cask --zap</code> route.</li>
+    <li>If proof fails, treat the app as an ordinary app: do not run Homebrew and do not zap.</li>
+  </ol>
+  <pre class="callout"><code>let candidate = LeftoverScanner.homebrewCask(appName: app.name, installedCasks: casksList)
+if let candidate, LeftoverScanner.caskOwns(appURL: app.id, token: candidate) {
+    casks[app.id] = candidate
+}</code></pre>
+  <p>Use standardized URLs at minimum; resolve symlinks where the Homebrew output is a symlinked artifact. Do not use display-name equality as proof.</p>
+
+  <h3>P0 regression test</h3>
+  <ul>
+    <li>Fixture app: <code>/Applications/Docker.app</code>.</li>
+    <li>Fixture candidate token: <code>docker</code>.</li>
+    <li>Mock <code>brew list --cask docker</code> output without <code>/Applications/Docker.app</code>.</li>
+    <li>Assert <code>caskOwns</code> is false and no cask uninstall plan is produced.</li>
+    <li>Add the positive case where the exact app path is listed and assert it is true.</li>
+  </ul>
+  <p><strong>Acceptance:</strong> a guessed token can never reach <code>brew uninstall --cask --zap</code> without an exact artifact-path match. This is the first ship and should be reviewed independently.</p>
+
+  <h2>2. Small bug fix — protect every Vitals channel</h2>
+  <p><code>AppInventory.isProtected</code> currently protects the literal <code>Vitals.app</code> and the running bundle ID. That leaves Stable able to list Nightly or Dev as removable.</p>
+  <p>Extend the existing guard with the product bundle namespace:</p>
+  <pre class="callout"><code>if bundleID.hasPrefix("com.syntaxlabtechnology.vitals") { return true }</code></pre>
+  <p>This requires no inventory rewrite. Add one test covering a different Vitals channel, for example <code>com.syntaxlabtechnology.vitals.dev</code> at <code>/Applications/Vitals Dev.app</code>.</p>
+
+  <h2>3. Protected apps become visible</h2>
+  <p>After the P0 safety patch, make the Applications list show all top-level application bundles in the defined application folders, including protected Apple/system apps and every Vitals channel. Protected rows show their real size but cannot be selected.</p>
+  <h3>Discovery scope</h3>
+  <ul>
+    <li>Keep direct-child scanning. Do not recursively enumerate nested helper apps, <code>.appex</code>, XPC services, frameworks, or app internals as separate rows.</li>
+    <li>Keep the existing user roots: <code>/Applications</code>, <code>/Applications/Utilities</code>, and <code>~/Applications</code>.</li>
+    <li>Add the direct system-visible roots needed for the “all applications” contract: <code>/System/Applications</code> and <code>/System/Applications/Utilities</code>.</li>
+    <li>Do not add Launch Services as a second discovery source. The direct filesystem scan remains authoritative for bundle rows and avoids stale registrations and duplicate identities.</li>
+    <li>Continue deduplicating canonical URLs and skip malformed entries only after recording a diagnostic; do not silently pretend an unreadable app does not exist.</li>
+  </ul>
+
+  <h3>Minimal model change</h3>
+  <p>Add one field to <code>InstalledApp</code>:</p>
+  <pre class="callout"><code>let protectedReason: String?</code></pre>
+  <ul>
+    <li><code>nil</code> means the row may be selected, subject to the existing fresh uninstall checks.</li>
+    <li>A non-nil reason means the row is visible, measured, locked, and excluded from selection.</li>
+    <li>Do not introduce a new <code>kind</code>/<code>source</code>/<code>locations</code>/<code>removalPlan</code> software platform for this change.</li>
+    <li>Keep <code>AppInventory.isProtected</code> as the safety predicate. Use it to populate the reason, and re-check it before building or executing an uninstall.</li>
+  </ul>
+
+  <h3>Minimal UI behavior</h3>
+  <ul>
+    <li>Keep the existing list, rows, search, sort, footer, confirmation sheet, and visual language.</li>
+    <li>Protected rows retain their icon/name/version/size and gain the existing lock affordance with a short reason such as “System app” or “Vitals”.</li>
+    <li>The row’s selection control is disabled when <code>protectedReason != nil</code>.</li>
+    <li>The headline count becomes the total visible application count. The footer selection count remains removable items only.</li>
+    <li>Do not add a package/CLI category, new navigation tab, or new developer-tool surface.</li>
+  </ul>
+
+  <h2>4. Removal rules retained</h2>
+  <table>
+    <thead><tr><th>Item</th><th>Behavior</th></tr></thead>
+    <tbody>
+      <tr><td>Plain removable <code>.app</code></td><td>Existing quit, leftover scan, Trash/admin flow, and final revalidation.</td></tr>
+      <tr><td>Homebrew cask with exact path proof</td><td>Existing cask route; preview/confirmation remains required; zap is allowed only after proof.</td></tr>
+      <tr><td>Homebrew candidate without path proof</td><td>Never invoke Homebrew. Handle only as a plain app if otherwise removable.</td></tr>
+      <tr><td>Apple/system/Vitals app</td><td>Visible and sized, permanently unselectable.</td></tr>
+      <tr><td>System extension</td><td>Detect and explain that removal requires the vendor app/uninstaller or management workflow. Vitals does not deactivate another vendor’s extension.</td></tr>
+      <tr><td>Root-owned/admin-installed app</td><td>Use the existing explicit admin path and fixed allowlists; never broaden path permissions because the row is visible.</td></tr>
+    </tbody>
+  </table>
+  <p>Apple recommends an app-provided uninstaller when present because it may remove login items, extensions, and other data; otherwise Finder’s normal route is moving the app to Trash. Apple also says required macOS apps and apps in the System folder cannot be removed. Vitals should mirror that distinction in visibility versus selectability.</p>
+
+  <h2>5. Explicitly cut from this plan</h2>
+  <table>
+    <thead><tr><th>Cut</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td>npm, Bun, pnpm, Yarn, Cargo, RubyGems, pipx, uv, Go adapters</td><td>Different product surface. Not part of the Applications app-bundle workflow.</td></tr>
+      <tr><td><code>node_modules</code> and project package rows</td><td>Project dependencies belong in the existing Cleanup/dev-junk area. Never edit manifests or remove transitive packages from Applications.</td></tr>
+      <tr><td>General software-item data model</td><td>One protected-reason field is sufficient for this feature.</td></tr>
+      <tr><td>Launch Services supplemental discovery</td><td>Filesystem app bundles remain authoritative; avoid stale/duplicate registration reconciliation.</td></tr>
+      <tr><td>Recursive app discovery and nested-helper grouping</td><td>Direct children are the intended user-facing application rows; recursion creates helper-junk rows.</td></tr>
+      <tr><td>Latency redesign</td><td>The current Info.plist scan is already fast and size measurement already streams through the existing gate/batching path.</td></tr>
+      <tr><td>macOS 27 installer/TLS work</td><td>Vitals does not install software over the network. Keep only Dev-build compatibility testing.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>6. macOS 26/27 validation</h2>
+  <ul>
+    <li>Build and install only through <code>apps/desktop/dev.sh</code>; never disturb Stable.</li>
+    <li>On macOS 26, verify system app visibility, protected Vitals channels, exact cask ownership, false-positive Docker scenario, plain app uninstall, and Homebrew-owned app uninstall.</li>
+    <li>Repeat the same matrix on macOS 27 beta. The feature should rely on public Foundation/AppKit behavior and should not need a 27-specific deletion path.</li>
+    <li>Run the existing protection, leftover, script-safety, and uninstall tests plus the cask ownership regression fixture.</li>
+  </ul>
+
+  <h2>7. Ship checklist</h2>
+  <ol>
+    <li><strong>PR 1, alone:</strong> add <code>caskOwns</code>, gate the cask map on exact path proof, add positive/negative tests, verify no false-positive zap.</li>
+    <li><strong>PR 2:</strong> protect the entire Vitals bundle namespace, add the channel regression test, add protected rows with <code>protectedReason</code>, and add direct system application roots.</li>
+    <li>Run Dev builds and the macOS 26/27 test matrix.</li>
+    <li>Review every selected item’s plan before executing it; no guessed cask token may reach the destructive path.</li>
+  </ol>
+
+  <h2>References</h2>
+  <ol class="small">
+    <li><a href="https://support.apple.com/en-us/102610">Apple Support — Delete or uninstall apps on Mac</a>: app-provided uninstallers, Trash behavior, required apps, and System-folder protection.</li>
+    <li><a href="https://support.apple.com/en-au/102149">Apple Support — System Integrity Protection</a>: protection of system paths and preinstalled apps.</li>
+    <li><a href="https://developer.apple.com/documentation/systemextensions/ossystemextensionrequest">Apple Developer — OSSystemExtensionRequest</a>: system-extension activation/deactivation API; Vitals will detect/instruct rather than promise vendor deactivation.</li>
+    <li><a href="https://docs.brew.sh/Cask-Cookbook">Homebrew Cask Cookbook</a>: cask uninstall/zap behavior, artifact paths, receipts, launch jobs, and login items.</li>
+    <li><a href="https://docs.brew.sh/Manpage">Homebrew manpage</a>: installed cask listing and uninstall semantics.</li>
+    <li><a href="https://github.com/tw93/mole">Mole source and documentation</a>: reference behavior for app discovery and leftover cleanup; Vitals keeps its own guarded implementation.</li>
+  </ol>
+
+  <footer>Revision 2 incorporates the independent review feedback. No product code was changed while updating this plan.</footer>
+</main>
+</body>
+</html>

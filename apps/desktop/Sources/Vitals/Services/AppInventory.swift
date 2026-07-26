@@ -1,7 +1,8 @@
 import Foundation
 import AppKit
 
-/// One uninstallable application found on disk.
+/// One application found on disk. Protected applications remain visible for
+/// storage accounting but cannot be selected for removal.
 struct InstalledApp: Identifiable, Hashable {
     let id: URL          // the .app bundle URL
     let name: String
@@ -9,6 +10,8 @@ struct InstalledApp: Identifiable, Hashable {
     let version: String?
     var sizeBytes: UInt64?
     var isRunning = false
+    /// Non-nil when the app is visible but must never be selected or removed.
+    let protectedReason: String?
     /// True when the bundle's parent directory isn't writable by this user,
     /// so moving it to the Trash would need elevated rights.
     let requiresAdmin: Bool
@@ -44,9 +47,8 @@ actor SizingGate {
     }
 }
 
-/// Finds the applications a user can uninstall. System software is excluded
-/// by design: nothing under /System, no Apple bundle identifiers, and never
-/// Vitals itself.
+/// Finds top-level applications. System software is returned as protected rows
+/// for honest inventory accounting; the removal path still refuses it.
 actor AppInventory {
     /// Shared by every stream this inventory produces — see `SizingGate`.
     let gate = SizingGate(width: 6)
@@ -54,16 +56,26 @@ actor AppInventory {
         URL(fileURLWithPath: "/Applications", isDirectory: true),
         URL(fileURLWithPath: "/Applications/Utilities", isDirectory: true),
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true),
+        URL(fileURLWithPath: "/System/Applications", isDirectory: true),
+        URL(fileURLWithPath: "/System/Applications/Utilities", isDirectory: true),
     ]
 
-    /// Apps Vitals refuses to list or touch.
+    /// Reason an app is visible but protected from selection/removal.
+    nonisolated static func protectionReason(bundleID: String?, url: URL) -> String? {
+        if url.path.hasPrefix("/System") { return "System app" }
+        if url.lastPathComponent == "Vitals.app" { return "Vitals" }
+        if let bundleID, bundleID.hasPrefix("com.syntaxlabtechnology.vitals") {
+            return "Vitals channel"
+        }
+        if let bundleID, bundleID.hasPrefix("com.apple.") { return "Apple app" }
+        if let own = Bundle.main.bundleIdentifier, bundleID == own { return "Vitals" }
+        return nil
+    }
+
+    /// Apps Vitals refuses to touch. They remain visible through
+    /// `protectionReason` so storage accounting is complete.
     nonisolated static func isProtected(bundleID: String?, url: URL) -> Bool {
-        if url.path.hasPrefix("/System") { return true }
-        if url.lastPathComponent == "Vitals.app" { return true }
-        guard let bundleID else { return false }
-        if bundleID.hasPrefix("com.apple.") { return true }
-        if let own = Bundle.main.bundleIdentifier, bundleID == own { return true }
-        return false
+        protectionReason(bundleID: bundleID, url: url) != nil
     }
 
     func scan() -> [InstalledApp] {
@@ -84,7 +96,7 @@ actor AppInventory {
                 guard seen.insert(resolved).inserted else { continue }
                 guard let bundle = Bundle(url: url) else { continue }
                 let bundleID = bundle.bundleIdentifier
-                guard !Self.isProtected(bundleID: bundleID, url: url) else { continue }
+                let protectedReason = Self.protectionReason(bundleID: bundleID, url: url)
 
                 let info = bundle.infoDictionary
                 let name = (info?["CFBundleDisplayName"] as? String)
@@ -95,6 +107,7 @@ actor AppInventory {
                     name: name,
                     bundleID: bundleID,
                     version: info?["CFBundleShortVersionString"] as? String,
+                    protectedReason: protectedReason,
                     requiresAdmin: !parentWritable
                 ))
             }
