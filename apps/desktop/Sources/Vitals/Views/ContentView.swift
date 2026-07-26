@@ -64,11 +64,6 @@ struct ContentView: View {
     /// menu-bar gear can also land on the Settings section (now an in-window
     /// panel, not a separate dialog).
     @EnvironmentObject private var navigator: Navigator
-    /// Sections opened at least once, kept mounted for instant switch-back —
-    /// seeded with Overview so home is live at launch. Mirrors the old lazy-tab
-    /// approach: a section joins on first selection; hidden ones stay laid out.
-    @State private var visited: Set<NavSection> = [.overview]
-
     /// The current section, read/written through the shared navigator.
     private var section: NavSection { navigator.section }
 
@@ -93,12 +88,14 @@ struct ContentView: View {
         .ignoresSafeArea(edges: .top)
         .modifier(WindowBackdrop())
         .frame(minWidth: 980, minHeight: 680)
-        .onAppear { model.setMainWindowVisible(true) }
+        .onAppear {
+            model.setMainWindowVisible(true)
+            model.setVisibleSection(section.rawValue)
+        }
+        .onChange(of: section, initial: true) { _, newSection in
+            model.setVisibleSection(newSection.rawValue)
+        }
         .onDisappear { model.setMainWindowVisible(false) }
-        // Keep the kept-mounted set in sync when navigation comes from outside
-        // the sidebar (⌘,, the menu-bar gear) — and on first appear, so a window
-        // reopened straight onto Settings mounts it. `initial: true` covers both.
-        .onChange(of: navigator.section, initial: true) { _, new in visited.insert(new) }
     }
 
     // MARK: Sidebar
@@ -181,7 +178,6 @@ struct ContentView: View {
     private func row(_ item: NavSection, shortcut: KeyboardShortcut?) -> some View {
         let selected = section == item
         return Button {
-            visited.insert(item)
             navigator.section = item
         } label: {
             HStack(spacing: 9) {
@@ -210,43 +206,40 @@ struct ContentView: View {
 
     // MARK: Content
 
-    /// A section is active only when it's the selected one (the gate every
-    /// kept-alive chart / sampler reads). The window-open gate is separate
-    /// (`model.setMainWindowVisible`), so this is just the selection.
-    private func active(_ s: NavSection) -> Bool { section == s }
-
-    /// Sections mount lazily, then stay alive (kept-mounted, hidden) so switching
-    /// back is instant. Switches aren't animated — fading a translucent panel in
-    /// over the glass window flashes dark before the blur resolves.
+    /// Mount only the selected section. Keeping every visited section in a ZStack
+    /// made hidden charts, layout trees, and view-local state live for the whole
+    /// window session; section models below still preserve scan results/tasks.
     private var content: some View {
-        ZStack {
-            if visited.contains(.overview) {
-                DashboardView(isActive: active(.overview), drill: drill).tabVisibility(active(.overview))
-            }
-            if visited.contains(.cpu) { CPUView().tabVisibility(active(.cpu)) }
-            if visited.contains(.gpu) { GPUView(isActive: active(.gpu)).tabVisibility(active(.gpu)) }
-            if visited.contains(.memory) { MemoryView(isActive: active(.memory)).tabVisibility(active(.memory)) }
-            if visited.contains(.battery) { BatteryView(appEnergyModel: appEnergyModel, isActive: active(.battery)).tabVisibility(active(.battery)) }
-            if visited.contains(.network) { NetworkView(isActive: active(.network)).tabVisibility(active(.network)) }
-            if visited.contains(.sensors) { SensorsView().tabVisibility(active(.sensors)) }
-            if visited.contains(.processes) {
-                ProcessesView(model: processesModel, isActive: active(.processes)).tabVisibility(active(.processes))
-            }
-            if visited.contains(.history) { HistoryView(isActive: active(.history)).tabVisibility(active(.history)) }
-            if visited.contains(.storage) {
-                StorageView(model: storageModel, isActive: active(.storage)).tabVisibility(active(.storage))
-            }
-            if visited.contains(.cleanup) {
-                CleanupView(model: cleanupModel, isActive: active(.cleanup)).tabVisibility(active(.cleanup))
-            }
-            if visited.contains(.applications) {
-                AppsView(model: appsModel, isActive: active(.applications)).tabVisibility(active(.applications))
-            }
-            if visited.contains(.loginItems) {
-                LoginItemsView(model: loginItemsModel, isActive: active(.loginItems)).tabVisibility(active(.loginItems))
-            }
-            if visited.contains(.settings) {
-                SettingsView(isActive: active(.settings)).tabVisibility(active(.settings))
+        Group {
+            switch section {
+            case .overview:
+                DashboardView(isActive: true, drill: drill)
+            case .cpu:
+                CPUView()
+            case .gpu:
+                GPUView(isActive: true)
+            case .memory:
+                MemoryView(isActive: true)
+            case .battery:
+                BatteryView(appEnergyModel: appEnergyModel, isActive: true)
+            case .network:
+                NetworkView(isActive: true)
+            case .sensors:
+                SensorsView()
+            case .processes:
+                ProcessesView(model: processesModel, isActive: true)
+            case .history:
+                HistoryView(isActive: true)
+            case .storage:
+                StorageView(model: storageModel, isActive: true)
+            case .cleanup:
+                CleanupView(model: cleanupModel, isActive: true)
+            case .applications:
+                AppsView(model: appsModel, isActive: true)
+            case .loginItems:
+                LoginItemsView(model: loginItemsModel, isActive: true)
+            case .settings:
+                SettingsView(isActive: true)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -255,7 +248,6 @@ struct ContentView: View {
 
     /// Drill from a Dashboard tile straight into the matching Monitor section.
     private func drill(to target: NavSection) {
-        visited.insert(target)
         navigator.section = target
     }
 }
@@ -315,16 +307,6 @@ private struct HeaderUpdateButton: View {
 
     private var spinner: some View {
         ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 26, height: 26)
-    }
-}
-
-extension View {
-    /// A kept-mounted section: visible and interactive only when active,
-    /// otherwise hidden (but still laid out, so it never has to re-mount).
-    func tabVisibility(_ active: Bool) -> some View {
-        opacity(active ? 1 : 0)
-            .allowsHitTesting(active)
-            .accessibilityHidden(!active)
     }
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Darwin
 
 /// Builds a plain-text snapshot of every current reading and copies it to the
 /// clipboard — handy to paste into a support thread or a note. Read-only and
@@ -17,6 +18,10 @@ enum DiagnosticSnapshot {
         lines.append("Vitals diagnostic snapshot")
         lines.append("\(HardwareInfo.chipName) · \(HardwareInfo.osVersion) · up \(HardwareInfo.uptimeText)")
         lines.append("Captured \(Date().formatted(date: .abbreviated, time: .standard))")
+        if let memory = processMemory() {
+            lines.append(String(format: "Vitals process: %.1f MB resident, %.1f MB virtual",
+                                megabytes(memory.resident), megabytes(memory.virtual)))
+        }
         lines.append("")
 
         if let average = model.averageCPUTemp, let hottest = model.hottestCPUSensor {
@@ -67,5 +72,27 @@ enum DiagnosticSnapshot {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    /// A point-in-time footprint for long-run memory investigations. This is
+    /// intentionally read only and not published on every sensor tick: doing so
+    /// would add another @Published invalidation to the hottest path. The
+    /// diagnostic snapshot is the explicit sampling boundary for support data.
+    private static func processMemory() -> (resident: UInt64, virtual: UInt64)? {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
+        )
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        return (resident: UInt64(info.resident_size), virtual: UInt64(info.virtual_size))
+    }
+
+    private static func megabytes(_ bytes: UInt64) -> Double {
+        Double(bytes) / 1_048_576
     }
 }

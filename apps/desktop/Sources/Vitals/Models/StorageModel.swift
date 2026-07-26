@@ -29,6 +29,10 @@ final class StorageModel: ObservableObject {
     /// The analyzer never publishes more than this many rows — the UI can't
     /// show more usefully, and it caps render cost on huge directories.
     static let displayLimit = 400
+    /// The cache is only an acceleration layer. Once it grows beyond this
+    /// bound, uncached paths are allowed to be measured again rather than
+    /// retaining an unbounded dictionary for the lifetime of the window.
+    static let sizeCacheLimit = 50_000
 
     @Published private(set) var volume: StorageAnalyzer.VolumeUsage?
     /// True once a capacity read has been attempted (so a nil result reads as
@@ -70,6 +74,15 @@ final class StorageModel: ObservableObject {
     /// Re-listing a folder the categories (or a previous drill) already
     /// measured skips the walk. Cleared on Analyze for fresh numbers.
     private var sizeCache: [String: UInt64] = [:]
+
+    private func cacheSize(_ size: UInt64, for path: String) {
+        if sizeCache[path] == nil && sizeCache.count >= Self.sizeCacheLimit { return }
+        sizeCache[path] = size
+    }
+
+    private func cacheSizes(_ sizes: [String: UInt64]) {
+        for (path, size) in sizes { cacheSize(size, for: path) }
+    }
 
     var currentRoot: URL? { path.last }
 
@@ -156,9 +169,9 @@ final class StorageModel: ObservableObject {
             for await (url, size, subtotals) in inventory.sizesWithSubtotals(for: roots, watching: watchPaths) {
                 if Task.isCancelled { isScanning = false; return }
                 sizes[url] = size
-                sizeCache[url.path] = size
+                cacheSize(size, for: url.path)
                 for (path, subtotal) in subtotals {
-                    sizeCache[path] = subtotal
+                    cacheSize(subtotal, for: path)
                     applyInsightSize(path: path, subtotal)
                 }
                 categories = Self.applyingCategorySizes(template, sizes)
@@ -215,7 +228,7 @@ final class StorageModel: ObservableObject {
             let missing = insights.filter { $0.sizeBytes == nil && !$0.oldDownloadsOnly }.map(\.url)
             for await (url, size) in inventory.sizes(for: missing) {
                 if Task.isCancelled { isScanningInsights = false; return }
-                sizeCache[url.path] = size
+                cacheSize(size, for: url.path)
                 applyInsightSize(path: url.path, size)
             }
             // Same stale-tail hazard as the category scan.
@@ -350,7 +363,7 @@ final class StorageModel: ObservableObject {
                     await MainActor.run { [weak self] in
                         guard let self, !Task.isCancelled else { return }
                         self.entries = snapshot
-                        self.sizeCache.merge(measured) { _, new in new }
+                        self.cacheSizes(measured)
                     }
                 }
             }
@@ -361,7 +374,7 @@ final class StorageModel: ObservableObject {
                 // (or the just-cleared cache) that superseded it.
                 guard let self, !Task.isCancelled else { return }
                 self.entries = snapshot
-                self.sizeCache.merge(measured) { _, new in new }
+                self.cacheSizes(measured)
                 self.isAnalyzing = false
             }
         }
