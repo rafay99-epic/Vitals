@@ -3,10 +3,9 @@ import AppKit
 import Metal
 
 enum Hardware {
-    /// True only on Apple Silicon hardware. Queries the machine, so it is
-    /// The packaged app is arm64-only, but keeping this runtime check makes
-    /// unsupported hardware fail safely if a developer runs the executable
-    /// directly from another build configuration.
+    /// True only on Apple Silicon hardware. The packaged app is arm64-only,
+    /// but keeping this runtime check makes unsupported hardware fail safely
+    /// if a developer runs the executable from another build configuration.
     static var isAppleSilicon: Bool {
         var value: Int32 = 0
         var size = MemoryLayout<Int32>.size
