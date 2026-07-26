@@ -1,0 +1,19 @@
+apps/desktop/build.sh
+  s_1b69206d5452f9::t_6bc890f4536f3c 53-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "30a4acd16f62c6c5e28c6e248bb4bae8f5fee51b",
+  "prompts": {},
+  "sessions": {
+    "s_1b69206d5452f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f9fc6-4d37-7e83-a841-21108112addf",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
