@@ -7,6 +7,7 @@ import AppKit
 @MainActor
 final class FanController: ObservableObject {
     @Published private(set) var isInstalled = false
+    @Published private(set) var isRegistered = false
     @Published private(set) var isWorking = false
     @Published private(set) var lastError: String?
     @Published private(set) var commands: [FanCommand] = []
@@ -17,8 +18,20 @@ final class FanController: ObservableObject {
     }
 
     func refreshInstalled() {
-        isInstalled = FileManager.default.fileExists(atPath: FanControl.daemonPlistPath)
+        let fm = FileManager.default
+        isRegistered = fm.fileExists(atPath: FanControl.daemonPlistPath)
+        var isDirectory: ObjCBool = false
+        let hasSupportDirectory = fm.fileExists(
+            atPath: FanControl.supportDir.path,
+            isDirectory: &isDirectory
+        ) && isDirectory.boolValue
+        // A plist without its writable state directory is a stale/partial
+        // installation. Treat it as repairable instead of allowing the next
+        // fan write to fail with a missing-folder error.
+        isInstalled = isRegistered && hasSupportDirectory
     }
+
+    var needsRepair: Bool { isRegistered && !isInstalled }
 
     func target(for fan: Int) -> FanCommand? {
         commands.first { $0.fan == fan }
@@ -58,6 +71,7 @@ final class FanController: ObservableObject {
         } catch {
             Log.error(.fan, "couldn't save fan settings", error: error)
             lastError = "Couldn't save fan settings: \(error.localizedDescription)"
+            refreshInstalled()
         }
     }
 
@@ -86,9 +100,10 @@ final class FanController: ObservableObject {
             launchctl bootstrap system '\(FanControl.daemonPlistPath)'
             """
             try await PrivilegedShell.runAsAdmin(script, prompt: "Vitals needs to install its fan-control helper.")
-            // Seed an empty state file the user can write to from now on.
+            // Seed only a missing state file. Re-enabling after the plist was
+            // removed must preserve any manual targets that were already saved.
             if !FileManager.default.fileExists(atPath: FanControl.stateURL.path) {
-                try? FanControl.writeCommands([])
+                try FanControl.writeCommands([])
             }
         }
         refreshInstalled()

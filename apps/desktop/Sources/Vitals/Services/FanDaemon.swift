@@ -23,9 +23,9 @@ enum FanControl {
     static let stateURL = supportDir.appendingPathComponent("fan-state.json")
     static let daemonPlistPath = "/Library/LaunchDaemons/\(label).plist"
 
-    static func loadCommands() -> [FanCommand] {
+    static func loadCommands(from url: URL = stateURL) -> [FanCommand] {
         // No file yet = no manual commands set; that's normal, not an error.
-        guard let data = try? Data(contentsOf: stateURL) else { return [] }
+        guard let data = try? Data(contentsOf: url) else { return [] }
         do {
             return try JSONDecoder().decode([FanCommand].self, from: data)
         } catch {
@@ -35,9 +35,16 @@ enum FanControl {
         }
     }
 
-    static func writeCommands(_ commands: [FanCommand]) throws {
+    static func writeCommands(_ commands: [FanCommand], to url: URL = stateURL) throws {
+        // Installation normally creates this directory with the user's
+        // ownership. Recreating it here also makes a removed/partial state
+        // directory self-healing when the caller still has permission.
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         let data = try JSONEncoder().encode(commands)
-        try data.write(to: stateURL, options: .atomic)
+        try data.write(to: url, options: .atomic)
     }
 }
 

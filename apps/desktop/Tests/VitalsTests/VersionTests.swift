@@ -49,4 +49,28 @@ struct FanCommandTests {
         #expect(decoded[0].rpm == 2400)
         #expect(decoded[1].mode == FanCommand.Mode.auto)
     }
+
+    @Test func stateStoreCreatesMissingParentDirectory() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vitals-fan-state-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root
+            .appendingPathComponent("support", isDirectory: true)
+            .appendingPathComponent("fan-state.json")
+        let commands = [FanCommand(fan: 0, mode: .manual, rpm: 6550)]
+
+        try FanControl.writeCommands(commands, to: url)
+
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(
+            atPath: url.deletingLastPathComponent().path,
+            isDirectory: &isDirectory
+        ))
+        #expect(isDirectory.boolValue)
+        let decoded = FanControl.loadCommands(from: url)
+        #expect(decoded.count == 1)
+        #expect(decoded[0].fan == 0)
+        #expect(decoded[0].mode == .manual)
+        #expect(decoded[0].rpm == 6550)
+    }
 }

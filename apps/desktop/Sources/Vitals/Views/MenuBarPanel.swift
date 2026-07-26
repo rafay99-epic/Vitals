@@ -264,6 +264,10 @@ struct MenuBarPanel: View {
 
                 if fanControl.isInstalled, fan.maxRPM > fan.minRPM {
                     presetBar(fan)
+                } else if fanControl.needsRepair {
+                    Text("Repair fan control in the Vitals window before setting speed here.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 } else if !fanControl.isInstalled {
                     Text("Enable fan control in the Vitals window to set speed here.")
                         .font(.caption2)

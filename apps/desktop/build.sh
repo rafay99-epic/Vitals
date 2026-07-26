@@ -9,6 +9,19 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# SwiftUI's property-wrapper macros (for example @State) are provided by the
+# full Xcode toolchain. Command Line Tools can expose a Swift compiler while
+# still failing later with the misleading "SwiftUIMacros plugin not found"
+# error, so stop here with the actual fix.
+DEVELOPER_DIR_PATH="${DEVELOPER_DIR:-$(xcode-select -p 2>/dev/null || true)}"
+if [[ -z "$DEVELOPER_DIR_PATH" || ! -x "$DEVELOPER_DIR_PATH/usr/bin/xcodebuild" ]]; then
+  echo "Vitals requires full Xcode to build SwiftUI." >&2
+  echo "Active developer directory: ${DEVELOPER_DIR_PATH:-<none>}" >&2
+  echo "Install Xcode 16 or newer, then select it with:" >&2
+  echo "  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer" >&2
+  exit 1
+fi
+
 CHANNEL="${VITALS_CHANNEL:-stable}"
 case "$CHANNEL" in
   stable)
@@ -32,11 +45,22 @@ case "$CHANNEL" in
     ;;
 esac
 
-echo "Compiling universal (arm64 + x86_64)…  [channel: $CHANNEL]"
-# Universal so the app can launch on an Intel Mac far enough to show its
-# "Apple Silicon only" apology; the real features run on the arm64 slice.
-swift build -c release --arch arm64 --arch x86_64
-BINARY=".build/apple/Products/Release/Vitals"
+echo "Compiling arm64 (Apple Silicon)…  [channel: $CHANNEL]"
+# Vitals uses Apple Silicon-only sensors and is not distributed for Intel Macs.
+# Keeping this explicit prevents SwiftPM from producing a deprecated x86_64
+# slice when the active SDK starts warning about Intel deployment support.
+swift build -c release --arch arm64
+BINARY="$(swift build --show-bin-path -c release --arch arm64)/Vitals"
+if [[ ! -x "$BINARY" ]]; then
+  echo "error: SwiftPM did not produce the expected executable: $BINARY" >&2
+  exit 1
+fi
+ARCH_INFO="$(lipo -info "$BINARY")"
+echo "Binary architecture: $ARCH_INFO"
+if [[ "$ARCH_INFO" != *"arm64"* || "$ARCH_INFO" == *"x86_64"* ]]; then
+  echo "error: expected an arm64-only Vitals binary" >&2
+  exit 1
+fi
 
 APP="build/$APP_NAME.app"
 rm -rf "$APP"

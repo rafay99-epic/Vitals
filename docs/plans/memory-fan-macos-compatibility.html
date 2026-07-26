@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vitals — Memory, Fan Persistence &amp; macOS Compatibility Plan</title>
+  <style>
+    :root { color-scheme: dark; --bg:#111214; --card:#1b1d21; --text:#f4f4f5; --muted:#a6a8af; --line:#34363d; --accent:#b96bce; --good:#6fd6a5; --warn:#ff9d43; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:radial-gradient(circle at 15% 0%, #2c1733 0, var(--bg) 34rem); color:var(--text); font:16px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; }
+    main { max-width:980px; margin:0 auto; padding:56px 24px 80px; }
+    .eyebrow { color:var(--accent); font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:12px; }
+    h1 { font-size:clamp(32px,5vw,58px); line-height:1.02; letter-spacing:-.04em; margin:12px 0 18px; max-width:780px; }
+    h2 { margin:42px 0 12px; font-size:25px; letter-spacing:-.02em; }
+    h3 { margin:0 0 8px; font-size:18px; }
+    p { color:var(--muted); max-width:780px; }
+    .lead { font-size:19px; max-width:760px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-top:24px; }
+    .card { background:color-mix(in srgb,var(--card) 92%,transparent); border:1px solid var(--line); border-radius:16px; padding:20px; }
+    .card p { margin:7px 0 0; font-size:14px; }
+    .tag { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:var(--muted); font-size:12px; margin:4px 4px 0 0; }
+    ol { padding-left:22px; color:var(--muted); }
+    li { margin:12px 0; padding-left:5px; }
+    strong { color:var(--text); }
+    code { color:#e1b9ea; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
+    .callout { border-left:3px solid var(--warn); padding:13px 16px; background:#241d18; border-radius:0 12px 12px 0; color:#ffd3a5; }
+    .success { border-left-color:var(--good); background:#17271f; color:#b8f0d2; }
+    footer { margin-top:52px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; }
+    @media (max-width:600px) { main { padding:34px 17px 58px; } h2 { margin-top:32px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Vitals · nightly maintenance branch</div>
+  <h1>Memory, fan persistence &amp; macOS compatibility</h1>
+  <p class="lead">A staged plan to identify the reported long-run memory growth, make fan settings self-healing, and verify the desktop app on macOS 15 and macOS 26+ without disturbing Stable.</p>
+
+  <div class="grid">
+    <section class="card"><h3>Observed baseline</h3><p>The current Stable process measured about <strong>108 MB resident</strong> in one snapshot. The reported 800 MB condition needs a long-run reproduction.</p><span class="tag">measure before changing</span></section>
+    <section class="card"><h3>Highest-risk retention</h3><p>Visited sections remain mounted through opacity, while cleanup/storage/app models retain scan results for the window lifetime.</p><span class="tag">SwiftUI lifecycle</span></section>
+    <section class="card"><h3>Fan failure</h3><p>The launchd plist can exist while the support directory is gone. Fan writes then fail because the parent directory is assumed, not repaired.</p><span class="tag">repairable configuration</span></section>
+  </div>
+
+  <h2>Implementation sequence</h2>
+  <ol>
+    <li><strong>Instrument.</strong> Record RSS/footprint, active tasks, timers, mounted sections, widget panels, history size, log entries, and scan-result sizes. Profile idle, Overview, widgets, all sections, Liquid Glass, and large scans with Allocations, Leaks, Memory Graph, and VM Tracker.</li>
+    <li><strong>Reduce UI retention.</strong> Mount only the selected section while keeping long-running models alive where scans must survive navigation. Clear or bound completed scan results and test repeated navigation/show-hide cycles.</li>
+    <li><strong>Make sampling serial.</strong> Replace the timeout behavior that can release the sampling gate before a synchronous hardware operation returns. Avoid queued overlap, reduce sampling based on actual visible demand, and coalesce SwiftUI publications.</li>
+    <li><strong>Repair fan state.</strong> Validate plist, helper service, support directory, permissions, and state file. Add a privileged repair path and tests for a missing directory, stale plist, atomic write, helper restart, and manual-to-auto recovery.</li>
+    <li><strong>Validate OS lanes.</strong> Keep macOS 15 as the deployment floor, test the classic fallback there, and test macOS 26+ with the modern SDK and Liquid Glass path. Exercise SMC, IOReport, widgets, sleep/wake, displays, and fan control on both lanes.</li>
+  </ol>
+
+  <h2>Acceptance criteria</h2>
+  <div class="grid">
+    <section class="card"><h3>Memory</h3><p>No monotonic resident-memory growth during a 60-minute idle soak. After closing tabs, widgets, and scan results, memory returns close to the post-warmup baseline.</p></section>
+    <section class="card"><h3>Processing</h3><p>No overlapping sensor samples after forced delays. Background sampling is limited to metrics actually needed by visible surfaces and enabled alerts.</p></section>
+    <section class="card"><h3>Fan control</h3><p>Deleting the support directory produces a clear repair state, and an authorized repair recreates it without requiring a full reinstall.</p></section>
+    <section class="card"><h3>Safety</h3><p>All development uses <code>Vitals Dev.app</code>. Stable remains untouched, and each implementation slice is delivered from a branch based on <code>nightly</code>.</p></section>
+  </div>
+
+  <h2>Known validation limitation</h2>
+  <p class="callout">The local machine has Command Line Tools but not the full Xcode SwiftUI macro plugins, so the baseline <code>swift test</code> attempt cannot complete here. Full Xcode validation is required before treating the branch as build-ready.</p>
+  <p class="callout success">Project memory updated: future work starts from <code>nightly</code>, plans are published through PagePilot, and the Dev build is the only desktop build installed during development.</p>
+
+  <footer>Prepared for the Vitals maintenance stream · source context recorded in <code>cloud.md</code> and <code>AGENTS.md</code>.</footer>
+</main>
+</body>
+</html>

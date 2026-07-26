@@ -9,43 +9,10 @@ import AppKit
 /// back on.
 struct HistoryView: View {
     @EnvironmentObject private var settings: AppSettings
+    @ObservedObject var model: HistoryModel
     let isActive: Bool
 
-    @State private var range: HistoryRange = .day
-    @State private var metric: Metric = LaunchOverrides.historyMetric ?? .temp
-    @State private var samples: [HistorySample] = []
-    @State private var alertEvents: [AlertEvent] = []
-    @State private var loading = false
-
-    enum Metric: String, CaseIterable, Identifiable {
-        case temp, cpu, gpu, memory, network, disk, battery, power
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .temp: return "Temp"
-            case .cpu: return "CPU"
-            case .gpu: return "GPU"
-            case .memory: return "Memory"
-            case .network: return "Network"
-            case .disk: return "Disk"
-            case .battery: return "Battery"
-            case .power: return "Power"
-            }
-        }
-        /// SF Symbol matching the sidebar, so the metric menu reads at a glance.
-        var symbol: String {
-            switch self {
-            case .temp: return "thermometer.medium"
-            case .cpu: return "cpu"
-            case .gpu: return "cpu.fill"
-            case .memory: return "memorychip"
-            case .network: return "network"
-            case .disk: return "internaldrive"
-            case .battery: return "battery.100percent"
-            case .power: return "bolt.fill"
-            }
-        }
-    }
+    typealias Metric = HistoryMetric
 
     private struct ReloadKey: Equatable { let active: Bool; let range: HistoryRange; let logging: Bool }
 
@@ -54,48 +21,36 @@ struct HistoryView: View {
             timeline
             // Fired alerts are independent of the metric log, so they show even
             // when logging is off and the chart is empty.
-            if !alertEvents.isEmpty {
-                AlertHistoryCard(events: alertEvents)
+            if !model.alertEvents.isEmpty {
+                AlertHistoryCard(events: model.alertEvents)
             }
             // Export lives outside the samples gate: per-app energy is logged
             // independently of CPU-temp samples, so its CSV must stay reachable
             // even on a Mac whose main history chart is empty.
             HistoryExportCard()
         }
-        .task(id: ReloadKey(active: isActive, range: range, logging: settings.loggingEnabled)) {
-            await reload()
+        .task(id: ReloadKey(active: isActive, range: model.range, logging: settings.loggingEnabled)) {
+            guard isActive else { return }
+            await model.reload()
         }
     }
 
     @ViewBuilder
     private var timeline: some View {
-        if !samples.isEmpty {
+        if !model.samples.isEmpty {
             // Existing history is browsable even if logging was since turned
             // off — flag that it won't keep growing.
             if !settings.loggingEnabled { loggingPausedNote }
-            HistoryControls(range: $range, metric: $metric)
-            HistoryChartCard(samples: samples, metric: metric, range: range)
-            HistoryStatsCard(samples: samples, metric: metric)
-        } else if loading {
+            HistoryControls(range: $model.range, metric: $model.metric)
+            HistoryChartCard(samples: model.samples, metric: model.metric, range: model.range)
+            HistoryStatsCard(samples: model.samples, metric: model.metric)
+        } else if model.loading {
             emptyState
         } else if !settings.loggingEnabled {
             loggingOffState
         } else {
             emptyState
         }
-    }
-
-    private func reload() async {
-        guard isActive else { return }              // keep what we have when off-tab
-        loading = true
-        let range = self.range
-        let result = await Task.detached(priority: .userInitiated) {
-            (HistoryReader.load(range: range, now: Date()), AlertLog.recent(limit: 30))
-        }.value
-        guard !Task.isCancelled else { return }     // a newer reload superseded this one
-        samples = result.0
-        alertEvents = result.1
-        loading = false
     }
 
     private var loggingPausedNote: some View {
@@ -124,10 +79,10 @@ struct HistoryView: View {
 
     private var emptyState: some View {
         EmptyStateView(
-            symbol: loading ? "hourglass" : "clock.arrow.circlepath",
+            symbol: model.loading ? "hourglass" : "clock.arrow.circlepath",
             tint: .indigo,
-            title: loading ? "Reading history…" : "No history yet",
-            message: loading
+            title: model.loading ? "Reading history…" : "No history yet",
+            message: model.loading
                 ? "Loading the logged readings."
                 : "Logging is on, but nothing's been recorded for this range yet. Check back in a few minutes."
         ) { EmptyView() }
@@ -189,67 +144,121 @@ private struct HistoryChartCard: View {
     }
 
     private var chart: some View {
-        Chart {
-            switch metric {
-            case .temp:
-                ForEach(samples) { s in
-                    LineMark(x: .value("Time", s.time), y: .value("Temp", settings.display(s.hottestTemp)),
-                             series: .value("S", "Hottest"))
-                        .foregroundStyle(by: .value("S", "Hottest")).interpolationMethod(.catmullRom)
-                    LineMark(x: .value("Time", s.time), y: .value("Temp", settings.display(s.avgTemp)),
-                             series: .value("S", "Average"))
-                        .foregroundStyle(by: .value("S", "Average")).interpolationMethod(.catmullRom)
-                }
-            case .cpu:
-                ForEach(samples) { s in areaLine(s.time, s.cpuUsage, .blue) }
-            case .gpu:
-                ForEach(samples) { s in if let g = s.gpuUsage { areaLine(s.time, g, .purple) } }
-            case .memory:
-                ForEach(samples) { s in
-                    LineMark(x: .value("Time", s.time), y: .value("GB", s.memoryGB))
-                        .foregroundStyle(.indigo).interpolationMethod(.catmullRom)
-                }
-            case .network:
-                ForEach(samples) { s in
-                    if let down = s.netInBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", down / 1_000_000),
-                                 series: .value("S", "Download"))
-                            .foregroundStyle(by: .value("S", "Download")).interpolationMethod(.catmullRom)
-                    }
-                    if let up = s.netOutBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", up / 1_000_000),
-                                 series: .value("S", "Upload"))
-                            .foregroundStyle(by: .value("S", "Upload")).interpolationMethod(.catmullRom)
-                    }
-                }
-            case .disk:
-                ForEach(samples) { s in
-                    if let read = s.diskReadBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", read / 1_000_000),
-                                 series: .value("S", "Read"))
-                            .foregroundStyle(by: .value("S", "Read")).interpolationMethod(.catmullRom)
-                    }
-                    if let write = s.diskWriteBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", write / 1_000_000),
-                                 series: .value("S", "Write"))
-                            .foregroundStyle(by: .value("S", "Write")).interpolationMethod(.catmullRom)
-                    }
-                }
-            case .battery:
-                ForEach(samples) { s in if let b = s.batteryPercent { areaLine(s.time, b, .green) } }
-            case .power:
-                ForEach(samples) { s in
-                    if let w = s.socWatts {
-                        LineMark(x: .value("Time", s.time), y: .value("W", w))
-                            .foregroundStyle(.orange).interpolationMethod(.catmullRom)
-                    }
-                }
-            }
-        }
-        .chartForegroundStyleScale(domain: seriesStyle.domain, range: seriesStyle.range)
-        .chartLegend(metric == .temp || metric == .network || metric == .disk ? .visible : .hidden)
+        Chart { chartMarks }
+        .chartForegroundStyleScale(domain: seriesDomain, range: seriesRange)
+        .chartLegend(legendVisibility)
         .chartYScale(domain: yDomain)
         .chartYAxisLabel(yLabel)
+    }
+
+    /// Keeping the mark switch outside the `Chart` expression is important for
+    /// Xcode 27: the compiler otherwise tries to solve every metric's nested
+    /// `ForEach`/optional mark tree together with all chart modifiers.
+    @ChartContentBuilder
+    private var chartMarks: some ChartContent {
+        switch metric {
+        case .temp: temperatureMarks
+        case .cpu: cpuMarks
+        case .gpu: gpuMarks
+        case .memory: memoryMarks
+        case .network: networkMarks
+        case .disk: diskMarks
+        case .battery: batteryMarks
+        case .power: powerMarks
+        }
+    }
+
+    @ChartContentBuilder
+    private var temperatureMarks: some ChartContent {
+        ForEach(samples) { sample in
+            LineMark(x: .value("Time", sample.time),
+                     y: .value("Temp", settings.display(sample.hottestTemp)),
+                     series: .value("S", "Hottest"))
+                .foregroundStyle(by: .value("S", "Hottest"))
+                .interpolationMethod(.catmullRom)
+            LineMark(x: .value("Time", sample.time),
+                     y: .value("Temp", settings.display(sample.avgTemp)),
+                     series: .value("S", "Average"))
+                .foregroundStyle(by: .value("S", "Average"))
+                .interpolationMethod(.catmullRom)
+        }
+    }
+
+    @ChartContentBuilder
+    private var cpuMarks: some ChartContent {
+        ForEach(samples) { sample in areaLine(sample.time, sample.cpuUsage, .blue) }
+    }
+
+    @ChartContentBuilder
+    private var gpuMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let usage = sample.gpuUsage { areaLine(sample.time, usage, .purple) }
+        }
+    }
+
+    @ChartContentBuilder
+    private var memoryMarks: some ChartContent {
+        ForEach(samples) { sample in
+            LineMark(x: .value("Time", sample.time), y: .value("GB", sample.memoryGB))
+                .foregroundStyle(.indigo)
+                .interpolationMethod(.catmullRom)
+        }
+    }
+
+    @ChartContentBuilder
+    private var networkMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let down = sample.netInBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", down / 1_000_000),
+                         series: .value("S", "Download"))
+                    .foregroundStyle(by: .value("S", "Download"))
+                    .interpolationMethod(.catmullRom)
+            }
+            if let up = sample.netOutBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", up / 1_000_000),
+                         series: .value("S", "Upload"))
+                    .foregroundStyle(by: .value("S", "Upload"))
+                    .interpolationMethod(.catmullRom)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private var diskMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let read = sample.diskReadBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", read / 1_000_000),
+                         series: .value("S", "Read"))
+                    .foregroundStyle(by: .value("S", "Read"))
+                    .interpolationMethod(.catmullRom)
+            }
+            if let write = sample.diskWriteBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", write / 1_000_000),
+                         series: .value("S", "Write"))
+                    .foregroundStyle(by: .value("S", "Write"))
+                    .interpolationMethod(.catmullRom)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private var batteryMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let percent = sample.batteryPercent {
+                areaLine(sample.time, percent, .green)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private var powerMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let watts = sample.socWatts {
+                LineMark(x: .value("Time", sample.time), y: .value("W", watts))
+                    .foregroundStyle(.orange)
+                    .interpolationMethod(.catmullRom)
+            }
+        }
     }
 
     @ChartContentBuilder
@@ -264,12 +273,28 @@ private struct HistoryChartCard: View {
 
     /// Legend/color domain for the current metric (empty for the single-series
     /// views, which colour their marks directly).
-    private var seriesStyle: (domain: [String], range: [Color]) {
+    private var seriesDomain: [String] {
         switch metric {
-        case .temp:    return (["Average", "Hottest"], [.orange, .red.opacity(0.7)])
-        case .network: return (["Download", "Upload"], [.mint, .orange])
-        case .disk:    return (["Read", "Write"], [.yellow, .orange])
-        case .cpu, .gpu, .memory, .battery, .power: return ([], [])
+        case .temp: return ["Average", "Hottest"]
+        case .network: return ["Download", "Upload"]
+        case .disk: return ["Read", "Write"]
+        case .cpu, .gpu, .memory, .battery, .power: return []
+        }
+    }
+
+    private var seriesRange: [Color] {
+        switch metric {
+        case .temp: return [.orange, .red.opacity(0.7)]
+        case .network: return [.mint, .orange]
+        case .disk: return [.yellow, .orange]
+        case .cpu, .gpu, .memory, .battery, .power: return []
+        }
+    }
+
+    private var legendVisibility: Visibility {
+        switch metric {
+        case .temp, .network, .disk: return .visible
+        case .cpu, .gpu, .memory, .battery, .power: return .hidden
         }
     }
 

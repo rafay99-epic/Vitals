@@ -3,8 +3,9 @@ import AppKit
 import Metal
 
 enum Hardware {
-    /// True only on Apple Silicon hardware. Queries the machine, so it is
-    /// correct even when this process runs as the x86_64 slice under Rosetta.
+    /// True only on Apple Silicon hardware. The packaged app is arm64-only,
+    /// but keeping this runtime check makes unsupported hardware fail safely
+    /// if a developer runs the executable from another build configuration.
     static var isAppleSilicon: Bool {
         var value: Int32 = 0
         var size = MemoryLayout<Int32>.size
@@ -40,8 +41,8 @@ enum Hardware {
     /// headless/no-Metal host that isn't technically a VM).
     static var supportsLiquidGlass: Bool { !isVirtualMachine && hasHardwareGPU }
 
-    /// Shows an apology and exits. Reached only on Intel Macs (the universal
-    /// binary's x86_64 slice runs just far enough to display this).
+    /// Shows an apology and exits when an unsupported machine runs a developer
+    /// build directly. Release and Dev bundles are arm64-only.
     @MainActor
     static func showUnsupportedAndQuit() -> Never {
         let app = NSApplication.shared
