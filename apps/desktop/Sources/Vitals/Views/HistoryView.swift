@@ -30,6 +30,7 @@ struct HistoryView: View {
             HistoryExportCard()
         }
         .task(id: ReloadKey(active: isActive, range: model.range, logging: settings.loggingEnabled)) {
+            guard isActive else { return }
             await model.reload()
         }
     }
@@ -78,10 +79,10 @@ struct HistoryView: View {
 
     private var emptyState: some View {
         EmptyStateView(
-            symbol: loading ? "hourglass" : "clock.arrow.circlepath",
+            symbol: model.loading ? "hourglass" : "clock.arrow.circlepath",
             tint: .indigo,
-            title: loading ? "Reading history…" : "No history yet",
-            message: loading
+            title: model.loading ? "Reading history…" : "No history yet",
+            message: model.loading
                 ? "Loading the logged readings."
                 : "Logging is on, but nothing's been recorded for this range yet. Check back in a few minutes."
         ) { EmptyView() }
