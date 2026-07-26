@@ -54,10 +54,9 @@ final class HistoryModel: ObservableObject {
         let result = await Task.detached(priority: .userInitiated) {
             (HistoryReader.load(range: selectedRange, now: Date()), AlertLog.recent(limit: 30))
         }.value
-        guard !Task.isCancelled else {
-            loading = false
-            return
-        }
+        // A cancelled request must not mutate shared loading state: a newer
+        // range/logging request may already be reading and showing its spinner.
+        guard !Task.isCancelled else { return }
         samples = result.0
         alertEvents = result.1
         loading = false
