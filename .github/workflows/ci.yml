@@ -58,7 +58,7 @@ jobs:
         run: swiftlint --reporter github-actions-logging
 
   # PR only: build + package the DMG (this IS the release-config build check —
-  # build.sh does a universal `swift build -c release`, so a separate build job
+  # build.sh does the arm64 release `swift build -c release`, so a separate build job
   # would just compile the same thing again on another runner) and upload it as
   # an artifact so a reviewer can install the change. No publish.
   package:
