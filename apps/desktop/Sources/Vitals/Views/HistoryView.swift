@@ -144,67 +144,121 @@ private struct HistoryChartCard: View {
     }
 
     private var chart: some View {
-        Chart {
-            switch metric {
-            case .temp:
-                ForEach(samples) { s in
-                    LineMark(x: .value("Time", s.time), y: .value("Temp", settings.display(s.hottestTemp)),
-                             series: .value("S", "Hottest"))
-                        .foregroundStyle(by: .value("S", "Hottest")).interpolationMethod(.catmullRom)
-                    LineMark(x: .value("Time", s.time), y: .value("Temp", settings.display(s.avgTemp)),
-                             series: .value("S", "Average"))
-                        .foregroundStyle(by: .value("S", "Average")).interpolationMethod(.catmullRom)
-                }
-            case .cpu:
-                ForEach(samples) { s in areaLine(s.time, s.cpuUsage, .blue) }
-            case .gpu:
-                ForEach(samples) { s in if let g = s.gpuUsage { areaLine(s.time, g, .purple) } }
-            case .memory:
-                ForEach(samples) { s in
-                    LineMark(x: .value("Time", s.time), y: .value("GB", s.memoryGB))
-                        .foregroundStyle(.indigo).interpolationMethod(.catmullRom)
-                }
-            case .network:
-                ForEach(samples) { s in
-                    if let down = s.netInBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", down / 1_000_000),
-                                 series: .value("S", "Download"))
-                            .foregroundStyle(by: .value("S", "Download")).interpolationMethod(.catmullRom)
-                    }
-                    if let up = s.netOutBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", up / 1_000_000),
-                                 series: .value("S", "Upload"))
-                            .foregroundStyle(by: .value("S", "Upload")).interpolationMethod(.catmullRom)
-                    }
-                }
-            case .disk:
-                ForEach(samples) { s in
-                    if let read = s.diskReadBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", read / 1_000_000),
-                                 series: .value("S", "Read"))
-                            .foregroundStyle(by: .value("S", "Read")).interpolationMethod(.catmullRom)
-                    }
-                    if let write = s.diskWriteBps {
-                        LineMark(x: .value("Time", s.time), y: .value("MB/s", write / 1_000_000),
-                                 series: .value("S", "Write"))
-                            .foregroundStyle(by: .value("S", "Write")).interpolationMethod(.catmullRom)
-                    }
-                }
-            case .battery:
-                ForEach(samples) { s in if let b = s.batteryPercent { areaLine(s.time, b, .green) } }
-            case .power:
-                ForEach(samples) { s in
-                    if let w = s.socWatts {
-                        LineMark(x: .value("Time", s.time), y: .value("W", w))
-                            .foregroundStyle(.orange).interpolationMethod(.catmullRom)
-                    }
-                }
-            }
-        }
-        .chartForegroundStyleScale(domain: seriesStyle.domain, range: seriesStyle.range)
-        .chartLegend(metric == .temp || metric == .network || metric == .disk ? .visible : .hidden)
+        Chart { chartMarks }
+        .chartForegroundStyleScale(domain: seriesDomain, range: seriesRange)
+        .chartLegend(legendVisibility)
         .chartYScale(domain: yDomain)
         .chartYAxisLabel(yLabel)
+    }
+
+    /// Keeping the mark switch outside the `Chart` expression is important for
+    /// Xcode 27: the compiler otherwise tries to solve every metric's nested
+    /// `ForEach`/optional mark tree together with all chart modifiers.
+    @ChartContentBuilder
+    private var chartMarks: some ChartContent {
+        switch metric {
+        case .temp: temperatureMarks
+        case .cpu: cpuMarks
+        case .gpu: gpuMarks
+        case .memory: memoryMarks
+        case .network: networkMarks
+        case .disk: diskMarks
+        case .battery: batteryMarks
+        case .power: powerMarks
+        }
+    }
+
+    @ChartContentBuilder
+    private var temperatureMarks: some ChartContent {
+        ForEach(samples) { sample in
+            LineMark(x: .value("Time", sample.time),
+                     y: .value("Temp", settings.display(sample.hottestTemp)),
+                     series: .value("S", "Hottest"))
+                .foregroundStyle(by: .value("S", "Hottest"))
+                .interpolationMethod(.catmullRom)
+            LineMark(x: .value("Time", sample.time),
+                     y: .value("Temp", settings.display(sample.avgTemp)),
+                     series: .value("S", "Average"))
+                .foregroundStyle(by: .value("S", "Average"))
+                .interpolationMethod(.catmullRom)
+        }
+    }
+
+    @ChartContentBuilder
+    private var cpuMarks: some ChartContent {
+        ForEach(samples) { sample in areaLine(sample.time, sample.cpuUsage, .blue) }
+    }
+
+    @ChartContentBuilder
+    private var gpuMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let usage = sample.gpuUsage { areaLine(sample.time, usage, .purple) }
+        }
+    }
+
+    @ChartContentBuilder
+    private var memoryMarks: some ChartContent {
+        ForEach(samples) { sample in
+            LineMark(x: .value("Time", sample.time), y: .value("GB", sample.memoryGB))
+                .foregroundStyle(.indigo)
+                .interpolationMethod(.catmullRom)
+        }
+    }
+
+    @ChartContentBuilder
+    private var networkMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let down = sample.netInBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", down / 1_000_000),
+                         series: .value("S", "Download"))
+                    .foregroundStyle(by: .value("S", "Download"))
+                    .interpolationMethod(.catmullRom)
+            }
+            if let up = sample.netOutBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", up / 1_000_000),
+                         series: .value("S", "Upload"))
+                    .foregroundStyle(by: .value("S", "Upload"))
+                    .interpolationMethod(.catmullRom)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private var diskMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let read = sample.diskReadBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", read / 1_000_000),
+                         series: .value("S", "Read"))
+                    .foregroundStyle(by: .value("S", "Read"))
+                    .interpolationMethod(.catmullRom)
+            }
+            if let write = sample.diskWriteBps {
+                LineMark(x: .value("Time", sample.time), y: .value("MB/s", write / 1_000_000),
+                         series: .value("S", "Write"))
+                    .foregroundStyle(by: .value("S", "Write"))
+                    .interpolationMethod(.catmullRom)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private var batteryMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let percent = sample.batteryPercent {
+                areaLine(sample.time, percent, .green)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private var powerMarks: some ChartContent {
+        ForEach(samples) { sample in
+            if let watts = sample.socWatts {
+                LineMark(x: .value("Time", sample.time), y: .value("W", watts))
+                    .foregroundStyle(.orange)
+                    .interpolationMethod(.catmullRom)
+            }
+        }
     }
 
     @ChartContentBuilder
@@ -219,12 +273,28 @@ private struct HistoryChartCard: View {
 
     /// Legend/color domain for the current metric (empty for the single-series
     /// views, which colour their marks directly).
-    private var seriesStyle: (domain: [String], range: [Color]) {
+    private var seriesDomain: [String] {
         switch metric {
-        case .temp:    return (["Average", "Hottest"], [.orange, .red.opacity(0.7)])
-        case .network: return (["Download", "Upload"], [.mint, .orange])
-        case .disk:    return (["Read", "Write"], [.yellow, .orange])
-        case .cpu, .gpu, .memory, .battery, .power: return ([], [])
+        case .temp: return ["Average", "Hottest"]
+        case .network: return ["Download", "Upload"]
+        case .disk: return ["Read", "Write"]
+        case .cpu, .gpu, .memory, .battery, .power: return []
+        }
+    }
+
+    private var seriesRange: [Color] {
+        switch metric {
+        case .temp: return [.orange, .red.opacity(0.7)]
+        case .network: return [.mint, .orange]
+        case .disk: return [.yellow, .orange]
+        case .cpu, .gpu, .memory, .battery, .power: return []
+        }
+    }
+
+    private var legendVisibility: Visibility {
+        switch metric {
+        case .temp, .network, .disk: return .visible
+        case .cpu, .gpu, .memory, .battery, .power: return .hidden
         }
     }
 
