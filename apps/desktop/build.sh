@@ -50,7 +50,11 @@ echo "Compiling arm64 (Apple Silicon)…  [channel: $CHANNEL]"
 # Keeping this explicit prevents SwiftPM from producing a deprecated x86_64
 # slice when the active SDK starts warning about Intel deployment support.
 swift build -c release --arch arm64
-BINARY=".build/apple/Products/Release/Vitals"
+BINARY="$(swift build --show-bin-path -c release --arch arm64)/Vitals"
+if [[ ! -x "$BINARY" ]]; then
+  echo "error: SwiftPM did not produce the expected executable: $BINARY" >&2
+  exit 1
+fi
 ARCH_INFO="$(lipo -info "$BINARY")"
 echo "Binary architecture: $ARCH_INFO"
 if [[ "$ARCH_INFO" != *"arm64"* || "$ARCH_INFO" == *"x86_64"* ]]; then
