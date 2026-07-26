@@ -6,8 +6,7 @@ import AppKit
 /// Monitor makes hard — "how much RAM is Brave using, and quit it" — in one place.
 struct ProcessesView: View {
     @ObservedObject var model: ProcessesModel
-    /// True only while Processes is the visible tab. The view stays mounted, so
-    /// it starts/stops sampling on this rather than on appear/disappear.
+    /// True while Processes is the visible tab.
     var isActive: Bool
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var navigator: Navigator
@@ -27,7 +26,7 @@ struct ProcessesView: View {
             Divider().opacity(0.5)
             footer
         }
-        // Sample only while this is the active tab (the view stays mounted).
+        // Sample only while this is the active tab.
         .onChange(of: isActive, initial: true) { _, active in
             if active {
                 model.includeSystem = settings.showSystemProcesses
@@ -43,6 +42,7 @@ struct ProcessesView: View {
         .onChange(of: settings.groupHelperProcesses) { _, group in
             model.groupHelpers = group; model.refresh()
         }
+        .onDisappear { model.stop() }
         .alert(item: $model.pendingQuit) { pending in
             quitAlert(pending)
         }

@@ -6,7 +6,8 @@ import SwiftUI
 /// Applications sub-view (Installed/Startup) — one component, never a copy.
 ///
 /// `onSelect` fires before the selection animates, so a host can record the item
-/// as visited (its kept-mounted view then stays alive for instant switch-back).
+/// as visited. Section models remain alive where needed, while the selected view
+/// owns the active presentation tree.
 struct SegmentControl<Item: Identifiable & Equatable>: View {
     let items: [Item]
     @Binding var selection: Item

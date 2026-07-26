@@ -9,11 +9,10 @@ import Charts
 /// than showing zeros.
 struct BatteryView: View {
     @EnvironmentObject private var model: VitalsModel
-    /// The live per-app energy list — owned by ContentView so its sampling
-    /// survives tab switches, sampled only while this tab is active.
+    /// The live per-app energy list — owned by ContentView so its state survives
+    /// tab switches, sampled only while this tab is active.
     @ObservedObject var appEnergyModel: AppEnergyModel
-    /// True only while the Battery tab is visible — gates the history chart so it
-    /// doesn't rebuild marks every tick while mounted in the background (mirrors GPUView).
+    /// True only while the Battery tab is visible — gates the history chart.
     let isActive: Bool
 
     var body: some View {
@@ -50,6 +49,7 @@ struct BatteryView: View {
         .onChange(of: isActive, initial: true) { _, active in
             if active { appEnergyModel.start() } else { appEnergyModel.stop() }
         }
+        .onDisappear { appEnergyModel.stop() }
     }
 }
 

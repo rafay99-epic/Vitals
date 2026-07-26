@@ -116,9 +116,16 @@ final class VitalsModel: ObservableObject {
     private let alertEngine = AlertEngine()
     private var timer: Timer?
     private var isSampling = false
+    /// The one in-flight sample. Cancelling a Swift Task does not interrupt a
+    /// blocking IOKit call, so the watchdog must not release this slot early.
+    private var samplingTask: Task<Void, Never>?
+    private var samplingID = UUID()
     /// Whether the main window is open. Top-process sampling (the costliest part
     /// of a tick) is skipped when it's closed and no process-CPU alert needs it.
     private var mainWindowVisible = false
+    /// The visible section narrows expensive optional reads while the window is
+    /// open; Settings and maintenance screens do not need process/IOReport data.
+    private var visibleSectionID = "overview"
     /// True while the Mac is asleep — set by `NSWorkspace.willSleep/didWake`
     /// observers. The timer is torn down on sleep and rebuilt on wake, so no
     /// sensor reads happen (and no battery is burned) while the machine is
@@ -135,6 +142,10 @@ final class VitalsModel: ObservableObject {
     /// Call when the main window opens/closes (ContentView appear/disappear).
     func setMainWindowVisible(_ visible: Bool) { mainWindowVisible = visible }
 
+    /// Call when navigation changes so optional sensor work follows the visible
+    /// surface instead of treating every open window as the Overview screen.
+    func setVisibleSection(_ sectionID: String) { visibleSectionID = sectionID }
+
     /// Call when a GPU-bearing widget (`.gpu` / `.combined`) appears/disappears
     /// so the sampler keeps the IOReport GPU reading live while it's on screen.
     func setGPUWidgetVisible(_ visible: Bool) { gpuWidgetVisible = visible }
@@ -144,7 +155,8 @@ final class VitalsModel: ObservableObject {
     internal var isSamplingTimerActive: Bool { timer != nil }
 
     private var needsTopProcesses: Bool {
-        mainWindowVisible || settings.alertRules.contains { $0.enabled && $0.metric == .processCPU }
+        mainWindowVisible && ["overview", "memory", "processes"].contains(visibleSectionID)
+            || settings.alertRules.contains { $0.enabled && $0.metric == .processCPU }
     }
     /// Whether the IOReport GPU sample is needed this tick. The GPU reading is
     /// only consumed by surfaces the user can see: the window's GPU card, a GPU
@@ -152,20 +164,21 @@ final class VitalsModel: ObservableObject {
     /// alert. Menu-bar-only with no GPU metric → skip the read and hold the last
     /// value, cutting an IOReport round-trip every tick.
     private var needsGPU: Bool {
-        mainWindowVisible
+        mainWindowVisible && ["overview", "gpu", "history"].contains(visibleSectionID)
             || gpuWidgetVisible
             || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage))
             || settings.alertRules.contains { $0.enabled && $0.metric == .gpuUsage }
     }
-    /// Whether the IOReport SoC-power sample is needed. Power draw only appears
-    /// in the window's Power card — no widget, menu-bar metric, or alert reads
-    /// it — so it's skipped entirely when the window is closed.
-    private var needsPower: Bool { mainWindowVisible }
+    /// Whether the IOReport SoC-power sample is needed. Power appears in the
+    /// overview, CPU/GPU/Battery detail, and History charts.
+    private var needsPower: Bool {
+        mainWindowVisible && ["overview", "cpu", "gpu", "battery", "history"].contains(visibleSectionID)
+    }
     private var cancellables: Set<AnyCancellable> = []
     private static let maxChartPoints = 300
-    /// A single sample must finish within this long or the watchdog frees the
-    /// pipeline. Generous — a real sample is milliseconds; this only fires when
-    /// a syscall has genuinely wedged.
+    /// A single sample must finish within this long or the watchdog marks the
+    /// readings stale and requests cancellation. Generous — a real sample is
+    /// milliseconds; this only fires when a syscall has genuinely wedged.
     private static let sampleTimeout: TimeInterval = 5
 
     // Overheat alerting state.
@@ -240,6 +253,8 @@ final class VitalsModel: ObservableObject {
     deinit {
         timer?.invalidate()
         timer = nil
+        samplingTask?.cancel()
+        samplingTask = nil
         sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 
@@ -313,14 +328,16 @@ final class VitalsModel: ObservableObject {
     /// slow sample (heavily loaded machine) queue up behind itself.
     ///
     /// A watchdog backs this up: a sensor syscall can wedge (a stuck IOKit
-    /// driver, a degraded VM). Without it, `isSampling` would stay true forever
-    /// and the app would freeze on stale numbers with no recovery — the worst
-    /// outcome for a monitor. If the sample overruns `sampleTimeout`, the
-    /// pipeline is freed so the next tick retries, and `sensorsStalled` lets
-    /// the UI stop pretending the frozen readings are live.
+    /// driver, a degraded VM). Cancellation cannot interrupt that synchronous
+    /// call, so the watchdog marks the readings stale and requests cancellation
+    /// but deliberately keeps the pipeline occupied until the call returns.
+    /// That serial behavior prevents an unbounded buildup of blocked tasks and
+    /// is safer than launching overlapping hardware reads.
     private func tick() {
         guard !isSampling, !isAsleep else { return }
         isSampling = true
+        let id = UUID()
+        samplingID = id
         // Keep the cadence in sync with the power source first. This may publish
         // `isOnBattery`/`isLowPowerMode` and re-enter `restartTimerIfAwake` →
         // `start` → `tick`; the `!isSampling` guard above makes that re-entrant
@@ -332,26 +349,34 @@ final class VitalsModel: ObservableObject {
         let includePower = needsPower
         let work = Task { [weak self] in
             guard let self else { return }
+            defer {
+                if self.samplingID == id {
+                    self.isSampling = false
+                    self.samplingTask = nil
+                }
+            }
             let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses,
                                                      includeGPU: includeGPU,
                                                      includePower: includePower,
                                                      includeAppEnergy: self.settings.loggingEnabled)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, self.samplingID == id else { return }
             self.apply(snapshot, sampledGPU: includeGPU)
             self.assignIfChanged(&self.sensorsStalled, to: false)
-            self.isSampling = false
         }
+        samplingTask = work
+        // A very fast test/mock sampler can finish before the assignment above;
+        // don't leave a completed task retained in that edge case.
+        if !isSampling { samplingTask = nil }
 
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.sampleTimeout * 1_000_000_000))
-            guard let self, self.isSampling else { return }  // already finished → nothing to do
-            work.cancel()
+            guard let self, self.isSampling, self.samplingID == id else { return }
+            self.samplingTask?.cancel()
             // Log only on the transition into a stall, not every stalled tick.
             if !self.sensorsStalled {
                 Log.notice(.sampler, "a sensor sample exceeded \(Self.sampleTimeout)s and was cancelled — readings may pause")
             }
             self.assignIfChanged(&self.sensorsStalled, to: true)
-            self.isSampling = false
         }
     }
 

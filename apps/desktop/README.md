@@ -59,8 +59,9 @@ Preferences persist across launches via `UserDefaults`.
 
 ## Install
 
-Requirements: an Apple Silicon Mac on macOS 15 or newer, with Xcode 16+
-installed (for the Swift toolchain).
+Requirements: an Apple Silicon Mac on macOS 15 or newer, with full Xcode 16+
+installed and selected as the active developer directory (for SwiftUI's macro
+toolchain). Command Line Tools alone are not sufficient.
 
 ```sh
 git clone https://github.com/rafay99-epic/Vitals.git

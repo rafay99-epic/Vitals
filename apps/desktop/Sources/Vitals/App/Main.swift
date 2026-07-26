@@ -7,7 +7,8 @@ enum Main {
         let arguments = CommandLine.arguments
 
         // Intel Macs lack the M-series sensors and fan keys Vitals depends on.
-        // The universal binary still launches there only to apologize.
+        // The distributed arm64-only bundle cannot launch there, but this keeps
+        // direct developer builds safe if one is run on unsupported hardware.
         guard Hardware.isAppleSilicon else {
             MainActor.assumeIsolated { Hardware.showUnsupportedAndQuit() }
         }

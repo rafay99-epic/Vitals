@@ -125,7 +125,27 @@ struct FanCard: View {
 
     @ViewBuilder
     private var controlFooter: some View {
-        if let error = fanControl.lastError {
+        if fanControl.needsRepair {
+            VStack(alignment: .leading, spacing: 6) {
+                if let error = fanControl.lastError {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("Fan control needs repair: its saved state folder is missing.")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+                Button {
+                    Task { await fanControl.install() }
+                } label: {
+                    Label(fanControl.isWorking ? "Repairing…" : "Repair Fan Control",
+                          systemImage: "wrench.and.screwdriver")
+                }
+                .controlSize(.small)
+                .disabled(fanControl.isWorking)
+            }
+        } else if let error = fanControl.lastError {
             Text(error)
                 .font(.caption2)
                 .foregroundStyle(.orange)
