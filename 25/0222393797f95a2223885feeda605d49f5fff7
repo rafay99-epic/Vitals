@@ -1,0 +1,37 @@
+apps/desktop/Sources/Vitals/Services/LeftoverScanner.swift
+  s_4e55d4bece084b::t_915cd6a75b2ccf 585-589,591-597,599-618,620-625
+  s_4e55d4bece084b::t_6f2f86d9d2a59c 619
+  s_4e55d4bece084b::t_4574b867e88f2a 590,598
+apps/desktop/Tests/VitalsTests/CleanupTests.swift
+  s_4e55d4bece084b::t_bd955114a8a50d 29-35,310-323
+docs/plans/2026-07-27-software-inventory-uninstall-plan.html
+  s_4e55d4bece084b::t_9b385d7d265d68 1-5,7,10,12-16,21-23,26-27,53,59,61,67,71,77-78,82,87,90,96,111,113,115,123-125,127,132-133,135,140-143,150-151,153-155
+  s_4e55d4bece084b::t_2a4760b662e2ef 6,8-9,11,17-20,24-25,28-52,54-58,60,62-66,68-70,72-76,79-81,83-86,88-89,91-95,97-110,112,114,116-122,126,128-131,134,136-139,144-149,152
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_4e55d4bece084b::t_ae9142857fc808 189,329
+  s_4e55d4bece084b::t_13525675dcb8e8 237,239,250-252,263-265,335-340,365
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_4e55d4bece084b::t_13525675dcb8e8 118,228-234
+  s_4e55d4bece084b::t_ae9142857fc808 255-261
+apps/desktop/Sources/Vitals/Views/HelpView.swift
+  s_4e55d4bece084b::t_ae9142857fc808 44
+apps/desktop/Sources/Vitals/Services/AppInventory.swift
+  s_4e55d4bece084b::t_c673133d8155f9 4-5,13-14,50-51,59-60,63-76,78,99
+  s_4e55d4bece084b::t_97ea9cca8aca02 110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "250222393797f95a2223885feeda605d49f5fff7",
+  "prompts": {},
+  "sessions": {
+    "s_4e55d4bece084b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa079-9ad9-7922-a73c-f17b20dd82e5",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
