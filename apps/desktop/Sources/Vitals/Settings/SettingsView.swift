@@ -124,7 +124,7 @@ struct SettingsView: View {
                   view: AnyView(PowerSettingsCard())),
             .init(title: "Appearance", keywords: "theme light dark system gpu acceleration liquid glass frosting translucent",
                   view: AnyView(AppearanceCard())),
-            .init(title: "Application", keywords: "launch at login startup hide dock icon menu bar only",
+            .init(title: "Applications", keywords: "launch at login startup hide dock icon menu bar only cli command line terminal system package manager scan inventory",
                   view: AnyView(ApplicationCard())),
         ]),
         SettingsSectionModel(title: "Interface", cards: [
@@ -140,8 +140,6 @@ struct SettingsView: View {
                   view: AnyView(ProcessesCard())),
             .init(title: "Storage", keywords: "analyze hidden files whole disk scan",
                   view: AnyView(StorageCard())),
-            .init(title: "Applications", keywords: "apps app bundles cli command line terminal system package manager scan inventory",
-                  view: AnyView(ApplicationInventoryCard())),
             .init(title: "Cleanup", keywords: "scan automatically caches",
                   view: AnyView(CleanupCard())),
         ]),
@@ -550,7 +548,7 @@ private struct ApplicationCard: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        SettingsCard(title: "Application", symbol: "macwindow", tint: .teal) {
+        SettingsCard(title: "Applications", symbol: "macwindow", tint: .teal) {
             SwitchRow(label: "Launch at login", isOn: $settings.launchAtLogin)
             if let error = settings.loginItemError {
                 Text(error)
@@ -563,6 +561,11 @@ private struct ApplicationCard: View {
                 isOn: $settings.hideDockIcon
             )
             .disabled(!settings.showMenuBar)
+            SwitchRow(
+                label: "Scan CLI and system applications",
+                caption: "Off by default for a faster first result. When enabled, Vitals also reads package-manager inventories and /System/Applications in parallel.",
+                isOn: $settings.scanCLIAndSystemApplications
+            )
         }
     }
 }
@@ -743,20 +746,6 @@ private struct CleanupCard: View {
                 label: "Scan automatically on open",
                 caption: "Off by default — Cleanup waits for you to press Scan. Cleaning always needs selection and confirmation.",
                 isOn: $settings.autoScanCleanup
-            )
-        }
-    }
-}
-
-private struct ApplicationInventoryCard: View {
-    @EnvironmentObject private var settings: AppSettings
-
-    var body: some View {
-        SettingsCard(title: "Applications", symbol: "square.grid.2x2", tint: .purple) {
-            SwitchRow(
-                label: "Scan CLI and system applications",
-                caption: "Off by default for a faster first result. When enabled, Vitals also reads package-manager inventories and /System/Applications in parallel.",
-                isOn: $settings.scanCLIAndSystemApplications
             )
         }
     }
