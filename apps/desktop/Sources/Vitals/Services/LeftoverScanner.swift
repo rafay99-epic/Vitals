@@ -582,6 +582,47 @@ enum LeftoverScanner {
         return nil
     }
 
+    /// Confirms that Homebrew's cask inventory actually contains this exact
+    /// app bundle. A display-name/token match is only a candidate: without
+    /// this path proof, `--zap` could remove data for a manually downloaded
+    /// app that happens to share a name with an installed cask.
+    static func caskOwns(appURL: URL, token: String, listOutput: String? = nil) -> Bool {
+        guard token.range(of: "^[a-z0-9][a-z0-9-]*$", options: .regularExpression) != nil else {
+            return false
+        }
+
+        let output: String
+        if let listOutput {
+            output = listOutput
+        } else {
+            guard let brew = brewExecutable() else { return false }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: brew)
+            process.arguments = ["list", "--cask", token]
+            let out = Pipe()
+            process.standardOutput = out
+            process.standardError = Pipe()
+            do {
+                try process.run()
+            } catch {
+                return false
+            }
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return false }
+            output = String(
+                data: out.fileHandleForReading.readDataToEndOfFile(),
+                encoding: .utf8
+            ) ?? ""
+        }
+
+        let target = appURL.standardizedFileURL.resolvingSymlinksInPath()
+        return output.split(whereSeparator: { $0.isNewline }).contains { line in
+            let path = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !path.isEmpty else { return false }
+            return URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == target
+        }
+    }
+
     // MARK: System extensions (detect + warn only)
 
     /// Orphaned system extensions that look like they belong to this app. These

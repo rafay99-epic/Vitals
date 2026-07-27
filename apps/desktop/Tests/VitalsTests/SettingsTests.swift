@@ -36,3 +36,17 @@ struct GPUAccelerationSettingsTests {
         #expect(settings.animationsEnabled == false)
     }
 }
+
+@MainActor
+struct ApplicationScanSettingsTests {
+    @Test func extendedInventoryIsOffByDefaultAndPersists() {
+        let name = "vitals.test.appscan.\(#function)"
+        let suite = UserDefaults(suiteName: name)!
+        suite.removePersistentDomain(forName: name)
+        let settings = AppSettings(defaults: suite, configURL: nil)
+
+        #expect(settings.scanCLIAndSystemApplications == false)
+        settings.scanCLIAndSystemApplications = true
+        #expect(suite.bool(forKey: "scanCLIAndSystemApplications") == true)
+    }
+}

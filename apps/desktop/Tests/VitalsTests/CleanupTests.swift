@@ -26,6 +26,13 @@ struct AppProtectionTests {
         ))
     }
 
+    @Test func everyVitalsChannelIsProtected() {
+        #expect(AppInventory.isProtected(
+            bundleID: "com.syntaxlabtechnology.vitals.dev",
+            url: URL(fileURLWithPath: "/Applications/Vitals Dev.app")
+        ))
+    }
+
     @Test func ordinaryAppsAreNot() {
         #expect(!AppInventory.isProtected(
             bundleID: "com.spotify.client",
@@ -201,6 +208,34 @@ struct LeftoverScannerTests {
     }
 }
 
+struct CLIInventoryTests {
+    @Test func treeParserKeepsScopedNamesAndRejectsTraversal() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vitals-cli-(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("@scope/tool"), withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("plain-cli"), withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let output = """
+        (root.path) (3)
+        ├── @scope/tool@1.2.3
+        ├── plain-cli@4.5.6
+        └── ../outside@9.9.9
+        """
+        let rows = CLIInventory.parseTreePackages(output, manager: .bun)
+
+        #expect(Set(rows.map(\.name)) == Set(["@scope/tool", "plain-cli"]))
+        #expect(rows.allSatisfy { $0.cliManager == .bun })
+    }
+}
+
 /// The complete uninstall reaches system-domain files and removes them as root,
 /// so the system catalog must stay confined and the privileged script must stay
 /// auditable: allowlisted roots only, never /System, never com.apple.*, never a
@@ -299,6 +334,20 @@ struct UninstallSystemTests {
         #expect(LeftoverScanner.homebrewCask(appName: "Google Chrome", installedCasks: casks) == "google-chrome")
         #expect(LeftoverScanner.homebrewCask(appName: "Slack", installedCasks: casks) == "slack")
         #expect(LeftoverScanner.homebrewCask(appName: "Some Unknown App", installedCasks: casks) == nil)
+    }
+
+    @Test func homebrewCaskOwnershipRequiresExactBundlePath() {
+        let app = URL(fileURLWithPath: "/Applications/Docker.app")
+        #expect(!LeftoverScanner.caskOwns(
+            appURL: app,
+            token: "docker",
+            listOutput: "/Applications/Other.app\n"
+        ))
+        #expect(LeftoverScanner.caskOwns(
+            appURL: app,
+            token: "docker",
+            listOutput: "/Applications/Docker.app\n"
+        ))
     }
 }
 
