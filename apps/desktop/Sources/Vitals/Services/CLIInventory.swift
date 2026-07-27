@@ -14,18 +14,23 @@ enum CLIInventory {
     private static let home = FileManager.default.homeDirectoryForCurrentUser
     private static let fm = FileManager.default
 
-    static func scan() -> [InstalledApp] {
-        var rows: [InstalledApp] = []
-        rows += homebrewFormulae()
-        rows += npmPackages()
-        rows += bunPackages()
-        rows += pnpmPackages()
-        rows += yarnPackages()
-        rows += cargoPackages()
-        rows += gemPackages()
-        rows += pipxPackages()
-        rows += uvPackages()
-        rows += goBinaries()
+    static func scan() async -> [InstalledApp] {
+        let rows = await withTaskGroup(of: [InstalledApp].self, returning: [[InstalledApp]].self) { group in
+            group.addTask { homebrewFormulae() }
+            group.addTask { npmPackages() }
+            group.addTask { bunPackages() }
+            group.addTask { pnpmPackages() }
+            group.addTask { yarnPackages() }
+            group.addTask { cargoPackages() }
+            group.addTask { gemPackages() }
+            group.addTask { pipxPackages() }
+            group.addTask { uvPackages() }
+            group.addTask { goBinaries() }
+
+            var results: [[InstalledApp]] = []
+            for await result in group { results.append(result) }
+            return results
+        }.flatMap { $0 }
 
         var seen = Set<URL>()
         return rows

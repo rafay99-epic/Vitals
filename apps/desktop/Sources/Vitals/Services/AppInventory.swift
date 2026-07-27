@@ -111,10 +111,12 @@ actor SizingGate {
 actor AppInventory {
     /// Shared by every stream this inventory produces — see `SizingGate`.
     let gate = SizingGate(width: 6)
-    nonisolated static let searchDirectories: [URL] = [
+    nonisolated static let userSearchDirectories: [URL] = [
         URL(fileURLWithPath: "/Applications", isDirectory: true),
         URL(fileURLWithPath: "/Applications/Utilities", isDirectory: true),
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true),
+    ]
+    nonisolated static let systemSearchDirectories: [URL] = [
         URL(fileURLWithPath: "/System/Applications", isDirectory: true),
         URL(fileURLWithPath: "/System/Applications/Utilities", isDirectory: true),
     ]
@@ -137,12 +139,15 @@ actor AppInventory {
         protectionReason(bundleID: bundleID, url: url) != nil
     }
 
-    func scan() -> [InstalledApp] {
+    func scan(includeSystemApplications: Bool = false) -> [InstalledApp] {
         let fm = FileManager.default
         var seen = Set<URL>()
         var apps: [InstalledApp] = []
+        let directories = includeSystemApplications
+            ? Self.userSearchDirectories + Self.systemSearchDirectories
+            : Self.userSearchDirectories
 
-        for directory in Self.searchDirectories {
+        for directory in directories {
             guard let entries = try? fm.contentsOfDirectory(
                 at: directory,
                 includingPropertiesForKeys: [.isDirectoryKey],

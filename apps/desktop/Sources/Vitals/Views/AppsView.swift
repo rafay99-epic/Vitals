@@ -72,6 +72,7 @@ struct AppIconView: View {
 /// same multi-select and owner-routed uninstall flow for both.
 struct AppsView: View {
     @ObservedObject var model: AppsModel
+    @EnvironmentObject private var settings: AppSettings
     /// True only while Applications is the visible tab. The view stays mounted,
     /// so the scan starts on activation rather than on appear.
     var isActive: Bool
@@ -90,7 +91,12 @@ struct AppsView: View {
             footer
         }
         .onChange(of: isActive, initial: true) { _, active in
-            if active && model.apps.isEmpty { model.refresh() }
+            if active && (model.apps.isEmpty || model.scanIncludesExtendedApplications != settings.scanCLIAndSystemApplications) {
+                model.refresh(includeExtendedApplications: settings.scanCLIAndSystemApplications)
+            }
+        }
+        .onChange(of: settings.scanCLIAndSystemApplications) { _, enabled in
+            if isActive { model.refresh(includeExtendedApplications: enabled) }
         }
         .sheet(item: $model.staged) { staged in
             UninstallConfirmationSheet(model: model, staged: staged)
@@ -137,7 +143,11 @@ struct AppsView: View {
     }
 
     private var heroSubtitle: String {
-        if model.isScanning { return "scanning apps and command-line tools…" }
+        if model.isScanning {
+            return settings.scanCLIAndSystemApplications
+                ? "scanning apps and command-line tools…"
+                : "scanning app bundles…"
+        }
         var parts: [String] = []
         if model.totalBytes > 0 { parts.append("\(formatBytes(model.totalBytes)) on disk") }
         if model.runningCount > 0 { parts.append("\(model.runningCount) running") }
@@ -166,7 +176,9 @@ struct AppsView: View {
         if model.apps.isEmpty && model.isScanning {
             LoadingStateView(
                 title: "Scanning applications",
-                message: "Reading app folders and package-manager inventories, then measuring sizes."
+                message: settings.scanCLIAndSystemApplications
+                    ? "Reading app folders and package-manager inventories in parallel, then measuring sizes."
+                    : "Reading app folders, then measuring sizes."
             )
         } else if let error = model.loadError {
             EmptyStateView(

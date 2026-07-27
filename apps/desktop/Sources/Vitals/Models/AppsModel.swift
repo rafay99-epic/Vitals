@@ -103,6 +103,8 @@ final class AppsModel: ObservableObject {
 
     private let inventory = AppInventory()
     private var sizeTask: Task<Void, Never>?
+    private(set) var scanIncludesExtendedApplications = false
+    private var pendingExtendedApplicationScan: Bool?
 
     var filteredApps: [InstalledApp] {
         var result = apps
@@ -136,18 +138,31 @@ final class AppsModel: ObservableObject {
         apps.filter(\.isRunning).count
     }
 
-    func refresh() {
-        guard !isScanning else { return }
+    func refresh(includeExtendedApplications: Bool? = nil) {
+        let includeExtendedApplications = includeExtendedApplications ?? scanIncludesExtendedApplications
+        guard !isScanning else {
+            pendingExtendedApplicationScan = includeExtendedApplications
+            return
+        }
+        scanIncludesExtendedApplications = includeExtendedApplications
         isScanning = true
         loadError = nil
         selection.removeAll()
         sizeTask?.cancel()
+        let inventory = self.inventory
         Task {
-            var found = await inventory.scan()
-            let cli = await Task.detached(priority: .userInitiated) {
-                CLIInventory.scan()
-            }.value
-            found += cli
+            var found = await withTaskGroup(of: [InstalledApp].self, returning: [InstalledApp].self) { group in
+                group.addTask {
+                    await inventory.scan(includeSystemApplications: includeExtendedApplications)
+                }
+                if includeExtendedApplications {
+                    group.addTask { await CLIInventory.scan() }
+                }
+                var results: [InstalledApp] = []
+                for await result in group { results += result }
+                return results
+            }
+            found.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
             for index in found.indices {
                 if let bundleID = found[index].bundleID {
@@ -162,6 +177,12 @@ final class AppsModel: ObservableObject {
             }
             isScanning = false
             computeSizes()
+            if let pending = pendingExtendedApplicationScan {
+                pendingExtendedApplicationScan = nil
+                if pending != scanIncludesExtendedApplications {
+                    refresh(includeExtendedApplications: pending)
+                }
+            }
         }
     }
 

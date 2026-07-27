@@ -140,6 +140,8 @@ struct SettingsView: View {
                   view: AnyView(ProcessesCard())),
             .init(title: "Storage", keywords: "analyze hidden files whole disk scan",
                   view: AnyView(StorageCard())),
+            .init(title: "Applications", keywords: "apps app bundles cli command line terminal system package manager scan inventory",
+                  view: AnyView(ApplicationInventoryCard())),
             .init(title: "Cleanup", keywords: "scan automatically caches",
                   view: AnyView(CleanupCard())),
         ]),
@@ -741,6 +743,20 @@ private struct CleanupCard: View {
                 label: "Scan automatically on open",
                 caption: "Off by default — Cleanup waits for you to press Scan. Cleaning always needs selection and confirmation.",
                 isOn: $settings.autoScanCleanup
+            )
+        }
+    }
+}
+
+private struct ApplicationInventoryCard: View {
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        SettingsCard(title: "Applications", symbol: "square.grid.2x2", tint: .purple) {
+            SwitchRow(
+                label: "Scan CLI and system applications",
+                caption: "Off by default for a faster first result. When enabled, Vitals also reads package-manager inventories and /System/Applications in parallel.",
+                isOn: $settings.scanCLIAndSystemApplications
             )
         }
     }
