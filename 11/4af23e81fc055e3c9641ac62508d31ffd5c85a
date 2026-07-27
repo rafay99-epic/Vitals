@@ -1,0 +1,52 @@
+apps/desktop/Sources/Vitals/Services/AppInventory.swift
+  s_4e55d4bece084b::t_ca0d818635b041 4-33,43,49-72,74-76,169
+  s_4e55d4bece084b::t_c0a814aafa2501 73
+apps/desktop/Sources/Vitals/Services/CLIInventory.swift
+  s_4e55d4bece084b::t_0f69ddbfd02420 167-169
+  s_4e55d4bece084b::t_8c67a0ba19558d 1-55,57,59,61,63,65,67-70,72,74,76-83,87-92,99-100,102-163,165-166,170-225,228,234-247,253-280,286-288,290-301,313,315-372,375-393,397,399-401,404-425
+  s_4e55d4bece084b::t_05dd7cb9ce8bd2 373-374
+  s_4e55d4bece084b::t_0224d6cc990866 232-233
+  s_4e55d4bece084b::t_f70fe0fc1edfcc 56,58,60,62,64,66,71,73,75
+  s_4e55d4bece084b::t_47876c9e356ce0 394-396,398,402-403
+  s_4e55d4bece084b::t_34c207490bcddd 97-98,101
+  s_4e55d4bece084b::t_41f07a265bb50d 226-227,229-231,248-252,281-285,289,302-312,314
+  s_4e55d4bece084b::t_6076d7d8cc186a 164
+  s_4e55d4bece084b::t_fcd61b0d62131e 84-86,93-96
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_4e55d4bece084b::t_9f46c1754e94e3 71-72,140,169,193,206
+  s_4e55d4bece084b::t_c0a814aafa2501 693
+  s_4e55d4bece084b::t_0fa86d01cdbc51 317-325,330-337,359
+  s_4e55d4bece084b::t_120c87fb38706e 478
+  s_4e55d4bece084b::t_876cc859158a4b 444-446,500-506,508-514,535-536,540-549,732
+  s_4e55d4bece084b::t_a0a764aa4efcfd 664-670,692,730-731
+apps/desktop/Sources/Vitals/Services/AppUninstaller.swift
+  s_4e55d4bece084b::t_d2a08163ee3334 20
+apps/desktop/Tests/VitalsTests/CleanupTests.swift
+  s_4e55d4bece084b::t_6076d7d8cc186a 211-217,224-233,235-238
+  s_4e55d4bece084b::t_e72d0bdd2a45b2 218-223
+  s_4e55d4bece084b::t_95a368eb609339 234
+apps/desktop/Sources/Vitals/Views/HelpView.swift
+  s_4e55d4bece084b::t_51ca16fd5acc96 44
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_4e55d4bece084b::t_f9d97a10e91a0a 85,296,301,435
+  s_4e55d4bece084b::t_2111c416c5b34c 113-114
+  s_4e55d4bece084b::t_d8c040b42c4982 287-295,297-300,302-306
+  s_4e55d4bece084b::t_5d322ee8e5bbc6 45,54,77,147-150,224,239,251
+  s_4e55d4bece084b::t_a5e8d798430a9a 225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "114af23e81fc055e3c9641ac62508d31ffd5c85a",
+  "prompts": {},
+  "sessions": {
+    "s_4e55d4bece084b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa079-9ad9-7922-a73c-f17b20dd82e5",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
