@@ -42,6 +42,7 @@ final class AppsModel: ObservableObject {
             case quitting(String)
             case removingFiles(String)
             case homebrew(String)
+            case packageManager(String, String)
             case awaitingAdmin
             case finishing
 
@@ -50,6 +51,7 @@ final class AppsModel: ObservableObject {
                 case .quitting(let name):      return "Quitting \(name)…"
                 case .removingFiles(let name): return "Removing \(name) and its files…"
                 case .homebrew(let name):      return "Uninstalling \(name) with Homebrew…"
+                case .packageManager(let name, let manager): return "Uninstalling \(name) with \(manager)…"
                 case .awaitingAdmin:           return "Enter your administrator password to remove system files…"
                 case .finishing:               return "Finishing up…"
                 }
@@ -72,6 +74,7 @@ final class AppsModel: ObservableObject {
         enum Outcome: Equatable {
             case trashed(items: Int, bytes: UInt64)
             case homebrew
+            case cli(manager: String)
             /// Queued for the end-of-batch admin removal — not yet removed.
             case pendingAdmin
             case removedViaAdmin
@@ -79,6 +82,7 @@ final class AppsModel: ObservableObject {
         }
         let id: URL
         let name: String
+        let isCLI: Bool
         var outcome: Outcome
     }
 
@@ -106,6 +110,8 @@ final class AppsModel: ObservableObject {
             result = result.filter {
                 $0.name.localizedCaseInsensitiveContains(searchText)
                     || ($0.bundleID?.localizedCaseInsensitiveContains(searchText) ?? false)
+                    || ($0.cliManager?.rawValue.localizedCaseInsensitiveContains(searchText) ?? false)
+                    || ($0.cliPackageName?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
         if sortOrder == .size {
@@ -138,6 +144,10 @@ final class AppsModel: ObservableObject {
         sizeTask?.cancel()
         Task {
             var found = await inventory.scan()
+            let cli = await Task.detached(priority: .userInitiated) {
+                CLIInventory.scan()
+            }.value
+            found += cli
             let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
             for index in found.indices {
                 if let bundleID = found[index].bundleID {
@@ -211,7 +221,8 @@ final class AppsModel: ObservableObject {
                     let name = app.name
                     let url = app.id
                     group.addTask(priority: .userInitiated) {
-                        (url,
+                        if app.isCLI { return (url, [], []) }
+                        return (url,
                          LeftoverScanner.scan(bundleID: bundleID, appName: name, appURL: url),
                          LeftoverScanner.systemExtensions(bundleID: bundleID))
                     }
@@ -225,6 +236,7 @@ final class AppsModel: ObservableObject {
                 if !extensions.isEmpty { systemExtensions[url] = extensions }
             }
             for app in targets {
+                guard !app.isCLI else { continue }
                 guard let candidate = LeftoverScanner.homebrewCask(
                     appName: app.name, installedCasks: casksList
                 ) else { continue }
@@ -236,7 +248,7 @@ final class AppsModel: ObservableObject {
             // A root-owned bundle (installed by a pkg) can't be trashed — flag it
             // so the sheet shows it's admin/permanent, and the cask-handled ones
             // are excluded (brew removes those).
-            let needAdmin = Set(targets.map(\.id).filter { casks[$0] == nil && AppUninstaller.bundleNeedsAdmin($0) })
+            let needAdmin = Set(targets.filter { !$0.isCLI }.map(\.id).filter { casks[$0] == nil && AppUninstaller.bundleNeedsAdmin($0) })
             staged = StagedUninstall(
                 apps: targets, leftovers: leftovers, casks: casks,
                 systemExtensions: systemExtensions, bundlesNeedingAdmin: needAdmin
@@ -272,6 +284,26 @@ final class AppsModel: ObservableObject {
             var systemPaths: [(url: URL, bytes: UInt64)] = []
 
             for app in staged.apps {
+                if app.isCLI {
+                    let manager = app.cliManager?.rawValue ?? "package manager"
+                    uninstallProgress?.phase = .packageManager(app.name, manager)
+                    let removed = await Task.detached(priority: .userInitiated) {
+                        CLIInventory.uninstall(app)
+                    }.value
+                    if removed {
+                        combined.cliUninstalled += 1
+                        uninstallProgress?.results.append(
+                            AppResult(id: app.id, name: app.name, isCLI: true, outcome: .cli(manager: manager))
+                        )
+                    } else {
+                        combined.failures.append((app.id, "The package manager could not remove this tool"))
+                        uninstallProgress?.results.append(
+                            AppResult(id: app.id, name: app.name, isCLI: true, outcome: .failed(items: 1))
+                        )
+                    }
+                    uninstallProgress?.completedApps += 1
+                    continue
+                }
                 uninstallProgress?.phase = .quitting(app.name)
                 if let running = AppUninstaller.runningApplication(bundleID: app.bundleID) {
                     await Self.quit(running)
@@ -400,7 +432,7 @@ final class AppsModel: ObservableObject {
         } else {
             result = .failed(items: outcome.failures.count)
         }
-        return AppResult(id: app.id, name: app.name, outcome: result)
+        return AppResult(id: app.id, name: app.name, isCLI: false, outcome: result)
     }
 
     /// Quit a running app, then poll briefly for it to actually exit instead of

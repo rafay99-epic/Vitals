@@ -68,8 +68,8 @@ struct AppIconView: View {
     }
 }
 
-/// The Applications tab: every uninstallable app, multi-selectable, with a
-/// leftover-aware uninstall that moves everything to the Trash.
+/// The Applications tab: app bundles plus manager-owned CLI tools, with the
+/// same multi-select and owner-routed uninstall flow for both.
 struct AppsView: View {
     @ObservedObject var model: AppsModel
     /// True only while Applications is the visible tab. The view stays mounted,
@@ -137,7 +137,7 @@ struct AppsView: View {
     }
 
     private var heroSubtitle: String {
-        if model.isScanning { return "scanning /Applications…" }
+        if model.isScanning { return "scanning apps and command-line tools…" }
         var parts: [String] = []
         if model.totalBytes > 0 { parts.append("\(formatBytes(model.totalBytes)) on disk") }
         if model.runningCount > 0 { parts.append("\(model.runningCount) running") }
@@ -166,7 +166,7 @@ struct AppsView: View {
         if model.apps.isEmpty && model.isScanning {
             LoadingStateView(
                 title: "Scanning applications",
-                message: "Reading /Applications and your user apps, then measuring sizes."
+                message: "Reading app folders and package-manager inventories, then measuring sizes."
             )
         } else if let error = model.loadError {
             EmptyStateView(
@@ -190,6 +190,7 @@ struct AppsView: View {
                 hints: [
                     .init(symbol: "folder", label: "/Applications"),
                     .init(symbol: "person.crop.square", label: "~/Applications"),
+                    .init(symbol: "terminal", label: "CLI packages"),
                 ]
             ) {
                 Button { model.refresh() } label: {
@@ -202,7 +203,7 @@ struct AppsView: View {
                 symbol: "magnifyingglass",
                 tint: .blue,
                 title: "No matches",
-                message: "No apps match “\(model.searchText)”. Try a different name or bundle id."
+                message: "No applications match “\(model.searchText)”. Try a different name, package, or manager."
             ) {
                 Button { model.searchText = "" } label: {
                     Label("Clear Search", systemImage: "xmark.circle")
@@ -313,11 +314,27 @@ private struct AppRow: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 15))
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
-                AppIconView(url: app.id, size: 30)
+                if app.isCLI {
+                    Image(systemName: app.cliManager?.symbol ?? "terminal")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(.quaternary.opacity(0.4)))
+                } else {
+                    AppIconView(url: app.id, size: 30)
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
                         Text(app.name)
                             .font(.system(size: 13, weight: .medium))
+                        if let manager = app.cliManager {
+                            Text(manager.rawValue)
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(.purple.opacity(0.16)))
+                                .foregroundStyle(.purple)
+                        }
                         if app.isRunning {
                             Text("Running")
                                 .font(.caption2.weight(.medium))
@@ -339,7 +356,7 @@ private struct AppRow: View {
                                 .help("Protected: \(protectedReason)")
                         }
                     }
-                    Text(app.bundleID ?? app.id.path)
+                    Text(app.secondaryLabel)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
@@ -424,6 +441,9 @@ private struct UninstallConfirmationSheet: View {
             if !staged.casks.isEmpty {
                 noteLabel("Homebrew apps are removed with brew uninstall --cask --zap (also clears their config & data).", "mug", .secondary)
             }
+            if staged.apps.contains(where: \.isCLI) {
+                noteLabel("CLI tools are removed by their owning package manager; project dependencies are never included.", "terminal", .secondary)
+            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -455,7 +475,7 @@ private struct UninstallConfirmationSheet: View {
     }
 
     private var introText: String {
-        var text = "The app and the checked items below are removed — user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
+        var text = "The checked applications and tools below are removed — app user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
         if hasSystem {
             text += " Items marked 🔒 — system files and pkg-installed apps — are removed permanently and need your administrator password."
         }
@@ -477,8 +497,21 @@ private struct UninstallConfirmationSheet: View {
     private func appSection(_ app: InstalledApp) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                AppIconView(url: app.id, size: 20)
+                if app.isCLI {
+                    Image(systemName: app.cliManager?.symbol ?? "terminal")
+                        .frame(width: 20, height: 20)
+                        .foregroundStyle(.secondary)
+                } else {
+                    AppIconView(url: app.id, size: 20)
+                }
                 Text(app.name).fontWeight(.semibold)
+                if let manager = app.cliManager {
+                    Text(manager.rawValue)
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(.purple.opacity(0.16)))
+                        .foregroundStyle(.purple)
+                }
                 if staged.casks[app.id] != nil {
                     Text("Homebrew")
                         .font(.caption2.weight(.medium))
@@ -499,14 +532,21 @@ private struct UninstallConfirmationSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            ForEach(staged.leftovers[app.id] ?? []) { leftover in
-                leftoverRow(leftover)
-            }
-            if (staged.leftovers[app.id] ?? []).isEmpty {
-                Text("No leftover files found.")
+            if app.isCLI {
+                Text("The owning package manager removes its managed files.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.leading, 28)
+            } else {
+                ForEach(staged.leftovers[app.id] ?? []) { leftover in
+                    leftoverRow(leftover)
+                }
+                if (staged.leftovers[app.id] ?? []).isEmpty {
+                    Text("No leftover files found.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.leading, 28)
+                }
             }
             if let extensions = staged.systemExtensions[app.id], !extensions.isEmpty {
                 Label(
@@ -621,7 +661,13 @@ private struct UninstallProgressView: View {
     private func resultRow(_ result: AppsModel.AppResult) -> some View {
         let style = Self.rowStyle(result.outcome)
         return HStack(spacing: 8) {
-            AppIconView(url: result.id, size: 18)
+            if result.isCLI {
+                Image(systemName: "terminal")
+                    .frame(width: 18, height: 18)
+                    .foregroundStyle(.secondary)
+            } else {
+                AppIconView(url: result.id, size: 18)
+            }
             Text(result.name).fontWeight(.medium)
             Spacer()
             Text(style.detail)
@@ -643,6 +689,8 @@ private struct UninstallProgressView: View {
             return ("checkmark.circle.fill", .green, "\(items) item\(items == 1 ? "" : "s") · \(formatBytes(bytes))")
         case .homebrew:
             return ("checkmark.circle.fill", .green, "Removed with Homebrew")
+        case .cli(let manager):
+            return ("checkmark.circle.fill", .green, "Removed with \(manager)")
         case .removedViaAdmin:
             return ("checkmark.circle.fill", .green, "Removed (system)")
         case .pendingAdmin:
@@ -678,6 +726,9 @@ private struct UninstallSummaryView: View {
                 }
                 if outcome.caskUninstalled > 0 {
                     summaryRow("Homebrew", "\(outcome.caskUninstalled) uninstalled")
+                }
+                if outcome.cliUninstalled > 0 {
+                    summaryRow("CLI tools", "\(outcome.cliUninstalled) uninstalled")
                 }
                 if !outcome.failures.isEmpty {
                     summaryRow("Couldn't remove", "\(outcome.failures.count) (in use or protected)", warn: true)
