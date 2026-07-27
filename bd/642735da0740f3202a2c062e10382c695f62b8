@@ -1,0 +1,38 @@
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_4e55d4bece084b::t_5417f95cfdebba 143-144,751-759
+  s_4e55d4bece084b::t_6335b4f6820350 760-762
+  s_4e55d4bece084b::t_87f3816315ca18 763-764
+apps/desktop/Tests/VitalsTests/SettingsTests.swift
+  s_4e55d4bece084b::t_d044baa9810d13 39-52
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_4e55d4bece084b::t_f30fb52f131c75 106,141-142,147,154-165
+  s_4e55d4bece084b::t_efcaee4e07681d 152
+  s_4e55d4bece084b::t_b4295cdf803a48 107,143-146,180-185
+apps/desktop/Sources/Vitals/Services/AppInventory.swift
+  s_4e55d4bece084b::t_64f94bd949c296 114,118-119,142,146-148,150
+apps/desktop/Sources/Vitals/Views/HelpView.swift
+  s_4e55d4bece084b::t_e2906a74866400 44
+apps/desktop/Sources/Vitals/Settings/AppSettings.swift
+  s_4e55d4bece084b::t_e1721039910062 246-251,359,420
+apps/desktop/Sources/Vitals/Services/CLIInventory.swift
+  s_4e55d4bece084b::t_01c0483ece0b8a 17-33
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_4e55d4bece084b::t_61dbf2a711e6ae 75,94-99
+  s_4e55d4bece084b::t_c2c37f7829b51a 146-150,179-181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "bd642735da0740f3202a2c062e10382c695f62b8",
+  "prompts": {},
+  "sessions": {
+    "s_4e55d4bece084b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa079-9ad9-7922-a73c-f17b20dd82e5",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
