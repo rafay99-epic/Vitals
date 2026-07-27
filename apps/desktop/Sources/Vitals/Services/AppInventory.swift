@@ -1,6 +1,36 @@
 import Foundation
 import AppKit
 
+/// Package managers that can prove ownership of a command-line installation.
+enum CLIManager: String, CaseIterable, Hashable, Sendable {
+    case homebrew = "Homebrew"
+    case npm = "npm"
+    case bun = "Bun"
+    case pnpm = "pnpm"
+    case yarn = "Yarn"
+    case cargo = "Cargo"
+    case gem = "RubyGems"
+    case pipx = "pipx"
+    case uv = "uv"
+    case go = "Go"
+
+    var symbol: String {
+        switch self {
+        case .homebrew: return "mug"
+        case .npm, .bun, .pnpm, .yarn: return "shippingbox"
+        case .cargo: return "gearshape.2"
+        case .gem: return "diamond"
+        case .pipx, .uv: return "terminal"
+        case .go: return "chevron.left.forwardslash.chevron.right"
+        }
+    }
+}
+
+enum InstalledAppKind: Hashable, Sendable {
+    case bundle
+    case cli(manager: CLIManager, packageName: String, installLocation: URL)
+}
+
 /// One application found on disk. Protected applications remain visible for
 /// storage accounting but cannot be selected for removal.
 struct InstalledApp: Identifiable, Hashable {
@@ -10,11 +40,40 @@ struct InstalledApp: Identifiable, Hashable {
     let version: String?
     var sizeBytes: UInt64?
     var isRunning = false
+    let kind: InstalledAppKind
     /// Non-nil when the app is visible but must never be selected or removed.
     let protectedReason: String?
     /// True when the bundle's parent directory isn't writable by this user,
     /// so moving it to the Trash would need elevated rights.
     let requiresAdmin: Bool
+
+    var isCLI: Bool {
+        if case .cli = kind { return true }
+        return false
+    }
+
+    var cliManager: CLIManager? {
+        guard case .cli(let manager, _, _) = kind else { return nil }
+        return manager
+    }
+
+    var cliPackageName: String? {
+        guard case .cli(_, let packageName, _) = kind else { return nil }
+        return packageName
+    }
+
+    var installLocation: URL? {
+        guard case .cli(_, _, let location) = kind else { return nil }
+        return location
+    }
+
+    var secondaryLabel: String {
+        if let bundleID { return bundleID }
+        if let manager = cliManager, let location = installLocation {
+            return "\(manager.rawValue) · \(location.path)"
+        }
+        return id.path
+    }
 }
 
 /// A counting gate over concurrent directory walks. Every sizing stream of one
@@ -52,10 +111,12 @@ actor SizingGate {
 actor AppInventory {
     /// Shared by every stream this inventory produces — see `SizingGate`.
     let gate = SizingGate(width: 6)
-    nonisolated static let searchDirectories: [URL] = [
+    nonisolated static let userSearchDirectories: [URL] = [
         URL(fileURLWithPath: "/Applications", isDirectory: true),
         URL(fileURLWithPath: "/Applications/Utilities", isDirectory: true),
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true),
+    ]
+    nonisolated static let systemSearchDirectories: [URL] = [
         URL(fileURLWithPath: "/System/Applications", isDirectory: true),
         URL(fileURLWithPath: "/System/Applications/Utilities", isDirectory: true),
     ]
@@ -78,12 +139,15 @@ actor AppInventory {
         protectionReason(bundleID: bundleID, url: url) != nil
     }
 
-    func scan() -> [InstalledApp] {
+    func scan(includeSystemApplications: Bool = false) -> [InstalledApp] {
         let fm = FileManager.default
         var seen = Set<URL>()
         var apps: [InstalledApp] = []
+        let directories = includeSystemApplications
+            ? Self.userSearchDirectories + Self.systemSearchDirectories
+            : Self.userSearchDirectories
 
-        for directory in Self.searchDirectories {
+        for directory in directories {
             guard let entries = try? fm.contentsOfDirectory(
                 at: directory,
                 includingPropertiesForKeys: [.isDirectoryKey],
@@ -107,6 +171,7 @@ actor AppInventory {
                     name: name,
                     bundleID: bundleID,
                     version: info?["CFBundleShortVersionString"] as? String,
+                    kind: .bundle,
                     protectedReason: protectedReason,
                     requiresAdmin: !parentWritable
                 ))

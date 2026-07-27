@@ -17,6 +17,7 @@ enum AppUninstaller {
         /// than claim a clean finish.
         var adminCancelled = false
         var caskUninstalled = 0
+        var cliUninstalled = 0
         var errorMessage: String?
         /// Bundles the user couldn't trash (root-owned / App-Management-blocked)
         /// — the caller retries these through the admin removal path.
