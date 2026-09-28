@@ -272,12 +272,12 @@ final class VitalsModel {
             }
             let snapshot = await self.sampler.sample(needs)
             guard !Task.isCancelled else { return }
-            self.apply(snapshot, sampledGPU: needs.gpu)
+            self.apply(snapshot, sampled: needs)
             self.assignIfChanged(&self.sensorsStalled, to: false)
         }
     }
 
-    private func apply(_ snapshot: SensorSampler.Snapshot, sampledGPU: Bool) {
+    private func apply(_ snapshot: SensorSampler.Snapshot, sampled: SensorSampler.Needs) {
         let classified = snapshot.sensors
         cpuSensors = classified.filter { $0.kind == .cpu }
         assignIfChanged(&gpuTemp, to: Self.average(of: classified, kind: .gpu))
@@ -303,13 +303,14 @@ final class VitalsModel {
         diskHealth = snapshot.diskHealth
         updateNetwork(snapshot.network)
         updateDiskIO(snapshot.diskIO)
-        // Skipped reads hold the last value for display. History below uses only
-        // this tick's fresh readings, so a skip is a gap, not a stale value.
-        if sampledGPU { gpu = snapshot.gpu }
-        if let power = snapshot.power { self.power = power }
+        // A read taken this tick replaces the value, nil included (a stalled or
+        // missing sensor); a skipped read holds the last one for display. History
+        // below logs only fresh readings, so a skip is a gap, not a stale value.
+        if sampled.gpu { gpu = snapshot.gpu }
+        if sampled.power { power = snapshot.power }
         assignIfChanged(&hasLoaded, to: true)
 
-        let freshGPU = sampledGPU ? snapshot.gpu : nil
+        let freshGPU = sampled.gpu ? snapshot.gpu : nil
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
             history.append(Sample(
                 id: Date(),

@@ -69,3 +69,12 @@ struct BuildNumberParseTests {
         #expect(Updater.buildNumber(in: nil) == 0)
     }
 }
+
+/// Tests (an unbundled process) must never resolve to a real data home: they'd
+/// otherwise write into the user's Stable history.
+struct DataHomeIsolationTests {
+    @Test func unbundledProcessesStayOutOfTheRealDataHome() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        #expect(!DataHome.directory.path.hasPrefix(home + "/.vitals"))
+    }
+}

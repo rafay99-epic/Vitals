@@ -31,6 +31,14 @@ final class SoCPowerSampler {
         guard let handle else { return nil }
         var out = VitalsSoCPower()
         guard vitals_socpower_sample(handle, &out) != 0 else { return nil }
-        return PowerSnapshot(cpuWatts: out.cpu_watts, gpuWatts: out.gpu_watts, aneWatts: out.ane_watts)
+        let snapshot = PowerSnapshot(cpuWatts: out.cpu_watts, gpuWatts: out.gpu_watts, aneWatts: out.ane_watts)
+        // A running SoC never spends exactly 0 J between samples. An all-zero delta
+        // means IOReport's energy counters have stalled (seen on macOS 27), so
+        // report no reading rather than a fabricated 0 W.
+        guard snapshot.total > 0 else {
+            Log.noticeOnce(.sensors, key: "socpower-stalled", "IOReport energy counters aren't advancing; power readings unavailable")
+            return nil
+        }
+        return snapshot
     }
 }

@@ -9,6 +9,12 @@ import Foundation
 ///     exports/   files you export by hand
 enum DataHome {
     static let directory: URL = {
+        // Only a packaged app owns real data. Unbundled processes (the test
+        // runner, `swift run`, `--probe`) would otherwise default to Stable's
+        // folder and write into the user's daily-driver history.
+        guard Bundle.main.bundleIdentifier != nil else {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("vitals-unbundled", isDirectory: true)
+        }
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(Channel.current.dataDirSuffix, isDirectory: true)
     }()
