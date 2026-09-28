@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vitals: performance, cleanup, feature cuts</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #000; color: #fff; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 26px; margin: 0 0 6px; font-weight: 600; }
+  h2 { font-size: 18px; margin: 44px 0 10px; font-weight: 600; border-bottom: 1px solid #222; padding-bottom: 6px; }
+  h3 { font-size: 14px; margin: 22px 0 6px; font-weight: 600; }
+  p { margin: 6px 0; }
+  code { font: 12.5px ui-monospace, "SF Mono", Menlo, monospace; color: #fff; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #1c1c1c; }
+  th { font-weight: 600; color: #fff; border-bottom: 1px solid #333; }
+  td.n, th.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .r { color: #ff6b6b; } .y { color: #ffd166; } .g { color: #6bdc8b; } .b { color: #7fb2ff; }
+  .kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 18px 0; border-top: 1px solid #222; border-bottom: 1px solid #222; }
+  .kpi div { padding: 12px 10px; border-right: 1px solid #222; }
+  .kpi div:last-child { border-right: 0; }
+  .kpi b { display: block; font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  ul, ol { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  label { cursor: pointer; }
+  input[type=checkbox] { accent-color: #fff; }
+  #picks { width: 100%; min-height: 90px; background: #000; color: #fff; border: 1px solid #333; font: 12.5px ui-monospace, Menlo, monospace; padding: 8px; }
+  button { background: #fff; color: #000; border: 0; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+  pre { background: #0b0b0b; border: 1px solid #1c1c1c; padding: 10px; overflow-x: auto; font: 12.5px ui-monospace, Menlo, monospace; }
+  @media (max-width: 700px) { .kpi { grid-template-columns: repeat(2, 1fr); } .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Vitals: make it fast, cut the dead weight</h1>
+<p>Plan only. No code changed yet. Measured on your Stable build (pid 13568, 3 days uptime, window closed, menu bar only), 28 Sep 2026.</p>
+
+<div class="kpi">
+  <div><b class="r">~79%</b>CPU with no window open</div>
+  <div><b class="y">83 MB</b>footprint, 50 MB of it heap</div>
+  <div><b>26</b>@Published fields, 44 observing views</div>
+  <div><b class="g">-4,000+</b>lines removable before feature cuts</div>
+</div>
+
+<h2>1. Root cause</h2>
+<p>A 3 second <code>sample</code> of the live process shows <b>1,065 of 1,669 main-thread samples</b> inside <code>-[NSStatusItem _updateReplicants]</code>. The menu bar icon animation (<code>menuBarAnimated = 1</code> in your prefs) runs three <code>repeatForever</code> animations inside a status item. macOS re-snapshots status items on the CPU every frame, so the "runs on the compositor, no per-frame CPU" claim in <code>MenuBarController.swift:5-12</code> and <code>MenuBarHost.swift:4-8</code> is wrong. The "~11%" figure in the comment is also wrong; it's roughly 60 to 80% here. Sensor syscalls are about 2% of CPU time.</p>
+<p>Second-order: <code>.task(id: spinKey)</code> restarts the fan spin every time rpm moves 1%, and a <code>linear(duration: 0)</code> reset doesn't cancel the old <code>repeatForever</code>. Animations likely stack over uptime, which fits the heap growth. Unconfirmed until we <code>heap</code> the Dev build twice an hour apart.</p>
+<p><b>60-second check you can do now:</b> Stable, Settings, Menu bar, turn off "Animate icons". Then <code>top -pid 13568 -stats cpu</code>. It should drop to low single digits.</p>
+
+<h2>2. Performance fixes (PR 1)</h2>
+<table>
+<tr><th>#</th><th>Fix</th><th>Where</th><th>Impact</th></tr>
+<tr><td>1</td><td>Delete the menu bar animation outright (spin + breathe), the <code>menuBarAnimated</code> setting, <code>menuBarAnimationEnabled</code>, and the <code>PowerThrottle.suppressAnimation</code> path. Numbers still update every tick.</td><td><code>MenuBarHost.swift:105-146</code>, <code>AppSettings.swift:219-229</code></td><td class="r">high</td></tr>
+<tr><td>2</td><td>Same restart-stacking pattern in widget icon tiles: delete the spin or key the view with <code>.id(spinKey)</code>. Also flip <code>animateWidgets</code> default to off.</td><td><code>WidgetHost.swift:77, 118-127</code></td><td class="y">med</td></tr>
+<tr><td>3</td><td>Migrate <code>VitalsModel</code> and <code>AppSettings</code> from <code>ObservableObject</code> to <code>@Observable</code> (macOS 15 target allows it). Today ~20 <code>@Published</code> writes per tick re-render every observing view, including charts whose comments assume they don't.</td><td><code>VitalsModel.swift</code>, <code>AppSettings.swift</code>, 44 view sites</td><td class="r">high</td></tr>
+<tr><td>4</td><td>Stop observing models from the <code>App</code> struct. 8 <code>@StateObject</code>s there re-evaluate all Window scenes and <code>.commands</code> on every model change and every log line. Hold services in a plain holder.</td><td><code>VitalsApp.swift:8-15, 62</code>; <code>ContentView.swift:62</code></td><td class="y">med-high</td></tr>
+<tr><td>5</td><td>Wi-Fi details (7 CoreWLAN calls, a fresh <code>SCDynamicStore</code> session) only when a network view is visible, same gate as <code>needsGPU</code>. Keep byte counters every tick. Reuse one store.</td><td><code>NetworkStats.swift:146-147, 233-265</code></td><td class="y">med</td></tr>
+<tr><td>6</td><td>Treat occluded, minimized and other-Space windows as not visible (<code>NSWindow.occlusionState</code>) so charts and heavy sampling pause.</td><td><code>VitalsModel.swift:125, 143</code>; <code>ContentView.swift:92-99</code></td><td class="y">med</td></tr>
+<tr><td>7</td><td>Drop "processes" from <code>needsTopProcesses</code>. <code>ProcessesView</code> never reads <code>topProcesses</code> and <code>ProcessesModel</code> already sweeps every 2 s, so that tab pays twice.</td><td><code>VitalsModel.swift:158</code></td><td class="y">med</td></tr>
+<tr><td>8</td><td>Lazy <code>LogStore</code>: create when the console opens, tail-read the file. Today it reads up to 10 MB of log text at launch and holds ~2.2k entries forever. (Moot if the Log Console is cut, see section 3.)</td><td><code>LogStore.swift:23-36</code>, <code>LogFile.swift:104</code></td><td class="y">low-med</td></tr>
+<tr><td>9</td><td>Don't keep a Metal device alive to read two constants. Read <code>name</code> + working set once, drop the device.</td><td><code>GPUSensor.swift:54</code></td><td class="y">med</td></tr>
+<tr><td>10</td><td><code>autoreleasepool {}</code> around the sampler body (CoreWLAN returns autoreleased objects on the actor thread).</td><td><code>SensorSampler.swift:74-106</code></td><td class="y">med?</td></tr>
+<tr><td>11</td><td><code>system_profiler</code> spawn every 10 min for a value that changes over weeks. Move to every 12 h + on wake.</td><td><code>SensorSampler.swift:44</code></td><td class="b">low</td></tr>
+<tr><td>12</td><td>Cache HID sensor list + names, battery service, GPU service. Read only needed keys per tick instead of copying whole property dicts.</td><td><code>HIDSensors.swift:33-51</code>, <code>Battery.swift:91-98</code>, <code>GPUSensor.swift:88-99</code></td><td class="b">low</td></tr>
+<tr><td>13</td><td>Sensor classification (<code>lowercased</code>, <code>contains</code>, sort) moves off main into the sampler, cached by name.</td><td><code>VitalsModel.swift:384-387, 683-720</code></td><td class="b">low-med</td></tr>
+<tr><td>14</td><td>Small ones: make <code>history</code> private + unpublished; kill the per-tick 5 s watchdog <code>Task</code>; check the DB write throttle before queueing; prune history daily, not only at open; static <code>DateComponentsFormatter</code>.</td><td><code>VitalsModel.swift:43, 319, 371</code>; <code>HistoryDatabase.swift:228, 455</code>; <code>SystemStats.swift:246</code></td><td class="b">low</td></tr>
+</table>
+<p><b>Targets, measured on the Dev build with the same prefs:</b> menu-bar-only CPU under 2%, footprint flat across 2 hours (two <code>footprint</code> snapshots), no Malloc Small growth in <code>heap</code>. Before/after numbers go in the PR.</p>
+
+<h2>3. Feature cuts: you pick</h2>
+<p>Tick what you want gone. The box at the bottom builds a list you can paste back to me. Dead code is pre-ticked because nothing calls it.</p>
+
+<h3>Dead code (no user-visible change)</h3>
+<table id="dead">
+<tr><th></th><th>What</th><th>Why</th><th class="n">Lines</th></tr>
+<tr><td><input type="checkbox" checked data-name="HealthView (keep HealthDiagnosticsCard)"></td><td><code>HealthView</code></td><td>Zero callers since tabs merged. Copies health logic from <code>DashboardHealthHero</code>.</td><td class="n">~170</td></tr>
+<tr><td><input type="checkbox" checked data-name="SegmentControl"></td><td><code>SegmentControl</code></td><td>Zero references.</td><td class="n">63</td></tr>
+<tr><td><input type="checkbox" checked data-name="StatCard + DiskContent body"></td><td><code>StatCard</code>, <code>DiskContent</code> view body</td><td>Zero references; keep <code>DiskContent.symbol(for:)</code>.</td><td class="n">~87</td></tr>
+<tr><td><input type="checkbox" checked data-name="Settings Tabs card (TabDisplayMode, TabSize)"></td><td>Settings, Interface, "Tabs" card</td><td>Saved and shown, read by nothing. Caption describes the old tab bar.</td><td class="n">~85</td></tr>
+<tr><td><input type="checkbox" checked data-name="--fan-set / --fan-auto / --check-update CLI modes"></td><td><code>--fan-set</code>, <code>--fan-auto</code>, <code>--check-update</code></td><td>Never invoked. Two are dead root-level SMC write paths; less safety surface.</td><td class="n">~62</td></tr>
+<tr><td><input type="checkbox" checked data-name="Updater GitHub token + RedirectSanitizer"></td><td>Updater <code>gh auth token</code> plumbing + redirect sanitizer</td><td>Built for a private repo. The repo is public now.</td><td class="n">~40</td></tr>
+<tr><td><input type="checkbox" checked data-name="Intel guard (isAppleSilicon)"></td><td>Intel "unsupported" dialog</td><td>Binary is arm64-only; macOS already refuses to launch it on Intel.</td><td class="n">~35</td></tr>
+<tr><td><input type="checkbox" checked data-name="Unused Log/Channel/LeftoverScanner members"></td><td><code>Log.info</code>, <code>debugOnce</code>, <code>Channel.bundleSuffix</code>, <code>ordersByBuildNumber</code>, <code>candidatePaths</code> alias</td><td>Zero or test-only callers.</td><td class="n">~31</td></tr>
+</table>
+
+<h3>Recommended cuts (they cost you something and give you little)</h3>
+<table id="rec">
+<tr><th></th><th>Feature</th><th>Why</th><th class="hide-sm">Background cost</th><th class="n">Lines</th></tr>
+<tr><td><input type="checkbox" checked data-name="Menu bar icon animation"></td><td>Menu bar icon animation</td><td>The #1 CPU cost in the app. Eye candy.</td><td class="hide-sm r">~60-80% CPU</td><td class="n">~60</td></tr>
+<tr><td><input type="checkbox" data-name="Background app-energy logging"></td><td>Background app-energy logging</td><td>Full process sweep every 60 s forever. Only output is a CSV export no view reads.</td><td class="hide-sm y">every 60 s</td><td class="n">~190</td></tr>
+<tr><td><input type="checkbox" data-name="Log Console window + LogStore"></td><td>Log Console window</td><td>Console.app or "Reveal vitals.log" covers it. Holds logs in memory from launch.</td><td class="hide-sm y">memory</td><td class="n">~340</td></tr>
+<tr><td><input type="checkbox" data-name="Help window"></td><td>Help window</td><td>Stale: describes the old "System" segment and "Settings, General".</td><td class="hide-sm">none</td><td class="n">~150</td></tr>
+<tr><td><input type="checkbox" data-name="Cleanup Duplicates"></td><td>Cleanup, Duplicates</td><td>Heavy I/O, not a hardware monitor's job.</td><td class="hide-sm">on scan</td><td class="n">982</td></tr>
+<tr><td><input type="checkbox" data-name="Applications CLI inventory"></td><td>Applications, CLI tools</td><td>Spawns brew/npm/bun per scan. Terminal is faster for you. Just merged in #144, so your call.</td><td class="hide-sm">on scan</td><td class="n">~540</td></tr>
+<tr><td><input type="checkbox" data-name="Deep clean aiHistory category"></td><td>Deep clean "AI chat history"</td><td>Deletes AI transcripts older than 30 days. You live in these tools. Keep the AI cache part.</td><td class="hide-sm">none</td><td class="n">~80</td></tr>
+</table>
+
+<h3>Your call (useful to someone, maybe not you)</h3>
+<table id="maybe">
+<tr><th></th><th>Feature</th><th>Overlaps with</th><th class="hide-sm">Background cost</th><th class="n">Lines</th></tr>
+<tr><td><input type="checkbox" data-name="Desktop widgets"></td><td>Desktop widgets (10 kinds)</td><td>Menu bar readout + panel. Largest single chunk.</td><td class="hide-sm">re-render every tick when shown; GPU widget forces GPU reads</td><td class="n">~2,080</td></tr>
+<tr><td><input type="checkbox" data-name="Storage Analyze (keep Storage Health)"></td><td>Storage, Analyze</td><td>macOS Storage, DaisyDisk, Cleanup Files</td><td class="hide-sm">on scan</td><td class="n">~2,020</td></tr>
+<tr><td><input type="checkbox" data-name="Login Items + startup impact"></td><td>Login Items</td><td>System Settings, Login Items</td><td class="hide-sm">when opened</td><td class="n">884</td></tr>
+<tr><td><input type="checkbox" data-name="Cleanup Files (large and old)"></td><td>Cleanup, Files</td><td>Storage Analyze, macOS Storage</td><td class="hide-sm">on scan</td><td class="n">824</td></tr>
+<tr><td><input type="checkbox" data-name="Custom alert rules (keep built-in overheat/thermal)"></td><td>Custom alert rules</td><td>Built-in overheat + thermal alerts</td><td class="hide-sm">a process-CPU rule forces a process sweep every tick</td><td class="n">~650</td></tr>
+<tr><td><input type="checkbox" data-name="Battery per-app energy (keep sleep blockers)"></td><td>Battery, per-app energy</td><td>Activity Monitor, Energy</td><td class="hide-sm">2.5 s timer while visible</td><td class="n">~410</td></tr>
+<tr><td><input type="checkbox" data-name="Processes section"></td><td>Processes section</td><td>Activity Monitor; Overview top-5</td><td class="hide-sm">2 s timer while visible</td><td class="n">~540</td></tr>
+<tr><td><input type="checkbox" data-name="Liquid Glass + Frosting + GPU toggle (keep Theme)"></td><td>Liquid Glass, Frosting, GPU acceleration toggles</td><td>Three settings for one look</td><td class="hide-sm">GPU backdrop when on</td><td class="n">~120</td></tr>
+<tr><td><input type="checkbox" data-name="Settings backup (config.json mirror)"></td><td>Settings backup</td><td>Guards a rare prefs wipe</td><td class="hide-sm">write on change</td><td class="n">~257</td></tr>
+<tr><td><input type="checkbox" data-name="Diagnostics copy-snapshot (keep Report a problem)"></td><td>Diagnostics "copy snapshot"</td><td>Report a problem</td><td class="hide-sm">none</td><td class="n">~125</td></tr>
+<tr><td><input type="checkbox" data-name="Fan control + FanDaemon"></td><td>Fan control</td><td>Nothing. Cut only if you never use it.</td><td class="hide-sm">root daemon every 3 s, survives quitting Vitals</td><td class="n">~490</td></tr>
+</table>
+
+<h3>Keeping</h3>
+<p>Overview, CPU, GPU, Memory, Battery (core), Temps &amp; Fans, Network (with Wi-Fi gated), History + SQLite, Storage Health (SMART), Cleanup Quick/Deep, Developer junk, Applications uninstall + leftovers, menu bar item + panel, updater, crash reporter, Report a problem.</p>
+
+<h3>Your picks</h3>
+<p><button type="button" id="copy">Copy picks</button></p>
+<textarea id="picks" readonly></textarea>
+
+<h2>4. Over-engineering cleanup (PR 3)</h2>
+<table>
+<tr><th>Tag</th><th>What</th><th>Replacement</th><th class="n">Lines</th></tr>
+<tr><td>shrink</td><td>"Read both logs, split, decode JSONL" copied 4x with 3 <code>JSONDecoder</code> statics (<code>LogFile</code>, <code>LogExport</code>, <code>CrashReporter</code>)</td><td>One <code>LogFile.readAll()</code></td><td class="n">-30</td></tr>
+<tr><td>shrink</td><td>PID listing, <code>proc_pid_rusage</code> CPU delta, <code>mach_timebase_info</code> copied across <code>ProcessSampler</code>, <code>ProcessInventory</code>, <code>StartupImpact</code></td><td>Derive top-N from <code>ProcessInventory</code>, one timebase</td><td class="n">-40</td></tr>
+<tr><td>shrink</td><td>Overheat alert re-implements sustain + cooldown from <code>AlertEngine.step</code></td><td>A built-in <code>AlertRule</code></td><td class="n">-12</td></tr>
+<tr><td>shrink</td><td>Identical <code>downsample</code> in <code>HistoryReader</code> and <code>VitalsModel</code></td><td>One <code>Array.thinned(to:)</code></td><td class="n">-6</td></tr>
+<tr><td>shrink</td><td>Three brew/tool locators</td><td>One</td><td class="n">-10</td></tr>
+<tr><td>stdlib</td><td>Hand-rolled <code>isVersion</code></td><td><code>compare(_:options: .numeric)</code></td><td class="n">-10</td></tr>
+<tr><td>stdlib</td><td>Six <code>DateFormatter</code> / <code>ISO8601DateFormatter</code> statics, two duplicates</td><td><code>Date.FormatStyle</code>, <code>.iso8601</code></td><td class="n">-20</td></tr>
+<tr><td>yagni</td><td><code>AlertLog</code>: two pass-throughs to <code>HistoryDatabase</code></td><td>Call the DB</td><td class="n">-15</td></tr>
+<tr><td>yagni</td><td>Seven one-time migrations (CSV to SQLite import, <code>DataHome</code> moves, widget <code>legacyFrame</code>, <code>onTop</code>, <code>cleanupDepth</code>, <code>loggingDefaultedOnV2</code>)</td><td>Pick a cutoff version, delete together</td><td class="n">-200</td></tr>
+<tr><td>yagni</td><td>~30 settings each declared in 3 places in <code>AppSettings</code></td><td>Falls out of the <code>@Observable</code> migration with a small stored-default helper</td><td class="n">-60</td></tr>
+</table>
+
+<h2>5. Comments pass (PR 4)</h2>
+<p>4,041 comment lines vs 20,357 code lines (16.6%). 39 doc blocks run 8+ lines. The same rationale repeats 3 to 4 times (<code>reduceOnBattery</code>, <code>menuBarAnimated</code>, <code>assignIfChanged</code>). ~80 lines narrate history ("the old X", "used to", issue numbers). "Honest" appears in 72 comment lines. Some are wrong: <code>DataHome</code> still describes CSV history, three reference a nonexistent <code>CollapsibleCard</code>, the menu bar ones claim zero CPU.</p>
+<p><b>Keep a comment only if it is:</b></p>
+<ol>
+<li>a safety or privilege invariant (what tests lock, why a path is allowed),</li>
+<li>a platform quirk or private-API contract (CF retain rules, IOKit/SMC oddities, AppKit launch order),</li>
+<li>a non-obvious perf constraint, said once, where the code is,</li>
+<li>a one-line doc where the name isn't enough.</li>
+</ol>
+<p>Delete history narration (git has it), philosophy restatements (CLAUDE.md has it), duplicates, and code restatement. Estimate: <b>~1,100 comment lines</b> go. Worst by ratio: <code>PowerState</code>, <code>CounterRate</code>, <code>Navigator</code>, <code>StartupImpact</code>, <code>DataHome</code>. Worst by volume: <code>AppSettings</code> (175), <code>VitalsModel</code> (174), <code>HistoryDatabase</code> (133).</p>
+
+<h2>6. Bugs found along the way</h2>
+<table>
+<tr><th>Sev</th><th>Bug</th><th>Where</th></tr>
+<tr><td class="r">high</td><td>History DB and charts record the last GPU utilization as live on ticks where the GPU wasn't sampled. Breaks the honesty rule; window-closed history is fabricated.</td><td><code>VitalsModel.swift:442, 472-473</code></td></tr>
+<tr><td class="y">med</td><td><code>brew uninstall --zap</code> output goes into a <code>Pipe()</code> nobody reads. Large output can fill it and hang the uninstall.</td><td><code>AppUninstaller.swift:116</code></td></tr>
+<tr><td class="y">med</td><td>Menu bar animation: switching <code>.animation</code> off on battery likely doesn't stop the running <code>repeatForever</code>. Moot once deleted.</td><td><code>MenuBarHost.swift:131-134</code></td></tr>
+<tr><td class="b">low</td><td><code>sensorsStalled</code> is published but no view shows it, so stale readings look live.</td><td><code>VitalsModel.swift:93</code></td></tr>
+</table>
+
+<h2>7. Execution</h2>
+<ol>
+<li><b>PR 1, perf</b> (<code>perf/menubar-and-observation</code> from <code>nightly</code>): section 2 + GPU honesty bug. Profile the Dev build before and after with <code>top</code>, <code>footprint</code>, <code>sample</code>, and <code>heap</code>.</li>
+<li><b>PR 2, cuts</b> (<code>chore/remove-unused-features</code>): dead code + whatever you tick in section 3, with their settings keys, sidebar entries, and tests.</li>
+<li><b>PR 3, simplify</b> (<code>refactor/ponytail</code>): section 4.</li>
+<li><b>PR 4, comments</b> (<code>chore/comment-pass</code>): section 5, last so it doesn't conflict with the others.</li>
+</ol>
+<p>Each PR: <code>swift build</code>, <code>swift test</code> (safety tests stay green), <code>./dev.sh</code>, visual check on "Vitals Dev". Stable is not touched. Nothing is committed until you say so. PRs go to <code>nightly</code>.</p>
+<p><b>Rough total:</b> ~950 lines from dead code + over-engineering, ~1,100 comment lines, plus whatever you cut in section 3 (up to ~9,000 more if you take everything).</p>
+
+</main>
+<script>
+  const boxes = [...document.querySelectorAll('input[type=checkbox]')];
+  const out = document.getElementById('picks');
+  const render = () => {
+    const picked = boxes.filter(b => b.checked).map(b => '- ' + b.dataset.name);
+    out.value = picked.length ? 'Cut these:\n' + picked.join('\n') : '';
+  };
+  boxes.forEach(b => b.addEventListener('change', render));
+  document.getElementById('copy').addEventListener('click', () => navigator.clipboard.writeText(out.value));
+  render();
+</script>
+</body>
+</html>
