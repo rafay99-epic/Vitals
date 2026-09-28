@@ -2,9 +2,8 @@ import Testing
 import Foundation
 @testable import Vitals
 
-/// Locks the power-aware sampling throttle: the cadence and the menu-bar
-/// animation gate must follow the power source exactly, and a corrupt 0 base
-/// can never divide-by-zero. Pure logic + the `AppSettings` wiring around it.
+/// Locks the power-aware sampling throttle: the cadence follows the power source
+/// exactly, and a corrupt 0 base can never divide-by-zero.
 @MainActor
 struct PowerThrottleTests {
     // MARK: Pure throttle logic
@@ -44,16 +43,6 @@ struct PowerThrottleTests {
         #expect(PowerThrottle.interval(base: 0, isOnBattery: true, isLowPowerMode: false, reduceOnBattery: true) == 0.5)
     }
 
-    @Test func animationSuppressesOnBatteryAndLowPower() {
-        #expect(PowerThrottle.suppressAnimation(isOnBattery: false, isLowPowerMode: false, reduceOnBattery: true) == false)
-        #expect(PowerThrottle.suppressAnimation(isOnBattery: true, isLowPowerMode: false, reduceOnBattery: true) == true)
-        // Opting out of Reduce sampling keeps the animation alive on battery.
-        #expect(PowerThrottle.suppressAnimation(isOnBattery: true, isLowPowerMode: false, reduceOnBattery: false) == false)
-        // Low Power Mode suppresses regardless of the toggle or power source.
-        #expect(PowerThrottle.suppressAnimation(isOnBattery: false, isLowPowerMode: true, reduceOnBattery: false) == true)
-        #expect(PowerThrottle.suppressAnimation(isOnBattery: true, isLowPowerMode: true, reduceOnBattery: false) == true)
-    }
-
     // MARK: AppSettings wiring
 
     // A unique suite per test so parallel tests never share a UserDefaults store.
@@ -61,7 +50,7 @@ struct PowerThrottleTests {
         let name = "vitals.test.power.\(id)"
         let suite = UserDefaults(suiteName: name)!
         suite.removePersistentDomain(forName: name)
-        return AppSettings(defaults: suite, configURL: nil)
+        return AppSettings(defaults: suite)
     }
 
     @Test func reduceOnBatteryShipsOnByDefault() {
@@ -92,55 +81,5 @@ struct PowerThrottleTests {
         settings._setPowerStateForTesting(isOnBattery: true, isLowPowerMode: false)
         settings.reduceOnBattery = false
         #expect(settings.effectiveRefreshInterval == 2)
-    }
-
-    @Test func menuBarAnimationPausesOnBatteryAndLowPower() {
-        let settings = freshSettings()
-        settings.menuBarAnimated = true
-        settings.gpuAcceleration = true
-        settings._setPowerStateForTesting(isOnBattery: false, isLowPowerMode: false)
-        #expect(settings.menuBarAnimationEnabled == true)
-        settings._setPowerStateForTesting(isOnBattery: true, isLowPowerMode: false)
-        #expect(settings.menuBarAnimationEnabled == false)
-        settings._setPowerStateForTesting(isOnBattery: false, isLowPowerMode: true)
-        #expect(settings.menuBarAnimationEnabled == false)
-        // Opting out of Reduce sampling lets the animation run on battery again.
-        settings.reduceOnBattery = false
-        settings._setPowerStateForTesting(isOnBattery: true, isLowPowerMode: false)
-        #expect(settings.menuBarAnimationEnabled == true)
-    }
-
-    @Test func menuBarAnimationStillGatedByUserOptInAndGpu() {
-        let settings = freshSettings()
-        settings._setPowerStateForTesting(isOnBattery: false, isLowPowerMode: false)
-        settings.menuBarAnimated = false
-        settings.gpuAcceleration = true
-        #expect(settings.menuBarAnimationEnabled == false)
-        settings.menuBarAnimated = true
-        settings.gpuAcceleration = false
-        #expect(settings.menuBarAnimationEnabled == false)
-    }
-
-    @Test func reduceOnBatteryPersistsAcrossDefaultsWipe() {
-        // reduceOnBattery is in registeredDefaults, so ConfigStore mirrors it.
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vitals-power-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        // UUID-based suite names so parallel tests never collide on the same
-        // UserDefaults store — the cause of a CI-only flake (see
-        // GPUAccelerationSettingsTests for the same pattern).
-        let firstSuite = UserDefaults(suiteName: "vitals.test.power.durability.\(UUID().uuidString)")!
-        let first = AppSettings(defaults: firstSuite, configURL: url)
-        first.reduceOnBattery = false  // opt out
-        // flushConfig drains the instance's serial write queue, so the opt-out
-        // lands *after* the init-time save — closing the race where that older
-        // async write clobbered it back to the default (the CI-only flake).
-        first.flushConfig()
-
-        // An update wipes UserDefaults — a fresh suite — but the config survives.
-        let secondSuite = UserDefaults(suiteName: "vitals.test.power.durability.\(UUID().uuidString)")!
-        let second = AppSettings(defaults: secondSuite, configURL: url)
-        #expect(second.reduceOnBattery == false)
     }
 }

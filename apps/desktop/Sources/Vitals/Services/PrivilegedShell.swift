@@ -1,10 +1,9 @@
 import Foundation
 
-/// Runs a shell script with administrator privileges through the standard
-/// macOS authorization dialog (`do shell script … with administrator
-/// privileges`). One native password/Touch ID prompt, one-shot — no persistent
-/// daemon. This is the single place the app escalates; both the fan helper
-/// install and the deep-clean system pass go through it.
+/// Runs a shell script as root through the standard macOS authorization dialog
+/// (`do shell script … with administrator privileges`), one-shot, no daemon.
+/// The single place the app escalates: deep clean, the cleanup retry, and
+/// system-domain uninstall.
 enum PrivilegedShell {
     struct AdminError: Error {
         let message: String
@@ -12,16 +11,15 @@ enum PrivilegedShell {
         let cancelled: Bool
     }
 
-    /// Stages `shellScript` to a temp file and runs it as root. The script
-    /// itself must be self-contained and safely constructed by the caller —
-    /// callers build it from fixed constants, never from untrusted input.
+    /// Stages `shellScript` to a temp file and runs it as root. Callers must build
+    /// it from fixed constants or re-validated paths, never untrusted input.
     nonisolated static func runAsAdmin(_ shellScript: String, prompt: String) async throws {
         let scriptPath = NSTemporaryDirectory() + "vitals-priv-\(UUID().uuidString).sh"
         try shellScript.write(toFile: scriptPath, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(atPath: scriptPath) }
 
-        // The AppleScript string stays a single, safely-escaped command: it
-        // only references the temp script path, which we control.
+        // The command only references the temp script path, which we control.
+        // `prompt` is interpolated unescaped, so it must not contain quotes.
         let appleScript = "do shell script \"/bin/sh '\(scriptPath)'\" with administrator privileges with prompt \"\(prompt)\""
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -30,7 +28,7 @@ enum PrivilegedShell {
                 process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
                 process.arguments = ["-e", appleScript]
                 let stderr = Pipe()
-                process.standardOutput = Pipe()
+                process.standardOutput = FileHandle.nullDevice
                 process.standardError = stderr
                 do {
                     try process.run()

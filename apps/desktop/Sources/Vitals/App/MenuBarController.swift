@@ -1,65 +1,41 @@
 import AppKit
 import SwiftUI
-import Combine
 
-/// Owns the menu-bar status item and its dropdown, replacing SwiftUI's
-/// `MenuBarExtra`. The reason for going manual: MenuBarExtra can only show a
-/// rasterized image for a multi-metric label, so animation means re-rendering
-/// frames on the CPU — which can't do a cheap 120 Hz. A custom status item hosts
-/// the label as a **live** view (`MenuBarLabelView`), so its animation runs on
-/// the Core Animation compositor at the display's refresh rate (ProMotion
-/// included) with no per-frame CPU. The dropdown is a transient `NSPopover`
-/// hosting the same `MenuBarPanel`.
+/// Owns the status item and its `MenuBarPanel` popover. Keep the label static:
+/// macOS re-snapshots a status item on the CPU for every frame it changes, so
+/// any repeating animation burns CPU even with every window closed.
 @MainActor
-final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
+final class MenuBarController: NSObject, NSPopoverDelegate {
     private let model: VitalsModel
     private let settings: AppSettings
-    private let fanControl: FanController
     private let navigator: Navigator
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
-    private var cancellables: Set<AnyCancellable> = []
+    private var launchObserver: NSObjectProtocol?
 
-    init(model: VitalsModel, settings: AppSettings, fanControl: FanController, navigator: Navigator) {
+    init(model: VitalsModel, settings: AppSettings, navigator: Navigator) {
         self.model = model
         self.settings = settings
-        self.fanControl = fanControl
         self.navigator = navigator
         super.init()
 
-        // Show/hide with the preference — changes only. `dropFirst` matters:
-        // @Published replays the current value synchronously at subscribe, so
-        // without it the first install would run right here, mid `App.init`,
-        // and defeat the launch gate below.
-        settings.$showMenuBar
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] show in self?.setVisible(show) }
-            .store(in: &cancellables)
-        // The first install waits until the app has FINISHED launching.
-        // Creating an NSStatusItem mid `App.init` — while NSApplicationMain is
-        // still registering with the window server — produces a zero-height
-        // NSStatusBarWindow (observed: frame (0, 0, 16, 0)) that AppKit must
-        // fix up later. This deferral is what the old `DispatchQueue.main
-        // .async` was *meant* to do, but the `$showMenuBar` subscription above
-        // replayed the current value at subscribe time and installed anyway
-        // (hence `dropFirst`), and main.async's first runloop turn is still
-        // inside the launch sequence. Note: this is launch hygiene, not a cure
-        // for macOS 26 parking the item off-screen (window screen == nil) on
-        // a lone notched display — that reproduces even with a fully-launched
-        // install, hits the shipped Stable build identically, and resolves on
-        // the next display-configuration change.
+        observeChanges(of: { settings.showMenuBar }) { [weak self] in self?.setVisible($0) }
+        // Install only after launch finishes: an NSStatusItem created while
+        // NSApplicationMain is still registering gets a zero-height window.
         if NSApp?.isRunning == true {
             setVisible(settings.showMenuBar)
         } else {
-            NotificationCenter.default.publisher(for: NSApplication.didFinishLaunchingNotification)
-                .prefix(1)
-                .sink { [weak self] _ in
+            launchObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didFinishLaunchingNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
                     guard let self else { return }
                     self.setVisible(self.settings.showMenuBar)
+                    self.launchObserver.map(NotificationCenter.default.removeObserver)
+                    self.launchObserver = nil
                 }
-                .store(in: &cancellables)
+            }
         }
     }
 
@@ -78,16 +54,12 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         button.action = #selector(togglePopover)
 
         let label = MenuBarLabelView()
-            .environmentObject(model)
-            .environmentObject(settings)
+            .environment(model)
+            .environment(settings)
 
         let host = MenuBarHostingView(rootView: AnyView(label))
-        // Report a real intrinsic size so `intrinsicContentSize` reflects the
-        // label's ideal width — the *unconstrained* footprint, independent of the
-        // button's current width. That independence is the whole point: the old
-        // GeometryReader measured a width the button width already clamped, so a
-        // value that grew a digit ("4%" → "47%") could never widen the item back
-        // and the row truncated to "4…" permanently (issues #45, #50).
+        // The label's unconstrained ideal width, independent of the button's
+        // current width, so a value that gains a digit can widen the item.
         host.sizingOptions = [.intrinsicContentSize]
         host.translatesAutoresizingMaskIntoConstraints = false
         host.onIntrinsicSizeChange = { [weak self, weak item, weak host] in
@@ -105,16 +77,11 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         resize(item: item, toFit: host)
     }
 
-    /// Slack (pt) added on top of the label's ideal width. Sub-pixel rounding on
-    /// fractional-scaled displays ("More Space", external monitors) can otherwise
-    /// shave the trailing glyph by a pixel and trip a truncation ellipsis; a
-    /// couple of points of headroom makes the readout scale-independent.
+    /// Headroom so sub-pixel rounding on fractional-scaled displays can't shave
+    /// the trailing glyph and trip a truncation ellipsis.
     private static let widthSlack: CGFloat = 2
 
-    /// Size the status item to the label's ideal width, read off the hosting
-    /// view's `intrinsicContentSize`. Deferred to the next runloop so it reads the
-    /// post-update layout and never resizes the button mid-layout pass; guarded so
-    /// an unchanged width doesn't churn the status bar.
+    /// Deferred to the next runloop so it never resizes the button mid-layout.
     private func resize(item: NSStatusItem, toFit host: NSView) {
         DispatchQueue.main.async {
             let ideal = host.intrinsicContentSize.width
@@ -138,11 +105,9 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
             return
         }
         let panel = MenuBarPanel()
-            .environmentObject(model)
-            .environmentObject(settings)
-            .environmentObject(fanControl)
-            .environmentObject(navigator)
-            .environment(\.animationsEnabled, settings.animationsEnabled)
+            .environment(model)
+            .environment(settings)
+            .environment(navigator)
 
         let popover = NSPopover()
         popover.behavior = .transient // dismiss on click outside / Esc
@@ -150,22 +115,20 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         popover.contentViewController = NSHostingController(rootView: panel)
         self.popover = popover
         button.highlight(true)
+        model.setMenuBarPanelVisible(true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
     func popoverDidClose(_ notification: Notification) {
+        model.setMenuBarPanelVisible(false)
         statusItem?.button?.highlight(false)
         popover = nil
     }
 }
 
-/// The status item's hosted label. Returns nil from `hitTest` so clicks fall
-/// through to the status-item button (the label is display-only) and toggle the
-/// dropdown.
+/// Returns nil from `hitTest` so clicks fall through to the status-item button.
 final class MenuBarHostingView: NSHostingView<AnyView> {
-    /// Fires whenever the live label's ideal size changes (a value gains or loses
-    /// a digit, or the chosen metrics change) so the controller can re-fit the
-    /// status item to the new intrinsic width.
+    /// Fires when the label's ideal size changes so the item can re-fit.
     var onIntrinsicSizeChange: (() -> Void)?
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -179,9 +142,7 @@ final class MenuBarHostingView: NSHostingView<AnyView> {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
 }
 
-/// Keeps the app alive when its windows are all closed — the menu-bar item is
-/// the app's home, like any menu-bar utility. (MenuBarExtra used to provide this
-/// implicitly.)
+/// Keeps the app alive when all windows are closed.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

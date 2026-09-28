@@ -69,7 +69,7 @@ struct LeftoverScannerTests {
 
     @Test func candidatesStayInsideUserDomain() {
         let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
-        let candidates = LeftoverScanner.candidatePaths(bundleID: "com.example.app", appName: "Example App", home: home)
+        let candidates = LeftoverScanner.userCandidates(bundleID: "com.example.app", appName: "Example App", home: home)
         #expect(!candidates.isEmpty)
         for (url, _) in candidates {
             #expect(url.path.hasPrefix("/Users/test/"), "escaped home: \(url.path)")
@@ -79,13 +79,13 @@ struct LeftoverScannerTests {
 
     @Test func invalidBundleIDContributesNoPaths() {
         let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
-        let bad = LeftoverScanner.candidatePaths(bundleID: "../../etc", appName: "X", home: home)
+        let bad = LeftoverScanner.userCandidates(bundleID: "../../etc", appName: "X", home: home)
         #expect(bad.isEmpty)  // name too short AND bundle id invalid
     }
 
     @Test func expectedLocationsAreProbed() {
         let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
-        let paths = LeftoverScanner.candidatePaths(bundleID: "com.example.app", appName: "Example", home: home)
+        let paths = LeftoverScanner.userCandidates(bundleID: "com.example.app", appName: "Example", home: home)
             .map { $0.0.path }
         #expect(paths.contains("/Users/test/Library/Application Support/com.example.app"))
         #expect(paths.contains("/Users/test/Library/Caches/Example"))
@@ -98,7 +98,7 @@ struct LeftoverScannerTests {
     /// id-keyed paths — never a shared system folder.
     @Test func broadenedLocationsAreProbed() {
         let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
-        let paths = LeftoverScanner.candidatePaths(bundleID: "com.example.app", appName: "Example", home: home)
+        let paths = LeftoverScanner.userCandidates(bundleID: "com.example.app", appName: "Example", home: home)
             .map { $0.0.path }
         #expect(paths.contains("/Users/test/Library/Caches/com.apple.nsurlsessiond/Downloads/com.example.app"))
         #expect(paths.contains("/Users/test/Library/Application Support/com.apple.sharedfilelist/com.example.app.sfl4"))
@@ -205,34 +205,6 @@ struct LeftoverScannerTests {
         // The sibling app's data is never captured.
         #expect(!found.contains { $0.id.path.contains("com.example.app.beta") })
         #expect(!names.contains("com.example.application"))
-    }
-}
-
-struct CLIInventoryTests {
-    @Test func treeParserKeepsScopedNamesAndRejectsTraversal() throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vitals-cli-(UUID().uuidString)")
-        try FileManager.default.createDirectory(
-            at: root, withIntermediateDirectories: true
-        )
-        try FileManager.default.createDirectory(
-            at: root.appendingPathComponent("@scope/tool"), withIntermediateDirectories: true
-        )
-        try FileManager.default.createDirectory(
-            at: root.appendingPathComponent("plain-cli"), withIntermediateDirectories: true
-        )
-        defer { try? FileManager.default.removeItem(at: root) }
-
-        let output = """
-        (root.path) (3)
-        ├── @scope/tool@1.2.3
-        ├── plain-cli@4.5.6
-        └── ../outside@9.9.9
-        """
-        let rows = CLIInventory.parseTreePackages(output, manager: .bun)
-
-        #expect(Set(rows.map(\.name)) == Set(["@scope/tool", "plain-cli"]))
-        #expect(rows.allSatisfy { $0.cliManager == .bun })
     }
 }
 
@@ -464,9 +436,9 @@ struct DeviceCleanupTests {
 
     @Test func destructiveKindsAreEnumerated() {
         // The destructive set is consciously enumerated: irreversible-if-gone
-        // data only (device backups, and AI chat transcripts moved to the Trash).
+        // data only. AI chat transcripts are never offered at any depth.
         let destructive = CleanupCategory.Kind.allCases.filter(\.isDestructive)
-        #expect(destructive == [.deviceBackups, .aiHistory])
+        #expect(destructive == [.deviceBackups])
     }
 }
 

@@ -6,28 +6,13 @@ enum Main {
     static func main() {
         let arguments = CommandLine.arguments
 
-        // Intel Macs lack the M-series sensors and fan keys Vitals depends on.
-        // The distributed arm64-only bundle cannot launch there, but this keeps
-        // direct developer builds safe if one is run on unsupported hardware.
-        guard Hardware.isAppleSilicon else {
-            MainActor.assumeIsolated { Hardware.showUnsupportedAndQuit() }
-        }
-
         if arguments.contains("--probe") {
             runProbe()
-        } else if arguments.contains("--check-update") {
-            runUpdateCheck()
         } else if arguments.contains("--fan-daemon") {
-            FanDaemon.run()
-        } else if let index = arguments.firstIndex(of: "--fan-set") {
-            runFanCommand(arguments: Array(arguments.dropFirst(index + 1)), auto: false)
-        } else if let index = arguments.firstIndex(of: "--fan-auto") {
-            runFanCommand(arguments: Array(arguments.dropFirst(index + 1)), auto: true)
+            FanHelperRetirement.runAsHelper()
         } else {
-            // Single instance, like Activity Monitor: a second launch hands
-            // off to the running app instead of starting a duplicate. The
-            // fan daemon (activationPolicy .prohibited) doesn't count — it's
-            // a background helper, not an app instance.
+            // Single instance: a second launch activates the running app. A
+            // retiring fan helper (activationPolicy .prohibited) doesn't count.
             let myPID = NSRunningApplication.current.processIdentifier
             if let bundleID = Bundle.main.bundleIdentifier,
                let other = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
@@ -42,66 +27,7 @@ enum Main {
 
 // MARK: - CLI tools
 
-/// `Vitals --fan-set <index> <rpm>` / `Vitals --fan-auto <index>`.
-/// Writing to the SMC requires root, so the app invokes its own binary with
-/// these flags through an administrator-privileges prompt (FanController).
-private func runFanCommand(arguments: [String], auto: Bool) {
-    guard geteuid() == 0 else {
-        print("error: fan control writes to the SMC and must run as root")
-        exit(1)
-    }
-    guard let first = arguments.first, let fanIndex = Int(first) else {
-        print("usage: Vitals --fan-set <index> <rpm> | --fan-auto <index>")
-        exit(1)
-    }
-    guard let smc = SMC() else {
-        print("error: could not open SMC")
-        exit(1)
-    }
-    do {
-        if auto {
-            try smc.setFanAutomatic(fanIndex)
-            print("fan \(fanIndex): automatic control restored")
-        } else {
-            guard arguments.count >= 2, let rpm = Double(arguments[1]) else {
-                print("usage: Vitals --fan-set <index> <rpm>")
-                exit(1)
-            }
-            let applied = try smc.setFanTarget(fanIndex, rpm: rpm)
-            print("fan \(fanIndex): target set to \(Int(applied)) rpm")
-        }
-        exit(0)
-    } catch {
-        print("error: \(error.localizedDescription)")
-        exit(1)
-    }
-}
-
-/// `Vitals --check-update` queries GitHub Releases once and prints the
-/// verdict — handy for testing the update pipeline without the GUI.
-private func runUpdateCheck() {
-    let semaphore = DispatchSemaphore(value: 0)
-    Task {
-        do {
-            if let release = try await Updater.fetchLatestRelease() {
-                print("Latest release: \(release.version) (\(release.assetName))")
-                print("This build:     \(Updater.currentVersion)")
-                print(Updater.isVersion(release.version, newerThan: Updater.currentVersion)
-                    ? "→ update available"
-                    : "→ up to date")
-            } else {
-                print("No releases published yet.")
-            }
-        } catch {
-            print("Check failed: \(error.localizedDescription)")
-        }
-        semaphore.signal()
-    }
-    semaphore.wait()
-}
-
 /// `Vitals --probe` prints one round of raw readings to stdout and exits.
-/// Useful for sanity-checking the sensors without launching the GUI.
 private func runProbe() {
     print("== Vitals probe ==")
     print(HardwareInfo.chipName, "·", HardwareInfo.osVersion)

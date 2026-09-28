@@ -2,7 +2,7 @@ import Foundation
 
 /// A file or folder an app left behind outside its bundle.
 struct Leftover: Identifiable, Hashable {
-    /// Where the leftover lives — decides how it's removed.
+    /// Where the leftover lives. Decides how it's removed.
     enum Domain { case user, system }
 
     enum Category: String, CaseIterable {
@@ -27,31 +27,31 @@ struct Leftover: Identifiable, Hashable {
     let domain: Domain
     var sizeBytes: UInt64
 
-    /// System-domain leftovers are owned by root, so removal needs admin and
-    /// can't go to the Trash — it's a permanent delete.
+    /// System-domain leftovers are root-owned: removal needs admin and is a
+    /// permanent delete, not the Trash.
     var requiresAdmin: Bool { domain == .system }
 }
 
-/// Locates everything an app leaves behind — the per-user files under
-/// `~/Library` (removed to the Trash) and the system-level files under
-/// `/Library` and friends (removed with administrator rights). Also detects a
-/// Homebrew cask install and orphaned system extensions.
+/// Locates everything an app leaves behind: per-user files under `~/Library`
+/// (removed to the Trash) and system-level files under `/Library` and friends
+/// (removed as admin). Also detects a Homebrew cask install and orphaned
+/// system extensions.
 ///
 /// The catalog of locations and the safety-first, age-/identity-gated design
-/// are informed by the Mole project (https://github.com/tw93/mole, GPL-3.0) —
+/// are informed by the Mole project (https://github.com/tw93/mole, GPL-3.0),
 /// full credit to its authors. Vitals is likewise GPL-3.0; see LICENSE.
 ///
 /// Identity gating is strict: bundle ids must validate as reverse-DNS before
-/// they're used to build any path, system-level name matches require a
-/// distinctive (≥5 char, non-generic) name, and `/System` and `com.apple.*`
-/// are never returned.
+/// they build any path, system-level name matches require a distinctive
+/// (≥5 char, non-generic) name, and `/System` and `com.apple.*` are never
+/// returned.
 enum LeftoverScanner {
     // MARK: Identity helpers
 
     /// Apps name folders inconsistently ("My App", "MyApp", "my-app") and ship
     /// channel suffixes ("Zed Nightly"), so probe every common variant plus the
     /// base name with the suffix stripped. Names under 2 characters are
-    /// rejected — they'd match far too broadly.
+    /// rejected: they'd match far too broadly.
     static func nameVariants(_ name: String) -> [String] {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard trimmed.count >= 2 else { return [] }
@@ -83,8 +83,8 @@ enum LeftoverScanner {
         return unique
     }
 
-    /// Only reverse-DNS-looking identifiers may build paths — a malformed
-    /// Info.plist must not inject globs or traversal.
+    /// Only reverse-DNS-looking identifiers may build paths, so a malformed
+    /// Info.plist can't inject globs or traversal.
     static func isValidBundleID(_ bundleID: String) -> Bool {
         let parts = bundleID.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count >= 2 else { return false }
@@ -108,16 +108,15 @@ enum LeftoverScanner {
     }
 
     /// Matches a filename to a bundle id only at a dot boundary, so "com.foo"
-    /// matches "com.foo", "com.foo.plist", "com.foo.helper" — never "com.foobar".
+    /// matches "com.foo", "com.foo.plist", "com.foo.helper", never "com.foobar".
     private static func startsWithBundleBoundary(_ filename: String, _ bundleID: String) -> Bool {
         filename == bundleID || filename.hasPrefix(bundleID + ".") || filename.hasPrefix(bundleID + " ")
     }
 
-    /// Whether a Group Container directory belongs to `bundleID`. Group
-    /// containers are named `<TEAMID>.<ownerID>` or `group.<ownerID>`; the owner
-    /// is the whole remainder after the first component, matched **exactly** — so
-    /// a sibling app whose id merely extends this one's (`com.foo.app.beta`) is
-    /// never captured, which would otherwise trash that app's data.
+    /// Whether a Group Container directory belongs to `bundleID`. Containers are
+    /// named `<TEAMID>.<ownerID>` or `group.<ownerID>`; the owner (everything
+    /// after the first component) must match **exactly**, so a sibling app whose
+    /// id extends this one's (`com.foo.app.beta`) never has its data trashed.
     static func groupContainerBelongsToBundle(_ filename: String, _ bundleID: String) -> Bool {
         guard isValidBundleID(bundleID) else { return false }
         if filename == bundleID { return true }
@@ -125,12 +124,10 @@ enum LeftoverScanner {
         return String(filename[filename.index(after: firstDot)...]) == bundleID
     }
 
-    /// Whether a filename is one of an app's "recent items" shared-file-list
-    /// stores — `<bundleID>.sfl`, `.sfl2`, `.sfl3`, `.sfl4`. macOS nests these
-    /// under `…/com.apple.sharedfilelist/<subfolder>/`, so probing the exact
-    /// root path misses them; this drives the enumeration that catches them. The
-    /// component after the id must be *only* the sfl extension, so a longer id
-    /// (`com.foo.bar.sfl4`) can't be mistaken for a shorter app's file (`com.foo`).
+    /// Whether a filename is one of an app's "recent items" stores
+    /// (`<bundleID>.sfl`, `.sfl2`, `.sfl3`, `.sfl4`). The part after the id must be
+    /// *only* the sfl extension, so a longer id (`com.foo.bar.sfl4`) can't be
+    /// mistaken for a shorter app's file (`com.foo`).
     static func isSharedFileList(_ filename: String, _ bundleID: String) -> Bool {
         guard isValidBundleID(bundleID), filename.hasPrefix(bundleID + ".") else { return false }
         let suffix = filename.dropFirst(bundleID.count + 1)
@@ -214,12 +211,6 @@ enum LeftoverScanner {
         return candidates
     }
 
-    /// Backward-compatible alias — the user catalog is what "candidate paths"
-    /// has always meant.
-    static func candidatePaths(bundleID: String?, appName: String, home: URL) -> [(URL, Leftover.Category)] {
-        userCandidates(bundleID: bundleID, appName: appName, home: home)
-    }
-
     /// Exact system-level paths worth probing (admin, permanent). Always
     /// confined to allowlisted `/Library` roots — never `/System`.
     static func systemCandidates(bundleID: String?, appName: String) -> [(URL, Leftover.Category)] {
@@ -262,11 +253,10 @@ enum LeftoverScanner {
         return candidates
     }
 
-    /// Vendor-nested locations: many apps file their data under a brand folder,
-    /// e.g. `~/Library/Application Support/Google/Chrome`, not under the app
-    /// name directly. We derive the vendor from the bundle id's middle component
-    /// ("com.**google**.Chrome") and probe only the *product* subfolder beneath
-    /// it — never the shared vendor root, which other apps use too.
+    /// Vendor-nested locations like `~/Library/Application Support/Google/Chrome`.
+    /// The vendor comes from the bundle id's middle component ("com.google.Chrome")
+    /// and only the *product* subfolder is probed, never the shared vendor root,
+    /// which other apps use too.
     static func vendorNestedCandidates(bundleID: String?, appName: String, home: URL) -> [(URL, Leftover.Category)] {
         guard let bundleID, isValidBundleID(bundleID) else { return [] }
         let parts = bundleID.split(separator: ".").map(String.init)
@@ -274,9 +264,8 @@ enum LeftoverScanner {
         let vendorRaw = parts[1]
         guard vendorRaw.count >= 3 else { return [] }  // "io", "co" are too broad
         let vendors = Set([vendorRaw, vendorRaw.capitalized])
-        // Products an app files under a vendor folder: the bundle id's last
-        // component ("com.google.**Chrome**" → "Chrome"), the last word of the
-        // display name, and the usual name variants.
+        // Product names: the id's last component, the display name's last word,
+        // and the usual name variants.
         var productSet = Set(nameVariants(appName))
         if let last = parts.last, last.count >= 2 { productSet.insert(last) }
         if let lastWord = appName.split(separator: " ").last, lastWord.count >= 2 {
@@ -313,14 +302,11 @@ enum LeftoverScanner {
         return pa.count == 2 && pa == pb
     }
 
-    /// Bundle identifiers of helpers shipped *inside* the app — login-item
-    /// helpers, XPC services, app extensions, system extensions. An app's
-    /// leftovers often live under a helper's id ("com.foo.app.helper"), not the
-    /// main id, so we harvest these and probe their per-user/system locations
-    /// too. Each id is validated as reverse-DNS and must share `mainBundleID`'s
-    /// vendor namespace — this excludes embedded *shared* third-party frameworks
-    /// (Sparkle, Sentry…) whose caches other apps also use. `Contents/Frameworks`
-    /// is deliberately not scanned for the same reason. Read-only.
+    /// Bundle ids of helpers shipped *inside* the app (login items, XPC services,
+    /// extensions), since leftovers often live under a helper's id. Each id must
+    /// validate as reverse-DNS and share `mainBundleID`'s vendor namespace, which
+    /// excludes embedded third-party frameworks (Sparkle, Sentry) whose caches
+    /// other apps also use. `Contents/Frameworks` is skipped for the same reason.
     static func helperBundleIDs(appURL: URL, mainBundleID: String) -> [String] {
         guard isValidBundleID(mainBundleID) else { return [] }
         let contents = appURL.appendingPathComponent("Contents", isDirectory: true)
@@ -357,10 +343,8 @@ enum LeftoverScanner {
         (try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [])) ?? []
     }
 
-    /// Probes the filesystem and returns every leftover that actually exists,
-    /// with sizes — both user-domain (Trash) and system-domain (admin). `home`
-    /// is injectable so the user-domain enumeration can be tested against a
-    /// temp directory; it defaults to the real home.
+    /// Every leftover that actually exists, with sizes, user-domain (Trash) and
+    /// system-domain (admin). `home` is injectable for tests.
     static func scan(bundleID: String?, appName: String, appURL: URL? = nil,
                      home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [Leftover] {
         let fm = FileManager.default
@@ -369,22 +353,17 @@ enum LeftoverScanner {
 
         func consider(_ url: URL, _ category: Leftover.Category, _ domain: Leftover.Domain) {
             let standardized = url.standardizedFileURL
-            // Universal guards — never touch the sealed system volume or Vitals.
+            // Universal guard: never touch the sealed system volume or Vitals.
             guard !standardized.path.hasPrefix("/System") else { return }
             guard fm.fileExists(atPath: standardized.path) else { return }
-            // Dedup by the *canonical* path, not the requested one: name and
-            // vendor variants differ only by case ("vitalse2e"/"Vitalse2E"), and
-            // on a case-insensitive volume those are the same file — counting it
-            // twice would over-report the leftover size. canonicalPath resolves
-            // case and symlinks; fall back to the standardized path if absent.
+            // Dedup by canonical path: case-only name variants are the same file
+            // on a case-insensitive volume and would double-count the size.
             let key = (try? standardized.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath) ?? standardized.path
             guard seen.insert(key).inserted else { return }
             found.append(Leftover(id: standardized, category: category, domain: domain,
                                   sizeBytes: AppInventory.directorySize(standardized)))
         }
 
-        // Probe the main app by name + id, plus the vendor-nested product
-        // folders an app may file its data under.
         for (url, category) in userCandidates(bundleID: bundleID, appName: appName, home: home) {
             consider(url, category, .user)
         }
@@ -397,9 +376,7 @@ enum LeftoverScanner {
 
         let validBundle = bundleID.flatMap { isValidBundleID($0) ? $0 : nil }
 
-        // Helpers shipped inside the bundle leave their own per-id files behind.
-        // Probe their bundle-id locations (no name matching — helper names are
-        // generic), and fold them into the dynamic id-keyed finds below.
+        // Helper ids are probed by id only: helper names are too generic.
         let helperIDs: [String]
         if let appURL, let validBundle {
             helperIDs = helperBundleIDs(appURL: appURL, mainBundleID: validBundle)
@@ -437,23 +414,14 @@ enum LeftoverScanner {
         }
 
         let ownedIDs = Set(allBundleIDs)
-        // The finds below are keyed off a bundle id this app owns; with none
-        // (no valid id, no helpers), skip the enumeration rather than list whole
-        // shared folders that can't match anything.
-        //
-        // These match by *exact* owned id (not a bundle-id prefix): a prefix
-        // sweep of the shared data dirs would capture a *separate installed* app
-        // whose id extends this one's (uninstalling `com.foo.app` must not trash
-        // `com.foo.app.beta`'s documents). The app's own suffixed artifacts are
-        // caught by exact probes (e.g. `Caches/<id>.ShipIt`) and by harvesting
-        // helper ids into `ownedIDs`.
+        // These match by *exact* owned id, not prefix: uninstalling `com.foo.app`
+        // must not trash `com.foo.app.beta`'s data. The app's own suffixed
+        // artifacts are caught by exact probes and harvested helper ids.
         if !ownedIDs.isEmpty {
             func ownsSharedFileList(_ name: String) -> Bool { ownedIDs.contains { isSharedFileList(name, $0) } }
 
-            // "Recent items" shared-file-lists live one level down, keyed by id:
-            // ~/Library/Application Support/com.apple.sharedfilelist/<sub>/<id>.sfl*
-            // (and occasionally directly in the root). Tiny each, but pure junk
-            // once the app is gone.
+            // Recent-items lists live one level down (…/sharedfilelist/<sub>/<id>.sfl*),
+            // occasionally at the root, so exact probes miss them.
             let sharedList = home.appendingPathComponent("Library/Application Support/com.apple.sharedfilelist")
             for entry in entries(of: sharedList) {
                 if ownsSharedFileList(entry.lastPathComponent) { consider(entry, .preferences, .user) }
@@ -461,8 +429,7 @@ enum LeftoverScanner {
                     consider(url, .preferences, .user)
                 }
             }
-            // Sandboxed *daemon* data — UUID-named, so it's matched by the bundle
-            // id recorded in each container's metadata plist (exact, no guessing).
+            // Daemon containers are UUID-named: match by the id in their metadata plist.
             for container in entries(of: home.appendingPathComponent("Library/Daemon Containers")) {
                 let meta = container.appendingPathComponent(".com.apple.containermanagerd.metadata.plist")
                 guard let dict = NSDictionary(contentsOf: meta),
@@ -535,16 +502,13 @@ enum LeftoverScanner {
 
     // MARK: Homebrew
 
-    private static func brewExecutable() -> String? {
-        for path in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
-        where FileManager.default.isExecutableFile(atPath: path) {
-            return path
-        }
-        return nil
+    /// Homebrew's binary (Apple Silicon or Intel prefix), or nil when absent.
+    static func brewExecutable() -> String? {
+        ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].first(where: FileManager.default.isExecutableFile)
     }
 
-    /// Tokens of every installed Homebrew cask. Empty if brew isn't present.
-    /// Runs `brew` as the user — no admin.
+    /// Tokens of every installed Homebrew cask, run as the user. Empty if brew
+    /// isn't present.
     static func installedCaskTokens() -> [String] {
         guard let brew = brewExecutable() else { return [] }
         let process = Process()
@@ -552,16 +516,17 @@ enum LeftoverScanner {
         process.arguments = ["list", "--cask", "-1"]
         let out = Pipe()
         process.standardOutput = out
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
             Log.notice(.uninstall, "couldn't launch brew to list casks — cask leftovers may be under-reported", error: error)
             return []
         }
+        // Drain before waiting: a full pipe blocks the child forever.
+        let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return [] }
-        let data = out.fileHandleForReading.readDataToEndOfFile()
         return (String(data: data, encoding: .utf8) ?? "")
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -582,10 +547,9 @@ enum LeftoverScanner {
         return nil
     }
 
-    /// Confirms that Homebrew's cask inventory actually contains this exact
-    /// app bundle. A display-name/token match is only a candidate: without
-    /// this path proof, `--zap` could remove data for a manually downloaded
-    /// app that happens to share a name with an installed cask.
+    /// Confirms Homebrew's cask inventory contains this exact app bundle. A
+    /// name/token match is only a candidate: without this path proof, `--zap`
+    /// could remove data for a manually downloaded app sharing a cask's name.
     static func caskOwns(appURL: URL, token: String, listOutput: String? = nil) -> Bool {
         guard token.range(of: "^[a-z0-9][a-z0-9-]*$", options: .regularExpression) != nil else {
             return false
@@ -601,18 +565,16 @@ enum LeftoverScanner {
             process.arguments = ["list", "--cask", token]
             let out = Pipe()
             process.standardOutput = out
-            process.standardError = Pipe()
+            process.standardError = FileHandle.nullDevice
             do {
                 try process.run()
             } catch {
                 return false
             }
+            let data = out.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             guard process.terminationStatus == 0 else { return false }
-            output = String(
-                data: out.fileHandleForReading.readDataToEndOfFile(),
-                encoding: .utf8
-            ) ?? ""
+            output = String(data: data, encoding: .utf8) ?? ""
         }
 
         let target = appURL.standardizedFileURL.resolvingSymlinksInPath()
@@ -625,9 +587,9 @@ enum LeftoverScanner {
 
     // MARK: System extensions (detect + warn only)
 
-    /// Orphaned system extensions that look like they belong to this app. These
-    /// are OS-managed, so Vitals only surfaces them for manual removal — it
-    /// never force-deletes them (matching Mole's behavior).
+    /// Orphaned system extensions that look like they belong to this app. They're
+    /// OS-managed, so they're only surfaced for manual removal, never
+    /// force-deleted (as in Mole).
     static func systemExtensions(bundleID: String?) -> [URL] {
         guard let bundleID, isValidBundleID(bundleID) else { return [] }
         let base = URL(fileURLWithPath: "/Library/SystemExtensions")

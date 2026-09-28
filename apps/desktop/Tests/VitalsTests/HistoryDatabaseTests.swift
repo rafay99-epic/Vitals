@@ -4,9 +4,8 @@ import SQLite3
 @testable import Vitals
 
 /// Locks the SQLite history store: rows round-trip with their optionals intact,
-/// range queries filter by time, duplicate timestamps are ignored, alerts persist,
-/// and the one-time CSV/alert-log import folds legacy data in (and renames the
-/// originals so it never re-imports).
+/// range queries filter by time, duplicate timestamps are ignored, alerts
+/// persist, and older schemas migrate in place.
 struct HistoryDatabaseTests {
     private func tempFile() -> URL {
         FileManager.default.temporaryDirectory
@@ -191,67 +190,7 @@ struct HistoryDatabaseTests {
         #expect(rows.last?.diskWriteBps == 9_500_000)
     }
 
-    @Test func importsLegacyCSVAndRenamesIt() throws {
-        let fm = FileManager.default
-        let dir = fm.temporaryDirectory.appendingPathComponent("vitals-mig-\(UUID().uuidString)")
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: dir) }
-
-        // A legacy CSV in the exact logged format: header + two valid rows + one
-        // malformed line that must be skipped. Timestamps are recent (relative to
-        // now) so the retention prune never deletes them, whatever year the test runs.
-        let now = Date()
-        let iso = HistoryReader.isoFormatter
-        let csv = dir.appendingPathComponent("history.csv")
-        try (HistoryExport.csvHeader +
-             "\(iso.string(from: now.addingTimeInterval(-20))),43.5,52.6,,1200,12.3,10.40,Nominal,87,49.0,0.79\n" +
-             "\(iso.string(from: now.addingTimeInterval(-10))),44.0,53.0,,1300,15.0,10.50,Fair,86,50.0,0.80\n" +
-             "garbage,line\n").write(to: csv, atomically: true, encoding: .utf8)
-
-        let alerts = dir.appendingPathComponent("alerts.log")
-        try "\(iso.string(from: now.addingTimeInterval(-15)))\tCPU temperature is 92°C.\n"
-            .write(to: alerts, atomically: true, encoding: .utf8)
-
-        let db = HistoryDatabase(file: dir.appendingPathComponent("history.sqlite3"),
-                                 legacyReadings: [csv], legacyAlerts: alerts)
-
-        let rows = db.samples(range: .all, now: now, maxPoints: 600)
-        #expect(rows.count == 2)                              // malformed line skipped
-        #expect(db.recentAlerts(limit: 10).count == 1)
-
-        // Originals preserved (not deleted) and renamed so they won't re-import.
-        #expect(!fm.fileExists(atPath: csv.path))
-        #expect(fm.fileExists(atPath: csv.appendingPathExtension("imported").path))
-        #expect(fm.fileExists(atPath: alerts.appendingPathExtension("imported").path))
-    }
-
-    @Test func removesStaleImportedBackupsAfterGracePeriod() throws {
-        let fm = FileManager.default
-        let dir = fm.temporaryDirectory.appendingPathComponent("vitals-clean-\(UUID().uuidString)")
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: dir) }
-
-        // A backup from a migration 3 days ago — past the 2-day grace.
-        let staleBase = dir.appendingPathComponent("history.csv")
-        let stale = staleBase.appendingPathExtension("imported")
-        try "old data".write(to: stale, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.modificationDate: Date().addingTimeInterval(-3 * 86_400)], ofItemAtPath: stale.path)
-
-        // A backup from a migration just now — still within grace.
-        let freshBase = dir.appendingPathComponent("alerts.log")
-        let fresh = freshBase.appendingPathExtension("imported")
-        try "new data".write(to: fresh, atomically: true, encoding: .utf8)
-
-        // The base files don't exist, so nothing imports — only the cleanup runs.
-        let db = HistoryDatabase(file: dir.appendingPathComponent("history.sqlite3"),
-                                 legacyReadings: [staleBase], legacyAlerts: freshBase)
-        db.waitUntilReady()   // open() runs async — let it finish before asserting
-
-        #expect(!fm.fileExists(atPath: stale.path))   // stale backup auto-removed
-        #expect(fm.fileExists(atPath: fresh.path))    // fresh backup kept (still in grace)
-    }
-
-    // MARK: v4 — power columns + per-app energy
+    // MARK: v4 power columns, v5 drops app_energy
 
     @Test func roundTripsPowerColumns() throws {
         let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
@@ -266,7 +205,7 @@ struct HistoryDatabaseTests {
 
     /// An older database created at schema v3 (no soc_watts/battery_watts, no
     /// app_energy table) must migrate cleanly on open and then accept v4 rows.
-    @Test func migratesV3DatabaseToV4() throws {
+    @Test func migratesV3DatabaseToCurrent() throws {
         let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
         let now = Date()   // real now, so the retention prune at open keeps these rows
 
@@ -283,61 +222,27 @@ struct HistoryDatabaseTests {
           net_in_bps REAL, net_out_bps REAL, disk_read_bps REAL, disk_write_bps REAL);
         INSERT INTO samples (ts, avg_cpu, hottest_cpu, cpu_usage, memory_gb, thermal_state)
           VALUES (\(oldTs), 40, 50, 10, 8, 'Nominal');
+        CREATE TABLE app_energy (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, name TEXT NOT NULL);
         PRAGMA user_version=3;
         """
         #expect(sqlite3_exec(raw, v3, nil, nil, nil) == SQLITE_OK)
         sqlite3_close(raw)
 
-        // Open with the current code → migration adds the new columns + table.
+        // Open with the current code → migration adds the new columns, drops app_energy.
         let db = HistoryDatabase(file: url)
         db.insert(sample(0, now: now, socWatts: 12.0, batteryWatts: -5.0))
-        db.appendAppEnergy([.init(bundleID: "com.x", name: "X", avgWatts: 3.0,
-                                  cpuPercent: 20, wakeupsPerSec: 100, preventsSleep: true)], at: now)
         db.waitUntilReady()
 
         let rows = db.samples(range: .all, now: now, maxPoints: 600)
         #expect(rows.count == 2)                                // old row survived, new row added
         #expect(rows.contains { $0.socWatts == 12.0 })          // v4 column readable
-        var appRows: [(Date, HistoryDatabase.AppEnergyRow)] = []
-        db.forEachAppEnergy { appRows.append(($0, $1)) }
-        #expect(appRows.count == 1)                             // app_energy table created + written
-        #expect(appRows.first?.1.preventsSleep == true)
-    }
 
-    @Test func appEnergyRoundTripsAndThrottles() throws {
-        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
-        let db = HistoryDatabase(file: url)
-        let now = Date()   // real now, so the on-write retention prune keeps these rows
-        let batch: [HistoryDatabase.AppEnergyRow] = [
-            .init(bundleID: "com.a", name: "A", avgWatts: 2.5, cpuPercent: 30, wakeupsPerSec: 50, preventsSleep: false),
-            .init(bundleID: nil, name: "daemon", avgWatts: nil, cpuPercent: 1, wakeupsPerSec: 5, preventsSleep: true),
-        ]
-        db.appendAppEnergy(batch, at: now)
-        // A second batch 30s later is inside the 60s throttle → dropped.
-        db.appendAppEnergy(batch, at: now.addingTimeInterval(30))
-        db.waitUntilReady()
-
-        var rows: [HistoryDatabase.AppEnergyRow] = []
-        db.forEachAppEnergy { _, row in rows.append(row) }
-        #expect(rows.count == 2)                            // only the first batch landed
-        #expect(rows.contains { $0.avgWatts == nil && $0.name == "daemon" })   // honest nil watts
-        #expect(rows.contains { $0.bundleID == "com.a" && $0.avgWatts == 2.5 })
-    }
-
-    @Test func appEnergyRetentionPrunesOnWrite() throws {
-        let url = tempFile(); defer { try? FileManager.default.removeItem(at: url) }
-        let db = HistoryDatabase(file: url)
-        let now = Date()
-        // A batch stamped 20 days ago is past the 14-day app-energy retention; the
-        // on-write prune must drop it rather than waiting for the next app open.
-        db.appendAppEnergy([.init(bundleID: nil, name: "Old", avgWatts: 1, cpuPercent: 1,
-                                  wakeupsPerSec: 1, preventsSleep: false)], at: now.addingTimeInterval(-20 * 86_400))
-        db.appendAppEnergy([.init(bundleID: nil, name: "New", avgWatts: 1, cpuPercent: 1,
-                                  wakeupsPerSec: 1, preventsSleep: false)], at: now)
-        db.waitUntilReady()
-
-        var names: [String] = []
-        db.forEachAppEnergy { _, row in names.append(row.name) }
-        #expect(names == ["New"])   // old batch pruned by the retention window
+        #expect(sqlite3_open(url.path, &raw) == SQLITE_OK)
+        defer { sqlite3_close(raw) }
+        var stmt: OpaquePointer?
+        #expect(sqlite3_prepare_v2(raw, "SELECT count(*) FROM sqlite_master WHERE name = 'app_energy';", -1, &stmt, nil) == SQLITE_OK)
+        defer { sqlite3_finalize(stmt) }
+        #expect(sqlite3_step(stmt) == SQLITE_ROW)
+        #expect(sqlite3_column_int(stmt, 0) == 0)               // removed feature's table is gone
     }
 }

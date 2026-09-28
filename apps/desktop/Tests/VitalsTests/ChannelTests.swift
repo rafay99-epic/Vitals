@@ -25,12 +25,6 @@ struct ChannelTests {
         #expect(Channel.dev.badge == "DEV")
     }
 
-    @Test func bundleSuffixes() {
-        #expect(Channel.stable.bundleSuffix == "")
-        #expect(Channel.nightly.bundleSuffix == ".nightly")
-        #expect(Channel.dev.bundleSuffix == ".dev")
-    }
-
     @Test func dataDirSuffixesAreIsolated() {
         #expect(Channel.stable.dataDirSuffix == ".vitals")
         #expect(Channel.nightly.dataDirSuffix == ".vitals-nightly")
@@ -44,9 +38,8 @@ struct ChannelTests {
         #expect(Channel.dev.assetName == nil)
     }
 
-    /// Only Nightly is a pre-release feed; only Dev has no updater; only Nightly
-    /// orders by build number (Stable orders by version). These three flags are
-    /// the safety contract behind the migration — a flip would regress the updater.
+    /// Only Nightly is a pre-release feed (ordered by build number); only Dev has
+    /// no updater. A flip would regress the updater.
     @Test func feedFlags() {
         #expect(Channel.stable.isPrerelease == false)
         #expect(Channel.nightly.isPrerelease == true)
@@ -55,10 +48,6 @@ struct ChannelTests {
         #expect(Channel.stable.updatesEnabled == true)
         #expect(Channel.nightly.updatesEnabled == true)
         #expect(Channel.dev.updatesEnabled == false)
-
-        #expect(Channel.stable.ordersByBuildNumber == false)
-        #expect(Channel.nightly.ordersByBuildNumber == true)
-        #expect(Channel.dev.ordersByBuildNumber == false)
     }
 }
 
@@ -78,5 +67,14 @@ struct BuildNumberParseTests {
     @Test func absentBuildNumberIsZero() {
         #expect(Updater.buildNumber(in: "Vitals 0.123") == 0)
         #expect(Updater.buildNumber(in: nil) == 0)
+    }
+}
+
+/// Tests (an unbundled process) must never resolve to a real data home: they'd
+/// otherwise write into the user's Stable history.
+struct DataHomeIsolationTests {
+    @Test func unbundledProcessesStayOutOfTheRealDataHome() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        #expect(!DataHome.directory.path.hasPrefix(home + "/.vitals"))
     }
 }

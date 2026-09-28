@@ -1,33 +1,22 @@
 import SwiftUI
 import Charts
 
-/// The Network segment: a live look at throughput and the interfaces carrying it.
-/// It leads with the summed download/upload heroes, then the last-N-minutes
-/// throughput chart, the per-interface breakdown (active first), and the Wi-Fi
-/// radio's association when one is powered on. Every number is a real reading: an
-/// idle link shows 0 B/s, an unknown SSID shows "—" (macOS withholds it without
-/// Location access), and a rate only appears once two samples exist — nothing is
-/// smoothed or invented.
+/// The Network section: summed download/upload, the throughput chart, the
+/// per-interface breakdown (active first), and the Wi-Fi association.
 struct NetworkView: View {
-    @EnvironmentObject private var model: VitalsModel
-    /// True only while Network is the visible segment. Gates the history chart so
-    /// it never rebuilds marks in the background (same rule as GPU/Memory).
-    let isActive: Bool
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         MetricScroll {
             if let network = model.network {
                 NetworkHeroCard(network: network)
-                // Stays mounted (no 50–150 ms re-layout on return); its data goes
-                // empty when inactive so it stops observing per-tick updates.
-                NetworkHistoryCard(isActive: isActive)
+                NetworkHistoryCard()
                 NetworkInterfacesCard(links: network.links, primaryName: network.primaryInterfaceName)
                 if let wifi = network.wifi {
                     WiFiCard(wifi: wifi)
                 }
             } else {
-                // A throughput figure needs two readings, so the very first tick
-                // has nothing to show — an honest "measuring", not a fake 0.
+                // A rate needs two readings, so the first tick shows "measuring", not 0.
                 LoadingStateView(
                     title: "Measuring network throughput",
                     message: "A live rate is the difference between two readings a second apart — the first numbers land in a moment."
@@ -75,9 +64,8 @@ private struct NetworkHeroCard: View {
         }
     }
 
-    /// The primary link named honestly, e.g. "Wi-Fi (en0)": the default-route
-    /// interface when the system tells us, else the first active link, else a
-    /// plain "No active interface" — never an invented name.
+    /// The primary link, e.g. "Wi-Fi (en0)": the default-route interface, else the
+    /// first active link, else "No active interface".
     private var subtitle: String {
         guard let link = primaryLink else { return "No active interface" }
         return "\(link.displayName) (\(link.name))"
@@ -95,27 +83,18 @@ private struct NetworkHeroCard: View {
 // MARK: - Throughput history
 
 private struct NetworkHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
-    /// True only while Network is showing. When false `chartHistory` resolves to
-    /// empty, so the `Chart` builds no marks and stops reading `model.chartHistory`
-    /// — no observation, no per-tick re-render while another tab is up.
-    let isActive: Bool
-
-    private var chartHistory: [VitalsModel.Sample] {
-        isActive ? model.chartHistory : []
-    }
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
+    private var chartHistory: [VitalsModel.Sample] { model.chartHistory }
 
     var body: some View {
-        // One pass over the series for the Y ceiling, hoisted out of the per-sample
-        // chart closure. A small floor keeps an idle network from drawing against a
-        // zero-height axis. Rates are bytes/s; the chart plots MB/s (÷ 1,000,000).
+        // One pass for the Y ceiling, outside the per-sample chart closure. A small
+        // floor keeps an idle link off a zero-height axis. Rates are bytes/s; the
+        // chart plots MB/s.
         let peak = chartHistory.reduce(0.0) { max($0, mbps($1.netInPerSec), mbps($1.netOutPerSec)) }
         let upper = max(peak * 1.15, 0.1)
         return SectionCard(title: "Last \(settings.historyMinutes) minutes", symbol: "chart.xyaxis.line") {
             VStack(alignment: .leading, spacing: 10) {
-                // Deferred keeps the 50–150 ms first-layout cost off the
-                // tab-switch animation (see GPUView/MemoryView).
                 Deferred { chart(upper: upper) }.frame(height: 150)
                 legend
             }
@@ -173,9 +152,8 @@ private struct NetworkHistoryCard: View {
 
 // MARK: - Interfaces
 
-/// Every counted physical interface, active ones first. Each row is honest about
-/// its state: a live link shows its rates, an inactive one says "Inactive", and
-/// the since-boot totals come straight from the kernel counters.
+/// Every counted physical interface, active first. Totals are since-boot kernel
+/// counters.
 private struct NetworkInterfacesCard: View {
     let links: [NetworkLink]
     let primaryName: String?
@@ -258,10 +236,9 @@ private struct NetworkInterfacesCard: View {
 
 // MARK: - Wi-Fi
 
-/// The Wi-Fi radio's association. Every field is optional because the OS
-/// legitimately withholds some: a nil SSID (no Location permission) shows "—"
-/// with a plain note, and any other unknown value drops its row rather than
-/// inventing one.
+/// The Wi-Fi association. Every field is optional because the OS withholds
+/// some: a nil SSID (no Location permission) shows a dash with a note, and
+/// other unknown values drop their row.
 private struct WiFiCard: View {
     let wifi: WiFiInfo
 

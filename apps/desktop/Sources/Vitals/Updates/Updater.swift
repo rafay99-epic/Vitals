@@ -1,20 +1,19 @@
 import Foundation
 import AppKit
-import Combine
+import Observation
 
 /// Checks GitHub Releases for newer builds, downloads the DMG, and swaps the
-/// installed app. The repository is private, so requests authenticate with
-/// the token from the locally signed-in GitHub CLI (`gh auth token`).
+/// installed app. The repository is public, so requests are unauthenticated.
 @MainActor
-final class Updater: ObservableObject {
+@Observable
+final class Updater {
     enum Status: Equatable {
         case idle
         case checking
         case upToDate
         case available(Release)
         case downloading
-        /// Downloaded in the background and waiting for the user to install it
-        /// (the "Download updates automatically" path).
+        /// Pre-downloaded in the background, waiting for the user to install.
         case readyToInstall(Release)
         case installing
         case failed(String)
@@ -42,33 +41,29 @@ final class Updater: ObservableObject {
 
     nonisolated static let repository = "rafay99-epic/Vitals"
     nonisolated static let currentVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
-    /// This build's CI build number (`VitalsBuildNumber`), used to order Nightly
-    /// pre-releases. 0 for local builds — so a local Nightly build always sees the
-    /// published pre-release as newer and can pull the official one.
+    /// CI build number (`VitalsBuildNumber`), orders Nightly pre-releases. 0 for
+    /// local builds, so a local Nightly always sees the published one as newer.
     nonisolated static let currentBuildNumber = Int(Bundle.main.infoDictionary?["VitalsBuildNumber"] as? String ?? "") ?? 0
-    /// Replace the actual running bundle (wherever it lives), not a hardcoded
-    /// path — so an app launched from a non-standard location updates in place.
+    /// The running bundle, so an app outside /Applications updates in place.
     nonisolated private static let installPath = Bundle.main.bundlePath
     /// The DMG asset this channel installs (nil for Dev, which never publishes),
     /// and the app bundle inside it.
     nonisolated static var assetName: String? { Channel.current.assetName }
     nonisolated static var bundleInImage: String { "\(Channel.current.displayName).app" }
 
-    @Published private(set) var status: Status = .idle
-    @Published private(set) var lastChecked: Date?
+    private(set) var status: Status = .idle
+    private(set) var lastChecked: Date?
 
     private let notifications = NotificationManager()
-    private var timer: Timer?
-    private var activationObserver: NSObjectProtocol?
-    private var cancellables: Set<AnyCancellable> = []
-    private var notifiedVersion: String?
-    /// The live settings, so a background check can read `autoDownloadUpdates`
-    /// (silently pre-download) at the moment it finds an update.
-    private weak var settings: AppSettings?
+    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    @ObservationIgnored private var notifiedVersion: String?
+    /// Read at check time for `autoDownloadUpdates`.
+    @ObservationIgnored private weak var settings: AppSettings?
     /// A DMG already downloaded in the background, waiting to be installed.
-    private var pendingDMG: URL?
+    @ObservationIgnored private var pendingDMG: URL?
     private static let checkInterval: TimeInterval = 6 * 3600
-    /// Don't re-check on every refocus — only if the last check is older than this.
+    /// Refocus re-checks only if the last check is older than this.
     private static let activationRecheckAfter: TimeInterval = 30 * 60
 
     var isBusy: Bool {
@@ -76,9 +71,7 @@ final class Updater: ObservableObject {
     }
 
     init() {
-        // Route notification taps (the "Download & Install" / "Install &
-        // Relaunch" buttons, or the banner itself) back into the update flow, so
-        // the user can update straight from the notification with no window open.
+        // Notification taps drive the update flow with no window open.
         notifications.onUpdateAction = { [weak self] action in
             guard let self else { return }
             switch action {
@@ -88,47 +81,38 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Checks at launch, every 6 hours, and when the user returns to the app
-    /// (throttled), while the automatic toggle is on. Each channel tracks its
-    /// own feed: Stable → the latest release, Nightly → the latest pre-release.
-    /// Dev has no feed, so this is a no-op there.
+    /// Checks at launch, every 6 hours, and on refocus (throttled) while the
+    /// automatic toggle is on. No-op on Dev.
     func startAutomaticChecks(settings: AppSettings) {
         guard Channel.current.updatesEnabled else { return }
         self.settings = settings
-        settings.$autoUpdateCheck
-            .removeDuplicates()
-            .sink { [weak self] enabled in
-                guard let self else { return }
-                self.timer?.invalidate()
-                self.timer = nil
-                if let observer = self.activationObserver {
-                    NotificationCenter.default.removeObserver(observer)
-                    self.activationObserver = nil
-                }
-                guard enabled else { return }
-                // Make update notifications actually deliverable: permission used
-                // to be requested only when overheat alerts were on, so with those
-                // off the "update available" notification was silently dropped.
-                self.notifications.requestAuthorizationIfNeeded()
-                Task { await self.check(userInitiated: false) }
-                let timer = Timer(timeInterval: Self.checkInterval, repeats: true) { [weak self] _ in
-                    Task { @MainActor in await self?.check(userInitiated: false) }
-                }
-                RunLoop.main.add(timer, forMode: .common)
-                self.timer = timer
-                // Re-check when the app is brought back to the foreground, so a
-                // release published while it was open (or idle) surfaces promptly.
-                self.activationObserver = NotificationCenter.default.addObserver(
-                    forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in await self?.checkOnActivation() }
-                }
-            }
-            .store(in: &cancellables)
+        applyAutomaticChecks(settings.autoUpdateCheck)
+        observeChanges(of: { settings.autoUpdateCheck }) { [weak self] in self?.applyAutomaticChecks($0) }
     }
 
-    /// A check triggered by returning to the app, throttled so refocusing the
-    /// window doesn't hammer GitHub.
+    private func applyAutomaticChecks(_ enabled: Bool) {
+        self.timer?.invalidate()
+        self.timer = nil
+        if let observer = self.activationObserver {
+            NotificationCenter.default.removeObserver(observer)
+            self.activationObserver = nil
+        }
+        guard enabled else { return }
+        self.notifications.requestAuthorizationIfNeeded()
+        Task { await self.check(userInitiated: false) }
+        let timer = Timer(timeInterval: Self.checkInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.check(userInitiated: false) }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+        self.activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.checkOnActivation() }
+        }
+    }
+
+    /// Throttled so refocusing the window doesn't hammer GitHub.
     private func checkOnActivation() async {
         if let last = lastChecked, Date().timeIntervalSince(last) < Self.activationRecheckAfter { return }
         await check(userInitiated: false)
@@ -137,9 +121,7 @@ final class Updater: ObservableObject {
     func check(userInitiated: Bool) async {
         guard Channel.current.updatesEnabled else { status = .idle; return }
         guard !isBusy else { return }
-        // Capture the prior state *before* `.checking` overwrites it, so we can
-        // tell whether this build was already downloaded. (`.downloading` /
-        // `.installing` can't reach here — the `isBusy` guard returns first.)
+        // Captured before `.checking` overwrites it, to detect an already-downloaded build.
         let previous = status
         status = .checking
         Log.debug(.updater, "checking for updates (userInitiated: \(userInitiated))")
@@ -148,9 +130,7 @@ final class Updater: ObservableObject {
             lastChecked = Date()
             if let release, Self.isNewer(release) {
                 Log.notice(.updater, "update available: \(release.displayVersion) (current \(Self.currentVersion))")
-                // Keep an already-downloaded build for the *same* release — a
-                // routine re-check must not reset `.readyToInstall` back to
-                // `.available` and abandon the cached DMG.
+                // A re-check must not reset `.readyToInstall` and abandon the cached DMG.
                 if case .readyToInstall(let pending) = previous,
                    Self.notifyKey(pending) == Self.notifyKey(release) {
                     status = .readyToInstall(pending)
@@ -160,8 +140,6 @@ final class Updater: ObservableObject {
                 if !userInitiated, notifiedVersion != Self.notifyKey(release) {
                     notifiedVersion = Self.notifyKey(release)
                     if settings?.autoDownloadUpdates == true {
-                        // Pre-download in the background, then notify "ready to
-                        // install" (which sends its own actionable notification).
                         await downloadInBackground(release)
                     } else {
                         notifyUpdateAvailable(release)
@@ -176,10 +154,8 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Is `release` newer than what's installed? Stable compares the numeric
-    /// version; Nightly compares the monotonic CI build number (the pre-release
-    /// feed reuses its tag, so the version string alone can't order builds). Dev
-    /// never updates.
+    /// Stable compares the numeric version; Nightly compares the CI build number,
+    /// since its rolling pre-release reuses one tag.
     nonisolated static func isNewer(_ release: Release) -> Bool {
         switch Channel.current {
         case .stable:  return isVersion(release.version, newerThan: currentVersion)
@@ -188,16 +164,13 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Download the available release and install it. If the release was already
-    /// pre-downloaded (`readyToInstall`), skip straight to installing. Drives the
-    /// Settings "Install" button and the "Download & Install" notification action.
+    /// Downloads (unless already pre-downloaded) and installs the available release.
     func downloadAndInstall() async {
         let release: Release
         switch status {
         case .available(let r):
             release = r
         case .readyToInstall(let r):
-            // Already on disk from a background pre-download — install it directly.
             if let dmg = pendingDMG { await installAndRelaunch(dmgAt: dmg, release: r); return }
             release = r
         default:
@@ -215,16 +188,14 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Install a previously background-downloaded DMG. Drives the Settings
-    /// "Install & Relaunch" button and the "ready to install" notification action.
+    /// Installs a DMG pre-downloaded by a background check.
     func installPending() async {
         guard case .readyToInstall(let release) = status, let dmg = pendingDMG else { return }
         await installAndRelaunch(dmgAt: dmg, release: release)
     }
 
-    /// Silently fetch the DMG after a background check, stash it, and notify the
-    /// user it's ready to install. On failure, fall back to the actionable
-    /// "available" notification so they can still download on demand.
+    /// Pre-downloads after a background check. On failure, falls back to the
+    /// "available" notification so the user can download on demand.
     private func downloadInBackground(_ release: Release) async {
         guard !isBusy else { return }
         status = .downloading
@@ -241,8 +212,7 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Install the mounted DMG, then hand off to the freshly installed copy and
-    /// terminate this one. Sets `.failed` (and notifies) if the install fails.
+    /// Installs, then launches the new copy and terminates this one.
     private func installAndRelaunch(dmgAt dmg: URL, release: Release) async {
         status = .installing
         Log.notice(.updater, "installing update \(release.displayVersion)")
@@ -256,9 +226,7 @@ final class Updater: ObservableObject {
         }
         let relauncher = Process()
         relauncher.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        // Pass the bundle path as a positional argument ($0), never interpolated
-        // into the script — a quote or space in the app path can't break the
-        // command or inject anything.
+        // Bundle path goes in as $0, never interpolated, so a quote in the path can't inject.
         relauncher.arguments = ["-c", "sleep 1; exec /usr/bin/open \"$0\"", Self.installPath]
         do {
             try relauncher.run()
@@ -270,9 +238,7 @@ final class Updater: ObservableObject {
 
     // MARK: - Notification actions
 
-    /// User tapped "Download & Install" (or the banner body of an "available"
-    /// notification). Bring the app forward and run the download; re-check first
-    /// if the app relaunched since the notification was posted and lost its state.
+    /// Re-checks first if the app relaunched since the notification and lost its state.
     private func handleDownloadAction() async {
         NSApp.activate(ignoringOtherApps: true)
         switch status {
@@ -282,9 +248,7 @@ final class Updater: ObservableObject {
         await downloadAndInstall()
     }
 
-    /// User tapped "Install & Relaunch" (or the banner body of a "ready"
-    /// notification). Install the pre-downloaded DMG; if it's gone (app
-    /// relaunched), fall back to a fresh download + install.
+    /// Falls back to a fresh download if the pre-downloaded DMG is gone (app relaunched).
     private func handleInstallAction() async {
         NSApp.activate(ignoringOtherApps: true)
         if pendingDMG != nil, case .readyToInstall = status {
@@ -340,8 +304,7 @@ final class Updater: ObservableObject {
         let assets: [Asset]
     }
 
-    /// Stable tracks the latest published release; Nightly tracks the newest
-    /// pre-release (the feed `nightly.yml` publishes). Dev has no feed.
+    /// Stable: latest release. Nightly: newest pre-release. Dev: none.
     nonisolated static func fetchLatestRelease() async throws -> Release? {
         guard Channel.current.updatesEnabled else { return nil }
         return Channel.current.isPrerelease ? try await fetchLatestPrerelease() : try await fetchStableRelease()
@@ -355,25 +318,21 @@ final class Updater: ObservableObject {
     }
 
     nonisolated private static func fetchLatestPrerelease() async throws -> Release? {
-        // The list is newest-first; take the first published pre-release carrying
-        // a Nightly DMG. Skip drafts — they're visible to maintainers but aren't
-        // released, and the backend (convex/lib/github.ts) excludes them too.
+        // Newest-first. Skip drafts: visible to maintainers but unreleased
+        // (convex/lib/github.ts excludes them too).
         let endpoint = "https://api.github.com/repos/\(repository)/releases?per_page=30"
         guard let data = try await get(endpoint) else { return nil }
         let releases = try jsonDecoder().decode([APIRelease].self, from: data)
         for api in releases where (api.prerelease ?? false) && !(api.draft ?? false) {
             if let release = release(from: api) { return release }
         }
-        return nil  // no Nightly pre-release published yet
+        return nil
     }
 
-    /// Shared GET with auth + status handling. Returns nil for a 404 "nothing
-    /// published yet" once we know the token can see the (private) repo.
+    /// Shared GET with status handling. Returns nil for a 404 (nothing published yet).
     nonisolated private static func get(_ urlString: String) async throws -> Data? {
-        let token = githubToken()
         var request = URLRequest(url: URL(string: urlString)!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -381,9 +340,7 @@ final class Updater: ObservableObject {
         }
         switch http.statusCode {
         case 200: return data
-        case 404 where token == nil:
-            throw UpdateError(message: "Can't see the private repository. Install GitHub CLI and run “gh auth login”.")
-        case 404: return nil  // nothing published yet
+        case 404: return nil
         default: throw UpdateError(message: "GitHub returned HTTP \(http.statusCode).")
         }
     }
@@ -394,11 +351,8 @@ final class Updater: ObservableObject {
         return decoder
     }
 
-    /// Build a `Release` from an API payload, matching **exactly** this channel's
-    /// DMG. No fallback to an arbitrary `.dmg`: the Nightly feed must ignore a
-    /// leftover Stable/Dev asset (e.g. an old `Vitals-Dev.dmg` pre-release), or it
-    /// would offer a cross-channel build. Returns nil if the channel's asset isn't
-    /// present (Dev has none and never reaches here).
+    /// Matches exactly this channel's DMG, never any `.dmg`: a leftover asset from
+    /// another channel would otherwise offer a cross-channel build.
     nonisolated private static func release(from api: APIRelease) -> Release? {
         guard let assetName, let asset = api.assets.first(where: { $0.name == assetName }) else { return nil }
         let version = api.tagName.hasPrefix("v") ? String(api.tagName.dropFirst()) : api.tagName
@@ -415,19 +369,14 @@ final class Updater: ObservableObject {
     }
 
     nonisolated static func download(_ release: Release) async throws -> URL {
-        // assetURL comes from the GitHub API payload — never force-unwrap it.
+        // assetURL comes from the API payload; never force-unwrap it.
         guard let assetURL = URL(string: release.assetURL) else {
             throw UpdateError(message: "The release has an invalid download URL.")
         }
         var request = URLRequest(url: assetURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
-        if let token = githubToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        // GitHub redirects asset downloads to S3, which rejects requests that
-        // still carry the Authorization header — strip it on redirect.
         // download(for:) streams to disk, so the DMG never sits in memory.
-        let (tempFile, response) = try await URLSession.shared.download(for: request, delegate: RedirectSanitizer())
+        let (tempFile, response) = try await URLSession.shared.download(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             try? FileManager.default.removeItem(at: tempFile)
             throw UpdateError(message: "Download failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)).")
@@ -461,37 +410,9 @@ final class Updater: ObservableObject {
 
     // MARK: - Helpers
 
+    /// Numeric compare, so "0.10" is newer than "0.9".
     nonisolated static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
-        func components(_ version: String) -> [Int] {
-            version.split(separator: ".").map { Int($0.prefix(while: \.isNumber)) ?? 0 }
-        }
-        let a = components(candidate)
-        let b = components(current)
-        for index in 0..<max(a.count, b.count) {
-            let lhs = index < a.count ? a[index] : 0
-            let rhs = index < b.count ? b[index] : 0
-            if lhs != rhs { return lhs > rhs }
-        }
-        return false
-    }
-
-    nonisolated static func githubToken() -> String? {
-        let candidates = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
-        for gh in candidates where FileManager.default.isExecutableFile(atPath: gh) {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: gh)
-            process.arguments = ["auth", "token"]
-            let stdout = Pipe()
-            process.standardOutput = stdout
-            process.standardError = Pipe()
-            guard (try? process.run()) != nil else { continue }
-            guard waitUntilExit(process, timeout: 10) else { continue }  // a wedged `gh` mustn't hang the update check
-            guard process.terminationStatus == 0 else { continue }
-            let token = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if let token, !token.isEmpty { return token }
-        }
-        return nil
+        candidate.compare(current, options: .numeric) == .orderedDescending
     }
 
     @discardableResult
@@ -514,9 +435,8 @@ final class Updater: ObservableObject {
         return String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
     }
 
-    /// Waits for `process` up to `timeout` seconds. Returns true if it exited
-    /// on its own; on overrun it terminates (then SIGKILLs) the process and
-    /// returns false, so a hung `gh`/`hdiutil`/`ditto` can never block forever.
+    /// Returns false after terminating (then SIGKILLing) a process that overruns
+    /// `timeout`, so a hung `hdiutil`/`ditto` can't block forever.
     @discardableResult
     nonisolated private static func waitUntilExit(_ process: Process, timeout: TimeInterval) -> Bool {
         let done = DispatchSemaphore(value: 0)
@@ -531,18 +451,5 @@ final class Updater: ObservableObject {
             return false
         }
         return true
-    }
-
-    private final class RedirectSanitizer: NSObject, URLSessionTaskDelegate {
-        func urlSession(
-            _ session: URLSession,
-            task: URLSessionTask,
-            willPerformHTTPRedirection response: HTTPURLResponse,
-            newRequest request: URLRequest
-        ) async -> URLRequest? {
-            var sanitized = request
-            sanitized.setValue(nil, forHTTPHeaderField: "Authorization")
-            return sanitized
-        }
     }
 }

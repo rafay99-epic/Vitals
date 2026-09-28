@@ -59,16 +59,4 @@ struct LoggingTests {
         let decoded = try decoder.decode(Log.Entry.self, from: encoder.encode(entry))
         #expect(decoded == entry)
     }
-
-    @Test func dayLabelNamesTodayAndYesterday() {
-        let now = Date()
-        #expect(LogsView.dayLabel(for: now) == "Today")
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-        #expect(LogsView.dayLabel(for: yesterday) == "Yesterday")
-        // An older date falls through to the full weekday/date heading.
-        let old = Date(timeIntervalSince1970: 1_600_000_000)
-        let label = LogsView.dayLabel(for: old)
-        #expect(label != "Today" && label != "Yesterday")
-        #expect(label.contains("2020"))
-    }
 }

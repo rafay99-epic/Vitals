@@ -2,19 +2,15 @@ import SwiftUI
 import Charts
 import AppKit
 
-/// The History tab: a browsable timeline of the logged readings, zoomable to the
-/// last hour/day/week or everything. Queries the SQLite store off-main and only
-/// while the tab is open, so it never costs anything in the background. Logging is
-/// on by default; if the user turns it off, the empty state invites turning it
-/// back on.
+/// The History section: a timeline of logged readings over the last hour, day,
+/// week, or everything. Queries the SQLite store off-main, only while mounted.
 struct HistoryView: View {
-    @EnvironmentObject private var settings: AppSettings
-    @ObservedObject var model: HistoryModel
-    let isActive: Bool
+    @Environment(AppSettings.self) private var settings
+    @Bindable var model: HistoryModel
 
     typealias Metric = HistoryMetric
 
-    private struct ReloadKey: Equatable { let active: Bool; let range: HistoryRange; let logging: Bool }
+    private struct ReloadKey: Equatable { let range: HistoryRange; let logging: Bool }
 
     var body: some View {
         MetricScroll {
@@ -24,13 +20,9 @@ struct HistoryView: View {
             if !model.alertEvents.isEmpty {
                 AlertHistoryCard(events: model.alertEvents)
             }
-            // Export lives outside the samples gate: per-app energy is logged
-            // independently of CPU-temp samples, so its CSV must stay reachable
-            // even on a Mac whose main history chart is empty.
             HistoryExportCard()
         }
-        .task(id: ReloadKey(active: isActive, range: model.range, logging: settings.loggingEnabled)) {
-            guard isActive else { return }
+        .task(id: ReloadKey(range: model.range, logging: settings.loggingEnabled)) {
             await model.reload()
         }
     }
@@ -38,8 +30,8 @@ struct HistoryView: View {
     @ViewBuilder
     private var timeline: some View {
         if !model.samples.isEmpty {
-            // Existing history is browsable even if logging was since turned
-            // off — flag that it won't keep growing.
+            // Existing history stays browsable after logging is turned off; flag that
+            // it won't keep growing.
             if !settings.loggingEnabled { loggingPausedNote }
             HistoryControls(range: $model.range, metric: $model.metric)
             HistoryChartCard(samples: model.samples, metric: model.metric, range: model.range)
@@ -70,7 +62,7 @@ struct HistoryView: View {
             symbol: "chart.xyaxis.line",
             tint: .indigo,
             title: "History logging is off",
-            message: "Turn on logging to record temperatures, usage, fans, and more to ~/.vitals — then browse and export the timeline here. It writes one line every 10 seconds."
+            message: "Turn on logging to record temperatures, usage, fans, and more, one reading every 10 seconds, stored locally in \((DataHome.directory.path as NSString).abbreviatingWithTildeInPath). Then browse and export the timeline here."
         ) {
             Button("Turn On Logging") { settings.loggingEnabled = true }
                 .buttonStyle(.borderedProminent)
@@ -97,16 +89,12 @@ private struct HistoryControls: View {
 
     var body: some View {
         HStack {
-            // Time range stays a segmented control — only four options, and quick
-            // side-by-side switching is the common action.
             Picker("", selection: $range) {
                 ForEach(HistoryRange.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             Spacer()
-            // Metric is a menu, not a segment row: eight-plus metrics would crowd
-            // (and eventually overflow) a segmented control. The menu scales to any
-            // number and shows the current pick with its icon.
+            // A menu, not a segmented control: eight metrics would overflow a segment row.
             Picker(selection: $metric) {
                 ForEach(HistoryView.Metric.allCases) { m in
                     Label(m.title, systemImage: m.symbol).tag(m)
@@ -122,7 +110,7 @@ private struct HistoryControls: View {
 // MARK: - Chart
 
 private struct HistoryChartCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     let samples: [HistorySample]
     let metric: HistoryView.Metric
     let range: HistoryRange
@@ -151,9 +139,8 @@ private struct HistoryChartCard: View {
         .chartYAxisLabel(yLabel)
     }
 
-    /// Keeping the mark switch outside the `Chart` expression is important for
-    /// Xcode 27: the compiler otherwise tries to solve every metric's nested
-    /// `ForEach`/optional mark tree together with all chart modifiers.
+    /// Keep the mark switch outside the `Chart` expression: otherwise the Xcode 27
+    /// compiler solves every metric's mark tree together with all chart modifiers.
     @ChartContentBuilder
     private var chartMarks: some ChartContent {
         switch metric {
@@ -323,8 +310,7 @@ private struct HistoryChartCard: View {
             let rates = samples.flatMap { [$0.netInBps, $0.netOutBps].compactMap { $0 } }
             return 0...max(((rates.max() ?? 0) / 1_000_000) * 1.1, 0.1)
         case .disk:
-            // Same idea as network: peak of either direction in MB/s, with a
-            // small floor so an idle drive's noise doesn't fill the chart.
+            // Same as network: peak of either direction, with a small floor.
             let rates = samples.flatMap { [$0.diskReadBps, $0.diskWriteBps].compactMap { $0 } }
             return 0...max(((rates.max() ?? 0) / 1_000_000) * 1.1, 0.1)
         case .temp:
@@ -338,7 +324,7 @@ private struct HistoryChartCard: View {
 // MARK: - Stats
 
 private struct HistoryStatsCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     let samples: [HistorySample]
     let metric: HistoryView.Metric
 
@@ -360,9 +346,8 @@ private struct HistoryStatsCard: View {
         }
     }
 
-    /// The primary series for the selected metric (download, for network;
-    /// read, for disk — the chart shows both directions, the summary follows
-    /// the headline one).
+    /// The primary series for the selected metric (download for network, read for
+    /// disk). The chart shows both directions; the summary follows the headline one.
     private var values: [Double] {
         switch metric {
         case .temp:    return samples.map(\.hottestTemp)
@@ -406,19 +391,18 @@ private struct HistoryExportCard: View {
             HStack(spacing: 8) {
                 Button("Export CSV") { export(.csv) }
                 Button("Export JSON") { export(.json) }
-                Button("App Energy CSV") { export(.appEnergy) }
                 if let message {
                     Text(message).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
             .controlSize(.small)
-            Text("Saves the full log to ~/.vitals/exports and reveals it in Finder.")
+            Text("Saves the full log to \((DataHome.exportsDirectory.path as NSString).abbreviatingWithTildeInPath) and reveals it in Finder.")
                 .font(.caption2).foregroundStyle(.tertiary)
         }
     }
 
-    private enum Format { case csv, json, appEnergy }
+    private enum Format { case csv, json }
 
     private func export(_ format: Format) {
         Task {
@@ -426,7 +410,6 @@ private struct HistoryExportCard: View {
                 switch format {
                 case .csv: return HistoryExport.csv()
                 case .json: return HistoryExport.json()
-                case .appEnergy: return HistoryExport.appEnergyCSV()
                 }
             }.value
             if let url {

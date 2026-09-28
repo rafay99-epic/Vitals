@@ -1,9 +1,6 @@
 import Foundation
 import SwiftUI
 
-/// The metric choices are model-owned so HistoryView can be remounted without
-/// losing the user's selection. Labels and symbols stay here because they are
-/// also used by the controls and command-line launch override.
 enum HistoryMetric: String, CaseIterable, Identifiable {
     case temp, cpu, gpu, memory, network, disk, battery, power
 
@@ -36,17 +33,16 @@ enum HistoryMetric: String, CaseIterable, Identifiable {
     }
 }
 
-/// State that must survive HistoryView's active-section lifecycle. The view is
-/// intentionally remounted to release hidden SwiftUI/chart trees, while this
-/// model keeps the selected range, metric, and loaded result available when the
-/// user returns.
+/// History state that survives HistoryView being unmounted when another section
+/// is selected.
 @MainActor
-final class HistoryModel: ObservableObject {
-    @Published var range: HistoryRange = .day
-    @Published var metric: HistoryMetric = LaunchOverrides.historyMetric ?? .temp
-    @Published private(set) var samples: [HistorySample] = []
-    @Published private(set) var alertEvents: [AlertEvent] = []
-    @Published private(set) var loading = false
+@Observable
+final class HistoryModel {
+    var range: HistoryRange = .day
+    var metric: HistoryMetric = LaunchOverrides.historyMetric ?? .temp
+    private(set) var samples: [HistorySample] = []
+    private(set) var alertEvents: [AlertEvent] = []
+    private(set) var loading = false
 
     func reload() async {
         loading = true
@@ -54,8 +50,7 @@ final class HistoryModel: ObservableObject {
         let result = await Task.detached(priority: .userInitiated) {
             (HistoryReader.load(range: selectedRange, now: Date()), AlertLog.recent(limit: 30))
         }.value
-        // A cancelled request must not mutate shared loading state: a newer
-        // range/logging request may already be reading and showing its spinner.
+        // A newer request may already be loading; a cancelled one must not clear its spinner.
         guard !Task.isCancelled else { return }
         samples = result.0
         alertEvents = result.1

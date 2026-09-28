@@ -1,25 +1,13 @@
 import SwiftUI
 import Charts
 
-/// The Memory segment: a deep-dive that used to be a single Dashboard-style card.
-/// It leads with the shared `MemoryCard` hero (so the breakdown can never drift
-/// from the Dashboard's), then adds the detail a monitor should show — usage over
-/// time, the full composition with percentages, live VM page traffic, and the
-/// heaviest memory consumers. Every number is a real reading: an idle rate shows
-/// 0/s, an absent figure shows "—", nothing is smoothed or invented.
+/// The Memory section: the `MemoryCard` hero, then usage over time, the full
+/// composition, live VM page traffic, and the top memory consumers.
 struct MemoryView: View {
-    /// True only while Memory is the visible segment. Gates the history chart so
-    /// it never rebuilds marks in the background (same rule as GPU/Battery).
-    let isActive: Bool
-
     var body: some View {
         MetricScroll {
             MemoryCard()
-            // Only mounted while active, so the chart isn't rebuilt every tick in
-            // the background. Memory always reads, so no "contains" guard needed.
-            if isActive {
-                MemoryUsageHistoryCard()
-            }
+            MemoryUsageHistoryCard()
             MemoryCompositionCard()
             MemoryActivityCard()
             TopMemoryProcessesCard()
@@ -30,20 +18,17 @@ struct MemoryView: View {
 // MARK: - Usage history
 
 private struct MemoryUsageHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
-        // One pass over the series, hoisted out of the per-sample chart closure:
-        // whether to draw the swap line at all, and the Y-axis ceiling. Swap can
-        // exceed installed RAM, so the domain takes the larger of RAM and the
-        // tallest swap reading — otherwise a swap spike would clip.
+        // One pass for swap presence and the Y ceiling, outside the per-sample
+        // closure. Swap can exceed installed RAM, so the domain takes the larger of
+        // the two, or a swap spike would clip.
         let maxSwapGB = model.chartHistory.reduce(0.0) { max($0, gigabytes($1.swapUsed)) }
         let hasSwap = maxSwapGB > 0
         let upperGB = max(gigabytes(model.memoryTotal), maxSwapGB, 1)
         return SectionCard(title: "Usage history", symbol: "chart.xyaxis.line") {
             VStack(alignment: .leading, spacing: 10) {
-                // Deferred keeps the 50–150 ms first-layout cost off the
-                // tab-switch animation (see GPUView/BatteryView).
                 Deferred { chart(hasSwap: hasSwap, upperGB: upperGB) }.frame(height: 150)
                 legend(hasSwap: hasSwap)
             }
@@ -94,9 +79,9 @@ private struct MemoryUsageHistoryCard: View {
 // MARK: - Composition detail
 
 /// The full breakdown the hero's legend summarises, with each region's share of
-/// physical RAM spelled out — plus swap, which the bar doesn't cover.
+/// physical RAM spelled out, plus swap, which the bar doesn't cover.
 private struct MemoryCompositionCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Composition", symbol: "chart.pie.fill") {
@@ -131,11 +116,10 @@ private struct MemoryCompositionCard: View {
 
 // MARK: - VM activity
 
-/// Live virtual-memory page traffic. These are honestly 0/s on a healthy,
-/// unpressured Mac — that's the point: sustained page-outs or swap-ins are the
-/// signal that RAM is tight, so showing the real (often zero) rate matters.
+/// Live VM page traffic. Usually 0/s on a healthy Mac; sustained page-outs or
+/// swap-ins are the signal that RAM is tight.
 private struct MemoryActivityCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Activity", symbol: "waveform.path.ecg") {
@@ -147,10 +131,8 @@ private struct MemoryActivityCard: View {
                         .foregroundStyle(.tertiary)
                 }
             } else {
-                // No memory reading at all (a VM/restricted Mac) is a permanent
-                // "unavailable", matching the hero and Composition cards; a real
-                // Mac only sits at "Gathering…" for the one tick before the first
-                // rate (a rate needs two readings) lands.
+                // No memory reading (VM/restricted Mac) is permanently unavailable; a real
+                // Mac shows "Gathering…" only until the first rate (two readings) lands.
                 Text(model.memory == nil ? "Memory activity unavailable." : "Gathering…")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 60)
@@ -179,7 +161,7 @@ private struct MemoryActivityCard: View {
 // MARK: - Top memory consumers
 
 private struct TopMemoryProcessesCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Top memory", symbol: "list.bullet") {

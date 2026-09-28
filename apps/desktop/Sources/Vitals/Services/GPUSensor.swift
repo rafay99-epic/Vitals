@@ -2,24 +2,22 @@ import Foundation
 import IOKit
 import Metal
 
-/// A single read of the GPU's live state. Every field is optional because a
-/// reading that can't be taken is reported as "unknown" — never a fabricated 0.
+/// One read of the GPU. A field that can't be read is nil.
 struct GPUSnapshot {
     /// Marketing name from Metal, e.g. "Apple M1 Pro".
     let name: String?
-    /// Overall GPU busy percentage, 0...100.
+    /// Busy percentage, 0...100.
     let utilization: Double?
-    /// Renderer (shader/compute) busy percentage, 0...100, when exposed.
+    /// Renderer (shader/compute) busy percentage, when exposed.
     let rendererUtilization: Double?
-    /// Tiler (geometry) busy percentage, 0...100, when exposed.
+    /// Tiler (geometry) busy percentage, when exposed.
     let tilerUtilization: Double?
-    /// Physical GPU core count, read once from the IORegistry.
     let coreCount: Int?
-    /// Bytes of (unified) system memory currently in use by the GPU.
+    /// Unified memory in use by the GPU, in bytes.
     let memoryUsed: UInt64?
-    /// Bytes the GPU driver has allocated (its working pool — always ≥ in-use).
+    /// The driver's allocated pool, always ≥ in-use.
     let memoryAllocated: UInt64?
-    /// Metal's recommended working-set size — the denominator for `memoryUsed`.
+    /// Metal's recommended working-set size, the denominator for `memoryUsed`.
     let memoryTotal: UInt64?
 
     init(name: String?, utilization: Double?,
@@ -35,36 +33,40 @@ struct GPUSnapshot {
         self.memoryAllocated = memoryAllocated
         self.memoryTotal = memoryTotal
     }
-
-    /// Fraction of the recommended working set in use, 0...1, when both are known.
-    var memoryFraction: Double? {
-        guard let used = memoryUsed, let total = memoryTotal, total > 0 else { return nil }
-        return min(Double(used) / Double(total), 1)
-    }
 }
 
-/// Reads GPU utilization and memory from the IOAccelerator registry entry — the
-/// same `PerformanceStatistics` Activity Monitor reads. Needs no entitlements
-/// and works on Apple Silicon. The GPU's name, total memory and core count come
-/// from Metal / the IORegistry and never change during a run, so they're
-/// captured once.
+/// GPU utilization and memory from the IOAccelerator's `PerformanceStatistics`
+/// (what Activity Monitor reads; no entitlements needed). Name, total memory and
+/// core count are captured once.
 ///
 /// Lives behind the `SensorSampler` actor, so its cached state is serialized.
 final class GPUSampler {
-    private let device = MTLCreateSystemDefaultDevice()
-    private lazy var name = device?.name
-    private lazy var memoryTotal: UInt64? = device.map { $0.recommendedMaxWorkingSetSize }
+    /// Read once. The Metal device itself isn't kept alive.
+    private lazy var device: (name: String?, memoryTotal: UInt64?) = {
+        guard let device = MTLCreateSystemDefaultDevice() else { return (nil, nil) }
+        return (device.name, device.recommendedMaxWorkingSetSize)
+    }()
     private lazy var coreCount: Int? = Self.gpuCoreCount()
+    /// Looked up once and retained; released in `deinit`.
+    private lazy var accelerator: io_service_t = Self.findAccelerator()
+
+    deinit {
+        if accelerator != 0 { IOObjectRelease(accelerator) }
+    }
 
     func sample() -> GPUSnapshot? {
-        let perf = Self.acceleratorPerformanceStatistics()
+        let name = device.name
+        // One key, not a copy of the entry's whole property table.
+        let perf = accelerator == 0 ? nil : IORegistryEntryCreateCFProperty(
+            accelerator, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as? [String: Any]
         let utilization = perf?["Device Utilization %"] as? Int
         let renderer = perf?["Renderer Utilization %"] as? Int
         let tiler = perf?["Tiler Utilization %"] as? Int
         let memoryUsed = perf?["In use system memory"] as? Int ?? perf?["Alloc system memory"] as? Int
         let memoryAllocated = perf?["Alloc system memory"] as? Int
 
-        // No accelerator and no Metal device — there is no GPU to report.
+        // No accelerator and no Metal device.
         if utilization == nil && memoryUsed == nil && name == nil { return nil }
 
         func percent(_ value: Int?) -> Double? { value.map { min(max(Double($0), 0), 100) } }
@@ -77,37 +79,34 @@ final class GPUSampler {
             coreCount: coreCount,
             memoryUsed: memoryUsed.map(UInt64.init),
             memoryAllocated: memoryAllocated.map(UInt64.init),
-            memoryTotal: memoryTotal
+            memoryTotal: device.memoryTotal
         )
     }
 
-    /// The `PerformanceStatistics` dictionary of the first IOAccelerator that
-    /// exposes one. On Apple Silicon there is a single integrated GPU.
-    private static func acceleratorPerformanceStatistics() -> [String: Any]? {
+    /// The first IOAccelerator exposing `PerformanceStatistics`, retained (+1).
+    /// 0 when there's none (a VM).
+    private static func findAccelerator() -> io_service_t {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault,
                                            IOServiceMatching("IOAccelerator"),
-                                           &iterator) == KERN_SUCCESS else { return nil }
+                                           &iterator) == KERN_SUCCESS else { return 0 }
         defer { IOObjectRelease(iterator) }
 
         var service = IOIteratorNext(iterator)
         while service != 0 {
-            defer { IOObjectRelease(service) }
-            var propsRef: Unmanaged<CFMutableDictionary>?
-            if IORegistryEntryCreateCFProperties(service, &propsRef, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-               let props = propsRef?.takeRetainedValue() as? [String: Any],
-               let perf = props["PerformanceStatistics"] as? [String: Any] {
-                return perf
+            if let stats = IORegistryEntryCreateCFProperty(service, "PerformanceStatistics" as CFString,
+                                                           kCFAllocatorDefault, 0) {
+                stats.release()   // Create (+1): only probing for presence
+                return service
             }
+            IOObjectRelease(service)
             service = IOIteratorNext(iterator)
         }
-        return nil
+        return 0
     }
 
-    /// Physical GPU core count, published on the GPU's device-tree node as
-    /// `gpu-core-count`. Searched recursively through the accelerator's parents
-    /// since the property doesn't sit on the IOAccelerator entry itself. Read
-    /// once — it can't change.
+    /// `gpu-core-count` lives on the GPU's device-tree node, not the
+    /// IOAccelerator entry, so search the accelerator's parents.
     private static func gpuCoreCount() -> Int? {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault,
@@ -116,15 +115,14 @@ final class GPUSampler {
         defer { IOObjectRelease(iterator) }
 
         let options = IOOptionBits(kIORegistryIterateRecursively | kIORegistryIterateParents)
-        var service = IOIteratorNext(iterator)
-        while service != 0 {
+        while case let service = IOIteratorNext(iterator), service != 0 {
+            // A fresh `let` per pass, so the defer releases this entry, not the next.
             defer { IOObjectRelease(service) }
             if let value = IORegistryEntrySearchCFProperty(
                 service, kIOServicePlane, "gpu-core-count" as CFString,
                 kCFAllocatorDefault, options) as? Int, value > 0 {
                 return value
             }
-            service = IOIteratorNext(iterator)
         }
         return nil
     }

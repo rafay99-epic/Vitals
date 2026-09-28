@@ -2,22 +2,19 @@ import Foundation
 import Darwin
 import PrivateSensors
 
-/// Per-process CPU usage, computed from `proc_pid_rusage` deltas between
-/// consecutive samples — the same data Activity Monitor shows (100% = one
-/// core fully busy, so values above 100% are normal for multi-threaded work).
+/// Per-process CPU usage from `proc_pid_rusage` deltas between samples. Same
+/// scale as Activity Monitor: 100% is one core, so multi-threaded work exceeds it.
 final class ProcessSampler {
     struct Process: Identifiable {
         let id: pid_t
         let name: String
         let cpuPercent: Double
-        /// Physical-memory footprint (`ri_phys_footprint`) — the same figure the
-        /// Processes tab and Activity Monitor's Memory column show.
+        /// `ri_phys_footprint`, Activity Monitor's Memory column.
         let memory: UInt64
     }
 
-    /// Two views of the same sweep: the heaviest CPU consumers (needs a prior
-    /// sample for the delta) and the heaviest memory consumers (instantaneous, so
-    /// it's populated even on the very first tick).
+    /// Two views of one sweep. `byCPU` needs a prior sample; `byMemory` is
+    /// instantaneous, so it's filled on the first tick too.
     struct Sampled {
         let byCPU: [Process]
         let byMemory: [Process]
@@ -37,9 +34,8 @@ final class ProcessSampler {
     func sample(top count: Int) -> Sampled {
         let now = mach_absolute_time()
         let pidCount = proc_listallpids(nil, 0)
-        // Sanity-cap the count: it's syscall-controlled, and a garbage-huge
-        // value would otherwise allocate an unbounded array and overflow the
-        // Int32 byte-size argument below. Real systems have a few hundred PIDs.
+        // Cap the kernel-supplied count so a garbage value can't allocate an
+        // unbounded array or overflow the Int32 byte size below.
         guard pidCount > 0, pidCount < 100_000 else { return .empty }
         let capacity = Int(pidCount) + 64
         var pids = [pid_t](repeating: 0, count: capacity)
@@ -60,6 +56,7 @@ final class ProcessSampler {
             }
             guard result == 0 else { continue }
             currentMemory[pid] = usage.ri_phys_footprint
+            // On Apple Silicon these are Mach ticks, not nanoseconds; converted below.
             let cpuTime = usage.ri_user_time + usage.ri_system_time
             currentCPUTime[pid] = cpuTime
             if let before = previousCPUTime[pid], cpuTime >= before {
@@ -72,9 +69,6 @@ final class ProcessSampler {
         previousCPUTime = currentCPUTime
         previousSampleAt = now
 
-        // CPU% per pid, only when there's a prior sample to diff against. The
-        // memory list below doesn't depend on this, so it's still produced on the
-        // first tick — instantaneous footprint needs no delta.
         var percentByPid: [pid_t: Double] = [:]
         if hadPreviousSample, wallNanos > 0 {
             for entry in deltas {
@@ -83,8 +77,7 @@ final class ProcessSampler {
             }
         }
 
-        // Resolve each pid's name at most once — `proc_pidpath` is a syscall, and
-        // a process can rank in both the CPU and memory top lists.
+        // A pid can rank in both lists; resolve its name (a syscall) once.
         var nameByPid: [pid_t: String] = [:]
         func name(_ pid: pid_t) -> String {
             if let cached = nameByPid[pid] { return cached }
@@ -109,14 +102,13 @@ final class ProcessSampler {
     }
 
     private static func name(of pid: pid_t) -> String {
-        // The executable name is friendlier than proc_name's 16-char p_comm,
-        // which truncates and can be an arbitrary string for helper processes.
+        // Prefer the executable name over proc_name's truncated 16-char p_comm.
         var pathBuffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
         if proc_pidpath(pid, &pathBuffer, UInt32(pathBuffer.count)) > 0 {
             let components = String(cString: pathBuffer).split(separator: "/")
             if let executable = components.last, !executable.isEmpty {
                 // Some executables are named after their version ("2.1.175");
-                // the enclosing .app bundle is the recognizable name.
+                // use the enclosing .app name instead.
                 let isVersionLike = executable.allSatisfy { $0.isNumber || $0 == "." }
                 if isVersionLike, let bundle = components.last(where: { $0.hasSuffix(".app") }) {
                     return String(bundle.dropLast(4))

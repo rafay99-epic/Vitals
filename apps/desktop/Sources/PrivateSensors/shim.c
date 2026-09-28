@@ -5,9 +5,8 @@
 // IOReport "Energy Model" power sampling.
 //
 // IOReport ships no link-time stub, so it is resolved with dlopen at runtime.
-// All CoreFoundation ownership lives here in C — the handle retains exactly the
-// subscription, the subscribed-channel dictionary, and the previous sample, and
-// releases them in destroy(). Swift only ever sees plain doubles.
+// The handle retains the subscription, the subscribed-channel dictionary, and
+// the previous sample, and releases them in destroy().
 // ---------------------------------------------------------------------------
 
 #include <dlfcn.h>
@@ -58,7 +57,7 @@ void *vitals_socpower_create(void) {
 
     if (!copy_channels || !create_subscription || !create_samples || !create_delta ||
         !iterate || !get_name || !get_unit || !get_value) {
-        return NULL;  // partial/renamed export — treat the whole feature as unavailable
+        return NULL;  // partial or renamed exports: treat the feature as unavailable
     }
 
     CFMutableDictionaryRef desired = copy_channels(CFSTR("Energy Model"), NULL, 0, 0, 0);
@@ -99,7 +98,7 @@ static double joules_per_unit(CFStringRef unit) {
     if (strcmp(buf, "uJ") == 0 || strcmp(buf, "\xC2\xB5J") == 0) return 1e-6;  // "uJ" / "µJ"
     if (strcmp(buf, "nJ") == 0) return 1e-9;
     if (strcmp(buf, "J") == 0)  return 1.0;
-    return 0;  // unknown unit → don't fabricate a magnitude
+    return 0;  // unknown unit: skip the channel
 }
 
 int vitals_socpower_sample(void *handle, VitalsSoCPower *out) {
@@ -119,7 +118,7 @@ int vitals_socpower_sample(void *handle, VitalsSoCPower *out) {
     }
 
     double seconds = (double)(current_ns - h->previous_ns) / 1e9;
-    if (seconds <= 0) {  // clock went backwards or no time passed — skip cleanly
+    if (seconds <= 0) {  // no time passed
         CFRelease(h->previous);
         h->previous = current;
         h->previous_ns = current_ns;
@@ -128,8 +127,7 @@ int vitals_socpower_sample(void *handle, VitalsSoCPower *out) {
 
     CFDictionaryRef delta = h->create_delta(h->previous, current, NULL);
     if (delta) {
-        // Accumulate energy (joules) per rail, then divide by elapsed time.
-        // Captured as a pointer — blocks can't capture a C array by reference.
+        // Blocks can't capture a C array by reference, so capture a pointer.
         double joules_storage[3] = {0, 0, 0};  // [0]=CPU [1]=GPU [2]=ANE
         double *joules = joules_storage;
         channel_name_fn get_name = h->get_name;
@@ -147,7 +145,7 @@ int vitals_socpower_sample(void *handle, VitalsSoCPower *out) {
             } else if (strcmp(n, "GPU") == 0) {
                 rail = 1;
             } else if (strncmp(n, "ANE", 3) == 0) {
-                // "ANE", or per-engine "ANE0"/"ANE1"… — never "ANExxx_SRAM".
+                // "ANE" or per-engine "ANE0", "ANE1"; never "ANExxx_SRAM".
                 const char *rest = n + 3;
                 int digits_only = 1;
                 for (const char *p = rest; *p; p++) {
@@ -159,7 +157,7 @@ int vitals_socpower_sample(void *handle, VitalsSoCPower *out) {
 
             double scale = joules_per_unit(get_unit(ch));
             if (scale > 0) joules[rail] += (double)get_value(ch, 0) * scale;
-            return 0;  // kIOReportIterOk — continue
+            return 0;  // kIOReportIterOk: continue
         });
         CFRelease(delta);
 
@@ -185,8 +183,7 @@ void vitals_socpower_destroy(void *handle) {
 }
 
 // ---------------------------------------------------------------------------
-// NVMe SSD SMART read (see PrivateSensors.h). Uses Apple's own NVMe SMART
-// user-client interface; all IOKit/CF lifetimes are owned here.
+// NVMe SSD SMART read (see PrivateSensors.h).
 // ---------------------------------------------------------------------------
 
 #include <IOKit/IOKitLib.h>
@@ -197,9 +194,9 @@ void vitals_socpower_destroy(void *handle) {
 int vitals_nvme_smart_read(VitalsDiskSMART *out) {
     memset(out, 0, sizeof(*out));
 
-    // Match by the public "NVMe SMART Capable" property rather than a device
-    // class, so this isn't tied to a particular controller (Apple Silicon
-    // publishes it on an IOEmbeddedNVMeBlockDevice). No match → no SMART here.
+    // Match by the "NVMe SMART Capable" property, not a device class, so this
+    // isn't tied to one controller (Apple Silicon publishes it on an
+    // IOEmbeddedNVMeBlockDevice).
     CFMutableDictionaryRef sub = CFDictionaryCreateMutable(
         kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     if (!sub) return 0;
@@ -242,11 +239,8 @@ int vitals_nvme_smart_read(VitalsDiskSMART *out) {
         out->unsafe_shutdowns         = d.UNSAFE_SHUTDOWNS[0];
         out->media_errors             = d.MEDIA_ERRORS[0];
 
-        // TRIM support lives in the Identify Controller ONCS bitfield (bit 2 =
-        // Dataset Management), not the SMART log — the same source system_profiler
-        // reports "TRIM Support" from. Read it on the same interface; a drive or
-        // VM that refuses Identify leaves trim_known = 0 and the caller shows
-        // "Unknown" rather than fabricating a "No".
+        // TRIM is ONCS bit 2 (Dataset Management) in Identify Controller. A drive
+        // that refuses Identify leaves trim_known = 0.
         NVMeIdentifyControllerStruct idc;
         memset(&idc, 0, sizeof(idc));
         if ((*smart)->GetIdentifyData(smart, &idc, 0) == kIOReturnSuccess) {
@@ -261,16 +255,15 @@ int vitals_nvme_smart_read(VitalsDiskSMART *out) {
 }
 
 // ---------------------------------------------------------------------------
-// Crash capture (see PrivateSensors.h). Strictly async-signal-safe: the handler
-// only calls open/write/close, backtrace(), and raise() — all on POSIX's
-// async-signal-safe list — over fixed buffers, with no malloc, stdio, or locks.
+// Crash capture (see PrivateSensors.h). The handler only calls open/write/close,
+// backtrace(), signal() and raise() over fixed buffers: no malloc, stdio, or
+// locks. backtrace() is not on the POSIX async-signal-safe list; on Darwin it
+// walks frames without allocating.
 //
-// It deliberately does NOT call backtrace_symbols_fd: that symbolicates via
-// dladdr(), which takes the dyld lock and can malloc — so a crash that already
-// holds those (a libmalloc abort from heap corruption, or a fault inside dyld)
-// would deadlock the handler and the process would hang instead of dying. We
-// write the raw return addresses instead, and re-raise to SIG_DFL so the OS
-// crash reporter produces the fully symbolicated report regardless.
+// Do NOT call backtrace_symbols_fd: it symbolicates via dladdr(), which takes
+// the dyld lock and can malloc, so a crash already holding either (heap
+// corruption abort, fault inside dyld) would hang instead of dying. Raw return
+// addresses are written instead; the OS crash report has the symbols.
 // ---------------------------------------------------------------------------
 
 #include <signal.h>
@@ -299,8 +292,8 @@ static void vitals_write_str(int fd, const char *s) {
     if (len > 0) { ssize_t r = write(fd, s, len); (void)r; }
 }
 
-// Writes a pointer as "0x" + 16 hex digits + newline, using only write() — no
-// snprintf (which is not guaranteed async-signal-safe).
+// Writes "0x" + 16 hex digits + newline with write() only; snprintf is not
+// guaranteed async-signal-safe.
 static void vitals_write_addr(int fd, unsigned long value) {
     static const char hex[] = "0123456789abcdef";
     char buf[19];
@@ -342,8 +335,8 @@ void vitals_install_crash_handlers(const char *log_path) {
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = vitals_crash_handler;
     sigemptyset(&sa.sa_mask);
-    // RESETHAND: after we re-raise, the default handler runs. NODEFER: allow a
-    // fault inside the handler to terminate rather than deadlock.
+    // RESETHAND: the re-raise hits the default handler. NODEFER: a fault inside
+    // the handler terminates rather than deadlocks.
     sa.sa_flags = SA_RESETHAND | SA_NODEFER;
     for (size_t i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++) {
         sigaction(sigs[i], &sa, NULL);

@@ -3,11 +3,8 @@ import Darwin
 import CoreWLAN
 import SystemConfiguration
 
-/// One physical network interface's live picture: its identity, the per-second
-/// throughput derived by diffing kernel byte counters, the running totals since
-/// boot, and whether the link is actually up. Rates only exist relative to a
-/// previous reading, so a single `NetworkLink` from the first sample carries 0
-/// rates — never a fabricated spike.
+/// One physical interface: identity, per-second throughput, totals since boot,
+/// and link state. Rates are 0 on the first sample (no previous reading).
 struct NetworkLink: Equatable, Sendable {
     enum Kind: Sendable { case wifi, ethernet, other }
     var name: String          // BSD name, "en0"
@@ -20,11 +17,9 @@ struct NetworkLink: Equatable, Sendable {
     var isActive: Bool         // IFF_UP && IFF_RUNNING
 }
 
-/// The Wi-Fi radio's association details, straight from CoreWLAN. Every field is
-/// optional because the OS legitimately withholds some of them: modern macOS
-/// returns a nil `ssid` unless the app holds Location permission, and an
-/// unassociated radio reports no signal. We pass those nils through untouched —
-/// an unknown SSID is honestly unknown, never a placeholder string.
+/// Wi-Fi association details from CoreWLAN. Fields are optional because macOS
+/// withholds some: `ssid` is nil without Location permission, and an
+/// unassociated radio reports no signal.
 struct WiFiInfo: Equatable, Sendable {
     var ssid: String?          // nil when macOS withholds it (needs Location permission)
     var rssi: Int?             // dBm
@@ -34,11 +29,7 @@ struct WiFiInfo: Equatable, Sendable {
     var channelBand: String?   // "2.4 GHz" / "5 GHz" / "6 GHz"
 }
 
-/// A full network reading for one tick: every counted physical interface (active
-/// ones first), the summed throughput and running totals across them, the Wi-Fi
-/// radio details when a Wi-Fi interface is powered on, and the default-route
-/// interface when the system will tell us. Anything undeterminable is nil, not
-/// guessed.
+/// One tick's network reading across all counted physical interfaces.
 struct NetworkSnapshot: Sendable {
     var links: [NetworkLink]          // physical interfaces, active ones first
     var totalInPerSec: Double         // sum over counted interfaces
@@ -49,51 +40,40 @@ struct NetworkSnapshot: Sendable {
     var primaryInterfaceName: String? // default-route interface if determinable, else nil
 }
 
-/// Live per-interface network throughput, built from the kernel's 64-bit byte
-/// counters. Sampled off the main thread by the sampler; **not** `@MainActor`.
+/// Per-interface throughput from the kernel's byte counters. Sampled off the
+/// main thread by the sampler; not `@MainActor`. Rates are deltas between
+/// consecutive `sample()` calls.
 ///
-/// Rates are deltas between consecutive `sample()` calls, so the instance holds
-/// the previous counters and a monotonic timestamp. The **first** call has no
-/// prior reading and reports 0 rates — honest, because a rate needs history.
-///
-/// Byte counters come from `sysctl(NET_RT_IFLIST2)` → `if_data64`, which are true
-/// 64-bit values. `getifaddrs`' `if_data` counters wrap at 32 bits and are
-/// deliberately not used here.
+/// Counters come from `sysctl(NET_RT_IFLIST2)` → `if_data64` (true 64-bit).
+/// `getifaddrs`' `if_data` counters wrap at 32 bits, so they aren't used.
 final class NetworkStats {
-    /// Previous per-interface byte counters, keyed by BSD name, plus the
-    /// monotonic timestamp they were read at — the two inputs a delta needs.
     private var previousCounters: [String: (bytesIn: UInt64, bytesOut: UInt64)] = [:]
     private var previousTimestamp: UInt64?  // CLOCK_UPTIME_RAW nanoseconds
 
-    /// The set of BSD names CoreWLAN considers Wi-Fi radios. Resolved once — the
-    /// hardware doesn't change under us — so per-tick classification stays cheap.
+    /// BSD names CoreWLAN considers Wi-Fi radios. Resolved once.
     private lazy var wifiInterfaceNames: Set<String> = Set(CWWiFiClient.shared().interfaceNames() ?? [])
 
-    /// BSD-name prefixes we never count toward throughput. These are either
-    /// loopback (`lo`) or *virtual* interfaces that re-carry bytes which already
-    /// crossed a physical `enX` link — a VPN tunnel (`utun`), AirDrop/AWDL
-    /// (`awdl`, `llw`), a Thunderbolt/other bridge (`bridge`), classic tunnels
-    /// (`gif`, `stf`), and Apple's internal helper interfaces (`ap`, `anpi`,
-    /// `XHC`). Counting them would double-count the same traffic, so we keep only
-    /// physical-style interfaces (`enX`: Wi-Fi, Ethernet, and Thunderbolt-bridge
-    /// members, which are also `enX`).
+    /// Loopback and virtual interfaces (VPN tunnels, AWDL, bridges, Apple helper
+    /// interfaces) re-carry bytes that already crossed a physical `enX` link.
+    /// Counting them would double-count traffic.
     static let excludedPrefixes = ["lo", "utun", "awdl", "llw", "bridge", "gif", "stf", "ap", "anpi", "XHC"]
 
-    /// True when a BSD interface name should be counted toward throughput — i.e.
-    /// it isn't one of the virtual/loopback families above. Pure and internal so
-    /// the double-count guard is unit-testable.
     static func isCountedInterface(_ name: String) -> Bool {
         !excludedPrefixes.contains { name.hasPrefix($0) }
     }
 
-    /// One reading. Rates are deltas versus the previous call; the first call
-    /// reports 0 rates. Always returns a snapshot (empty links on total failure),
-    /// never nil — the model can display "no interfaces" honestly.
-    func sample() -> NetworkSnapshot {
+    /// Wi-Fi details and default route from the last detailed read.
+    private var wifi: WiFiInfo?
+    private var primaryInterface: String?
+    private lazy var store = SCDynamicStoreCreate(nil, "Vitals.NetworkStats" as CFString, nil, nil)
+
+    /// One reading. Returns empty links on total failure, never nil.
+    /// `includeDetails` gates the CoreWLAN and default-route reads; when false the
+    /// previous details are held. Byte counters are read every call.
+    func sample(includeDetails: Bool) -> NetworkSnapshot {
         let counters = Self.readInterfaceCounters().filter { Self.isCountedInterface($0.name) }
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        // Elapsed since the last reading; 0 on the first call (no prior stamp),
-        // which drives every rate to 0 via `CounterRate.perSecond`.
+        // 0 on the first call, which makes every rate 0.
         let elapsed: TimeInterval = previousTimestamp.map { Double(now - $0) / 1_000_000_000 } ?? 0
 
         var links: [NetworkLink] = []
@@ -118,10 +98,8 @@ final class NetworkStats {
             ))
         }
 
-        // Remember this tick's counters for the next delta.
-        // `uniquingKeysWith` rather than `uniqueKeysWithValues`: a duplicate BSD
-        // name in the routing dump should never happen, but a monitor must not
-        // crash on odd kernel output — keep the first record and move on.
+        // `uniquingKeysWith`, not `uniqueKeysWithValues`: a duplicate BSD name in
+        // the routing dump must not crash the app.
         previousCounters = Dictionary(counters.map {
             ($0.name, (bytesIn: $0.bytesIn, bytesOut: $0.bytesOut))
         }, uniquingKeysWith: { first, _ in first })
@@ -130,6 +108,11 @@ final class NetworkStats {
         // Active links first, then a stable name order so the list doesn't churn.
         links.sort { a, b in
             a.isActive == b.isActive ? a.name < b.name : a.isActive
+        }
+
+        if includeDetails {
+            wifi = readWiFi()
+            primaryInterface = readPrimaryInterface()
         }
 
         let totalInPerSec = links.reduce(0) { $0 + $1.bytesInPerSec }
@@ -143,8 +126,8 @@ final class NetworkStats {
             totalOutPerSec: totalOutPerSec,
             totalBytesIn: totalBytesIn,
             totalBytesOut: totalBytesOut,
-            wifi: readWiFi(),
-            primaryInterfaceName: readPrimaryInterface()
+            wifi: wifi,
+            primaryInterfaceName: primaryInterface
         )
     }
 
@@ -166,8 +149,7 @@ final class NetworkStats {
 
     // MARK: - Kernel byte counters (sysctl NET_RT_IFLIST2 → if_data64)
 
-    /// One interface's identity + 64-bit byte counters, parsed from a
-    /// `if_msghdr2` record.
+    /// One `if_msghdr2` record.
     private struct InterfaceCounter {
         let name: String
         let ifType: UInt8
@@ -177,10 +159,8 @@ final class NetworkStats {
         var isActive: Bool { (flags & IFF_UP) != 0 && (flags & IFF_RUNNING) != 0 }
     }
 
-    /// Walk the routing socket's interface list (`NET_RT_IFLIST2`) and pull the
-    /// true 64-bit `ifi_ibytes` / `ifi_obytes` out of each `if_data64`. The
-    /// buffer is a packed sequence of variable-length messages; we advance by
-    /// each record's `ifm_msglen` and only decode the `RTM_IFINFO2` ones.
+    /// The buffer is a packed sequence of variable-length messages: advance by
+    /// each record's `ifm_msglen` and decode only `RTM_IFINFO2` records.
     private static func readInterfaceCounters() -> [InterfaceCounter] {
         var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
         var length = 0
@@ -225,10 +205,8 @@ final class NetworkStats {
 
     // MARK: - Wi-Fi (CoreWLAN)
 
-    /// The Wi-Fi radio's live association, or nil when the radio is powered off
-    /// (no Wi-Fi to report). Every CoreWLAN read is guarded and left nil when the
-    /// OS returns nothing — an unassociated radio reports no signal, and macOS
-    /// withholds the SSID without Location permission; we never invent either.
+    /// Nil when the radio is powered off. CoreWLAN reports 0 for missing
+    /// signal values, mapped to nil here.
     private func readWiFi() -> WiFiInfo? {
         guard let interface = CWWiFiClient.shared().interface(), interface.powerOn() else { return nil }
         let channel = interface.wlanChannel()
@@ -256,21 +234,17 @@ final class NetworkStats {
 
     // MARK: - Default route
 
-    /// The primary (default-route) interface name from SystemConfiguration's
-    /// global IPv4 state, or nil when it can't be determined.
+    /// Default-route interface from SystemConfiguration's global IPv4 state.
     private func readPrimaryInterface() -> String? {
-        guard let store = SCDynamicStoreCreate(nil, "Vitals.NetworkStats" as CFString, nil, nil),
+        guard let store,
               let value = SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString) as? [String: Any]
         else { return nil }
         return value["PrimaryInterface"] as? String
     }
 }
 
-/// Pure, locale-independent formatting for network numbers. Base **1000** (the
-/// networking convention, not 1024) and adaptive precision: bytes/sec render as
-/// an integer of B/s, KB/s carries 0–1 decimals, MB/s and GB/s one decimal.
-/// `String(format:)` uses the C locale, so the output is deterministic and
-/// testable regardless of the user's region.
+/// Network number formatting. Base 1000 (networking convention, not 1024).
+/// `String(format:)` uses the C locale, so output is the same in every region.
 enum NetworkFormat {
     /// A throughput like "0 B/s", "540 KB/s", "1.2 MB/s".
     static func rate(_ bytesPerSec: Double) -> String {
@@ -278,8 +252,6 @@ enum NetworkFormat {
         if value < 1000 { return "\(Int(value.rounded())) B/s" }
         let kb = value / 1000
         if kb < 1000 {
-            // 0 decimals once we're into the hundreds; 1 decimal below, so small
-            // rates keep a useful digit without cluttering big ones.
             return kb >= 100 ? "\(Int(kb.rounded())) KB/s" : "\(oneDecimal(kb)) KB/s"
         }
         let mb = kb / 1000
@@ -287,9 +259,7 @@ enum NetworkFormat {
         return "\(oneDecimal(mb / 1000)) GB/s"
     }
 
-    /// A menu-bar-width throughput like "0B", "540K", "1.2M" — the same tiers
-    /// as `rate(_:)` with the unit shrunk to one letter (K/M/G of bytes per
-    /// second), for surfaces where every point of width matters.
+    /// Menu-bar-width throughput like "0B", "540K", "1.2M". Same tiers as `rate(_:)`.
     static func compactRate(_ bytesPerSec: Double) -> String {
         let value = (bytesPerSec.isFinite && bytesPerSec > 0) ? bytesPerSec : 0
         if value < 1000 { return "\(Int(value.rounded()))B" }

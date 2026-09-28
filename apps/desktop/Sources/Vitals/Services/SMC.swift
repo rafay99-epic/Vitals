@@ -2,9 +2,9 @@ import Foundation
 import IOKit
 import PrivateSensors
 
-/// Client for the System Management Controller: reads fan state for the
-/// dashboard, and writes fan mode/target for manual fan control. Reads work
-/// for any user; writes require root (see `FanController`).
+/// Client for the System Management Controller. Reads fan state for any user;
+/// the one write (`setFanAutomatic`) needs root and only runs from the retired
+/// fan helper (`FanHelperRetirement`).
 final class SMC {
     struct Fan: Identifiable {
         let id: Int
@@ -23,17 +23,16 @@ final class SMC {
 
     private let connection: io_connect_t
 
-    /// A key's type and size never change, but fetching them costs a kernel
-    /// round-trip — half the SMC traffic before this cache existed. Missing
-    /// keys are remembered too, so absent keys (no F0Md on some machines)
-    /// aren't re-queried every tick.
+    /// A key's type and size never change but cost a kernel round-trip to fetch.
+    /// Missing keys (no F0Md on some machines) are cached too so they aren't
+    /// re-queried every tick.
     private var keyInfoCache: [UInt32: SMCKeyInfoData] = [:]
     private var missingKeys: Set<UInt32> = []
 
     init?() {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         guard service != 0 else {
-            Log.noticeOnce(.smc, key: "smc-no-service", "AppleSMC service not found — fan readings and control are unavailable")
+            Log.noticeOnce(.smc, key: "smc-no-service", "AppleSMC service not found — fan readings are unavailable")
             return nil
         }
         defer { IOObjectRelease(service) }
@@ -68,49 +67,15 @@ final class SMC {
         }
     }
 
-    /// Forces the fan to a fixed rpm (clamped to its rated range).
-    /// Returns the rpm actually applied. Requires root.
-    func setFanTarget(_ fan: Int, rpm: Double) throws -> Double {
-        let minRPM = read("F\(fan)Mn") ?? 0
-        let maxRPM = read("F\(fan)Mx") ?? 0
-        guard maxRPM > minRPM else {
-            throw SMCError(message: "fan \(fan) has no usable speed range")
-        }
-        let clamped = min(max(rpm, minRPM), maxRPM)
-        try enableManualMode(fan)
-        try write("F\(fan)Tg", value: clamped)  // target rpm (float on Apple Silicon)
-        return clamped
-    }
-
     /// Returns the fan to macOS automatic control. Requires root.
-    func setFanAutomatic(_ fan: Int) throws {
+    func setFanAutomatic(_ fan: Int) {
         try? write("F\(fan)Md", value: 0)  // auto
         try? write("Ftst", value: 0)       // clear the diagnostic unlock
     }
 
-    /// Switches a fan to manual mode. On Apple Silicon M3/M4 the firmware
-    /// holds fans in "system mode" (mode 3) and rejects a direct mode write;
-    /// setting the `Ftst` diagnostic-unlock key first lets the mode change
-    /// take. See agoodkind/macos-smc-fan for the reverse-engineering.
-    private func enableManualMode(_ fan: Int) throws {
-        let modeKey = "F\(fan)Md"
-        // Fast path: already manual, or a direct write is accepted (Intel, M5).
-        if (read(modeKey) ?? 0) == 1 { return }
-        if (try? write(modeKey, value: 1)) != nil, (read(modeKey) ?? 0) == 1 { return }
-
-        // Unlock path: set Ftst, then retry the mode write for a few seconds.
-        try? write("Ftst", value: 1)
-        for _ in 0..<60 {
-            if (try? write(modeKey, value: 1)) != nil, (read(modeKey) ?? 0) == 1 { return }
-            usleep(100_000)  // 100 ms
-        }
-        throw SMCError(message: "fan \(fan) stayed in system mode — firmware refused manual control")
-    }
-
     // MARK: - Key access
 
-    /// Reads a key and decodes it to a Double, or nil if the key is missing
-    /// or has a type we don't understand.
+    /// Nil if the key is missing or its type isn't decoded.
     func read(_ key: String) -> Double? {
         guard let keyCode = Self.fourCC(key), let info = keyInfo(for: keyCode) else { return nil }
 
@@ -182,6 +147,7 @@ final class SMC {
 
     // MARK: - Codecs
 
+    // `flt ` is native byte order; the integer and fixed-point types are big-endian.
     private static func decode(_ bytes: [UInt8], type: UInt32) -> Double? {
         switch string(fromFourCC: type) {
         case "flt ":

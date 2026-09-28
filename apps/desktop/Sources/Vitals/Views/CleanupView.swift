@@ -1,20 +1,12 @@
 import SwiftUI
 
-/// The Cleanup tab: five pages behind one segmented picker — the classic Quick
-/// and Deep cache sweeps, per-project Developer junk, a Large-&-Old Files review,
-/// and a content-verified Duplicates finder. Pages swap **in place** (the
-/// performance rule: navigation never changes window geometry); each page keeps
-/// its own hero, scroll, and footer.
+/// The Cleanup section: Quick and Deep cache sweeps and per-project Developer
+/// junk behind one picker. Pages swap in place, so window geometry never changes.
 struct CleanupView: View {
-    @ObservedObject var model: CleanupModel
-    /// True only while Cleanup is the visible tab; the view stays mounted.
-    var isActive: Bool
-    /// Persisted so the chosen page sticks across launches.
+    @Bindable var model: CleanupModel
+    /// Persisted so the chosen page sticks across launches. A stored page that
+    /// no longer exists falls back to Quick.
     @AppStorage("cleanupPage") private var page: CleanupPage = .quick
-    /// The old two-value depth switch — migrated once into `page` so a user who
-    /// left Cleanup on Deep lands on the Deep page.
-    @AppStorage("cleanupDepth") private var legacyDepth: CleanDepth = .quick
-    @AppStorage("cleanupPageMigrated") private var pageMigrated = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,37 +16,24 @@ struct CleanupView: View {
             ZStack {
                 switch page {
                 case .quick:
-                    CleanupClassicPage(model: model, isActive: isActive, depth: .quick)
+                    CleanupClassicPage(model: model, depth: .quick)
                         .transition(.opacity)
                 case .deep:
-                    CleanupClassicPage(model: model, isActive: isActive, depth: .deep)
+                    CleanupClassicPage(model: model, depth: .deep)
                         .transition(.opacity)
                 case .developer:
                     CleanupDeveloperPage(model: model)
-                        .transition(.opacity)
-                case .files:
-                    CleanupFilesPage(model: model)
-                        .transition(.opacity)
-                case .duplicates:
-                    CleanupDuplicatesPage(model: model)
                         .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(response: 0.28, dampingFraction: 0.85), value: page)
         }
-        .onAppear {
-            guard !pageMigrated else { return }
-            if legacyDepth == .deep { page = .deep }
-            pageMigrated = true
-        }
     }
 
     private var picker: some View {
         HStack {
-            // A pull-down menu, not a segment row: the mode label shows the current
-            // page with its icon, and the list scales without crowding the bar
-            // (matches the History metric picker).
+            // A pull-down menu so the label shows the current page with its icon.
             Picker(selection: $page) {
                 ForEach(CleanupPage.allCases) { option in
                     Label(option.title, systemImage: option.symbol).tag(option)
@@ -65,7 +44,7 @@ struct CleanupView: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
-            .disabled(model.isCleaning || model.isDevCleaning || model.isFilesCleaning || model.isDupCleaning)
+            .disabled(model.isCleaning || model.isDevCleaning)
             Spacer()
         }
         .padding(.horizontal, 20)
@@ -75,16 +54,12 @@ struct CleanupView: View {
 
 // MARK: - Quick / Deep page
 
-/// The classic cache sweep — today's Cleanup behavior, one page per depth. The
-/// old in-hero depth picker is gone; `depth` is fixed and the four-way page
-/// picker above chooses it. Quick stays in the user domain (no password); Deep
-/// adds age-gated system categories that need one administrator prompt.
+/// The cache sweep, one page per depth. Quick stays in the user domain (no
+/// password); Deep adds age-gated system categories behind one admin prompt.
 private struct CleanupClassicPage: View {
-    @ObservedObject var model: CleanupModel
-    /// True only while Cleanup is the visible tab.
-    var isActive: Bool
+    @Bindable var model: CleanupModel
     let depth: CleanDepth
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     @State private var confirming = false
     @State private var confirmingDestructive = false
 
@@ -110,11 +85,9 @@ private struct CleanupClassicPage: View {
                 .opacity(0.5)
             footer
         }
-        .onChange(of: isActive, initial: true) { _, active in
-            guard active else { return }
-            // Mounting this page (or re-activating the tab) measures for its
-            // depth: if a scan already ran at the other depth, re-measure for
-            // this one; otherwise honor auto-scan on the first run.
+        .onAppear {
+            // If a scan already ran at the other depth, re-measure for this one;
+            // otherwise honor auto-scan on the first run.
             if model.hasRun && model.depth != depth {
                 model.scan(depth: depth)
             } else if settings.autoScanCleanup && !model.hasRun {
@@ -143,7 +116,7 @@ private struct CleanupClassicPage: View {
             isPresented: $confirmingDestructive,
             titleVisibility: .visible
         ) {
-            Button(destructiveButtonLabel, role: .destructive) { model.clean() }
+            Button("Permanently Delete", role: .destructive) { model.clean() }
         } message: {
             Text(destructiveMessage)
         }
@@ -182,41 +155,15 @@ private struct CleanupClassicPage: View {
         return lines
     }
 
-    /// Destructive categories that end up in the Trash (recoverable) rather
-    /// than deleted in place — split from the permanent ones so the second
-    /// confirmation never overstates what's about to happen.
-    private var destructiveTrashCategories: [CleanupCategory] {
-        model.selectedDestructiveCategories.filter { $0.kind.movesToTrash }
-    }
-
-    private var destructivePermanentCategories: [CleanupCategory] {
-        model.selectedDestructiveCategories.filter { !$0.kind.movesToTrash }
-    }
-
     private var destructiveTitle: String {
-        let size = formatBytes(model.selectedDestructiveCategories.reduce(0) { $0 + $1.sizeBytes })
-        return destructivePermanentCategories.isEmpty ? "Move \(size) to the Trash?" : "Permanently delete \(size)?"
-    }
-
-    private var destructiveButtonLabel: String {
-        destructivePermanentCategories.isEmpty ? "Move to Trash" : "Permanently Delete"
+        "Permanently delete \(formatBytes(model.selectedDestructiveCategories.reduce(0) { $0 + $1.sizeBytes }))?"
     }
 
     private var destructiveMessage: String {
-        func names(_ categories: [CleanupCategory]) -> String {
-            categories
-                .map { "\($0.kind.title) (\(formatBytes($0.sizeBytes)))" }
-                .joined(separator: ", ")
-        }
-        let permanentNames = names(destructivePermanentCategories)
-        let trashNames = names(destructiveTrashCategories)
-        if destructivePermanentCategories.isEmpty {
-            return "This moves \(trashNames) to the Trash — recoverable until you empty it."
-        }
-        if destructiveTrashCategories.isEmpty {
-            return "This permanently deletes \(permanentNames). It is not regenerable and can't be recovered — make sure you have another copy. This can't be undone."
-        }
-        return "This permanently deletes \(permanentNames) — not regenerable and can't be recovered, make sure you have another copy. \(trashNames) is moved to the Trash instead — recoverable until you empty it."
+        let names = model.selectedDestructiveCategories
+            .map { "\($0.kind.title) (\(formatBytes($0.sizeBytes)))" }
+            .joined(separator: ", ")
+        return "This permanently deletes \(names). It is not regenerable and can't be recovered, so make sure you have another copy. This can't be undone."
     }
 
     // MARK: Hero
@@ -410,7 +357,6 @@ private extension CleanupCategory.Kind {
         case .trash: return .red
         case .recentItems: return .indigo
         case .aiCaches: return .purple
-        case .aiHistory: return .pink
         case .systemCaches: return .gray
         case .systemLogs: return .mint
         case .crashReports: return .red
@@ -455,21 +401,12 @@ private struct CategoryCard: View {
                             .help("Removing these needs administrator rights")
                     }
                     if category.kind.isDestructive {
-                        if category.kind.movesToTrash {
-                            Text("TO TRASH")
-                                .font(.system(size: 9, weight: .bold))
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Capsule().fill(.orange.opacity(0.16)))
-                                .foregroundStyle(.orange)
-                                .help("Moved to the Trash — recoverable until you empty it")
-                        } else {
-                            Text("PERMANENT")
-                                .font(.system(size: 9, weight: .bold))
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Capsule().fill(.red.opacity(0.16)))
-                                .foregroundStyle(.red)
-                                .help("Not regenerable — deleted permanently and can't be recovered")
-                        }
+                        Text("PERMANENT")
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(.red.opacity(0.16)))
+                            .foregroundStyle(.red)
+                            .help("Not regenerable — deleted permanently and can't be recovered")
                     }
                     Spacer()
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
