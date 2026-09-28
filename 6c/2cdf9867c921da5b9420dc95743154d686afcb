@@ -1,0 +1,23 @@
+apps/desktop/Sources/Vitals/App/MenuBarController.swift
+  s_70840817465319::t_ce539215a8db04 118,123
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_70840817465319::t_ce539215a8db04 115-116,119-140,208,266-273
+apps/desktop/Sources/Vitals/Views/PerformanceHistoryCard.swift
+  s_70840817465319::t_44f7e3ffcb36df 38-40,44-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6c2cdf9867c921da5b9420dc95743154d686afcb",
+  "prompts": {},
+  "sessions": {
+    "s_70840817465319": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05bb6853-7761-4ba6-bb5b-fe82a241e45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
