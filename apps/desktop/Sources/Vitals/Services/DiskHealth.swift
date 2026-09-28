@@ -2,17 +2,11 @@ import Foundation
 import IOKit
 import PrivateSensors
 
-/// The internal SSD's health, straight from the drive's own NVMe SMART log —
-/// wear, lifetime bytes written/read, power-on hours, power cycles, unsafe
-/// shutdowns, spare blocks, temperature, and the controller's critical-warning
-/// flag. Every figure is a real counter the drive reports; nothing is estimated
-/// or invented. A Mac (or VM) that doesn't expose SMART returns nil rather than
-/// a fabricated "100% healthy".
+/// The internal SSD's NVMe SMART log.
 struct DiskHealthSnapshot {
     let model: String?
     let capacityBytes: Int64?
-    /// The drive's own wear estimate (NVMe "percentage used"): 0 = fresh, 100 =
-    /// the rated endurance has been consumed (it can read past 100).
+    /// NVMe "percentage used": 0 = fresh, 100 = rated endurance consumed. Can exceed 100.
     let percentUsed: Int
     /// Lifetime bytes written / read (NVMe data units × 512 000).
     let bytesWritten: Int64
@@ -23,48 +17,40 @@ struct DiskHealthSnapshot {
     let availableSpare: Int          // % remaining
     let availableSpareThreshold: Int // % at which the drive warns
     let mediaErrors: Int
-    /// Composite temperature in °C, or nil when the drive doesn't report it.
+    /// Composite temperature in °C, nil when not reported.
     let temperature: Double?
-    /// NVMe critical-warning bitfield; 0 = no warning.
+    /// NVMe critical-warning bitfield; any set bit is a controller-flagged problem.
     let criticalWarning: Int
-    /// Whether the drive supports TRIM (NVMe Dataset Management), read from the
-    /// Identify Controller ONCS field — the same source `system_profiler` reports
-    /// "TRIM Support" from. `nil` when the drive didn't answer the Identify query,
-    /// so the UI shows "Unknown" rather than guessing.
+    /// TRIM support from the Identify Controller ONCS field (the same source
+    /// `system_profiler` uses). Nil when the drive didn't answer Identify.
     let trimSupported: Bool?
 
-    /// Human label for the TRIM row — honest about the unknown case.
     var trimText: String {
         guard let trimSupported else { return "Unknown" }
         return trimSupported ? "Supported" : "Not supported"
     }
 
-    /// NVMe reports endurance in 512 000-byte "data units". Pure, for testing.
+    /// NVMe reports endurance in 512 000-byte "data units". Saturates at Int64.max.
     static func bytes(dataUnits: UInt64) -> Int64 {
         let (product, overflow) = dataUnits.multipliedReportingOverflow(by: 512_000)
         if overflow || product > UInt64(Int64.max) { return Int64.max }
         return Int64(product)
     }
 
-    /// Verdict from the NVMe critical-warning bitfield — any set bit means the
-    /// controller is flagging a real problem (spare exhausted, read-only,
-    /// degraded reliability, …). Pure, for testing.
     static func condition(criticalWarning: Int) -> String {
         criticalWarning == 0 ? "Healthy" : "Service recommended"
     }
 
     enum WearLevel { case normal, elevated, critical }
 
-    /// Severity for the wear gauge. Folds in the controller's critical-warning
-    /// flag and the spare-block threshold — not just wear % — so a flagged drive
-    /// never shows a reassuring green. Pure, for testing.
+    /// Folds in the critical-warning flag and spare threshold, not just wear %,
+    /// so a flagged drive never shows green.
     var wearLevel: WearLevel {
         if criticalWarning != 0 || percentUsed >= 100 { return .critical }
         if percentUsed >= 80 || availableSpare < availableSpareThreshold { return .elevated }
         return .normal
     }
 
-    /// Power-on time as days once past a day, hours below. Pure, for testing.
     var poweredOnText: String {
         guard powerOnHours >= 24 else { return "\(powerOnHours) h" }
         let days = powerOnHours / 24
@@ -73,18 +59,15 @@ struct DiskHealthSnapshot {
 }
 
 enum DiskHealth {
-    /// Reads the internal SSD's SMART log via the IOKit NVMe user client, then
-    /// enriches it with the drive model/capacity from IORegistry. Returns nil
-    /// when no SMART-capable device is present or the read fails — the caller
-    /// shows an honest "unavailable" state, never zeros.
+    /// SMART log via the IOKit NVMe user client, plus model/capacity from
+    /// IORegistry. Nil when no SMART-capable device exists or the read fails.
     static func read() -> DiskHealthSnapshot? {
         var raw = VitalsDiskSMART()
         guard vitals_nvme_smart_read(&raw) == 1, raw.valid == 1 else { return nil }
 
         let (model, capacity) = identity()
-        // Composite temperature is in Kelvin; 0 means "not reported" → show nothing.
+        // Kelvin; 0 means not reported.
         let temperature = raw.temperature_k > 0 ? Double(raw.temperature_k) - 273.15 : nil
-        // TRIM: honest tri-state — nil when the drive refused the Identify query.
         let trim: Bool? = raw.trim_known == 1 ? (raw.trim_supported == 1) : nil
 
         func clampInt(_ value: UInt64) -> Int { Int(min(value, UInt64(Int.max))) }
@@ -107,12 +90,10 @@ enum DiskHealth {
         )
     }
 
-    /// Best-effort model + capacity from the NVMe controller's IORegistry
-    /// properties (mirrors `Battery.read`'s property read). Only reported when
-    /// there is exactly **one** NVMe controller: the SMART log and this lookup
-    /// match drives independently, so with an external NVMe attached we can't be
-    /// sure they're the same drive — better to show no name/size than to pair
-    /// the wrong one. Missing fields just don't render; nothing is faked.
+    /// Model + capacity from the NVMe controller's IORegistry properties. Only
+    /// when there is exactly one controller: the SMART read and this lookup match
+    /// drives independently, so with an external NVMe attached they could pair
+    /// the wrong drive.
     private static func identity() -> (model: String?, capacityBytes: Int64?) {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IONVMeController"), &iterator) == KERN_SUCCESS else {
@@ -123,7 +104,6 @@ enum DiskHealth {
         let controller = IOIteratorNext(iterator)
         guard controller != 0 else { return (nil, nil) }
         defer { IOObjectRelease(controller) }
-        // More than one controller → ambiguous which drive; show nothing.
         let extra = IOIteratorNext(iterator)
         guard extra == 0 else { IOObjectRelease(extra); return (nil, nil) }
 

@@ -1,38 +1,26 @@
 import Foundation
 import IOKit
 
-/// A whole-machine disk I/O reading for one tick: per-second read/write
-/// throughput summed over every block-storage driver (internal SSD and any
-/// attached external drives). Rates only exist relative to a previous
-/// reading, so the first sample carries 0 rates — never a fabricated spike.
+/// Whole-machine disk throughput for one tick, summed over every block-storage
+/// driver. 0 on the first sample.
 struct DiskIOSnapshot: Sendable {
     var readPerSec: Double      // bytes/s, summed over drivers
     var writePerSec: Double
 }
 
-/// Live disk throughput from IOKit's `IOBlockStorageDriver` statistics — the
-/// same cumulative byte counters `iostat` reads. Sampled off the main thread
-/// by the sampler; **not** `@MainActor`.
+/// Disk throughput from `IOBlockStorageDriver` statistics (the counters `iostat`
+/// reads). Sampled off the main thread by the sampler; not `@MainActor`.
 ///
-/// Rates are deltas between consecutive `sample()` calls. Counters are kept
-/// **per driver** (keyed by IORegistry entry ID, which is unique for a
-/// driver's lifetime), so ejecting a drive simply drops its key and attaching
-/// one starts it from a 0-rate first delta — neither event can bend the total
-/// into a fake spike, mirroring `NetworkStats`' per-interface bookkeeping.
+/// Counters are kept per driver, keyed by IORegistry entry ID, so attaching or
+/// ejecting a drive can't produce a fake spike in the total.
 final class DiskStats {
-    /// Previous per-driver byte counters plus the monotonic timestamp they
-    /// were read at — the two inputs a delta needs.
     private var previousCounters: [UInt64: (read: UInt64, written: UInt64)] = [:]
     private var previousTimestamp: UInt64?  // CLOCK_UPTIME_RAW nanoseconds
 
-    /// One reading. Rates are deltas versus the previous call; the first call
-    /// reports 0 rates. Always returns a snapshot (0 rates when IOKit has no
-    /// drivers to report), never nil.
     func sample() -> DiskIOSnapshot {
         let counters = Self.readDriverCounters()
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        // Elapsed since the last reading; 0 on the first call (no prior
-        // stamp), which drives every rate to 0 via `CounterRate.perSecond`.
+        // 0 on the first call, which makes every rate 0.
         let elapsed: TimeInterval = previousTimestamp.map { Double(now - $0) / 1_000_000_000 } ?? 0
 
         var readPerSec = 0.0
@@ -51,18 +39,14 @@ final class DiskStats {
         return DiskIOSnapshot(readPerSec: readPerSec, writePerSec: writePerSec)
     }
 
-    /// Property keys from `<IOKit/storage/IOBlockStorageDriver.h>` —
-    /// `kIOBlockStorageDriverStatistics{Key,BytesReadKey,BytesWrittenKey}`.
-    /// The storage headers aren't part of IOKit's Swift module, so the
-    /// ABI-stable literals are spelled out here.
+    /// `kIOBlockStorageDriverStatistics{Key,BytesReadKey,BytesWrittenKey}` from
+    /// `<IOKit/storage/IOBlockStorageDriver.h>`. The storage headers aren't in
+    /// IOKit's Swift module, so the ABI-stable literals are spelled out.
     private static let statisticsKey = "Statistics"
     private static let bytesReadKey = "Bytes (Read)"
     private static let bytesWrittenKey = "Bytes (Write)"
 
-    /// Every block-storage driver's cumulative byte counters, from the
-    /// `Statistics` property `IOBlockStorageDriver` maintains (the counters
-    /// behind `iostat`). A driver with no readable statistics is skipped —
-    /// skipping is honest; substituting zeros would dilute the totals.
+    /// Drivers without readable statistics are skipped.
     private static func readDriverCounters() -> [(id: UInt64, read: UInt64, written: UInt64)] {
         var iterator = io_iterator_t()
         guard IOServiceGetMatchingServices(

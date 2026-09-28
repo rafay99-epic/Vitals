@@ -2,7 +2,7 @@ import Foundation
 
 /// How far a cleanup reaches.
 enum CleanDepth: String, CaseIterable, Identifiable {
-    /// User-domain caches, logs, and Trash — no admin, today's behavior.
+    /// User-domain caches, logs, and Trash. No admin.
     case quick
     /// Adds system-level junk that needs administrator rights.
     case deep
@@ -12,9 +12,9 @@ enum CleanDepth: String, CaseIterable, Identifiable {
 }
 
 /// A category of reclaimable disk space, with the concrete items that would
-/// be removed. Every category is regenerable data (caches, logs, trash) —
-/// never documents, projects, or settings. System categories are age-gated:
-/// only files older than a retention window are touched.
+/// be removed. Every category is regenerable data (caches, logs, trash), never
+/// documents, projects, or settings. System categories are age-gated: only
+/// files older than a retention window are touched.
 struct CleanupCategory: Identifiable {
     enum Kind: String, CaseIterable, Identifiable {
         // Quick (user domain, no admin)
@@ -31,7 +31,6 @@ struct CleanupCategory: Identifiable {
         // Deep, user domain (no admin)
         case recentItems
         case deviceBackups
-        case aiHistory
         // Deep, system (admin, age-gated)
         case systemCaches
         case systemLogs
@@ -49,22 +48,12 @@ struct CleanupCategory: Identifiable {
             }
         }
 
-        /// Irreversible removal of data that isn't merely regenerable cache —
-        /// an iOS device backup may be the only copy of a phone. These are never
-        /// auto-anything: off by default and gated behind a second, explicit
+        /// Data that isn't merely regenerable (a device backup may be the only
+        /// copy of a phone). Off by default and gated behind a second, explicit
         /// confirmation that names exactly what will be destroyed.
         var isDestructive: Bool {
             switch self {
-            case .deviceBackups, .aiHistory: return true
-            default: return false
-            }
-        }
-
-        /// Removed by moving to the Trash (recoverable) rather than an in-place
-        /// delete — used for irreversible-if-gone user data like chat transcripts.
-        var movesToTrash: Bool {
-            switch self {
-            case .aiHistory: return true
+            case .deviceBackups: return true
             default: return false
             }
         }
@@ -92,7 +81,6 @@ struct CleanupCategory: Identifiable {
             case .trash: return "Trash"
             case .recentItems: return "Recent items"
             case .aiCaches: return "AI Tool Junk"
-            case .aiHistory: return "Old AI Chat Sessions"
             case .systemCaches: return "System caches"
             case .systemLogs: return "System logs"
             case .crashReports: return "Crash reports"
@@ -115,7 +103,6 @@ struct CleanupCategory: Identifiable {
             case .trash: return "Files already in the Trash, removed permanently"
             case .recentItems: return "Recently-opened file and server lists (the files stay)"
             case .aiCaches: return "Old caches, logs and temp files from AI coding tools you've used"
-            case .aiHistory: return "AI conversation transcripts older than 30 days — moved to the Trash"
             case .systemCaches: return "Old .cache/.tmp/.log files in /Library/Caches (7+ days)"
             case .systemLogs: return "Old system logs in /private/var/log (7+ days)"
             case .crashReports: return "Crash and diagnostic reports older than 7 days"
@@ -138,7 +125,6 @@ struct CleanupCategory: Identifiable {
             case .trash: return "trash"
             case .recentItems: return "clock.arrow.circlepath"
             case .aiCaches: return "sparkles"
-            case .aiHistory: return "bubble.left.and.bubble.right"
             case .systemCaches: return "gearshape"
             case .systemLogs: return "doc.badge.gearshape"
             case .crashReports: return "exclamationmark.triangle"
@@ -187,9 +173,8 @@ enum DiskCleaner {
         return !protectedCachePrefixes.contains { name.hasPrefix($0) }
     }
 
-    /// Logs entries kept out of the user-domain Logs category: diagnostic and
-    /// crash reports. (Deep mode offers them separately, age-gated, as their
-    /// own admin category.)
+    /// Diagnostic and crash reports stay out of the user Logs category. Deep mode
+    /// offers them separately, age-gated, as an admin category.
     static func shouldOfferLog(named name: String) -> Bool {
         name != "DiagnosticReports" && name != "CrashReporter"
     }
@@ -205,11 +190,9 @@ enum DiskCleaner {
         return categories
     }
 
-    /// The category kinds a scan at `depth` can offer — pure enum filtering, no
-    /// filesystem IO. Conditional categories (e.g. `.aiCaches`, which only
-    /// materializes when an AI tool is installed) are always included: a superset
-    /// is correct for pruning a stale selection via `formIntersection`, and cheap
-    /// enough to compute on the main actor.
+    /// The category kinds a scan at `depth` can offer, with no filesystem IO.
+    /// Conditional kinds (`.aiCaches`) are always included: a superset is
+    /// correct for pruning a stale selection via `formIntersection`.
     static func kinds(at depth: CleanDepth) -> Set<CleanupCategory.Kind> {
         switch depth {
         case .quick: return Set(CleanupCategory.Kind.allCases.filter { $0.minimumDepth == .quick })
@@ -298,8 +281,7 @@ enum DiskCleaner {
                   sizeBytes: 0),
         ]
 
-        // AI coding tools' junk — only when at least one such tool is actually
-        // installed, so the card never appears on a machine that has none.
+        // Only when an AI tool is installed, so the card never shows otherwise.
         if !AIToolJunk.detectedTools(home: home).isEmpty {
             categories.append(.init(kind: .aiCaches,
                                     items: AIToolJunk.cacheItems(home: home),
@@ -318,34 +300,21 @@ enum DiskCleaner {
             .map { shared.appendingPathComponent($0) }
             .filter { fm.fileExists(atPath: $0.path) }
 
-        // iOS device backups — reported like Mole, but offered for opt-in
-        // removal too (off by default, second confirmation). Each backup folder
-        // under MobileSync/Backup is a separate item so a stale one can go
-        // without taking a current one.
+        // Each backup folder is a separate item so a stale one can go without
+        // taking a current one.
         let backupRoot = home
             .appendingPathComponent("Library/Application Support/MobileSync/Backup")
         let backups = ((try? fm.contentsOfDirectory(at: backupRoot, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? [])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
 
-        var categories: [CleanupCategory] = [
+        return [
             .init(kind: .recentItems, items: recentLists, sizeBytes: 0),
             .init(kind: .deviceBackups, items: backups, sizeBytes: 0),
         ]
-
-        // Old AI chat transcripts — destructive (moved to the Trash), so only
-        // offered when an AI tool is present and there's actually something aged.
-        if !AIToolJunk.detectedTools(home: home).isEmpty {
-            let history = AIToolJunk.historyItems(home: home)
-            if !history.isEmpty {
-                categories.append(.init(kind: .aiHistory, items: history, sizeBytes: 0))
-            }
-        }
-        return categories
     }
 
-    /// Cached iOS/iPadOS/iPod firmware images (`.ipsw`) older than the firmware
-    /// retention window. Re-downloadable, so safe to clear (Mole clears these
-    /// too). Fixed iTunes "Software Updates" roots only.
+    /// Cached iOS/iPadOS/iPod firmware (`.ipsw`) older than the retention
+    /// window. Re-downloadable. Fixed iTunes "Software Updates" roots only.
     static func iosFirmwareFiles(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
         let roots = ["iPhone Software Updates", "iPad Software Updates", "iPod Software Updates"]
             .map { home.appendingPathComponent("Library/iTunes/\($0)") }
@@ -353,10 +322,9 @@ enum DiskCleaner {
             .map(\.url)
     }
 
-    /// The number of Time Machine local snapshots on the boot volume. macOS
-    /// manages these automatically (purging them under disk pressure); Mole and
-    /// Vitals only report the count — there's no honest byte figure to show.
-    /// Returns nil if Time Machine isn't configured or `tmutil` is unavailable.
+    /// Time Machine local snapshot count on the boot volume. macOS purges these
+    /// under disk pressure and there's no honest byte figure, so only the count
+    /// is reported. Nil if Time Machine isn't configured or `tmutil` is missing.
     static func localSnapshotCount() -> Int? {
         let tmutil = "/usr/bin/tmutil"
         guard FileManager.default.isExecutableFile(atPath: tmutil) else { return nil }
@@ -365,31 +333,31 @@ enum DiskCleaner {
         process.arguments = ["listlocalsnapshots", "/"]
         let out = Pipe()
         process.standardOutput = out
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
             return nil
         }
+        let data = out.fileHandleForReading.readDataToEndOfFile()   // drain before waiting
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return nil }
-        let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let text = String(data: data, encoding: .utf8) ?? ""
         let count = text.split(separator: "\n").filter { $0.contains("com.apple.TimeMachine.") }.count
         return count > 0 ? count : nil
     }
 
     private static func deepSystemCategories() -> [CleanupCategory] {
-        // Items filled in lazily by `measured(_:)` — the age-eligible walk is
-        // the expensive part and runs during the streamed sizing phase.
+        // Items are filled by `measured(_:)`: the age-eligible walk is expensive
+        // and runs during the streamed sizing phase.
         [CleanupCategory.Kind.systemCaches, .systemLogs, .crashReports, .systemTemp, .gpuCaches]
             .map { CleanupCategory(kind: $0, items: [], sizeBytes: 0) }
     }
 
     // MARK: Measuring
 
-    /// Returns the category with `items` and `sizeBytes` filled. User
-    /// categories sum their listed items; system categories walk their fixed
-    /// roots for the age-eligible files that the clean script would remove.
+    /// Fills `items` and `sizeBytes`. System categories walk their fixed roots
+    /// for the same age-eligible files the clean script would remove.
     static func measured(_ category: CleanupCategory) -> CleanupCategory {
         var category = category
         if category.kind.requiresAdmin {
@@ -455,7 +423,7 @@ enum DiskCleaner {
     }
 
     /// Known per-user Metal/GPU shader cache directories under /var/folders.
-    /// Fixed shape `…/C/<id>/com.apple.{metal,metalfe,gpuarchiver}` — never a
+    /// Fixed shape `…/C/<id>/com.apple.{metal,metalfe,gpuarchiver}`, never a
     /// broader match.
     private static func gpuCacheDirs() -> [URL] {
         let fm = FileManager.default
@@ -480,17 +448,13 @@ enum DiskCleaner {
     }
 
     /// Browser cache directories across the Chromium family and Firefox. Only
-    /// ever returns *cache* subfolders — `Cache`, `Code Cache`, GPU/shader
-    /// caches, and the Service Worker cache stores — built from a fixed list, so
-    /// it can never reach a profile's `Cookies`, `History`, `Bookmarks` or
-    /// `Login Data` (those live as siblings and are deliberately left alone).
-    /// All regenerable: the browser refills them on next use.
+    /// *cache* subfolders from a fixed list, so it can never reach a profile's
+    /// `Cookies`, `History`, `Bookmarks` or `Login Data` (siblings, left alone).
     static func browserCacheDirs(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
         let fm = FileManager.default
         let appSupport = home.appendingPathComponent("Library/Application Support")
         let caches = home.appendingPathComponent("Library/Caches")
 
-        // Chromium-family install roots (each contains profile folders).
         let chromiumRoots = [
             "Google/Chrome", "Google/Chrome Beta", "Google/Chrome Canary",
             "BraveSoftware/Brave-Browser", "Microsoft Edge", "Chromium",
@@ -529,9 +493,8 @@ enum DiskCleaner {
     // MARK: Cleaning
 
     struct CleanResult {
-        /// A user-domain item the in-process pass couldn't delete (root-owned
-        /// cache file, permission-locked Trash entry). Carries its measured size
-        /// so a privileged retry can credit it once the file is actually gone.
+        /// A user-domain item the in-process pass couldn't delete. Carries its
+        /// size so a privileged retry can credit it once the file is gone.
         struct Failure { let url: URL; let size: UInt64; let reason: String }
 
         var freedBytes: UInt64 = 0
@@ -540,24 +503,16 @@ enum DiskCleaner {
         var usedAdmin = false
     }
 
-    /// Removes the contents of user-domain categories in-process. Items are
-    /// deleted, not trashed — these are caches and logs the system regenerates.
-    /// System categories are NOT handled here; they go through `systemCleanScript`.
+    /// Removes user-domain category items in-process, deleted in place (they
+    /// regenerate). System categories go through `systemCleanScript`, not here.
     static func clean(_ categories: [CleanupCategory]) -> CleanResult {
         let fm = FileManager.default
         var result = CleanResult()
         for category in categories where !category.kind.requiresAdmin {
-            let toTrash = category.kind.movesToTrash
             for url in category.items {
                 let size = AppInventory.directorySize(url)
                 do {
-                    if toTrash {
-                        // Recoverable removal for irreversible-if-gone data. On
-                        // failure we record it and stop — never a permanent delete.
-                        try fm.trashItem(at: url, resultingItemURL: nil)
-                    } else {
-                        try fm.removeItem(at: url)
-                    }
+                    try fm.removeItem(at: url)
                     result.freedBytes += size
                     result.removedItems += 1
                 } catch {
@@ -569,14 +524,11 @@ enum DiskCleaner {
         return result
     }
 
-    /// A root `rm -rf` script for user-domain cleanup items the in-process pass
-    /// couldn't delete — root-owned cache files, permission-locked Trash entries.
-    /// This is the cleanup counterpart to the uninstaller's blocked-bundle
-    /// fallback: every path is re-validated against the fixed set of user
-    /// cleanup roots, independently of how it was discovered — absolute, inside
-    /// the home folder, no `..`, never the bare home, never `/System`. Anything
-    /// that fails validation is dropped, never executed. Returns nil if nothing
-    /// survives.
+    /// A root `rm -rf` script for user-domain items the in-process pass couldn't
+    /// delete. Every path is re-validated against fixed user cleanup roots,
+    /// regardless of how it was found: absolute, inside home, no `..`, never the
+    /// bare home, never `/System`. Failures are dropped, never executed. Nil if
+    /// nothing survives.
     static func userCleanFallbackScript(
         for paths: [URL],
         home: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -608,10 +560,9 @@ enum DiskCleaner {
         return any ? lines.joined(separator: "\n") : nil
     }
 
-    /// A root shell script that deletes only age-gated files under a fixed set
-    /// of allowlisted system roots. Built entirely from constants — never from
-    /// UI-supplied paths — so the privileged side is auditable and bounded.
-    /// Never references /System, never a bare path, always `-mtime` gated.
+    /// A root script that deletes only age-gated files under allowlisted system
+    /// roots. Built from constants, never UI-supplied paths, so the privileged
+    /// side is auditable. Never /System, never a bare path, always `-mtime` gated.
     static func systemCleanScript(for kinds: Set<CleanupCategory.Kind>) -> String {
         var lines = ["#!/bin/sh", "# Vitals deep clean — age-gated, fixed roots only."]
 

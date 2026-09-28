@@ -1,10 +1,10 @@
 import Foundation
 import SwiftUI
-import Combine
 import AppKit
 
 @MainActor
-final class VitalsModel: ObservableObject {
+@Observable
+final class VitalsModel {
     struct Sensor: Identifiable {
         enum Kind { case cpu, gpu, storage, battery, other }
         let id: String
@@ -25,78 +25,62 @@ final class VitalsModel: ObservableObject {
         let swapUsed: Double    // bytes
         let batteryPercent: Double?  // charge %, nil when no battery
         let totalWatts: Double?      // SoC package power, nil until the 2nd sample
-        let batteryWatts: Double?    // battery load watts (signed: + charging, − draining), nil off battery
-        let netInPerSec: Double?     // network download, bytes/s — nil until the 2nd sample
-        let netOutPerSec: Double?    // network upload, bytes/s — nil until the 2nd sample
-        let diskReadPerSec: Double?  // disk read, bytes/s — nil until the 2nd sample
-        let diskWritePerSec: Double? // disk write, bytes/s — nil until the 2nd sample
+        let batteryWatts: Double?    // signed: + charging, − draining; nil off battery
+        let netInPerSec: Double?     // bytes/s, nil until the 2nd sample
+        let netOutPerSec: Double?    // bytes/s, nil until the 2nd sample
+        let diskReadPerSec: Double?  // bytes/s, nil until the 2nd sample
+        let diskWritePerSec: Double? // bytes/s, nil until the 2nd sample
     }
 
-    @Published private(set) var cpuSensors: [Sensor] = []
-    @Published private(set) var gpuTemp: Double?
+    private(set) var cpuSensors: [Sensor] = []
+    private(set) var gpuTemp: Double?
     /// GPU utilization and memory (nil when there's no readable GPU, e.g. a VM).
-    @Published private(set) var gpu: GPUSnapshot?
-    @Published private(set) var ssdTemp: Double?
-    @Published private(set) var batteryTemp: Double?
-    @Published private(set) var fans: [SMC.Fan] = []
-    @Published private(set) var hasSMC = false
-    @Published private(set) var history: [Sample] = []
-    /// `history` thinned for drawing — charts can't show more points than
+    private(set) var gpu: GPUSnapshot?
+    private(set) var ssdTemp: Double?
+    private(set) var batteryTemp: Double?
+    private(set) var fans: [SMC.Fan] = []
+    private(set) var hasSMC = false
+    /// The full in-memory window. Views read `chartHistory`, never this.
+    @ObservationIgnored private var history: [Sample] = []
+    /// `history` thinned for drawing: charts can't show more points than
     /// pixels, and Swift Charts rebuild cost scales with mark count.
-    @Published private(set) var chartHistory: [Sample] = []
-    @Published private(set) var cpuUsage: Double = 0
-    /// Per-cluster CPU utilisation (Apple Silicon). Nil when there's no trusted
-    /// P/E split — `cpuUsage` (the blended figure) still applies.
-    @Published private(set) var cpuClusters: (performance: Double, efficiency: Double)?
-    /// Per-core utilisation for the CPU tab's deep view. Empty without a trusted split.
-    @Published private(set) var cpuPerCore: [CoreUsage] = []
-    @Published private(set) var memory: MemorySnapshot?
-    /// Live VM page-traffic rates (page-ins/outs, swap-ins/outs, compress/
-    /// decompress). Nil until the second sample — a rate needs a prior reading.
-    @Published private(set) var memoryActivity: MemoryActivity?
-    @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
-    @Published private(set) var topProcesses: [ProcessSampler.Process] = []
-    /// The heaviest memory consumers, top-first. Sampled in the same sweep as
-    /// `topProcesses` (which is CPU-ordered), so it costs no extra syscalls.
-    @Published private(set) var topMemoryProcesses: [ProcessSampler.Process] = []
-    /// The previous tick's cumulative VM counters + when they were read, kept to
-    /// diff into `memoryActivity`.
-    private var previousMemorySnapshot: MemorySnapshot?
-    private var previousMemorySnapshotAt: Date?
-    @Published private(set) var battery: BatterySnapshot?
-    /// The internal SSD's SMART health (wear, endurance, power-on hours…). Nil
-    /// on a Mac/VM that doesn't expose SMART, or for the first tick or two.
-    @Published private(set) var diskHealth: DiskHealthSnapshot?
-    /// Live SoC power draw (CPU/GPU/ANE rails). Nil until the second sample —
-    /// power is an energy delta and needs a prior reading — and on the rare
-    /// machine where IOReport is unavailable.
-    @Published private(set) var power: PowerSnapshot?
-    /// Live per-interface network throughput (Wi-Fi/Ethernet) plus Wi-Fi link
-    /// details. Nil until the second sample — the first reading has no prior
-    /// byte counters, so its 0 B/s rates would be placeholders, not
-    /// measurements (same rule as `memoryActivity`/`power`).
-    @Published private(set) var network: NetworkSnapshot?
-    /// True once the first network reading landed; publication starts with the
-    /// second (see `network`).
-    private var hasNetworkBaseline = false
-    /// Whole-machine disk read/write throughput. Nil until the second sample —
-    /// the first reading has no prior byte counters (same rule as `network`).
-    @Published private(set) var diskIO: DiskIOSnapshot?
-    /// True once the first disk reading landed; publication starts with the
-    /// second (see `diskIO`).
-    private var hasDiskIOBaseline = false
-    /// False until the first sample lands — drives the dashboard loading state.
-    @Published private(set) var hasLoaded = false
-    /// True when a sample overran the watchdog (a sensor syscall wedged). The
-    /// last readings stay on screen, but this lets the UI flag that they're not
-    /// updating rather than silently presenting stale numbers as live.
-    @Published private(set) var sensorsStalled = false
+    private(set) var chartHistory: [Sample] = []
+    private(set) var cpuUsage: Double = 0
+    /// Per-cluster CPU utilisation (Apple Silicon). Nil without a trusted P/E split.
+    private(set) var cpuClusters: (performance: Double, efficiency: Double)?
+    /// Per-core utilisation. Empty without a trusted P/E split.
+    private(set) var cpuPerCore: [CoreUsage] = []
+    private(set) var memory: MemorySnapshot?
+    /// VM page-traffic rates. Nil until the second sample: a rate needs a prior reading.
+    private(set) var memoryActivity: MemoryActivity?
+    private(set) var thermalState = ProcessInfo.processInfo.thermalState
+    private(set) var topProcesses: [ProcessSampler.Process] = []
+    /// Heaviest memory consumers, from the same sweep as the CPU-ordered `topProcesses`.
+    private(set) var topMemoryProcesses: [ProcessSampler.Process] = []
+    @ObservationIgnored private var previousMemorySnapshot: MemorySnapshot?
+    @ObservationIgnored private var previousMemorySnapshotAt: Date?
+    private(set) var battery: BatterySnapshot?
+    /// Internal SSD SMART health. Nil when SMART isn't exposed, or for the first tick or two.
+    private(set) var diskHealth: DiskHealthSnapshot?
+    /// SoC power draw. Nil until the second sample (energy delta) and when
+    /// IOReport is unavailable.
+    private(set) var power: PowerSnapshot?
+    /// Network throughput plus Wi-Fi link details. Nil until the second sample:
+    /// the first reading has no prior byte counters.
+    private(set) var network: NetworkSnapshot?
+    @ObservationIgnored private var hasNetworkBaseline = false
+    /// Disk read/write throughput. Nil until the second sample, like `network`.
+    private(set) var diskIO: DiskIOSnapshot?
+    @ObservationIgnored private var hasDiskIOBaseline = false
+    /// False until the first sample lands; drives the loading state.
+    private(set) var hasLoaded = false
+    /// True while a sample is overdue (a sensor syscall wedged). The last
+    /// readings stay on screen, and the Overview says they're paused.
+    private(set) var sensorsStalled = false
 
     let memoryTotal = ProcessInfo.processInfo.physicalMemory
 
-    /// True only when a sample arrived but carried no usable readings at all
-    /// (no temps, no fans, no memory) — e.g. a VM or restricted hardware.
-    /// On real Macs memory always reads, so this stays false.
+    /// True when a sample arrived with no usable readings at all, e.g. a VM.
     var sensorsUnavailable: Bool {
         hasLoaded && cpuSensors.isEmpty && gpuTemp == nil && !hasSMC && memory == nil
     }
@@ -113,132 +97,93 @@ final class VitalsModel: ObservableObject {
     private let settings: AppSettings
     private let sampler = SensorSampler()
     private let notifications = NotificationManager()
-    private let alertEngine = AlertEngine()
-    private var timer: Timer?
-    private var isSampling = false
+    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var isSampling = false
     /// The one in-flight sample. Cancelling a Swift Task does not interrupt a
     /// blocking IOKit call, so the watchdog must not release this slot early.
-    private var samplingTask: Task<Void, Never>?
-    private var samplingID = UUID()
-    /// Whether the main window is open. Top-process sampling (the costliest part
-    /// of a tick) is skipped when it's closed and no process-CPU alert needs it.
-    private var mainWindowVisible = false
-    /// The visible section narrows expensive optional reads while the window is
-    /// open; Settings and maintenance screens do not need process/IOReport data.
-    private var visibleSectionID = "overview"
-    /// True while the Mac is asleep — set by `NSWorkspace.willSleep/didWake`
-    /// observers. The timer is torn down on sleep and rebuilt on wake, so no
-    /// sensor reads happen (and no battery is burned) while the machine is
-    /// suspended. The flag also guards `start()` so a settings change made while
-    /// asleep can't restart sampling until wake.
-    private var isAsleep = false
-    /// Whether a desktop widget showing GPU data (the GPU or Combined widget) is
-    /// on screen. The widget reads `self.gpu`, so the IOReport GPU sample is only
-    /// skipped when this is false too — never let a visible widget go stale.
-    private var gpuWidgetVisible = false
-    /// `NSWorkspace` sleep/wake observers; removed in `deinit`.
-    private var sleepObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var samplingTask: Task<Void, Never>?
+    @ObservationIgnored private var samplingStartedAt: Date?
+    /// Window state that gates the heavy optional reads; see `windowOnScreen`.
+    @ObservationIgnored private var mainWindowVisible = false
+    @ObservationIgnored private var mainWindowUnoccluded = true
+    /// Narrows optional reads to what the visible section needs.
+    @ObservationIgnored private var visibleSection: NavSection = .overview
+    /// Set by the sleep/wake observers. Also guards `start()` so a settings
+    /// change made while asleep can't resume sampling before wake.
+    @ObservationIgnored private var isAsleep = false
+    @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var menuBarPanelVisible = false
 
     /// Call when the main window opens/closes (ContentView appear/disappear).
-    func setMainWindowVisible(_ visible: Bool) { mainWindowVisible = visible }
+    func setMainWindowVisible(_ visible: Bool) {
+        mainWindowVisible = visible
+        publishChartsIfVisible()
+    }
 
-    /// Call when navigation changes so optional sensor work follows the visible
-    /// surface instead of treating every open window as the Overview screen.
-    func setVisibleSection(_ sectionID: String) { visibleSectionID = sectionID }
+    /// Call when the main window becomes covered, minimized, hidden or moves
+    /// to another Space (false), and when it's back in view (true).
+    func setMainWindowUnoccluded(_ unoccluded: Bool) {
+        mainWindowUnoccluded = unoccluded
+        publishChartsIfVisible()
+    }
 
-    /// Call when a GPU-bearing widget (`.gpu` / `.combined`) appears/disappears
-    /// so the sampler keeps the IOReport GPU reading live while it's on screen.
-    func setGPUWidgetVisible(_ visible: Bool) { gpuWidgetVisible = visible }
+    /// Call when the menu-bar dropdown opens/closes; its sparklines read charts.
+    func setMenuBarPanelVisible(_ visible: Bool) {
+        menuBarPanelVisible = visible
+        publishChartsIfVisible()
+    }
 
-    /// Test/diagnostic exposure of whether the sampling timer is armed. Sleep
-    /// tears it down; wake rebuilds it.
+    /// Open and actually on screen: not minimized, hidden, fully covered, or on
+    /// another Space.
+    private var windowOnScreen: Bool { mainWindowVisible && mainWindowUnoccluded }
+
+    /// Call when navigation changes so optional reads follow the visible section.
+    func setVisibleSection(_ section: NavSection) { visibleSection = section }
+
+    /// For tests: whether the sampling timer is armed.
     internal var isSamplingTimerActive: Bool { timer != nil }
 
-    private var needsTopProcesses: Bool {
-        mainWindowVisible && ["overview", "memory", "processes"].contains(visibleSectionID)
-            || settings.alertRules.contains { $0.enabled && $0.metric == .processCPU }
+    /// Optional reads needed this tick. GPU also feeds the GPU menu-bar metric
+    /// and the dropdown's GPU row; the rest only matter with the window on screen.
+    private var currentNeeds: SensorSampler.Needs {
+        let section = windowOnScreen ? visibleSection : nil
+        func showing(_ sections: NavSection...) -> Bool { section.map(sections.contains) ?? false }
+        return SensorSampler.Needs(
+            topProcesses: showing(.overview, .memory),
+            gpu: showing(.overview, .gpu, .history)
+                || menuBarPanelVisible
+                || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage)),
+            power: showing(.overview, .cpu, .gpu, .battery, .history),
+            networkDetails: showing(.overview, .network)
+        )
     }
-    /// Whether the IOReport GPU sample is needed this tick. The GPU reading is
-    /// only consumed by surfaces the user can see: the window's GPU card, a GPU
-    /// or Combined desktop widget, a GPU-usage menu-bar metric, or a GPU-usage
-    /// alert. Menu-bar-only with no GPU metric → skip the read and hold the last
-    /// value, cutting an IOReport round-trip every tick.
-    private var needsGPU: Bool {
-        mainWindowVisible && ["overview", "gpu", "history"].contains(visibleSectionID)
-            || gpuWidgetVisible
-            || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage))
-            || settings.alertRules.contains { $0.enabled && $0.metric == .gpuUsage }
-    }
-    /// Whether the IOReport SoC-power sample is needed. Power appears in the
-    /// overview, CPU/GPU/Battery detail, and History charts.
-    private var needsPower: Bool {
-        mainWindowVisible && ["overview", "cpu", "gpu", "battery", "history"].contains(visibleSectionID)
-    }
-    private var cancellables: Set<AnyCancellable> = []
     private static let maxChartPoints = 300
-    /// A single sample must finish within this long or the watchdog marks the
-    /// readings stale and requests cancellation. Generous — a real sample is
-    /// milliseconds; this only fires when a syscall has genuinely wedged.
+    /// A sample overdue by this long counts as wedged. A real sample takes milliseconds.
     private static let sampleTimeout: TimeInterval = 5
 
-    // Overheat alerting state.
-    private var hotSince: Date?
-    private var lastHeatAlert: Date = .distantPast
-    private var previousThermalState = ProcessInfo.processInfo.thermalState
+    /// At most one history row per 10 s, however fast the tick.
+    private static let logInterval: TimeInterval = 10
+    @ObservationIgnored private var lastLoggedAt: Date = .distantPast
+
+    @ObservationIgnored private var hotSince: Date?
+    @ObservationIgnored private var lastHeatAlert: Date = .distantPast
+    @ObservationIgnored private var previousThermalState = ProcessInfo.processInfo.thermalState
     private static let heatAlertAfter: TimeInterval = 120
     private static let heatAlertCooldown: TimeInterval = 600
 
-    // Custom-rule alerting: free disk space is read on a throttle since it
-    // barely moves and statfs needn't run every tick.
-    private var diskFreeGB: Double?
-    private var diskCheckedAt: Date = .distantPast
-    private static let diskCheckInterval: TimeInterval = 30
-
     init(settings: AppSettings) {
         self.settings = settings
-        settings.$refreshInterval
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.restartTimerIfAwake() }
-            .store(in: &cancellables)
-        // Power state and the battery-throttle toggle both change the effective
-        // cadence, so a transition restarts the timer at the new interval. The
-        // model refreshes the power state each tick (`updatePowerState`), and
-        // these sinks only fire on an actual transition (AppSettings reassigns
-        // `isOnBattery`/`isLowPowerMode` only when they move).
-        settings.$isOnBattery
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.restartTimerIfAwake() }
-            .store(in: &cancellables)
-        settings.$isLowPowerMode
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.restartTimerIfAwake() }
-            .store(in: &cancellables)
-        settings.$reduceOnBattery
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.restartTimerIfAwake() }
-            .store(in: &cancellables)
-        settings.$historyMinutes
-            .dropFirst()
-            .sink { [weak self] _ in self?.trimHistory() }
-            .store(in: &cancellables)
-        // Ask for notification permission as soon as any alert is enabled.
-        settings.$notifyOverheat
-            .merge(with: settings.$notifyThermal)
-            .filter { $0 }
-            .sink { [weak self] _ in self?.notifications.requestAuthorizationIfNeeded() }
-            .store(in: &cancellables)
-        settings.$alertRules
-            .filter { $0.contains(where: \.enabled) }
-            .sink { [weak self] _ in self?.notifications.requestAuthorizationIfNeeded() }
-            .store(in: &cancellables)
+        observeChanges(of: { settings.effectiveRefreshInterval }) { [weak self] _ in self?.restartTimerIfAwake() }
+        observeChanges(of: { settings.historyMinutes }) { [weak self] _ in self?.trimHistory() }
+        // Ask for notification permission at launch when an alert is on, and
+        // whenever one is turned on later.
+        if settings.notifyOverheat || settings.notifyThermal { notifications.requestAuthorizationIfNeeded() }
+        observeChanges(of: { settings.notifyOverheat || settings.notifyThermal }) { [weak self] enabled in
+            if enabled { self?.notifications.requestAuthorizationIfNeeded() }
+        }
 
-        // Pause sampling on system sleep and resume on wake — no sensor reads,
-        // no wakeups, no battery drain while the Mac is suspended. Registered
-        // last: the closures capture self, which must be fully initialized.
+        // Pause sampling across system sleep. Registered last: the closures
+        // capture self, which must be fully initialized.
         let workspace = NSWorkspace.shared.notificationCenter
         sleepObservers = [
             workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -258,8 +203,7 @@ final class VitalsModel: ObservableObject {
         sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 
-    /// Never below 0.5 s — the Picker only offers 1/2/5, but a corrupted
-    /// UserDefaults value of 0 would otherwise divide-by-zero here and below.
+    /// Floor of 0.5 s: a corrupted UserDefaults value of 0 would divide by zero below.
     private var safeRefreshInterval: Double { max(0.5, settings.refreshInterval) }
 
     private var maxHistory: Int {
@@ -284,19 +228,15 @@ final class VitalsModel: ObservableObject {
         start()
     }
 
-    /// Restarts the timer only while awake **and already running** — a cadence-
-    /// relevant setting change made while asleep must not resume sampling until
-    /// the Mac wakes, and the `timer != nil` guard blocks a re-entrant call
-    /// during the first `start()` (where `tick()` runs before `self.timer` is
-    /// assigned) from scheduling a second, leaked timer.
+    /// Restarts only while awake and already running. The `timer != nil` guard
+    /// blocks a re-entrant call during the first `start()` (where `tick()` runs
+    /// before `self.timer` is assigned) from leaking a second timer.
     private func restartTimerIfAwake() {
         guard !isAsleep, timer != nil else { return }
         restartTimer()
     }
 
-    /// Tears down the sampling timer on system sleep. An in-flight tick (if any)
-    /// is allowed to finish — it's one harmless extra sample — but no new ticks
-    /// fire until `handleWake`.
+    /// An in-flight tick may finish; no new ticks fire until `handleWake`.
     private func handleSleep() {
         guard !isAsleep else { return }
         isAsleep = true
@@ -305,10 +245,8 @@ final class VitalsModel: ObservableObject {
         Log.notice(.sampler, "system sleeping — sampling paused")
     }
 
-    /// Rebuilds the sampling timer on wake and immediately takes a fresh sample
-    /// so readings recover from the gap at once. The cadence is re-read from
-    /// `effectiveRefreshInterval`, so a power-source change that happened during
-    /// sleep (unplugged in clamshell, woken on battery) takes effect immediately.
+    /// Samples at once and re-reads the cadence, so a power-source change made
+    /// during sleep takes effect immediately.
     private func handleWake() {
         guard isAsleep else { return }
         isAsleep = false
@@ -320,79 +258,54 @@ final class VitalsModel: ObservableObject {
         if history.count > maxHistory {
             history.removeFirst(history.count - maxHistory)
         }
-        chartHistory = Self.downsample(history, to: Self.maxChartPoints)
+        publishChartsIfVisible()
     }
 
-    /// Kicks off one sample on the sampler's executor and publishes the
-    /// result back here. `isSampling` drops a tick rather than letting a
-    /// slow sample (heavily loaded machine) queue up behind itself.
-    ///
-    /// A watchdog backs this up: a sensor syscall can wedge (a stuck IOKit
-    /// driver, a degraded VM). Cancellation cannot interrupt that synchronous
-    /// call, so the watchdog marks the readings stale and requests cancellation
-    /// but deliberately keeps the pipeline occupied until the call returns.
-    /// That serial behavior prevents an unbounded buildup of blocked tasks and
-    /// is safer than launching overlapping hardware reads.
+    /// Charts cost ~60 MB of transient GPU memory per redraw, and a covered or
+    /// minimized window still redraws. So `chartHistory` only moves while a chart
+    /// can be seen; `history` keeps recording, and the next reveal catches up.
+    private func publishChartsIfVisible() {
+        guard windowOnScreen || menuBarPanelVisible else { return }
+        chartHistory = history.thinned(to: Self.maxChartPoints)
+    }
+
+    /// One sample at a time: a tick that finds the previous one running is dropped.
+    /// A wedged sensor syscall can't be cancelled, so an overdue sample flags
+    /// readings stale but keeps the slot until it returns, rather than stacking
+    /// blocked tasks.
     private func tick() {
-        guard !isSampling, !isAsleep else { return }
+        guard !isAsleep else { return }
+        if isSampling {
+            if let started = samplingStartedAt, !sensorsStalled,
+               Date().timeIntervalSince(started) >= Self.sampleTimeout {
+                samplingTask?.cancel()
+                Log.notice(.sampler, "a sensor sample exceeded \(Self.sampleTimeout)s and was cancelled; readings paused")
+                sensorsStalled = true
+            }
+            return
+        }
         isSampling = true
-        let id = UUID()
-        samplingID = id
-        // Keep the cadence in sync with the power source first. This may publish
-        // `isOnBattery`/`isLowPowerMode` and re-enter `restartTimerIfAwake` →
-        // `start` → `tick`; the `!isSampling` guard above makes that re-entrant
-        // tick a no-op, so only this sample actually runs.
+        samplingStartedAt = Date()
+        // May restart the timer and re-enter `tick`; `isSampling` makes that a no-op.
         settings.updatePowerState()
 
-        let includeTopProcesses = needsTopProcesses
-        let includeGPU = needsGPU
-        let includePower = needsPower
-        let work = Task { [weak self] in
+        let needs = currentNeeds
+        samplingTask = Task { [weak self] in
             guard let self else { return }
             defer {
-                if self.samplingID == id {
-                    self.isSampling = false
-                    self.samplingTask = nil
-                }
+                self.isSampling = false
+                self.samplingTask = nil
             }
-            let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses,
-                                                     includeGPU: includeGPU,
-                                                     includePower: includePower,
-                                                     includeAppEnergy: self.settings.loggingEnabled)
-            guard !Task.isCancelled, self.samplingID == id else { return }
-            self.apply(snapshot, sampledGPU: includeGPU)
+            let snapshot = await self.sampler.sample(needs)
+            guard !Task.isCancelled else { return }
+            self.apply(snapshot, sampled: needs)
             self.assignIfChanged(&self.sensorsStalled, to: false)
-        }
-        samplingTask = work
-        // A very fast test/mock sampler can finish before the assignment above;
-        // don't leave a completed task retained in that edge case.
-        if !isSampling { samplingTask = nil }
-
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.sampleTimeout * 1_000_000_000))
-            guard let self, self.isSampling, self.samplingID == id else { return }
-            self.samplingTask?.cancel()
-            // Log only on the transition into a stall, not every stalled tick.
-            if !self.sensorsStalled {
-                Log.notice(.sampler, "a sensor sample exceeded \(Self.sampleTimeout)s and was cancelled — readings may pause")
-            }
-            self.assignIfChanged(&self.sensorsStalled, to: true)
         }
     }
 
-    private func apply(_ snapshot: SensorSampler.Snapshot, sampledGPU: Bool) {
-        let classified = Self.classify(snapshot.readings)
-
+    private func apply(_ snapshot: SensorSampler.Snapshot, sampled: SensorSampler.Needs) {
+        let classified = snapshot.sensors
         cpuSensors = classified.filter { $0.kind == .cpu }
-            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
-        // Gate the cheap, often-stable scalars: `@Published` fires
-        // `objectWillChange` on every assignment regardless of whether the value
-        // actually moved, so reassigning `thermalState` to the same enum each
-        // tick would still invalidate every observing view. Only reassign when
-        // the value genuinely changes — the temperature Double?s drift most
-        // ticks but the compare is trivial, and `thermalState`/`hasSMC`/
-        // `hasLoaded`/`sensorsStalled` barely move, so their observers (Health
-        // tab, Fan card, the loading state) skip re-rendering on a normal tick.
         assignIfChanged(&gpuTemp, to: Self.average(of: classified, kind: .gpu))
         assignIfChanged(&ssdTemp, to: Self.average(of: classified, kind: .storage))
         assignIfChanged(&batteryTemp, to: Self.average(of: classified, kind: .battery))
@@ -416,22 +329,14 @@ final class VitalsModel: ObservableObject {
         diskHealth = snapshot.diskHealth
         updateNetwork(snapshot.network)
         updateDiskIO(snapshot.diskIO)
-        // Only reassign GPU when it was actually sampled this tick. When the
-        // window/widgets/metric don't need it, the sampler returns nil and we
-        // hold the last reading — so reopening the window shows the prior value
-        // until the next tick refreshes it, never a fabricated blank.
-        if sampledGPU { gpu = snapshot.gpu }
-        // Power is nil both when skipped and when IOReport had no delta this
-        // tick; `if let` holds the last good reading in either case. The history
-        // Sample uses the fresh `snapshot.power?.total`, so a skip is an honest
-        // gap in the chart, not a flat-held value.
-        if let power = snapshot.power { self.power = power }
+        // A read taken this tick replaces the value, nil included (a stalled or
+        // missing sensor); a skipped read holds the last one for display. History
+        // below logs only fresh readings, so a skip is a gap, not a stale value.
+        if sampled.gpu { gpu = snapshot.gpu }
+        if sampled.power { power = snapshot.power }
         assignIfChanged(&hasLoaded, to: true)
 
-        // Custom rules run every tick — disk/battery/process alerts shouldn't
-        // depend on temperature sensors being present.
-        evaluateAlertRules()
-
+        let freshGPU = sampled.gpu ? snapshot.gpu : nil
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
             history.append(Sample(
                 id: Date(),
@@ -439,17 +344,13 @@ final class VitalsModel: ObservableObject {
                 averageCPU: average,
                 hottestCPU: hottest.celsius,
                 gpu: gpuTemp,
-                gpuUsage: gpu?.utilization,
+                gpuUsage: freshGPU?.utilization,
                 usage: cpuUsage,
                 memoryUsed: Double(memory?.used ?? 0),
                 swapUsed: Double(memory?.swapUsed ?? 0),
                 batteryPercent: battery?.percent,
-                // The fresh tick's reading (not the sticky `self.power`), so a
-                // missed IOReport sample is an honest gap, not a flat-held value.
                 totalWatts: snapshot.power?.total,
                 batteryWatts: battery?.watts,
-                // The published reading (nil until the 2nd sample), so the
-                // first tick is an honest gap, never a fabricated 0 B/s.
                 netInPerSec: network?.totalInPerSec,
                 netOutPerSec: network?.totalOutPerSec,
                 diskReadPerSec: diskIO?.readPerSec,
@@ -459,7 +360,9 @@ final class VitalsModel: ObservableObject {
 
             checkAlerts(averageTemp: average)
 
-            if settings.loggingEnabled {
+            let now = Date()
+            if settings.loggingEnabled, now.timeIntervalSince(lastLoggedAt) >= Self.logInterval {
+                lastLoggedAt = now
                 HistoryDatabase.shared.append(HistoryDatabase.Entry(
                     averageTemp: average,
                     hottestTemp: hottest.celsius,
@@ -469,35 +372,24 @@ final class VitalsModel: ObservableObject {
                     memoryUsedGB: gigabytes(memory?.used ?? 0),
                     thermalState: thermalState.label,
                     batteryPercent: battery?.percent,
-                    gpuUsage: gpu?.utilization,
-                    gpuMemoryGB: gpu?.memoryUsed.map { gigabytes($0) },
+                    gpuUsage: freshGPU?.utilization,
+                    gpuMemoryGB: freshGPU?.memoryUsed.map { gigabytes($0) },
                     netInBps: network?.totalInPerSec,
                     netOutBps: network?.totalOutPerSec,
                     diskReadBps: diskIO?.readPerSec,
                     diskWriteBps: diskIO?.writePerSec,
-                    // Fresh readings (nil until the 2nd power/battery sample), so a
-                    // gap is honest, never a flat-held value.
                     socWatts: snapshot.power?.total,
                     batteryWatts: battery?.watts
-                ))
+                ), at: now)
             }
-        }
-
-        // Per-app energy is refreshed on its own cadence inside the sampler; when a
-        // fresh batch arrives, persist it (still gated on the logging setting).
-        if settings.loggingEnabled, let rows = snapshot.appEnergy {
-            HistoryDatabase.shared.appendAppEnergy(rows, at: Date())
         }
     }
 
-    /// Turn the snapshot's running VM counters into per-second rates by diffing
-    /// against the previous tick. Publishes nil until a second sample lands (a
-    /// rate needs two readings), and treats a counter that went backwards — a
-    /// 32-bit wrap or a stat reset — as zero rather than a fabricated spike.
+    /// Diffs VM counters against the previous tick into per-second rates. A
+    /// counter that went backwards (32-bit wrap or stat reset) reads as zero,
+    /// not a spike.
     private func updateMemoryActivity(_ memory: MemorySnapshot?) {
-        // Memory unavailable (a VM/restricted Mac): drop the published rates and
-        // the baseline so the UI stops presenting the last sample's rates as live
-        // and doesn't compute a bogus rate against a stale prior reading on return.
+        // Drop rates and baseline so a stale prior reading isn't diffed on return.
         guard let memory else {
             memoryActivity = nil
             previousMemorySnapshot = nil
@@ -524,10 +416,8 @@ final class VitalsModel: ObservableObject {
         )
     }
 
-    /// Publishes the network reading from the second sample onward. The first
-    /// reading has no prior counters, so its 0 B/s rates are placeholders, not
-    /// measurements — a rate needs two readings. A skipped read (nil) holds the
-    /// last published snapshot rather than blanking live surfaces, like `gpu`.
+    /// Publishes from the second sample onward: the first has no prior counters,
+    /// so its 0 B/s rates are placeholders. A skipped read (nil) holds the last value.
     private func updateNetwork(_ snapshot: NetworkSnapshot?) {
         guard let snapshot else { return }
         if hasNetworkBaseline {
@@ -537,9 +427,7 @@ final class VitalsModel: ObservableObject {
         }
     }
 
-    /// Same second-sample rule as `updateNetwork`: the first disk reading has
-    /// no prior counters, so its 0 B/s rates are placeholders, not
-    /// measurements. A skipped read (nil) holds the last published snapshot.
+    /// Same second-sample rule as `updateNetwork`.
     private func updateDiskIO(_ snapshot: DiskIOSnapshot?) {
         guard let snapshot else { return }
         if hasDiskIOBaseline {
@@ -559,11 +447,9 @@ final class VitalsModel: ObservableObject {
                 if let since = hotSince,
                    Date().timeIntervalSince(since) >= Self.heatAlertAfter,
                    Date().timeIntervalSince(lastHeatAlert) >= Self.heatAlertCooldown {
-                    notifications.send(
-                        title: "Your Mac is running hot",
-                        body: "Average CPU temperature has stayed above \(settings.format(settings.warnThreshold, decimals: 0)) for over 2 minutes — currently \(settings.formatWithUnit(averageTemp)).",
-                        id: "vitals.overheat"
-                    )
+                    alert(title: "Your Mac is running hot",
+                          body: "Average CPU temperature has stayed above \(settings.format(settings.warnThreshold, decimals: 0)) for over 2 minutes. Currently \(settings.formatWithUnit(averageTemp)).",
+                          id: "vitals.overheat")
                     lastHeatAlert = Date()
                 }
             } else {
@@ -574,92 +460,17 @@ final class VitalsModel: ObservableObject {
         if settings.notifyThermal,
            thermalState == .serious || thermalState == .critical,
            thermalState.rawValue > previousThermalState.rawValue {
-            notifications.send(
-                title: "Thermal pressure is \(thermalState.label)",
-                body: "macOS is throttling performance to cool down. Consider quitting heavy apps — check Top Processes in Vitals.",
-                id: "vitals.thermal"
-            )
+            alert(title: "Thermal pressure is \(thermalState.label)",
+                  body: "macOS is throttling performance to cool down. Consider quitting heavy apps; the Overview lists the top processes.",
+                  id: "vitals.thermal")
         }
         previousThermalState = thermalState
     }
 
-    // MARK: Custom alert rules
-
-    /// Runs the user's rules against the current readings and sends a
-    /// notification for each that fires. The engine handles the sustain/cooldown
-    /// timing; we just format the message in the user's units.
-    private func evaluateAlertRules() {
-        // Zero work in the common case: no rules, or none enabled.
-        guard settings.alertRules.contains(where: \.enabled) else { return }
-        let readings = currentAlertReadings()
-        for (rule, value) in alertEngine.evaluate(rules: settings.alertRules, readings: readings, now: Date()) {
-            let body = alertMessage(rule: rule, value: value, readings: readings)
-            notifications.send(title: "Vitals alert", body: body, id: "vitals.rule.\(rule.id.uuidString)")
-            AlertLog.record(message: body, at: Date())
-        }
-    }
-
-    private func currentAlertReadings() -> AlertReadings {
-        refreshDiskFreeIfStale()
-        let topProcess = topProcesses.max { $0.cpuPercent < $1.cpuPercent }
-        return AlertReadings(
-            cpuTemp: hottestCPUSensor?.celsius,
-            cpuUsage: cpuUsage,
-            gpuUsage: gpu?.utilization,
-            memoryUsedPercent: memory.map { $0.total > 0 ? Double($0.used) / Double($0.total) * 100 : 0 },
-            minFanRPM: fans.isEmpty ? nil : fans.map(\.rpm).min(),
-            diskFreeGB: diskFreeGB,
-            batteryPercent: battery?.percent,
-            topProcessCPU: topProcess?.cpuPercent,
-            topProcessName: topProcess?.name,
-            // Canonical MB/s to match the rule's stored threshold unit. Nil
-            // until the second sample — a rule can't fire on a placeholder.
-            networkDownMBps: network.map { $0.totalInPerSec / 1_000_000 },
-            networkUpMBps: network.map { $0.totalOutPerSec / 1_000_000 },
-            diskReadMBps: diskIO.map { $0.readPerSec / 1_000_000 },
-            diskWriteMBps: diskIO.map { $0.writePerSec / 1_000_000 }
-        )
-    }
-
-    private func refreshDiskFreeIfStale() {
-        guard Date().timeIntervalSince(diskCheckedAt) >= Self.diskCheckInterval else { return }
-        diskCheckedAt = Date()
-        if let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
-           let bytes = values.volumeAvailableCapacityForImportantUsage {
-            diskFreeGB = Double(bytes) / 1_073_741_824
-        }
-    }
-
-    /// A short, human notification body in the user's units. Process rules name
-    /// the offending app.
-    private func alertMessage(rule: AlertRule, value: Double, readings: AlertReadings) -> String {
-        let now = formattedAlertValue(rule.metric, value)
-        let limit = formattedAlertValue(rule.metric, rule.threshold)
-        if rule.metric == .processCPU {
-            return "\(readings.topProcessName ?? "A process") is using \(now) CPU — \(rule.comparison.label) your \(limit) alert."
-        }
-        return "\(rule.metric.label) is \(now) — \(rule.comparison.label) your \(limit) alert."
-    }
-
-    private func formattedAlertValue(_ metric: AlertMetric, _ value: Double) -> String {
-        if metric.isTemperature { return settings.formatWithUnit(value, decimals: 0) }
-        switch metric {
-        case .fanRPM:   return "\(Int(value)) rpm"
-        case .diskFree: return String(format: "%.0f GB", value)
-        // The reading is canonical MB/s; NetworkFormat speaks bytes/s.
-        case .networkDownload, .networkUpload, .diskRead, .diskWrite:
-            return NetworkFormat.rate(value * 1_000_000)
-        default:        return "\(Int(value))%"
-        }
-    }
-
-    /// Evenly thins `samples` to at most `maxCount` points, always keeping
-    /// the first and the newest. Indices step by more than one whenever
-    /// thinning happens, so no sample (or id) repeats.
-    static func downsample(_ samples: [Sample], to maxCount: Int) -> [Sample] {
-        guard samples.count > maxCount, maxCount > 1 else { return samples }
-        let stride = Double(samples.count - 1) / Double(maxCount - 1)
-        return (0..<maxCount).map { samples[Int((Double($0) * stride).rounded())] }
+    /// Notifies and records the alert in History's recent-alerts list.
+    private func alert(title: String, body: String, id: String) {
+        notifications.send(title: title, body: body, id: id)
+        AlertLog.record(message: "\(title). \(body)", at: Date())
     }
 
     private static func average(of sensors: [Sensor], kind: Sensor.Kind) -> Double? {
@@ -668,19 +479,14 @@ final class VitalsModel: ObservableObject {
         return values.reduce(0, +) / Double(values.count)
     }
 
-    /// Reassign `target` only when `newValue` differs — `@Published` fires
-    /// `objectWillChange` on every assignment regardless of whether the value
-    /// moved, so this gates the cheap, often-stable Equatable properties
-    /// (`thermalState`, `hasSMC`, `hasLoaded`, `sensorsStalled`, the temperature
-    /// Double?s) so their observers skip re-rendering on a tick where nothing
-    /// actually changed. Generic over `Equatable` so it costs nothing for the
-    /// array/struct properties, which stay ungated.
+    /// Skips the write when unchanged, so views reading an often-stable value
+    /// (`thermalState`, `hasLoaded`, …) don't re-render on every tick.
     private func assignIfChanged<T: Equatable>(_ target: inout T, to newValue: T) {
         guard target != newValue else { return }
         target = newValue
     }
 
-    static func classify(_ readings: [HIDSensors.Reading]) -> [Sensor] {
+    nonisolated static func classify(_ readings: [HIDSensors.Reading]) -> [Sensor] {
         var labelCounts: [String: Int] = [:]
         return readings.map { reading in
             let kind = kind(for: reading.name)
@@ -693,7 +499,7 @@ final class VitalsModel: ObservableObject {
         }
     }
 
-    private static func kind(for name: String) -> Sensor.Kind {
+    nonisolated private static func kind(for name: String) -> Sensor.Kind {
         let n = name.lowercased()
         if n.contains("pacc") || n.contains("eacc") || n.contains("tdie") || n.contains("cpu") { return .cpu }
         if n.contains("gpu") { return .gpu }
@@ -702,14 +508,14 @@ final class VitalsModel: ObservableObject {
         return .other
     }
 
-    private static func shortLabel(for name: String, kind: Sensor.Kind) -> String {
+    nonisolated private static func shortLabel(for name: String, kind: Sensor.Kind) -> String {
         let number = name.reversed().prefix(while: \.isNumber).reversed().map(String.init).joined()
         let n = name.lowercased()
         switch kind {
         case .cpu:
             if n.contains("pacc") { return "P\(number)" }
             if n.contains("eacc") { return "E\(number)" }
-            // M-series dies report as "PMU tdieN" / "PMU2 tdieN" — two banks.
+            // M-series dies report as "PMU tdieN" / "PMU2 tdieN": two banks.
             if n.contains("tdie") { return n.contains("pmu2") ? "B\(number)" : "A\(number)" }
             return name
         case .gpu: return number.isEmpty ? "GPU" : "GPU \(number)"
@@ -739,5 +545,13 @@ extension ProcessInfo.ThermalState {
         case .critical: return .red
         @unknown default: return .gray
         }
+    }
+}
+
+extension Array where Element == VitalsModel.Sample {
+    /// Whether any sample carries a reading for `series`. Charts and metric
+    /// tabs hide a series this Mac never reported.
+    func hasReading(_ series: KeyPath<VitalsModel.Sample, Double?>) -> Bool {
+        contains { $0[keyPath: series] != nil }
     }
 }

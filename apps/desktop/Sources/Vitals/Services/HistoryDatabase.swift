@@ -1,27 +1,15 @@
 import Foundation
 import SQLite3
 
-/// The on-disk store for logged readings and fired alerts — a single SQLite
-/// database in the channel-aware data home (`DataHome.historyDatabaseFile`),
-/// replacing the old append-only CSV. SQLite gives reliable, indexed,
-/// filterable storage: range queries stay fast no matter how much history
-/// accumulates, where the CSV had to be read and parsed in full.
+/// Logged readings and fired alerts in one SQLite database in the data home.
 ///
-/// One connection guarded by a serial queue (SQLite is opened FULLMUTEX too, so
-/// this is belt-and-braces): writes (`append`, `recordAlert`) are fire-and-forget
-/// `async` so the main-thread tick never blocks on disk; reads (`samples`,
-/// `recentAlerts`, exports) run `sync` and are always called off the main thread.
-///
-/// `HistoryReader` / `HistoryExport` / `AlertLog` remain the public API the views
-/// use — they delegate here, so this is the one storage seam.
+/// One connection on a serial queue: writes (`append`, `recordAlert`) are
+/// fire-and-forget so the main-thread tick never blocks on disk; reads run `sync`
+/// and must be called off the main thread.
 final class HistoryDatabase: @unchecked Sendable {
-    static let shared = HistoryDatabase(
-        file: DataHome.historyDatabaseFile,
-        legacyReadings: [DataHome.historyPrevious, DataHome.historyFile],
-        legacyAlerts: DataHome.alertsFile
-    )
+    static let shared = HistoryDatabase(file: DataHome.historyDatabaseFile)
 
-    /// One row of readings to log. Same shape the CSV logger used.
+    /// One row of readings to log.
     struct Entry {
         let averageTemp: Double
         let hottestTemp: Double
@@ -41,55 +29,18 @@ final class HistoryDatabase: @unchecked Sendable {
         let batteryWatts: Double?
     }
 
-    /// One per-app energy row, logged in batches at a coarse cadence. `bundleID`
-    /// is nil for processes not inside an `.app`. `avgWatts` is a real reading
-    /// (nil when the OS reported no energy); `preventsSleep` marks apps holding a
-    /// system-sleep assertion.
-    struct AppEnergyRow {
-        let bundleID: String?
-        let name: String
-        let avgWatts: Double?
-        let cpuPercent: Double
-        let wakeupsPerSec: Double
-        let preventsSleep: Bool
-    }
-
     private let queue = DispatchQueue(label: "com.vitals.history-db")
     private var db: OpaquePointer?
     private let dbFile: URL
-    /// Legacy CSV files to import once (oldest first), then the alert log.
-    private let legacyReadings: [URL]
-    private let legacyAlerts: URL?
-    /// Mirrors the CSV logger's cap: at most one readings row every 10 s, so the
-    /// faster sampling tick can call `append` freely without bloating the table.
-    private static let minimumWriteInterval: TimeInterval = 10
-    private var lastWrite: Date = .distantPast
-    /// App-energy rows are many-per-tick, so they're logged on their own coarse
-    /// cadence (once a minute) to keep the table bounded.
-    private static let appEnergyWriteInterval: TimeInterval = 60
-    private var lastAppEnergyWrite: Date = .distantPast
-    /// Drop readings older than this so a machine left running for years can't
-    /// grow the table without bound. Generous — a year at one row / 10 s is only
+    /// Drop readings older than this, checked daily. A year at one row / 10 s is
     /// ~3M rows. Alerts are tiny and never pruned.
     private static let retention: TimeInterval = 365 * 86_400
-    /// App-energy rows are many-per-sample (top apps × once a minute), so they're
-    /// kept for a shorter window than the single-row `samples` series.
-    private static let appEnergyRetention: TimeInterval = 14 * 86_400
-    /// How long the imported legacy files (`*.imported`) are kept after migration
-    /// as a safety net before being deleted automatically, so they don't linger
-    /// in the data home and confuse the user. Measured from the migration moment.
-    private static let importedGracePeriod: TimeInterval = 2 * 86_400
+    private var lastPrune: Date = .distantPast
 
-    /// `file` is the database path; `legacyReadings`/`legacyAlerts` are the old
-    /// CSV / alert-log files imported once on first open (empty for tests).
-    init(file: URL, legacyReadings: [URL] = [], legacyAlerts: URL? = nil) {
+    init(file: URL) {
         self.dbFile = file
-        self.legacyReadings = legacyReadings
-        self.legacyAlerts = legacyAlerts
-        // Open + the one-time CSV import (which can parse a large file) run
-        // asynchronously on the queue — `shared` is first touched by the
-        // main-thread tick, and this must never block it. Every later operation is
-        // dispatched to the same serial queue, so it naturally runs after `open`.
+        // Async: `shared` is first touched by the main-thread tick. Every later
+        // operation queues behind this, so it always runs after `open`.
         queue.async { self.open() }
     }
 
@@ -97,8 +48,7 @@ final class HistoryDatabase: @unchecked Sendable {
         if let db { sqlite3_close(db) }
     }
 
-    /// Blocks until `open` (and any one-time import) has finished — for tests that
-    /// assert on `open`'s side effects right after construction.
+    /// Blocks until `open` has finished, for tests.
     func waitUntilReady() { queue.sync {} }
 
     // MARK: Setup
@@ -122,13 +72,7 @@ final class HistoryDatabase: @unchecked Sendable {
         exec("PRAGMA synchronous=NORMAL;")
         exec("PRAGMA busy_timeout=3000;")
         createSchema()
-        // Don't clean up on the same launch we migrate: the freshly-retired
-        // backups are brand new, and skipping avoids any chance of deleting one
-        // whose timestamp stamp didn't take. Stale backups are swept on a later,
-        // non-migrating launch.
-        let migratedNow = importLegacyFilesIfNeeded()
-        if !migratedNow { removeStaleImportedFiles() }
-        prune()
+        pruneIfDue(Date())
     }
 
     private func createSchema() {
@@ -157,23 +101,17 @@ final class HistoryDatabase: @unchecked Sendable {
             battery_watts  REAL
         );
         """)
-        // Migrations (v1 → v2 network, v2 → v3 disk I/O): earlier versions
-        // shipped `samples` without the newer columns, and CREATE TABLE IF NOT
-        // EXISTS won't touch an existing table. Column *presence* is the gate —
-        // not `user_version` — so a crash between the ALTER and the version
-        // stamp can't wedge a half-migrated database, and re-running is always
-        // a no-op.
+        // Older files lack newer columns and CREATE TABLE IF NOT EXISTS won't add
+        // them. Column *presence* is the gate, not `user_version`, so a crash
+        // mid-migration can't wedge the file and re-running is a no-op.
         addSampleColumnIfMissing("net_in_bps")
         addSampleColumnIfMissing("net_out_bps")
         addSampleColumnIfMissing("disk_read_bps")
         addSampleColumnIfMissing("disk_write_bps")
-        // v3 → v4: system-on-chip package watts + battery load watts.
         addSampleColumnIfMissing("soc_watts")
         addSampleColumnIfMissing("battery_watts")
-        // UNIQUE(ts, message): a fired alert is identified by when + what, so
-        // re-importing the alert log (e.g. a crash between import and retire) can't
-        // duplicate rows — INSERT OR IGNORE makes it idempotent. Distinct alerts
-        // differ in ts (the cooldown spaces repeats), so none are lost.
+        // A fired alert is identified by when + what. Distinct alerts differ in ts
+        // (the cooldown spaces repeats), so INSERT OR IGNORE loses none.
         exec("""
         CREATE TABLE IF NOT EXISTS alerts (
             id      INTEGER PRIMARY KEY,
@@ -183,30 +121,18 @@ final class HistoryDatabase: @unchecked Sendable {
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);")
-
-        // Per-app energy history. One row per logged app per batch (a batch shares
-        // one `ts`), so this is one-to-many where `samples` is one row per tick.
-        // Indexed on ts for range scans and retention pruning.
-        exec("""
-        CREATE TABLE IF NOT EXISTS app_energy (
-            id             INTEGER PRIMARY KEY,
-            ts             INTEGER NOT NULL,
-            bundle_id      TEXT,
-            name           TEXT NOT NULL,
-            avg_watts       REAL,
-            cpu_pct         REAL,
-            wakeups_per_sec REAL,
-            prevents_sleep  INTEGER NOT NULL DEFAULT 0
-        );
-        """)
-        exec("CREATE INDEX IF NOT EXISTS idx_app_energy_ts ON app_energy(ts);")
-        exec("PRAGMA user_version=4;")
+        // v5: per-app energy logging was removed. Drop its table once and
+        // VACUUM so the file actually shrinks (a DROP alone keeps the pages).
+        if userVersion < 5 {
+            exec("DROP TABLE IF EXISTS app_energy;")
+            exec("VACUUM;")
+        }
+        exec("PRAGMA user_version=5;")
     }
 
-    /// Adds a `REAL` column to `samples` if it isn't there yet. SQLite's ALTER
-    /// TABLE has no IF NOT EXISTS, so existence comes from `table_info` — which
-    /// makes the migration idempotent regardless of what version stamp the file
-    /// carries. `column` is always one of our own constant names, never input.
+    /// Adds a `REAL` column to `samples` if missing. SQLite's ALTER TABLE has no
+    /// IF NOT EXISTS, so existence comes from `table_info`. `column` is always a
+    /// constant name, never input.
     private func addSampleColumnIfMissing(_ column: String) {
         guard let db else { return }
         var stmt: OpaquePointer?
@@ -223,14 +149,11 @@ final class HistoryDatabase: @unchecked Sendable {
 
     // MARK: Writes
 
-    /// Append one readings row, throttled to one per 10 s. Fire-and-forget — the
-    /// caller (the main-thread tick) never waits on disk.
-    func append(_ entry: Entry) {
-        let now = Date()
+    /// Append one readings row. Fire-and-forget; the caller (the tick) throttles.
+    func append(_ entry: Entry, at now: Date = Date()) {
         queue.async { [weak self] in
             guard let self, let db = self.db else { return }
-            guard now.timeIntervalSince(self.lastWrite) >= Self.minimumWriteInterval else { return }
-            self.lastWrite = now
+            self.pruneIfDue(now)
 
             let sql = """
             INSERT OR IGNORE INTO samples
@@ -275,54 +198,11 @@ final class HistoryDatabase: @unchecked Sendable {
         }
     }
 
-    /// Append a batch of per-app energy rows sharing one timestamp. Throttled to
-    /// one batch per minute; fire-and-forget on the serial queue. `rows` should
-    /// already be capped to the interesting apps (top consumers + sleep blockers)
-    /// by the caller.
-    func appendAppEnergy(_ rows: [AppEnergyRow], at time: Date) {
-        guard !rows.isEmpty else { return }
-        queue.async { [weak self] in
-            guard let self, let db = self.db else { return }
-            guard time.timeIntervalSince(self.lastAppEnergyWrite) >= Self.appEnergyWriteInterval else { return }
-            self.lastAppEnergyWrite = time
-            let ts = Self.millis(time)
-            let sql = """
-            INSERT INTO app_energy (ts, bundle_id, name, avg_watts, cpu_pct, wakeups_per_sec, prevents_sleep)
-            VALUES (?,?,?,?,?,?,?);
-            """
-            self.exec("BEGIN;")
-            var stmt: OpaquePointer?
-            var ok = sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK
-            if ok {
-                for row in rows {
-                    sqlite3_bind_int64(stmt, 1, ts)
-                    if let bundleID = row.bundleID { sqlite3_bind_text(stmt, 2, bundleID, -1, Self.transient) }
-                    else { sqlite3_bind_null(stmt, 2) }
-                    sqlite3_bind_text(stmt, 3, row.name, -1, Self.transient)
-                    self.bindOptional(stmt, 4, row.avgWatts)
-                    sqlite3_bind_double(stmt, 5, row.cpuPercent)
-                    sqlite3_bind_double(stmt, 6, row.wakeupsPerSec)
-                    sqlite3_bind_int(stmt, 7, row.preventsSleep ? 1 : 0)
-                    if sqlite3_step(stmt) != SQLITE_DONE { ok = false; break }
-                    sqlite3_reset(stmt)
-                }
-                sqlite3_finalize(stmt)
-            }
-            // A batch is all-or-nothing: one bad INSERT rolls back the whole
-            // timestamp rather than leaving a partial, misleading snapshot.
-            self.exec(ok ? "COMMIT;" : "ROLLBACK;")
-            // Enforce the retention window during the session, not only at open —
-            // a long-running Mac would otherwise keep every minute batch forever.
-            if ok { self.pruneTable("app_energy", olderThan: Self.appEnergyRetention) }
-        }
-    }
-
     // MARK: Reads
 
-    /// Readings within `range`, oldest→newest. For ranges with more rows than
-    /// `maxPoints` it thins in SQL (every Nth row by rowid) so a huge "all" query
-    /// still returns a chart-sized set without loading the whole table into memory.
-    /// The caller (`HistoryReader.load`) does the final exact down-sample.
+    /// Readings within `range`, oldest→newest. Over `maxPoints` rows it thins in
+    /// SQL (every Nth rowid) so "all" never loads the whole table.
+    /// `HistoryReader.load` does the final exact down-sample.
     func samples(range: HistoryRange, now: Date, maxPoints: Int) -> [HistorySample] {
         queue.sync {
             guard let db else { return [] }
@@ -332,10 +212,9 @@ final class HistoryDatabase: @unchecked Sendable {
             guard count > 0 else { return [] }
             let stride = maxPoints > 0 ? max(1, count / Int64(maxPoints)) : 1
 
-            // `cutoff` and `stride` are computed Int64s (never user input), so
-            // inlining them is safe — and lets the thinned query also pin the true
-            // first/last in-range rows, so the chart's endpoints are the real
-            // newest/oldest readings, not just the nearest surviving sample.
+            // `cutoff` and `stride` are computed Int64s, never input, so inlining
+            // is safe. The thinned query also pins the true first/last rows so the
+            // chart's endpoints are real readings.
             var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps, soc_watts, battery_watts FROM samples WHERE ts >= \(cutoff)"
             if stride > 1 {
                 sql += " AND (id % \(stride) = 0"
@@ -392,9 +271,8 @@ final class HistoryDatabase: @unchecked Sendable {
         }
     }
 
-    /// Stream every readings row, oldest→newest, to `body` — without materializing
-    /// the whole table. Used by CSV export so a year of history (~3M rows) never
-    /// loads into memory at once. Runs on the serial queue; call off the main thread.
+    /// Streams every readings row, oldest→newest, to `body` without materializing
+    /// the table (CSV export of ~3M rows). Call off the main thread.
     func forEachSample(_ body: (HistorySample) -> Void) {
         queue.sync {
             guard let db else { return }
@@ -426,153 +304,26 @@ final class HistoryDatabase: @unchecked Sendable {
         }
     }
 
-    /// Stream every per-app energy row, oldest→newest, to `body` (with its batch
-    /// timestamp) — without materializing the table. Used by CSV export. Runs on
-    /// the serial queue; call off the main thread.
-    func forEachAppEnergy(_ body: (Date, AppEnergyRow) -> Void) {
-        queue.sync {
-            guard let db else { return }
-            let sql = "SELECT ts, bundle_id, name, avg_watts, cpu_pct, wakeups_per_sec, prevents_sleep FROM app_energy ORDER BY ts ASC, id ASC;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-            defer { sqlite3_finalize(stmt) }
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                let bundleID = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : text(stmt, 1)
-                body(Self.date(sqlite3_column_int64(stmt, 0)), AppEnergyRow(
-                    bundleID: bundleID,
-                    name: text(stmt, 2),
-                    avgWatts: optionalDouble(stmt, 3),
-                    cpuPercent: sqlite3_column_double(stmt, 4),
-                    wakeupsPerSec: sqlite3_column_double(stmt, 5),
-                    preventsSleep: sqlite3_column_int(stmt, 6) != 0
-                ))
-            }
-        }
-    }
-
     // MARK: Maintenance
 
-    /// Drop rows older than their retention window. Cheap (indexed deletes);
-    /// runs once at open.
-    private func prune() {
-        pruneTable("samples", olderThan: Self.retention)
-        pruneTable("app_energy", olderThan: Self.appEnergyRetention)
-    }
-
-    private func pruneTable(_ table: String, olderThan retention: TimeInterval) {
-        guard let db else { return }
-        let cutoff = Self.millis(Date().addingTimeInterval(-retention))
-        // `table` is always one of our own constant names, never input.
+    /// Drop readings past retention, at most once a day (an indexed delete).
+    /// Must run on `queue`.
+    private func pruneIfDue(_ now: Date) {
+        guard let db, now.timeIntervalSince(lastPrune) >= 86_400 else { return }
+        lastPrune = now
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "DELETE FROM \(table) WHERE ts < ?;", -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, "DELETE FROM samples WHERE ts < ?;", -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_int64(stmt, 1, cutoff)
+        sqlite3_bind_int64(stmt, 1, Self.millis(now.addingTimeInterval(-Self.retention)))
         sqlite3_step(stmt)
     }
 
-    // MARK: Legacy import (CSV → SQLite, one time)
-
-    /// On the first launch after upgrading, fold the old CSV log and alert log
-    /// into the database, then retire the originals to `*.imported`. Returns
-    /// whether anything was retired this run.
-    ///
-    /// Data-safety: a file is only retired if it was actually read **and** the
-    /// import left rows in the database — so a file we couldn't open, or an import
-    /// that failed (no DB, disk full), leaves the user's raw CSV exactly where it
-    /// is for a later retry rather than renaming (and eventually deleting) the only
-    /// copy. `INSERT OR IGNORE` on the `ts UNIQUE` key makes a repeated run safe.
-    private func importLegacyFilesIfNeeded() -> Bool {
-        guard db != nil else { return false }   // open failed — never touch the user's files
-        let fm = FileManager.default
-        var retiredAny = false
-
-        // Readings: previous file first (older rows), then the current one.
-        if legacyReadings.contains(where: { fm.fileExists(atPath: $0.path) }) {
-            var imported = 0
-            var read: [URL] = []
-            exec("BEGIN;")
-            for url in legacyReadings {
-                guard fm.fileExists(atPath: url.path) else { continue }
-                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-                read.append(url)
-                for line in text.split(separator: "\n") {
-                    guard let s = HistoryReader.parse(line) else { continue }
-                    if insertSampleUnsafe(s) { imported += 1 }
-                }
-            }
-            exec("COMMIT;")
-            // Only retire once data is safely in the table (covers a partial/failed
-            // import). A file with no real rows is retired on a later launch once
-            // the DB has rows (e.g. from live logging) so it doesn't linger forever.
-            if hasSamples() {
-                for url in read { retire(url); retiredAny = true }
-            }
-            if imported > 0 { Log.notice(.history, "imported \(imported) readings from CSV into SQLite") }
-        }
-
-        // Alerts (low-stakes — retire whenever the file was readable).
-        if let alertsURL = legacyAlerts, fm.fileExists(atPath: alertsURL.path),
-           let text = try? String(contentsOf: alertsURL, encoding: .utf8) {
-            exec("BEGIN;")
-            var imported = 0
-            for line in text.split(separator: "\n") {
-                guard let event = AlertLog.parse(line) else { continue }
-                recordAlertUnsafe(message: event.message, at: event.time); imported += 1
-            }
-            exec("COMMIT;")
-            retire(alertsURL); retiredAny = true
-            if imported > 0 { Log.notice(.history, "imported \(imported) alerts from log into SQLite") }
-        }
-        return retiredAny
-    }
-
-    /// Whether the readings table holds any row — the gate for retiring (and
-    /// thus eventually deleting) the migrated CSV, so the only copy of real data
-    /// is never removed after a failed import.
-    private func hasSamples() -> Bool {
-        guard let db else { return false }
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "SELECT EXISTS(SELECT 1 FROM samples);", -1, &stmt, nil) == SQLITE_OK else { return false }
-        defer { sqlite3_finalize(stmt) }
-        return sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_int64(stmt, 0) == 1
-    }
-
-    /// Rename an imported legacy file to `*.imported` and stamp it with the
-    /// migration time, so the grace clock for auto-deletion starts now (a plain
-    /// rename keeps the file's old timestamp, which could be months back).
-    private func retire(_ url: URL) {
-        let fm = FileManager.default
-        let imported = url.appendingPathExtension("imported")
-        try? fm.removeItem(at: imported)   // a prior, expired backup
-        guard (try? fm.moveItem(at: url, to: imported)) != nil else { return }
-        try? fm.setAttributes([.modificationDate: Date()], ofItemAtPath: imported.path)
-    }
-
-    /// Delete the imported legacy backups once they're older than the grace
-    /// period — so a converted user's data home doesn't keep stale CSV/alert
-    /// files around to confuse them. Runs every open; the file's own timestamp
-    /// (stamped at migration in `retire`) is the clock.
-    private func removeStaleImportedFiles() {
-        let fm = FileManager.default
-        let cutoff = Date().addingTimeInterval(-Self.importedGracePeriod)
-        let backups = (legacyReadings + [legacyAlerts].compactMap { $0 })
-            .map { $0.appendingPathExtension("imported") }
-        for url in backups {
-            guard let modified = try? fm.attributesOfItem(atPath: url.path)[.modificationDate] as? Date,
-                  modified < cutoff else { continue }
-            try? fm.removeItem(at: url)
-            Log.notice(.history, "removed migrated legacy file \(url.lastPathComponent)")
-        }
-    }
-
-    /// Insert one already-parsed sample synchronously (no throttle). For the
-    /// importer and tests. Runs on the serial queue.
+    /// Insert one sample synchronously. For tests.
     func insert(_ sample: HistorySample) {
         queue.sync { _ = insertSampleUnsafe(sample) }
     }
 
-    /// Insert one sample directly (must already be on `queue` — used by the
-    /// importer, which runs inside `open`). Returns whether a row was added.
+    /// Insert one sample; must already be on `queue`. Returns whether a row was added.
     private func insertSampleUnsafe(_ s: HistorySample) -> Bool {
         guard let db else { return false }
         let sql = """
@@ -603,18 +354,15 @@ final class HistoryDatabase: @unchecked Sendable {
         return sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0
     }
 
-    private func recordAlertUnsafe(message: String, at time: Date) {
-        guard let db else { return }
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO alerts (ts, message) VALUES (?,?);", -1, &stmt, nil) == SQLITE_OK
-        else { return }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_int64(stmt, 1, Self.millis(time))
-        sqlite3_bind_text(stmt, 2, message, -1, Self.transient)
-        sqlite3_step(stmt)
-    }
-
     // MARK: SQLite helpers
+
+    private var userVersion: Int64 {
+        guard let db else { return 0 }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nil) == SQLITE_OK else { return 0 }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW ? sqlite3_column_int64(stmt, 0) : 0
+    }
 
     /// SQLite wants to know whether a bound string outlives the bind; TRANSIENT
     /// tells it to copy, which is always correct here.

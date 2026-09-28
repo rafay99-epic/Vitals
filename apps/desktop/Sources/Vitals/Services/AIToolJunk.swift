@@ -1,26 +1,18 @@
 import Foundation
 
-/// One AI coding tool found on this machine. `name` is what the UI shows; a
-/// tool contributes junk paths only when its detect directory exists (it has
-/// actually run here), and only the specific cache/temp/log/version paths that
-/// exist — auth, config and user settings under the tool's directory are never
-/// touched.
+/// One AI coding tool found on this machine. Auth, config and user settings
+/// under the tool's directory are never touched.
 struct AITool {
     let name: String
 }
 
 /// Caches, temp files, logs and superseded versions left behind by AI coding
-/// tools. UI-free and fully testable against a fixture: pass an explicit
-/// `home`/`tmpRoot`/`now`. The scan stays honest — it only ever lists paths
-/// that exist, and only for tools that are actually installed.
+/// tools. Lists only paths that exist, only for installed tools. Pass
+/// `home`/`tmpRoot`/`now` to test against a fixture.
 enum AIToolJunk {
-    /// AI chat transcripts older than this are offered for (destructive) removal.
-    static let historyAgeDays = 30
     /// A tmp working directory younger than this may back a live session, so it
     /// is left alone even when a tool is detected.
     static let tempAgeHours = 24
-
-    // MARK: Public API
 
     /// The AI tools detected under `home` (detect directory present).
     static func detectedTools(
@@ -43,18 +35,6 @@ enum AIToolJunk {
         Tool.allCases
             .filter { FileManager.default.fileExists(atPath: $0.detectDir(home: home).path) }
             .flatMap { $0.cacheItems(home: home, tmpRoot: tmpRoot, now: now) }
-    }
-
-    /// Age-gated AI chat transcripts (files) from detected tools. Destructive to
-    /// remove, so gated to files older than `historyAgeDays` and never anything
-    /// that looks like persistent memory.
-    static func historyItems(
-        home: URL = FileManager.default.homeDirectoryForCurrentUser,
-        now: Date = Date()
-    ) -> [URL] {
-        Tool.allCases
-            .filter { FileManager.default.fileExists(atPath: $0.detectDir(home: home).path) }
-            .flatMap { $0.historyItems(home: home, now: now) }
     }
 
     // MARK: Tool table
@@ -94,16 +74,13 @@ enum AIToolJunk {
             switch self {
             case .claudeCode:
                 var items: [URL] = []
-                // Stale tmp working directories only — a live session runs from
-                // a fresh one, so the young ones are never touched.
+                // Stale tmp dirs only: a live session runs from a fresh one.
                 let tmpBase = tmpRoot.appendingPathComponent("claude-\(getuid())")
                 items += staleContents(of: tmpBase, olderThanHours: AIToolJunk.tempAgeHours, now: now)
-                // shell-snapshots: only its aged contents. A running session
-                // sources a fresh snapshot on every Bash call, so deleting the
-                // whole directory can break the live session — list only entries
-                // past the same tmp age gate. `file-history` is deliberately
-                // absent: it is Claude Code's per-edit undo/restore store
-                // (recovery data, not a cache), and there is no Trash copy.
+                // Only aged shell-snapshots: a running session sources a fresh one
+                // on every Bash call, so deleting the directory breaks it.
+                // `file-history` is deliberately absent: it's the per-edit undo
+                // store (recovery data, not cache).
                 items += staleContents(of: home.appendingPathComponent(".claude/shell-snapshots"),
                                        olderThanHours: AIToolJunk.tempAgeHours, now: now)
                 items += existing([
@@ -148,21 +125,6 @@ enum AIToolJunk {
             }
         }
 
-        func historyItems(home: URL, now: Date) -> [URL] {
-            switch self {
-            case .claudeCode:
-                // Recursive `*.jsonl` transcripts under projects/. `history.jsonl`
-                // and the memory store live outside projects/, so they're never seen.
-                return agedFiles(under: home.appendingPathComponent(".claude/projects"),
-                                 extensions: ["jsonl"], olderThanDays: AIToolJunk.historyAgeDays, now: now)
-            case .codex:
-                return agedFiles(under: home.appendingPathComponent(".codex/sessions"),
-                                 extensions: nil, olderThanDays: AIToolJunk.historyAgeDays, now: now)
-            default:
-                return []
-            }
-        }
-
         /// Symlinks that name the *active* version (never listed): any symlink in
         /// `~/.local/bin`, plus sibling `latest`/`current` pointers next to the
         /// versions directory.
@@ -177,7 +139,7 @@ enum AIToolJunk {
     }
 }
 
-// MARK: - File helpers (fileprivate, no tool state)
+// MARK: - File helpers
 
 /// Regenerable cache subfolders inside an Electron app's data directory — never
 /// its `Local Storage`, `IndexedDB`, cookies or user settings.
@@ -194,9 +156,8 @@ private func electronCaches(in base: URL, extra: [String] = []) -> [URL] {
     existing((electronCacheDirNames + extra).map { base.appendingPathComponent($0) })
 }
 
-/// Immediate contents of `dir` (files and directories) whose mtime is older than
-/// `hours`. Used for tmp session working directories and the shell-snapshot
-/// cache, so a running session's fresh entry is spared while stale ones are listed.
+/// Immediate contents of `dir` whose mtime is older than `hours`, so a running
+/// session's fresh entry is spared.
 private func staleContents(of dir: URL, olderThanHours hours: Int, now: Date) -> [URL] {
     let fm = FileManager.default
     let cutoff = now.addingTimeInterval(-Double(hours) * 3600)
@@ -233,10 +194,9 @@ private func oldVersions(in versionsDir: URL, pointers: [URL]) -> [URL] {
         guard let v = try? entry.resourceValues(forKeys: keys) else { continue }
         if v.isSymbolicLink == true { continue }                            // never a symlink
         if protected.contains(entry.standardizedFileURL.path) { continue }  // active version
-        // Not restricted to directories: Claude Code's versions dir holds
-        // version binaries as plain files. Instead require a version-shaped
-        // name, so a stray metadata file (manifest.json, .DS_Store) can never
-        // be mistaken for the newest version and shield a real one from listing.
+        // Versions can be plain files (Claude Code), so require a version-shaped
+        // name instead: a stray manifest.json or .DS_Store must never count as
+        // the newest version and shield a real one.
         if !isVersionShaped(entry.lastPathComponent) { continue }
         candidates.append((entry, v.contentModificationDate ?? .distantPast))
     }
@@ -244,33 +204,10 @@ private func oldVersions(in versionsDir: URL, pointers: [URL]) -> [URL] {
     return candidates.sorted { $0.modified > $1.modified }.dropFirst().map(\.url)
 }
 
-/// True for names like `2.0.14` or `v2.0.14` — an optional leading `v` then a
-/// digit. Excludes hidden files (leading `.`) and non-version metadata.
+/// True for names like `2.0.14` or `v2.0.14`: an optional `v` then a digit.
 private func isVersionShaped(_ name: String) -> Bool {
     var rest = Substring(name)
     if rest.first == "v" { rest = rest.dropFirst() }
     return rest.first?.isNumber == true
 }
 
-/// Regular files under `root` (recursive) older than `days`, optionally scoped
-/// by extension. Persistent memory is always spared: never a `MEMORY.md`, never
-/// anything inside a `memory` directory component — both checks case-insensitive,
-/// since the volume underneath is usually case-insensitive too.
-private func agedFiles(under root: URL, extensions: Set<String>?, olderThanDays days: Int, now: Date) -> [URL] {
-    let fm = FileManager.default
-    guard fm.fileExists(atPath: root.path) else { return [] }
-    let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
-    let keys: Set<URLResourceKey> = [.isRegularFileKey, .contentModificationDateKey]
-    guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: Array(keys),
-                                         options: [], errorHandler: { _, _ in true }) else { return [] }
-    var result: [URL] = []
-    for case let url as URL in enumerator {
-        guard let v = try? url.resourceValues(forKeys: keys), v.isRegularFile == true else { continue }
-        if let extensions, !extensions.contains(url.pathExtension.lowercased()) { continue }
-        if url.lastPathComponent.lowercased() == "memory.md" { continue }
-        if url.pathComponents.contains(where: { $0.lowercased() == "memory" }) { continue }
-        guard let modified = v.contentModificationDate, modified < cutoff else { continue }
-        result.append(url)
-    }
-    return result
-}

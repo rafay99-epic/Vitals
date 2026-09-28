@@ -1,84 +1,23 @@
 import SwiftUI
 
-/// Every navigable destination, as one flat tier in the sidebar — a glanceable
-/// Overview on top, then a read-only **Monitor** group and a write/maintenance
-/// **Maintain** group (the "read freely, write carefully" split, made visible).
-/// This replaces the old two-tier navigation (top capsule tabs *plus* the
-/// System/Applications sub-segment bars): one level, no tabs-in-tabs.
-enum NavSection: String, CaseIterable, Identifiable {
-    case overview
-    case cpu, gpu, memory, battery, network, sensors, processes, history
-    case storage, cleanup, applications, loginItems
-    case settings
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .overview:     return "Overview"
-        case .cpu:          return "CPU"
-        case .gpu:          return "GPU"
-        case .memory:       return "Memory"
-        case .battery:      return "Battery"
-        case .network:      return "Network"
-        case .sensors:      return "Temps & Fans"
-        case .processes:    return "Processes"
-        case .history:      return "History"
-        case .storage:      return "Storage"
-        case .cleanup:      return "Cleanup"
-        case .applications: return "Applications"
-        case .loginItems:   return "Login Items"
-        case .settings:     return "Settings"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .overview:     return "gauge.with.dots.needle.50percent"
-        case .cpu:          return "cpu"
-        case .gpu:          return "cpu.fill"
-        case .memory:       return "memorychip"
-        case .battery:      return "battery.100percent"
-        case .network:      return "network"
-        case .sensors:      return "thermometer.medium"
-        case .processes:    return "list.bullet"
-        case .history:      return "chart.xyaxis.line"
-        case .storage:      return "internaldrive"
-        case .cleanup:      return "sparkles"
-        case .applications: return "square.grid.2x2"
-        case .loginItems:   return "power"
-        case .settings:     return "gearshape"
-        }
-    }
-
-}
-
 /// Top-level navigation: a fixed left sidebar over one content canvas. The
-/// sidebar never collapses, so window geometry never changes from navigation
-/// (the constraint the old capsule-tab shell solved by forbidding a sidebar
-/// outright — a *fixed* rail honours it too, while giving one clean nav level).
+/// sidebar never collapses, so window geometry never changes from navigation.
 struct ContentView: View {
-    @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var model: VitalsModel
-    /// The selected destination, shared app-wide so the ⌘, command and the
-    /// menu-bar gear can also land on the Settings section (now an in-window
-    /// panel, not a separate dialog).
-    @EnvironmentObject private var navigator: Navigator
-    /// The current section, read/written through the shared navigator.
+    @Environment(AppSettings.self) private var settings
+    @Environment(VitalsModel.self) private var model
+    /// Shared app-wide so the ⌘, command and the menu-bar gear can also select
+    /// the Settings section.
+    @Environment(Navigator.self) private var navigator
     private var section: NavSection { navigator.section }
 
     // Per-section models, owned here so a scan started in one section survives
-    // switching sections (Processes, Apps, Login Items, Cleanup, Storage).
-    @StateObject private var processesModel = ProcessesModel()
-    @StateObject private var appEnergyModel = AppEnergyModel()
-    @StateObject private var appsModel = AppsModel()
-    @StateObject private var loginItemsModel = LoginItemsModel()
-    @StateObject private var cleanupModel = CleanupModel()
-    @StateObject private var storageModel = StorageModel()
-    @StateObject private var historyModel = HistoryModel()
+    // switching sections.
+    @State private var appsModel = AppsModel()
+    @State private var cleanupModel = CleanupModel()
+    @State private var historyModel = HistoryModel()
 
-    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .processes, .history]
-    private static let maintain: [NavSection] = [.storage, .cleanup, .applications, .loginItems]
+    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .history]
+    private static let maintain: [NavSection] = [.diskHealth, .cleanup, .applications]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -87,16 +26,18 @@ struct ContentView: View {
             content
         }
         .ignoresSafeArea(edges: .top)
-        .modifier(WindowBackdrop())
+        .background(Color(nsColor: .windowBackgroundColor))
+        .environment(\.animationsEnabled, settings.appActive)
         .frame(minWidth: 980, minHeight: 680)
         .onAppear {
             model.setMainWindowVisible(true)
-            model.setVisibleSection(section.rawValue)
+            model.setVisibleSection(section)
         }
         .onChange(of: section, initial: true) { _, newSection in
-            model.setVisibleSection(newSection.rawValue)
+            model.setVisibleSection(newSection)
         }
         .onDisappear { model.setMainWindowVisible(false) }
+        .background(WindowOcclusionReader { model.setMainWindowUnoccluded($0) })
     }
 
     // MARK: Sidebar
@@ -121,10 +62,8 @@ struct ContentView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 12)
             }
-            // Settings is pinned to the very bottom — always visible regardless of
-            // how far the section list scrolls, the way macOS apps anchor app-wide
-            // settings (Music, Sensei). It's its own group, not part of Monitor or
-            // Maintain.
+            // Settings is pinned to the bottom, outside the scrolling list, so it's
+            // always visible.
             Divider().opacity(0.4).padding(.horizontal, 8)
             VStack(alignment: .leading, spacing: 1) {
                 row(.settings, shortcut: nil)
@@ -140,8 +79,7 @@ struct ContentView: View {
         .gesture(WindowDragGesture())
     }
 
-    /// Branding + the app-wide update affordance. The top inset clears the
-    /// traffic lights. (Settings moved into the sidebar's pinned bottom row.)
+    /// Branding + the update button. The top inset clears the traffic lights.
     private var sidebarHeader: some View {
         HStack(spacing: 8) {
             Image(nsImage: NSApp.applicationIconImage)
@@ -165,17 +103,16 @@ struct ContentView: View {
             .padding(.bottom, 3)
     }
 
-    /// ⌘n / ⌥⌘n for the nth row of a group — digits only go to 9, so anything
+    /// ⌘n / ⌥⌘n for the nth row of a group. Digits only go to 9, so anything
     /// past that has no shortcut rather than a wrong one.
     private static func shortcut(_ n: Int, modifiers: EventModifiers = .command) -> KeyboardShortcut? {
         guard (1...9).contains(n) else { return nil }
         return KeyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: modifiers)
     }
 
-    /// A sidebar destination row — icon + label, the whole row a click target,
-    /// the selected one filled. Overview + Monitor take ⌘1…⌘9 by visible
-    /// position; Maintain has its own ⌥⌘1…⌥⌘4 tier. Switching never animates
-    /// geometry — only the selection fill moves.
+    /// A sidebar row, the whole row a click target. Overview + Monitor take ⌘1-⌘8
+    /// by position; Maintain has its own ⌥⌘1-⌥⌘3 tier. Only the selection fill
+    /// changes on switch, never geometry.
     private func row(_ item: NavSection, shortcut: KeyboardShortcut?) -> some View {
         let selected = section == item
         return Button {
@@ -207,40 +144,35 @@ struct ContentView: View {
 
     // MARK: Content
 
-    /// Mount only the selected section. Keeping every visited section in a ZStack
-    /// made hidden charts, layout trees, and view-local state live for the whole
-    /// window session; section models below still preserve scan results/tasks.
+    /// Mount only the selected section so hidden charts and layout trees don't
+    /// stay alive. The section models above preserve scan results and tasks.
     private var content: some View {
         Group {
             switch section {
             case .overview:
-                DashboardView(isActive: true, drill: drill)
+                DashboardView(drill: drill)
             case .cpu:
                 CPUView()
             case .gpu:
-                GPUView(isActive: true)
+                GPUView()
             case .memory:
-                MemoryView(isActive: true)
+                MemoryView()
             case .battery:
-                BatteryView(appEnergyModel: appEnergyModel, isActive: true)
+                BatteryView()
             case .network:
-                NetworkView(isActive: true)
+                NetworkView()
             case .sensors:
                 SensorsView()
-            case .processes:
-                ProcessesView(model: processesModel, isActive: true)
             case .history:
-                HistoryView(model: historyModel, isActive: true)
-            case .storage:
-                StorageView(model: storageModel, isActive: true)
+                HistoryView(model: historyModel)
+            case .diskHealth:
+                DiskHealthView()
             case .cleanup:
-                CleanupView(model: cleanupModel, isActive: true)
+                CleanupView(model: cleanupModel)
             case .applications:
-                AppsView(model: appsModel, isActive: true)
-            case .loginItems:
-                LoginItemsView(model: loginItemsModel, isActive: true)
+                AppsView(model: appsModel)
             case .settings:
-                SettingsView(isActive: true)
+                SettingsView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -253,12 +185,47 @@ struct ContentView: View {
     }
 }
 
-/// The header's update affordance: a compact badged download icon when an
-/// update is available (one click installs, from any section), and a small
-/// spinner while it downloads and installs. Reads the shared `Updater`, so it
-/// stays in sync. Nothing shows when up to date.
+/// Reports whether the hosting window is actually visible (not minimized,
+/// hidden, fully covered, or on another Space), now and on every change.
+private struct WindowOcclusionReader: NSViewRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> NSView { ReaderView(onChange: onChange) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class ReaderView: NSView {
+        let onChange: (Bool) -> Void
+        private var observer: NSObjectProtocol?
+
+        init(onChange: @escaping (Bool) -> Void) {
+            self.onChange = onChange
+            super.init(frame: .zero)
+        }
+        @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
+
+        deinit { observer.map(NotificationCenter.default.removeObserver) }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            observer.map(NotificationCenter.default.removeObserver)
+            observer = nil
+            guard let window else { return }
+            onChange(window.occlusionState.contains(.visible))
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+            ) { [weak self, weak window] _ in
+                guard let window else { return }
+                self?.onChange(window.occlusionState.contains(.visible))
+            }
+        }
+    }
+}
+
+/// The sidebar header's update button: a download icon when an update is
+/// available or downloaded (one click installs), a spinner while downloading or
+/// installing, nothing when up to date.
 private struct HeaderUpdateButton: View {
-    @EnvironmentObject private var updater: Updater
+    @Environment(Updater.self) private var updater
     @State private var hovered = false
 
     var body: some View {
@@ -311,20 +278,11 @@ private struct HeaderUpdateButton: View {
     }
 }
 
-/// The Dashboard: the glanceable overview, Mole-style. A health-score hero, a
-/// bento grid of per-subsystem tiles (each with a live sparkline, each a tap into
-/// the matching Monitor section), the live multi-metric chart, power and fans, and
-/// the top processes. Detail is a drill-in — the heavy per-subsystem cards live in
-/// the Monitor sections now, so nothing here is duplicated.
+/// The Overview: health hero, per-subsystem tiles (each drills into its Monitor
+/// section), the multi-metric chart, power and fans, and top processes.
 struct DashboardView: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
-    /// True only while the Dashboard is the visible section. The live history
-    /// chart rebuilds its marks from `chartHistory` on every tick — gating it
-    /// (and the hover lookup) on `isActive` keeps a kept-alive background
-    /// dashboard from paying that cost every sample, mirroring GPU/Battery.
-    let isActive: Bool
-    /// Jump to a Monitor section (tap a tile to drill into its detail).
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
     let drill: (NavSection) -> Void
 
     var body: some View {
@@ -345,43 +303,25 @@ struct DashboardView: View {
                         EmptyView()
                     }
                 } else {
-                    glassBatched
+                    cards
                 }
             }
             .padding(20)
         }
     }
 
-    /// The dashboard's cards batched into one Liquid Glass pass. Kept per-view:
-    /// the section is mounted once, so this container is created once and never
-    /// re-initialized on switch.
-    @ViewBuilder
-    private var glassBatched: some View {
-        #if compiler(>=6.2)
-        if #available(macOS 26.0, *), settings.glassEnabled {
-            GlassEffectContainer { cards }
-        } else {
-            cards
-        }
-        #else
-        cards
-        #endif
-    }
-
-    /// Lazy so the window's first frame (and every frame of a resize
-    /// animation) only builds and lays out the cards actually on screen —
-    /// the heavy below-the-fold charts no longer tax open/close/toggle.
+    /// Lazy so the first frame and each resize frame only lay out on-screen cards.
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: 16) {
             UpdateBanner()
             DashboardHealthHero(drill: drill)
             DashboardTileGrid(drill: drill)
-            PerformanceHistoryCard(isActive: isActive)
+            PerformanceHistoryCard()
             HStack(alignment: .top, spacing: 16) {
                 PowerCard()
                 FanCard()
             }
-            DashboardProcessesCard(drill: drill)
+            DashboardProcessesCard()
             footer
         }
     }
@@ -406,7 +346,12 @@ struct DashboardView: View {
                 Text("on battery")
                 Text("·")
             }
-            Text("Updates every \(settings.effectiveRefreshInterval, format: .number) s")
+            if model.sensorsStalled {
+                Label("Sensors not responding, readings paused", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            } else {
+                Text("Updates every \(settings.effectiveRefreshInterval, format: .number) s")
+            }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -416,7 +361,7 @@ struct DashboardView: View {
 
 /// Shown at the top of the dashboard while an update is available or installing.
 struct UpdateBanner: View {
-    @EnvironmentObject private var updater: Updater
+    @Environment(Updater.self) private var updater
 
     var body: some View {
         switch updater.status {

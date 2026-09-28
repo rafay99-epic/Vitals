@@ -1,25 +1,18 @@
 import SwiftUI
 import Charts
 
-/// The GPU tab: a deeper look than the Dashboard's summary card — utilization
-/// broken into renderer/tiler, the unified-memory working set, and live power
-/// for the GPU and Neural Engine rails. Apple Silicon exposes no GPU-specific
-/// temperature (CPU and GPU share one die and the diodes aren't labelled per
-/// block), so none is shown — labelling a generic die reading "GPU" would break
-/// the honesty rule.
+/// The GPU section: utilization (renderer/tiler), the unified-memory working
+/// set, and power rails. Apple Silicon exposes no GPU-specific temperature (the
+/// die diodes aren't labelled per block), so none is shown rather than
+/// labelling a generic die reading "GPU".
 struct GPUView: View {
-    @EnvironmentObject private var model: VitalsModel
-    /// True only while the GPU tab is the visible one. The tab stays mounted for
-    /// instant switching, so without this the history chart would rebuild its
-    /// marks on every sample tick in the background — gating it keeps idle cost
-    /// to zero when another tab is up.
-    let isActive: Bool
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         MetricScroll {
             if let gpu = model.gpu {
                 GPUHeroCard(gpu: gpu)
-                GPUUtilizationCard(gpu: gpu, isActive: isActive)
+                GPUUtilizationCard(gpu: gpu)
                 GPUMemoryCard(gpu: gpu)
                 GPUPowerCard()
             } else {
@@ -69,9 +62,8 @@ private struct GPUHeroCard: View {
 // MARK: - Utilization breakdown + history
 
 private struct GPUUtilizationCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
     let gpu: GPUSnapshot
-    let isActive: Bool
 
     var body: some View {
         SectionCard(title: "Utilization", symbol: "chart.bar.fill") {
@@ -82,8 +74,7 @@ private struct GPUUtilizationCard: View {
                     meterRow("Renderer", gpu.rendererUtilization, tint: .indigo)
                     meterRow("Tiler", gpu.tilerUtilization, tint: .teal)
                 }
-                // Only build the chart while this tab is showing — see GPUView.
-                if isActive, model.chartHistory.contains(where: { $0.gpuUsage != nil }) {
+                if model.chartHistory.hasReading(\.gpuUsage) {
                     Divider()
                     Deferred { history }.frame(height: 150)
                 }
@@ -163,7 +154,7 @@ private struct GPUMemoryCard: View {
     }
 
     /// In-use (solid) within the driver's allocation (faint) within the working
-    /// set (track) — three honest depths of the same unified pool.
+    /// set (track): three depths of the same unified pool.
     private var bar: some View {
         GeometryReader { geometry in
             let total = max(Double(gpu.memoryTotal ?? gpu.memoryAllocated ?? gpu.memoryUsed ?? 1), 1)
@@ -205,7 +196,7 @@ private struct GPUMemoryCard: View {
 // MARK: - Neural Engine + power rails
 
 private struct GPUPowerCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Power", symbol: "bolt.fill") {
@@ -220,8 +211,7 @@ private struct GPUPowerCard: View {
     }
 }
 
-/// A small fraction-filled bar in the card language, used for the GPU meters.
-// Shared meter fill, reused by the CPU card's P/E split.
+/// A fraction-filled bar in the card language, used by the GPU and CPU meters.
 func utilizationBar(fraction: Double, tint: Color) -> some View {
     GeometryReader { geometry in
         ZStack(alignment: .leading) {

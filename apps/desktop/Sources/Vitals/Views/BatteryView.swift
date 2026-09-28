@@ -1,19 +1,10 @@
 import SwiftUI
 import Charts
 
-/// The Battery tab: the full health picture System Settings keeps hidden —
-/// real capacity against design, cycle count, condition, the charge trend over
-/// time, the live USB-C / MagSafe adapter negotiation, and voltage / current /
-/// power / temperature straight from the pack's own gauge. Every figure is a
-/// direct AppleSmartBattery reading; a machine with no battery says so rather
-/// than showing zeros.
+/// The Battery section: capacity vs design, cycles, condition, charge trend,
+/// adapter negotiation, and the pack's electrical readings (AppleSmartBattery).
 struct BatteryView: View {
-    @EnvironmentObject private var model: VitalsModel
-    /// The live per-app energy list — owned by ContentView so its state survives
-    /// tab switches, sampled only while this tab is active.
-    @ObservedObject var appEnergyModel: AppEnergyModel
-    /// True only while the Battery tab is visible — gates the history chart.
-    let isActive: Bool
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         MetricScroll {
@@ -22,9 +13,7 @@ struct BatteryView: View {
                 if let adapter = battery.adapter {
                     BatteryAdapterCard(adapter: adapter)
                 }
-                // Gate the scan on isActive too (mirrors GPUView) so a backgrounded
-                // mounted tab doesn't walk chartHistory every tick.
-                if isActive, model.chartHistory.contains(where: { $0.batteryPercent != nil }) {
+                if model.chartHistory.hasReading(\.batteryPercent) {
                     BatteryHistoryCard()
                 }
                 BatteryHealthCard(battery: battery)
@@ -34,22 +23,16 @@ struct BatteryView: View {
                     symbol: "bolt.slash",
                     tint: .green,
                     title: "No battery",
-                    message: "This Mac runs on wall power — there's no battery to report on. Charge, health and power figures appear here on a notebook. Energy use and sleep are tracked below regardless."
+                    message: "This Mac runs on wall power — there's no battery to report on. Charge, health and power figures appear here on a notebook. Sleep blockers are listed below regardless."
                 ) { EmptyView() }
             }
-            // Energy telemetry is relevant on wall power too (a plugged-in Mac
-            // still has runaway apps and sleep blockers), so these sit outside the
-            // battery gate.
-            if isActive, model.chartHistory.contains(where: { $0.totalWatts != nil }) {
+            // Power draw and sleep blockers matter on wall power too, so they
+            // sit outside the battery gate.
+            if model.chartHistory.hasReading(\.totalWatts) {
                 BatteryPowerDrawCard()
             }
-            AppEnergyCard(model: appEnergyModel)
-            SleepBlockersCard(model: appEnergyModel)
+            SleepBlockersCard()
         }
-        .onChange(of: isActive, initial: true) { _, active in
-            if active { appEnergyModel.start() } else { appEnergyModel.stop() }
-        }
-        .onDisappear { appEnergyModel.stop() }
     }
 }
 
@@ -119,10 +102,8 @@ private struct BatteryAdapterCard: View {
         }
     }
 
-    /// The live delivered watts when the charger reports them — even ~0 W when
-    /// the battery is full (honest, like a stopped fan reading 0 rpm), so the
-    /// "delivering" label always matches the number. Falls back to the rated
-    /// figure (labelled "rated"), then "Connected". Never a fabricated number.
+    /// Live delivered watts when the charger reports them (even ~0 W when full, so
+    /// "delivering" matches the number), else the rated figure, else "Connected".
     private var heroValue: String {
         if let delivered = adapter.deliveredWatts {
             return String(format: "%.1f W", delivered)
@@ -133,7 +114,7 @@ private struct BatteryAdapterCard: View {
 
     private var rows: [MetricRow] {
         var rows: [MetricRow] = []
-        // Show the rated cap alongside the live draw — they diverge as the battery fills.
+        // Show the rated cap alongside the live draw; they diverge as the battery fills.
         if adapter.deliveredWatts != nil, let watts = adapter.watts {
             rows.append(MetricRow(symbol: "bolt.fill", label: "Rated power", value: "\(watts) W"))
         }
@@ -150,13 +131,10 @@ private struct BatteryAdapterCard: View {
 // MARK: - Charge history
 
 private struct BatteryHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Charge history", symbol: "chart.xyaxis.line") {
-            // Only inserted by BatteryView while the tab is active, so the chart
-            // never rebuilds marks in the background (see GPUView). Deferred keeps
-            // the 50–150 ms first-layout cost off the tab-switch animation.
             Deferred { chart }.frame(height: 150)
         }
     }
@@ -240,8 +218,8 @@ private struct BatteryHealthCard: View {
 // MARK: - Live electrical detail
 
 private struct BatteryDetailCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
     let battery: BatterySnapshot
 
     var body: some View {
@@ -276,7 +254,7 @@ private struct BatteryDetailCard: View {
 // MARK: - Power draw over time
 
 private struct BatteryPowerDrawCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Power draw", symbol: "bolt.fill") {
@@ -304,88 +282,50 @@ private struct BatteryPowerDrawCard: View {
     }
 }
 
-// MARK: - Per-app energy
+// MARK: - Sleep & wake (power assertions)
 
-private struct AppEnergyCard: View {
-    @ObservedObject var model: AppEnergyModel
-    private static let maxRows = 12
+/// Apps holding a sleep assertion, re-read every 5 s while mounted.
+private struct SleepBlockersCard: View {
+    @State private var model = SleepBlockersModel()
 
     var body: some View {
-        SectionCard(title: "App energy", symbol: "bolt.badge.checkmark") {
-            content
-        }
-    }
-
-    @ViewBuilder private var content: some View {
-        if !model.hasLoaded {
-            HStack { ProgressView().controlSize(.small); Text("Measuring…").font(.callout).foregroundStyle(.secondary) }
-        } else if model.loadFailed {
-            Text("Couldn't read the process list on this system.")
-                .font(.callout).foregroundStyle(.secondary)
-        } else if model.apps.isEmpty {
-            Text("Nothing found").font(.callout).foregroundStyle(.secondary)
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(model.usesRealWatts
-                     ? "Average power each app is drawing right now."
-                     : "Relative energy impact (CPU + wakeups) — this Mac isn't reporting real per-app energy, so these rank apps rather than show watts.")
-                    .font(.caption).foregroundStyle(.secondary)
-                // Bars share the list's single unit — watts when measured, else the
-                // impact index — so their lengths match the values shown.
-                let real = model.usesRealWatts
-                let value: (AppEnergyUsage) -> Double = { real ? ($0.avgWatts ?? 0) : $0.impactIndex }
-                let maxValue = max(model.apps.map(value).max() ?? 0, 0.0001)
-                ForEach(model.apps.prefix(Self.maxRows)) { app in
-                    AppEnergyRowView(app: app, fraction: value(app) / maxValue, usesRealWatts: real)
+        SectionCard(title: "Sleep & wake", symbol: "moon.zzz.fill") {
+            if let blockers = model.blockers {
+                if blockers.isEmpty {
+                    // Scoped to the user's apps: a system daemon holding an
+                    // assertion isn't listed, so don't promise the Mac will sleep.
+                    Label("No apps are keeping your Mac awake.", systemImage: "checkmark.circle.fill")
+                        .font(.callout).foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(blockers) { app in
+                            HStack(spacing: 10) {
+                                AppIcon(bundleURL: app.bundleURL)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(app.name).font(.callout).lineLimit(1)
+                                    if let reason = app.reason, !reason.isEmpty {
+                                        Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                Text(app.preventsSystemSleep ? "System" : "Display")
+                                    .font(.caption.weight(.medium))
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(Capsule().fill(Color.orange.opacity(0.18)))
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                    }
                 }
+            } else {
+                HStack { ProgressView().controlSize(.small); Text("Checking…").font(.callout).foregroundStyle(.secondary) }
             }
         }
+        .task { await model.watch() }
     }
 }
 
-private struct AppEnergyRowView: View {
-    let app: AppEnergyUsage
-    let fraction: Double
-    let usesRealWatts: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            AppEnergyIcon(bundleURL: app.bundleURL)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(app.name).font(.callout).lineLimit(1)
-                utilizationBar(fraction: min(fraction, 1), tint: barTint)
-            }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(valueText)
-                    .font(.system(.callout, design: .rounded, weight: .medium))
-                    .monospacedDigit().numericTransition()
-                if app.preventsSystemSleep {
-                    Label("Awake", systemImage: "moon.stars.fill")
-                        .font(.caption2).foregroundStyle(.orange)
-                        .labelStyle(.titleAndIcon)
-                }
-            }
-        }
-    }
-
-    /// When the OS reports real energy, every row shows watts (or "—" for an app
-    /// still establishing its baseline) — never the impact index alongside watts,
-    /// which would mix two scales. When it doesn't, every row shows the relative
-    /// index as a plain number (never suffixed "W", so it's never misread as watts).
-    private var valueText: String {
-        if usesRealWatts { return app.avgWatts.map(wattsText) ?? "—" }
-        return String(format: "%.0f", app.impactIndex)
-    }
-
-    private var barTint: Color {
-        app.preventsSystemSleep ? .orange : .green
-    }
-}
-
-/// The app's icon, or a neutral symbol tile for bundle-less processes (daemons,
-/// helpers with no `.app`).
-private struct AppEnergyIcon: View {
+private struct AppIcon: View {
     let bundleURL: URL?
 
     var body: some View {
@@ -400,48 +340,6 @@ private struct AppEnergyIcon: View {
     }
 }
 
-// MARK: - Sleep & wake (power assertions)
-
-private struct SleepBlockersCard: View {
-    @ObservedObject var model: AppEnergyModel
-
-    var body: some View {
-        SectionCard(title: "Sleep & wake", symbol: "moon.zzz.fill") {
-            let blockers = model.sleepBlockers
-            if !model.hasLoaded {
-                HStack { ProgressView().controlSize(.small); Text("Checking…").font(.callout).foregroundStyle(.secondary) }
-            } else if blockers.isEmpty {
-                // Scoped to apps, not the whole machine: this list covers the
-                // user's own processes, so a system daemon holding an assertion
-                // wouldn't appear here — don't promise the Mac will sleep.
-                Label("No apps are keeping your Mac awake.",
-                      systemImage: "checkmark.circle.fill")
-                    .font(.callout).foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(blockers) { app in
-                        HStack(spacing: 10) {
-                            AppEnergyIcon(bundleURL: app.bundleURL)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(app.name).font(.callout).lineLimit(1)
-                                if let reason = app.assertionReason, !reason.isEmpty {
-                                    Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 8)
-                            Text(app.preventsSystemSleep ? "System" : "Display")
-                                .font(.caption.weight(.medium))
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Capsule().fill(Color.orange.opacity(0.18)))
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Shared key/value grid
 
 struct MetricRow: Identifiable {
@@ -451,8 +349,8 @@ struct MetricRow: Identifiable {
     var id: String { label }
 }
 
-/// A two-column key/value grid in the card language — fixed columns (never
-/// `.adaptive`, per the performance rules) so it doesn't reflow mid-animation.
+/// A two-column key/value grid. Fixed columns (never `.adaptive`) so it
+/// doesn't reflow mid-animation.
 struct MetricRowGrid: View {
     let rows: [MetricRow]
 

@@ -1,9 +1,9 @@
 import SwiftUI
 import Charts
 
-/// Top CPU consumers. Wrapper-free content so it can sit inside a CollapsibleCard.
+/// Top CPU consumers, as bare content for a card to wrap.
 struct TopProcessesContent: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         if model.topProcesses.isEmpty {
@@ -33,10 +33,9 @@ struct TopProcessesContent: View {
     }
 }
 
+/// Every fan's live speed and mode, read-only. Fanless Macs say so.
 struct FanCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var fanControl: FanController
-    @State private var pendingRPM: [Int: Double] = [:]
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Fans", symbol: "fan") {
@@ -45,7 +44,7 @@ struct FanCard: View {
                     Image(systemName: model.hasSMC ? "fan.slash" : "questionmark.circle")
                         .font(.largeTitle)
                         .foregroundStyle(.tertiary)
-                    Text(model.hasSMC ? "This Mac is fanless — it cools passively." : "Fan data unavailable.")
+                    Text(model.hasSMC ? "This Mac is fanless. It cools passively." : "Fan data unavailable.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -55,14 +54,10 @@ struct FanCard: View {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(model.fans) { fan in
                         fanRow(fan)
-                        if fanControl.isInstalled {
-                            fanControls(fan)
-                        }
                         if fan.id != model.fans.last?.id {
                             Divider()
                         }
                     }
-                    controlFooter
                 }
                 .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
             }
@@ -84,121 +79,17 @@ struct FanCard: View {
                 Text("\(Int(fan.rpm)) rpm")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .numericTransition()
-                Text(modeLine(fan))
-                    .font(.caption)
-                    .foregroundStyle(isManual(fan) ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                if let manual = fan.isManual {
+                    Text(manual ? "Manual · target \(Int(fan.targetRPM)) rpm" : "Automatic")
+                        .font(.caption)
+                        .foregroundStyle(manual ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                }
                 Text("Range \(Int(fan.minRPM))–\(Int(fan.maxRPM)) rpm")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
             Spacer()
         }
-    }
-
-    @ViewBuilder
-    private func fanControls(_ fan: SMC.Fan) -> some View {
-        if fan.maxRPM > fan.minRPM {
-            HStack(spacing: 8) {
-                Slider(value: sliderBinding(fan), in: fan.minRPM...fan.maxRPM) { editing in
-                    if !editing {
-                        fanControl.setTarget(fan: fan.id, rpm: Int(sliderValue(fan)))
-                    }
-                }
-                .controlSize(.small)
-                .disabled(fanControl.isWorking)
-
-                Text("\(Int(sliderValue(fan)))")
-                    .font(.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, alignment: .trailing)
-
-                Button("Auto") {
-                    pendingRPM[fan.id] = nil
-                    fanControl.setAuto(fan: fan.id)
-                }
-                .controlSize(.small)
-                .disabled(fanControl.isWorking || !isManual(fan))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var controlFooter: some View {
-        if fanControl.needsRepair {
-            VStack(alignment: .leading, spacing: 6) {
-                if let error = fanControl.lastError {
-                    Text(error)
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                } else {
-                    Text("Fan control needs repair: its saved state folder is missing.")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
-                Button {
-                    Task { await fanControl.install() }
-                } label: {
-                    Label(fanControl.isWorking ? "Repairing…" : "Repair Fan Control",
-                          systemImage: "wrench.and.screwdriver")
-                }
-                .controlSize(.small)
-                .disabled(fanControl.isWorking)
-            }
-        } else if let error = fanControl.lastError {
-            Text(error)
-                .font(.caption2)
-                .foregroundStyle(.orange)
-        } else if fanControl.isInstalled {
-            HStack {
-                Text("Manual speed overrides macOS cooling, within the rated range.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                Spacer()
-                Button("Disable…") {
-                    Task { await fanControl.remove(fanCount: model.fans.count) }
-                }
-                .controlSize(.mini)
-                .disabled(fanControl.isWorking)
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    Task { await fanControl.install() }
-                } label: {
-                    Label(fanControl.isWorking ? "Installing…" : "Enable Fan Control", systemImage: "fan")
-                }
-                .disabled(fanControl.isWorking)
-                Text("Installs a small helper (one password) so you can set fan speed without a prompt each time. macOS thermal safety stays active.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-    }
-
-    private func isManual(_ fan: SMC.Fan) -> Bool {
-        fanControl.target(for: fan.id)?.mode == .manual
-    }
-
-    private func modeLine(_ fan: SMC.Fan) -> String {
-        if isManual(fan) {
-            let target = fanControl.target(for: fan.id).map { Int($0.rpm) } ?? Int(fan.targetRPM)
-            return "Manual · target \(target) rpm"
-        }
-        return "Automatic"
-    }
-
-    private func sliderValue(_ fan: SMC.Fan) -> Double {
-        if let pending = pendingRPM[fan.id] { return pending }
-        if let command = fanControl.target(for: fan.id), command.mode == .manual { return command.rpm }
-        return min(max(fan.targetRPM, fan.minRPM), fan.maxRPM)
-    }
-
-    private func sliderBinding(_ fan: SMC.Fan) -> Binding<Double> {
-        Binding(
-            get: { sliderValue(fan) },
-            set: { pendingRPM[fan.id] = $0 }
-        )
     }
 
     private func gaugeValue(_ fan: SMC.Fan) -> Double {
@@ -208,7 +99,7 @@ struct FanCard: View {
 }
 
 struct MemoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     private struct Segment: Identifiable {
         let label: String
@@ -274,7 +165,9 @@ struct MemoryCard: View {
 
     private func legend(_ memory: MemorySnapshot) -> some View {
         let items = segments(memory) + [Segment(label: "Free", bytes: memory.free, color: .secondary.opacity(0.3))]
-        return LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], spacing: 4) {
+        // Fixed columns, never `.adaptive`: adaptive grids reflow mid-animation.
+        let columns = Array(repeating: GridItem(.flexible(), alignment: .leading), count: items.count)
+        return LazyVGrid(columns: columns, spacing: 4) {
             ForEach(items) { item in
                 HStack(spacing: 6) {
                     RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 9, height: 9)
@@ -317,12 +210,12 @@ struct MemoryCard: View {
     }
 }
 
-/// Battery detail rows. Wrapper-free so it can sit inside a CollapsibleCard.
+/// Battery detail rows, as bare content for a card to wrap.
 struct BatteryContent: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
 
-    /// Charge-state SF Symbol for the section header (used by the dashboard).
+    /// Charge-state SF Symbol.
     static func symbol(for battery: BatterySnapshot?) -> String {
         guard let battery else { return "battery.100percent" }
         if battery.isCharging { return "battery.100percent.bolt" }
@@ -335,11 +228,9 @@ struct BatteryContent: View {
         }
     }
 
-    // One wording, one tint rule, one clock format for every battery surface
-    // (Battery tab, dashboard card, battery widget) — shared here so the
-    // copies can't drift apart.
+    // Shared wording, tint, and clock format for every battery surface.
 
-    /// "Charging" / "On power adapter" / "On battery" — the charge-state line.
+    /// "Charging" / "On power adapter" / "On battery": the charge-state line.
     static func stateLine(for battery: BatterySnapshot) -> String {
         if battery.isCharging { return "Charging" }
         if battery.externalPower { return battery.fullyCharged ? "Fully charged, on power adapter" : "On power adapter" }
@@ -433,12 +324,11 @@ struct BatteryContent: View {
 
 }
 
-/// SoC power at a glance on the Dashboard — total package draw plus the CPU /
-/// GPU / Neural Engine rails. Reuses the shared `PowerTile`; shows an honest
-/// note until the first energy delta lands (or when IOReport is unavailable),
-/// never a fake 0 W.
+/// SoC power on the Overview: package total plus the CPU / GPU / Neural Engine
+/// rails. Shows a note until the first energy delta lands (or when IOReport is
+/// unavailable), never a fake 0 W.
 struct PowerCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Power", symbol: "bolt.fill") {
@@ -451,70 +341,5 @@ struct PowerCard: View {
                     .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
             }
         }
-    }
-}
-
-/// SSD health at a glance. Wrapper-free so it can sit inside a CollapsibleCard
-/// on the Dashboard, mirroring `BatteryContent`. Every figure is a real SMART
-/// counter; an unavailable drive says so rather than showing zeros.
-struct DiskContent: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
-
-    /// Header symbol for the dashboard card — flags a critical warning if any.
-    static func symbol(for disk: DiskHealthSnapshot?) -> String {
-        (disk?.criticalWarning ?? 0) == 0 ? "internaldrive.fill" : "internaldrive.badge.exclamationmark"
-    }
-
-    var body: some View {
-        Group {
-            if let disk = model.diskHealth {
-                HStack(alignment: .center, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(disk.percentUsed)%")
-                            .font(.system(size: 28, weight: .semibold, design: .rounded))
-                            .numericTransition()
-                        Text("used").font(.caption).foregroundStyle(.secondary)
-                        Gauge(value: min(Double(disk.percentUsed) / 100, 1)) { EmptyView() }
-                            .gaugeStyle(.accessoryLinearCapacity)
-                            .tint(diskWearTint(disk.wearLevel))
-                            .frame(width: 200)
-                    }
-
-                    Divider()
-                        .frame(height: 64)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        detailRow(symbol: "internaldrive", text: identityLine(disk))
-                        detailRow(symbol: "square.and.arrow.down", text: "\(formatBytes(UInt64(disk.bytesWritten))) written")
-                        detailRow(symbol: "power", text: "Powered on \(disk.poweredOnText)")
-                        if let temp = disk.temperature {
-                            detailRow(symbol: "thermometer.low", text: "Temperature \(settings.formatWithUnit(temp))")
-                        }
-                    }
-                    Spacer()
-                }
-            } else {
-                Text("SSD health unavailable.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
-            }
-        }
-    }
-
-    private func identityLine(_ disk: DiskHealthSnapshot) -> String {
-        let condition = DiskHealthSnapshot.condition(criticalWarning: disk.criticalWarning)
-        let parts = [disk.model, disk.capacityBytes.map { formatBytes(UInt64($0)) }, condition].compactMap { $0 }
-        return parts.joined(separator: " · ")
-    }
-
-    private func detailRow(symbol: String, text: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol)
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-            Text(text)
-        }
-        .font(.callout)
     }
 }

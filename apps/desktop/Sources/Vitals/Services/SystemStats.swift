@@ -1,14 +1,12 @@
 import Foundation
 import Darwin
 
-/// `mach_host_self()` allocates a new send right on every call and we never
-/// deallocate them — sampled once a second, that leaks kernel port references
-/// for the lifetime of the process. Acquire the port once instead.
+/// `mach_host_self()` allocates a new send right on every call, which leaks a
+/// port reference per sample. Acquire it once.
 private let machHost: host_t = mach_host_self()
 
-/// Reads an integer `sysctlbyname` value (e.g. `hw.perflevel0.logicalcpu`),
-/// sized from the kernel so it's correct whether the value is 32- or 64-bit.
-/// nil when the name is absent (e.g. Intel has no `hw.perflevel*`).
+/// Integer `sysctlbyname`, sized from the kernel so 32- and 64-bit values both
+/// work. Nil when the name is absent (Intel has no `hw.perflevel*`).
 func sysctlInt(_ name: String) -> Int? {
     var size = 0
     guard sysctlbyname(name, nil, &size, nil, 0) == 0 else { return nil }
@@ -24,38 +22,30 @@ func sysctlInt(_ name: String) -> Int? {
     return nil
 }
 
-/// CPU utilisation split by core cluster. `overall` is always present; the
-/// per-cluster figures are nil when the Performance/Efficiency layout can't be
-/// trusted (Intel, or the perflevel core counts don't reconcile with the array
-/// we sampled) — then the UI shows the honest blended number, never a
-/// fabricated split.
-/// One logical core's utilisation, tagged with its cluster. The `id` is the
-/// `host_processor_info` logical-core index.
+/// One logical core's utilisation. `id` is the `host_processor_info` index.
 struct CoreUsage: Identifiable {
     let id: Int
     let percent: Double
     let isPerformance: Bool
 }
 
+/// CPU utilisation by cluster. The P/E figures are nil when the layout can't be
+/// trusted (Intel, or perflevel counts don't match the sampled array).
 struct CPUUsage {
     let overall: Double
     let performance: Double?
     let efficiency: Double?
-    /// Per-core utilisation, index-ordered. Empty unless there's a trusted P/E
-    /// split (so the CPU tab never labels cores it can't place).
+    /// Index-ordered. Empty unless there's a trusted P/E split.
     let perCore: [CoreUsage]
 }
 
-/// Overall + per-cluster CPU utilisation, from the delta of per-core tick
-/// counters between consecutive samples.
+/// CPU utilisation from per-core tick deltas between consecutive samples.
 final class CPUUsageSampler {
     private var previousTicks: [[UInt32]] = []
 
-    /// Apple Silicon orders `host_processor_info` as **[E-cores][P-cores]**: the
-    /// first `hw.perflevel1.logicalcpu` indices are Efficiency cores, the last
-    /// `hw.perflevel0.logicalcpu` are Performance (verified on hardware — a
-    /// default-QoS load saturates exactly the trailing indices). Resolved once;
-    /// nil unless there's a clean two-level split.
+    /// Apple Silicon orders `host_processor_info` as [E-cores][P-cores]: the
+    /// first `hw.perflevel1.logicalcpu` indices are Efficiency, the rest
+    /// Performance (verified on hardware). Nil unless there are exactly two levels.
     static let clusters: (performance: Range<Int>, efficiency: Range<Int>)? = {
         guard sysctlInt("hw.nperflevels") == 2,
               let performance = sysctlInt("hw.perflevel0.logicalcpu"), performance > 0,
@@ -64,7 +54,7 @@ final class CPUUsageSampler {
         return (performance: efficiency..<(efficiency + performance), efficiency: 0..<efficiency)
     }()
 
-    /// Returns CPU usage (overall + clusters), or nil on the first call / error.
+    /// Nil on the first call or on error.
     func sample() -> CPUUsage? {
         var coreCount: natural_t = 0
         var info: processor_info_array_t?
@@ -76,9 +66,8 @@ final class CPUUsageSampler {
             vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(infoCount) * vm_size_t(MemoryLayout<integer_t>.size))
         }
 
-        // Trust the allocated element count (`infoCount`), not `coreCount`:
-        // a buggy hypervisor can report a core count larger than the array it
-        // actually returned, and indexing past it would read out of bounds.
+        // Trust `infoCount`, not `coreCount`: a buggy hypervisor can report more
+        // cores than the array holds, and indexing past it reads out of bounds.
         let safeCores = min(Int(coreCount), Int(infoCount) / Int(CPU_STATE_MAX))
         guard safeCores > 0 else { return nil }
         let ticks = (0..<safeCores).map { core -> [UInt32] in
@@ -90,14 +79,10 @@ final class CPUUsageSampler {
         return Self.clusterUsage(ticks: ticks, previous: previousTicks, clusters: Self.clusters)
     }
 
-    /// Pure: per-core tick arrays → overall + per-cluster busy %. The split is
-    /// only filled when the cluster ranges partition `[0, core count)` exactly
-    /// (contiguous, no gaps/overflow) — otherwise just `overall`, so a bad
-    /// mapping degrades to the honest blended number. For testing.
+    /// The P/E split is only filled when the cluster ranges tile
+    /// `[0, core count)` exactly; otherwise just `overall`.
     static func clusterUsage(ticks: [[UInt32]], previous: [[UInt32]],
                              clusters: (performance: Range<Int>, efficiency: Range<Int>)?) -> CPUUsage? {
-        // Self-defend the precondition the caller also checks: equal-length,
-        // aligned per-core arrays. Mismatched input → nil rather than a crash.
         guard previous.count == ticks.count else { return nil }
         func usage(_ indices: Range<Int>) -> Double? {
             var busy = 0.0, total = 0.0
@@ -114,7 +99,7 @@ final class CPUUsageSampler {
 
         var performance: Double?, efficiency: Double?
         var perCore: [CoreUsage] = []
-        // The ranges must exactly tile [0, count): E = [0, nE), P = [nE, count).
+        // E = [0, nE), P = [nE, count).
         if let clusters,
            clusters.efficiency.lowerBound == 0,
            clusters.efficiency.upperBound == clusters.performance.lowerBound,
@@ -131,8 +116,7 @@ final class CPUUsageSampler {
     }
 }
 
-/// The macOS memory-pressure level, straight from the kernel — the same
-/// green/yellow/red signal Activity Monitor shows.
+/// Kernel memory-pressure level, the same signal Activity Monitor shows.
 enum MemoryPressure: Int {
     case normal = 1
     case warning = 2
@@ -159,24 +143,16 @@ struct MemorySnapshot {
     let swapUsed: UInt64
     let swapTotal: UInt64
     let pressure: MemoryPressure
-    // Cumulative VM page counters since boot, straight from the same
-    // `vm_statistics64` read. They only become a meaningful per-second rate once
-    // diffed against a prior sample — `VitalsModel` does that to publish
-    // `MemoryActivity` — so the raw running totals live here, never a fabricated
-    // rate from a single reading.
+    // Cumulative VM counters since boot. `VitalsModel` diffs them into `MemoryActivity`.
     let pageIns: UInt64
     let pageOuts: UInt64
     let swapIns: UInt64
     let swapOuts: UInt64
     let compressions: UInt64
     let decompressions: UInt64
-
-    var usedFraction: Double { total > 0 ? Double(used) / Double(total) : 0 }
 }
 
-/// Live virtual-memory activity, in pages per second, derived by diffing two
-/// `MemorySnapshot` counter readings. Nil until a second sample exists — a rate
-/// needs a prior reading, so the first tick has nothing honest to report.
+/// VM activity in pages per second, from two `MemorySnapshot` readings.
 struct MemoryActivity {
     let pageInsPerSec: Double
     let pageOutsPerSec: Double
@@ -243,11 +219,15 @@ enum HardwareInfo {
     }
 
     static var uptimeText: String {
+        uptimeFormatter.string(from: ProcessInfo.processInfo.systemUptime) ?? "—"
+    }
+
+    private static let uptimeFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.day, .hour, .minute]
         formatter.unitsStyle = .abbreviated
-        return formatter.string(from: ProcessInfo.processInfo.systemUptime) ?? "—"
-    }
+        return formatter
+    }()
 
     private static func sysctlString(_ name: String) -> String? {
         var size = 0

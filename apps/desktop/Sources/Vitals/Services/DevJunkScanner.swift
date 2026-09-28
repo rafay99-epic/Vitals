@@ -1,32 +1,16 @@
 import Foundation
 
-/// Finds regenerable developer build artifacts — `node_modules`, `target`,
-/// `.next`, `Pods`, `DerivedData` and friends — under the user's code folders,
-/// so a project's disposable output can be reclaimed without touching source.
+/// Finds regenerable developer build artifacts (`node_modules`, `target`,
+/// `.next`, `Pods`, `DerivedData`, ...) under the user's code folders.
 ///
-/// This is safety-critical: `delete` removes directories **permanently** (these
-/// are regenerable by a build/install, so the Trash would only waste space).
-/// Precision over cleverness — every guard below was chosen so the deleting side
-/// can never be talked into a source tree, a home folder, or the system volume:
-///
-/// - The walk never follows symlinks, never descends into a found artifact, and
-///   never enters hidden directories except a small allowlist of hidden caches.
-/// - An artifact only counts when it sits under a **project** (a dir carrying a
-///   real project marker) and matches the exact-name allowlist with its context
-///   gate satisfied (`target` needs a sibling `Cargo.toml`, `Pods` a `Podfile`,
-///   `dist`/`build`/`out` a project marker in the parent), or carries a valid
-///   `CACHEDIR.TAG`.
-/// - `isDeletableArtifact` re-validates every path independently of how it was
-///   discovered — standardized, no `..`, under an allowed root and at least two
-///   components below it, an existing non-symlink directory, allowlisted (gate
-///   re-checked, *and* a project marker somewhere above it — see
-///   `hasProjectAncestor`, which closes off a smuggled `Artifact(url:)` naming
-///   an allowlisted directory under a root with no project anywhere above it)
-///   or cache-tagged (a `CACHEDIR.TAG` is exempt from the project-ancestor
-///   requirement — it's a deliberate marker on its own), never `/System`,
-///   never a `.vitals*` data dir. `delete` runs it on every item and, after
-///   removal, verifies the path is actually gone before crediting freed
-///   bytes. The test suite locks this.
+/// Safety-critical: `delete` removes directories **permanently** (they're
+/// regenerable, so the Trash would only waste space). The walk never follows
+/// symlinks, never descends into a found artifact, and skips hidden dirs except
+/// `hiddenArtifactNames`. An artifact counts only under a project marker, with
+/// its name allowlisted and context gate satisfied (`target` needs a sibling
+/// `Cargo.toml`, `Pods` a `Podfile`, `dist`/`build`/`out` a marker in the
+/// parent), or with a valid `CACHEDIR.TAG`. `isDeletableArtifact` re-validates
+/// every path before removal; the test suite locks it.
 enum DevJunkScanner {
     struct Artifact: Identifiable, Hashable {
         let url: URL
@@ -63,34 +47,29 @@ enum DevJunkScanner {
         "settings.gradle.kts", "Package.swift", ".git",
     ]
 
-    /// Exact directory names treated as build/dependency artifacts. Several carry
-    /// context gates applied in `candidateArtifactURL` / `isNameAllowlisted` — the
-    /// single source of truth for both switches is this set plus
-    /// `ungatedArtifactNames` below, so the two can never drift apart.
+    /// Exact directory names treated as build/dependency artifacts. Gated names
+    /// are checked in `candidateArtifactURL` / `isNameAllowlisted`.
     static let artifactNames: Set<String> = [
         "node_modules", ".next", ".nuxt", "dist", "build", "out", "target",
         ".venv", "venv", "Pods", "Carthage", ".gradle", ".turbo",
         ".parcel-cache", "DerivedData",
     ]
 
-    /// The subset of `artifactNames` accepted unconditionally — no sibling/parent
-    /// gate — by both `candidateArtifactURL` and `isNameAllowlisted`. Everything
-    /// else in `artifactNames` (`target`, `Pods`, `dist`/`build`/`out`, `Carthage`)
-    /// carries an explicit context gate and stays spelled out in each switch.
+    /// The subset of `artifactNames` accepted with no context gate, shared by
+    /// `candidateArtifactURL` and `isNameAllowlisted` so they can't drift.
     private static let ungatedArtifactNames: Set<String> = [
         "node_modules", ".next", ".nuxt", ".venv", "venv",
         ".turbo", ".parcel-cache", ".gradle", "DerivedData",
     ]
 
-    /// Hidden names that are still artifact candidates — otherwise the walk skips
-    /// every dot-directory. These are candidates but are never descended into.
+    /// Hidden names that are still artifact candidates. The walk skips every
+    /// other dot-directory.
     static let hiddenArtifactNames: Set<String> = [
         ".next", ".nuxt", ".venv", ".turbo", ".parcel-cache", ".gradle",
     ]
 
-    /// The `CACHEDIR.TAG` signature from the Cache Directory Tagging spec — a
-    /// directory carrying a tag that starts with this line is a cache and safe
-    /// to clear (Cargo, some bundlers, and others write it).
+    /// Cache Directory Tagging spec signature. A dir whose `CACHEDIR.TAG` starts
+    /// with it is a cache and safe to clear.
     private static let cacheDirSignature = "Signature: 8a477f597d28d172789f06886806bc55"
 
     // MARK: Roots
@@ -122,7 +101,7 @@ enum DevJunkScanner {
         }
 
         func walk(_ dir: URL, depth: Int, inheritedProject: URL?) {
-            if Task.isCancelled { return }   // stop a scan the caller cancelled mid-walk
+            if Task.isCancelled { return }
             if isVitalsPath(dir) { return }
             let project = hasProjectIndicator(dir) ? dir : inheritedProject
 
@@ -179,8 +158,7 @@ enum DevJunkScanner {
         into collected: inout [(project: URL, artifact: Artifact)],
         noteOrder: (URL) -> Void
     ) {
-        // A dir with no project ancestor contributes no artifacts (but we still
-        // don't descend into it — the caller `continue`s regardless).
+        // No project ancestor: no artifact (the caller still skips descending).
         guard let project else { return }
         let key = project.standardizedFileURL
         let std = url.standardizedFileURL
@@ -231,9 +209,8 @@ enum DevJunkScanner {
         return kept
     }
 
-    /// "When did I last work here" — newest modification among the root's
-    /// immediate children, ignoring the artifacts themselves (an `npm install`
-    /// shouldn't make a dormant project look active).
+    /// Newest mtime among the root's immediate children, ignoring artifacts so an
+    /// `npm install` doesn't make a dormant project look active.
     private static func lastActive(root: URL, artifacts: [Artifact]) -> Date? {
         let fm = FileManager.default
         let artifactPaths = Set(artifacts.map { $0.url.path })
@@ -250,7 +227,7 @@ enum DevJunkScanner {
 
     // MARK: Measuring
 
-    /// Fills each artifact's `sizeBytes` (value semantics — a new Project).
+    /// Fills each artifact's `sizeBytes`.
     static func measured(_ project: Project) -> Project {
         var project = project
         project.artifacts = project.artifacts.map { artifact in
@@ -263,37 +240,32 @@ enum DevJunkScanner {
 
     // MARK: Deletion
 
-    /// The test-locked validator. Every clause must hold, on the standardized
-    /// (symlink-unresolved) path, before an artifact may be removed.
+    /// The test-locked validator, independent of how the path was found. Every
+    /// clause must hold before an artifact may be removed.
     static func isDeletableArtifact(_ url: URL, roots: [URL]) -> Bool {
-        // Reject traversal on the raw input — standardization would collapse it.
+        // Reject traversal on the raw input: standardization would collapse it.
         guard !url.pathComponents.contains("..") else { return false }
 
         let std = url.standardizedFileURL
         let path = std.path
-        // The /System literal check stays on the *unresolved* path on purpose:
-        // resolving crosses the data-volume firmlink to /System/Volumes/Data,
-        // which would falsely reject every legitimate ~/... artifact.
+        // /System is checked on the *unresolved* path on purpose: resolving
+        // crosses the firmlink to /System/Volumes/Data and would reject every ~/ path.
         guard !path.hasPrefix("/System") else { return false }
         guard !isVitalsPath(std) else { return false }
         guard roots.contains(where: { atLeastTwoBelow(path, root: $0) }) else { return false }
 
-        // Also require the fully symlink-resolved path to stay at-least-two-below
-        // a resolved root, so a symlinked *intermediate* directory can't redirect
-        // removeItem outside the tree (the unresolved check above is string-only).
-        // Both sides are resolved, so the firmlink cancels out for real paths.
+        // The resolved path must also sit two below a resolved root, so a symlinked
+        // intermediate dir can't redirect removeItem outside the tree. Both sides
+        // are resolved, so the firmlink cancels out.
         let resolved = url.resolvingSymlinksInPath().path
         guard roots.contains(where: { atLeastTwoBelow(resolved, root: $0.resolvingSymlinksInPath()) }) else { return false }
 
         guard let vals = try? std.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
               vals.isDirectory == true, vals.isSymbolicLink != true else { return false }
 
-        // Name-allowlisted acceptance also requires a project marker somewhere
-        // above the artifact (see `hasProjectAncestor`) — otherwise a smuggled
-        // `Artifact(url:)` naming e.g. `node_modules` two levels under a root
-        // with no project anywhere above it would pass on name alone. A
-        // `CACHEDIR.TAG` is a deliberate, spec-defined cache marker on its own
-        // and is exempt from this — it doesn't need a project above it.
+        // A name match also needs a project marker above it, so a smuggled
+        // `Artifact(url:)` can't pass on name alone. A `CACHEDIR.TAG` is a
+        // deliberate cache marker on its own and needs no project.
         return (isNameAllowlisted(std) && hasProjectAncestor(std, roots: roots)) || hasValidCacheDirTag(std)
     }
 
@@ -341,12 +313,9 @@ enum DevJunkScanner {
         return false
     }
 
-    /// Whether some ancestor of `url` — from its parent directory up to (and
-    /// including) the first path component under its containing root — carries
-    /// a project indicator. Guards the name-allowlisted acceptance path in
-    /// `isDeletableArtifact` against a directory that merely has an
-    /// allowlisted name but no project above it anywhere (a scan root itself,
-    /// e.g. `~/Code`, never counts as a project on its own).
+    /// Whether an ancestor of `url`, from its parent up to the first component
+    /// under its root, carries a project indicator. The scan root itself (e.g.
+    /// `~/Code`) never counts.
     private static func hasProjectAncestor(_ url: URL, roots: [URL]) -> Bool {
         guard let root = roots.first(where: { atLeastTwoBelow(url.path, root: $0) }) else { return false }
         let rootPath = root.standardizedFileURL.path

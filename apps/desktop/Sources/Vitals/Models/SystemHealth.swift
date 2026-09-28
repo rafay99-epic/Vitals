@@ -1,15 +1,11 @@
 import Foundation
 import SwiftUI
 
-/// An honest "is my Mac struggling right now?" read, composed only from numbers
-/// the model already publishes: macOS's own thermal state (which *is* its
-/// throttling signal), memory pressure, the hottest CPU sensor and fan speed.
-/// It invents nothing — every factor the Health tab shows points back at a real
-/// reading, and the colour bands here only tint a value that's displayed beside
-/// them. The classification is pure so it can be unit-tested.
+/// The Overview's "is my Mac struggling?" read, composed from published readings:
+/// thermal state, memory pressure, hottest CPU sensor, and fan speed. Pure, so
+/// it can be unit-tested.
 enum SystemHealth {
-    /// Four bands mirroring `ProcessInfo.ThermalState`, so thermal pressure maps
-    /// across without loss.
+    /// Four bands mirroring `ProcessInfo.ThermalState`.
     enum Level: Int, Comparable {
         case good = 0, elevated, high, critical
         static func < (a: Level, b: Level) -> Bool { a.rawValue < b.rawValue }
@@ -42,9 +38,7 @@ enum SystemHealth {
         }
     }
 
-    /// Display bands for a CPU package temperature in °C. The figure itself is
-    /// always shown next to the colour, so this only decides hue — it never
-    /// stands in for the number.
+    /// Display bands for a CPU temperature in °C.
     static func temperatureLevel(celsius: Double) -> Level {
         switch celsius {
         case ..<75: return .good
@@ -54,17 +48,15 @@ enum SystemHealth {
         }
     }
 
-    /// A fan pinned near its rated ceiling means cooling is working hard — a sign
-    /// of load, but the machine is handling it, so it never reads worse than
-    /// "elevated".
+    /// A fan near its rated ceiling signals load the machine is handling, so it
+    /// never reads worse than "elevated".
     static func fanLevel(rpm: Double, maxRPM: Double) -> Level {
         guard maxRPM > 0 else { return .good }
         return rpm >= maxRPM * 0.95 ? .elevated : .good
     }
 
-    /// macOS throttles to protect the machine at Serious and above; that state
-    /// *is* the throttle signal, so it's reported as one rather than guessed at
-    /// from clock speeds (which need root to read accurately).
+    /// macOS throttles at Serious and above. Used instead of clock speeds, which
+    /// need root to read accurately.
     static func isThrottling(_ state: ProcessInfo.ThermalState) -> Bool {
         state == .serious || state == .critical
     }

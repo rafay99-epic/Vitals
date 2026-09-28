@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// One shared formatter: the class-method form allocates internally per call,
-/// and size labels re-render across hundreds of rows on every scan publish.
+/// One shared formatter: the class-method form allocates per call, and size
+/// labels render across hundreds of rows.
 @MainActor private let byteFormatter: ByteCountFormatter = {
     let formatter = ByteCountFormatter()
     formatter.countStyle = .file
@@ -13,34 +13,71 @@ import AppKit
     byteFormatter.string(fromByteCount: Int64(bytes))
 }
 
-/// Process-wide icon cache: NSWorkspace lookups are not cheap, and list rows
-/// re-render on every size update — without this, each render refetched every
-/// App icon loading. The cache lookup is instant; the load itself
-/// (`NSWorkspace.shared.icon(forFile:)`) touches disk + decodes the image, so
-/// it runs off-main via `Task.detached` — a cold cache miss never blocks the
-/// main thread, which is what held the Processes tab's first frame.
+/// Process-wide icon cache. `NSWorkspace.icon(forFile:)` hits disk and decodes
+/// the image, so misses load off-main via `Task.detached`.
 enum AppIconCache {
-    private static let cache = NSCache<NSURL, NSImage>()
+    /// The largest size any row draws an icon at is 28 pt; bake a 32 pt @2x
+    /// (64 px) bitmap so it stays crisp everywhere while costing a fixed ~16 KB.
+    private static let logicalSize = NSSize(width: 32, height: 32)
+    private static let backingScale = 2
 
-    /// Instant cache check — nil on miss. `NSCache` is thread-safe.
+    private static let cache: NSCache<NSURL, NSImage> = {
+        let cache = NSCache<NSURL, NSImage>()
+        // Flattening is what bounds memory: ~16 KB per icon, one per installed
+        // app. `countLimit` is a soft backstop (NSCache may briefly exceed it),
+        // not a hard cap; unbounded, it only evicted under memory pressure.
+        cache.countLimit = 512
+        return cache
+    }()
+
+    /// Instant cache check, nil on miss. `NSCache` is thread-safe.
     static func cached(for url: URL) -> NSImage? {
         cache.object(forKey: url as NSURL)
     }
 
-    /// Synchronous icon load — call off-main (`Task.detached`). `NSWorkspace`
-    /// and `NSCache` are both thread-safe, so this needs no actor hop. Stores
-    /// the result so the next `cached(for:)` hits.
+    /// Synchronous icon load; call off-main. `NSWorkspace` and `NSCache` are both
+    /// thread-safe, so no actor hop is needed. Caches the flattened icon.
     nonisolated static func loadIcon(for url: URL) -> NSImage {
-        let icon = NSWorkspace.shared.icon(forFile: url.path)
-        icon.size = NSSize(width: 32, height: 32)
+        let icon = flatten(NSWorkspace.shared.icon(forFile: url.path))
         cache.setObject(icon, forKey: url as NSURL)
+        return icon
+    }
+
+    /// `NSWorkspace.icon(forFile:)` returns a multi-representation image whose
+    /// ICNS reps run up to 512×512 / 1024×1024 — setting `.size` only changes
+    /// the *draw* size, so those full-res bitmaps stay resident (~100 KB–1 MB
+    /// each). Redraw once into a single small bitmap and cache that instead, so
+    /// a few hundred cached icons cost megabytes, not hundreds of them.
+    nonisolated static func flatten(_ source: NSImage) -> NSImage {
+        let pixelsWide = Int(logicalSize.width) * backingScale
+        let pixelsHigh = Int(logicalSize.height) * backingScale
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide, pixelsHigh: pixelsHigh,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else {
+            // Bitmap allocation failed — fall back to the sized original rather
+            // than nothing. Rare, and still correct, just not shrunk.
+            source.size = logicalSize
+            return source
+        }
+        rep.size = logicalSize
+        NSGraphicsContext.saveGraphicsState()
+        if let context = NSGraphicsContext(bitmapImageRep: rep) {
+            NSGraphicsContext.current = context
+            context.imageInterpolation = .high
+            source.draw(in: NSRect(origin: .zero, size: logicalSize))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        let icon = NSImage(size: logicalSize)
+        icon.addRepresentation(rep)
         return icon
     }
 }
 
-/// An app icon that loads off-main on a cache miss and shows a neutral
-/// placeholder meanwhile. Shared by the Processes and Applications tabs so
-/// neither blocks its first frame on `NSWorkspace.shared.icon(forFile:)`.
+/// An app icon that loads off-main on a cache miss, with a neutral placeholder
+/// meanwhile.
 struct AppIconView: View {
     let url: URL
     let size: CGFloat
@@ -68,14 +105,10 @@ struct AppIconView: View {
     }
 }
 
-/// The Applications tab: app bundles plus manager-owned CLI tools, with the
-/// same multi-select and owner-routed uninstall flow for both.
+/// The Applications section: every uninstallable app, multi-selectable, with a
+/// leftover-aware uninstall.
 struct AppsView: View {
-    @ObservedObject var model: AppsModel
-    @EnvironmentObject private var settings: AppSettings
-    /// True only while Applications is the visible tab. The view stays mounted,
-    /// so the scan starts on activation rather than on appear.
-    var isActive: Bool
+    @Bindable var model: AppsModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,20 +123,14 @@ struct AppsView: View {
                 .opacity(0.5)
             footer
         }
-        .onChange(of: isActive, initial: true) { _, active in
-            if active && (model.apps.isEmpty || model.scanIncludesExtendedApplications != settings.scanCLIAndSystemApplications) {
-                model.refresh(includeExtendedApplications: settings.scanCLIAndSystemApplications)
-            }
-        }
-        .onChange(of: settings.scanCLIAndSystemApplications) { _, enabled in
-            if isActive { model.refresh(includeExtendedApplications: enabled) }
+        .onAppear {
+            if model.apps.isEmpty { model.refresh() }
         }
         .sheet(item: $model.staged) { staged in
             UninstallConfirmationSheet(model: model, staged: staged)
-                // Don't let a swipe/Esc dismiss the sheet mid-removal (the work
-                // keeps running) or at the summary (dismissing without Done would
-                // strand a stale lastOutcome and reopen onto it next time) — only
-                // the in-sheet buttons drive it.
+                // Don't let a swipe/Esc dismiss the sheet mid-removal (the work keeps
+                // running) or at the summary (a stale lastOutcome would reopen next time).
+                // Only the in-sheet buttons drive it.
                 .interactiveDismissDisabled(model.uninstallProgress != nil || model.lastOutcome != nil)
         }
     }
@@ -143,11 +170,7 @@ struct AppsView: View {
     }
 
     private var heroSubtitle: String {
-        if model.isScanning {
-            return settings.scanCLIAndSystemApplications
-                ? "scanning apps and command-line tools…"
-                : "scanning app bundles…"
-        }
+        if model.isScanning { return "scanning /Applications…" }
         var parts: [String] = []
         if model.totalBytes > 0 { parts.append("\(formatBytes(model.totalBytes)) on disk") }
         if model.runningCount > 0 { parts.append("\(model.runningCount) running") }
@@ -176,9 +199,7 @@ struct AppsView: View {
         if model.apps.isEmpty && model.isScanning {
             LoadingStateView(
                 title: "Scanning applications",
-                message: settings.scanCLIAndSystemApplications
-                    ? "Reading app folders and package-manager inventories in parallel, then measuring sizes."
-                    : "Reading app folders, then measuring sizes."
+                message: "Reading /Applications and your user apps, then measuring sizes."
             )
         } else if let error = model.loadError {
             EmptyStateView(
@@ -202,7 +223,6 @@ struct AppsView: View {
                 hints: [
                     .init(symbol: "folder", label: "/Applications"),
                     .init(symbol: "person.crop.square", label: "~/Applications"),
-                    .init(symbol: "terminal", label: "CLI packages"),
                 ]
             ) {
                 Button { model.refresh() } label: {
@@ -215,7 +235,7 @@ struct AppsView: View {
                 symbol: "magnifyingglass",
                 tint: .blue,
                 title: "No matches",
-                message: "No applications match “\(model.searchText)”. Try a different name, package, or manager."
+                message: "No apps match “\(model.searchText)”. Try a different name or bundle id."
             ) {
                 Button { model.searchText = "" } label: {
                     Label("Clear Search", systemImage: "xmark.circle")
@@ -326,27 +346,11 @@ private struct AppRow: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 15))
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
-                if app.isCLI {
-                    Image(systemName: app.cliManager?.symbol ?? "terminal")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 30, height: 30)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(.quaternary.opacity(0.4)))
-                } else {
-                    AppIconView(url: app.id, size: 30)
-                }
+                AppIconView(url: app.id, size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
                         Text(app.name)
                             .font(.system(size: 13, weight: .medium))
-                        if let manager = app.cliManager {
-                            Text(manager.rawValue)
-                                .font(.caption2.weight(.medium))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(.purple.opacity(0.16)))
-                                .foregroundStyle(.purple)
-                        }
                         if app.isRunning {
                             Text("Running")
                                 .font(.caption2.weight(.medium))
@@ -368,7 +372,7 @@ private struct AppRow: View {
                                 .help("Protected: \(protectedReason)")
                         }
                     }
-                    Text(app.secondaryLabel)
+                    Text(app.bundleID ?? app.id.path)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
@@ -408,9 +412,10 @@ private struct AppRow: View {
 
 // MARK: - Confirmation sheet
 
-/// Shows exactly what will be moved to the Trash before anything happens.
+/// Shows exactly what will be removed, and whether it goes to the Trash or is
+/// deleted permanently, before anything happens.
 private struct UninstallConfirmationSheet: View {
-    @ObservedObject var model: AppsModel
+    @Bindable var model: AppsModel
     let staged: AppsModel.StagedUninstall
 
     private var hasSystem: Bool {
@@ -427,9 +432,8 @@ private struct UninstallConfirmationSheet: View {
                 confirmation
             }
         }
-        // A shared minimum height so the sheet doesn't snap its window size
-        // between the confirm / progress / summary states — the transitions
-        // settle in place instead of jumping.
+        // Fixed width + shared min height so the sheet doesn't resize between the
+        // confirm / progress / summary states.
         .frame(width: 560)
         .frame(minHeight: 340, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: model.uninstallProgress == nil)
@@ -452,9 +456,6 @@ private struct UninstallConfirmationSheet: View {
             }
             if !staged.casks.isEmpty {
                 noteLabel("Homebrew apps are removed with brew uninstall --cask --zap (also clears their config & data).", "mug", .secondary)
-            }
-            if staged.apps.contains(where: \.isCLI) {
-                noteLabel("CLI tools are removed by their owning package manager; project dependencies are never included.", "terminal", .secondary)
             }
 
             ScrollView {
@@ -487,7 +488,7 @@ private struct UninstallConfirmationSheet: View {
     }
 
     private var introText: String {
-        var text = "The checked applications and tools below are removed — app user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
+        var text = "The app and the checked items below are removed — user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
         if hasSystem {
             text += " Items marked 🔒 — system files and pkg-installed apps — are removed permanently and need your administrator password."
         }
@@ -509,21 +510,8 @@ private struct UninstallConfirmationSheet: View {
     private func appSection(_ app: InstalledApp) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                if app.isCLI {
-                    Image(systemName: app.cliManager?.symbol ?? "terminal")
-                        .frame(width: 20, height: 20)
-                        .foregroundStyle(.secondary)
-                } else {
-                    AppIconView(url: app.id, size: 20)
-                }
+                AppIconView(url: app.id, size: 20)
                 Text(app.name).fontWeight(.semibold)
-                if let manager = app.cliManager {
-                    Text(manager.rawValue)
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(.purple.opacity(0.16)))
-                        .foregroundStyle(.purple)
-                }
                 if staged.casks[app.id] != nil {
                     Text("Homebrew")
                         .font(.caption2.weight(.medium))
@@ -544,21 +532,14 @@ private struct UninstallConfirmationSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if app.isCLI {
-                Text("The owning package manager removes its managed files.")
+            ForEach(staged.leftovers[app.id] ?? []) { leftover in
+                leftoverRow(leftover)
+            }
+            if (staged.leftovers[app.id] ?? []).isEmpty {
+                Text("No leftover files found.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.leading, 28)
-            } else {
-                ForEach(staged.leftovers[app.id] ?? []) { leftover in
-                    leftoverRow(leftover)
-                }
-                if (staged.leftovers[app.id] ?? []).isEmpty {
-                    Text("No leftover files found.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.leading, 28)
-                }
             }
             if let extensions = staged.systemExtensions[app.id], !extensions.isEmpty {
                 Label(
@@ -623,9 +604,8 @@ private struct UninstallConfirmationSheet: View {
 
 // MARK: - Live progress
 
-/// Shown in place of the confirmation while the uninstall runs, so the work is
-/// never invisible: the current step's label, a bar (or spinner for one app),
-/// and a list that fills in per app as each finishes.
+/// Shown in place of the confirmation while the uninstall runs: the current
+/// step, a bar (or spinner for one app), and per-app results as they finish.
 private struct UninstallProgressView: View {
     let progress: AppsModel.UninstallProgress
 
@@ -635,7 +615,6 @@ private struct UninstallProgressView: View {
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 8) {
-                // The phase label is the "is it stuck?" answer — always current.
                 Text(progress.phase.label)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -673,13 +652,7 @@ private struct UninstallProgressView: View {
     private func resultRow(_ result: AppsModel.AppResult) -> some View {
         let style = Self.rowStyle(result.outcome)
         return HStack(spacing: 8) {
-            if result.isCLI {
-                Image(systemName: "terminal")
-                    .frame(width: 18, height: 18)
-                    .foregroundStyle(.secondary)
-            } else {
-                AppIconView(url: result.id, size: 18)
-            }
+            AppIconView(url: result.id, size: 18)
             Text(result.name).fontWeight(.medium)
             Spacer()
             Text(style.detail)
@@ -701,8 +674,6 @@ private struct UninstallProgressView: View {
             return ("checkmark.circle.fill", .green, "\(items) item\(items == 1 ? "" : "s") · \(formatBytes(bytes))")
         case .homebrew:
             return ("checkmark.circle.fill", .green, "Removed with Homebrew")
-        case .cli(let manager):
-            return ("checkmark.circle.fill", .green, "Removed with \(manager)")
         case .removedViaAdmin:
             return ("checkmark.circle.fill", .green, "Removed (system)")
         case .pendingAdmin:
@@ -716,8 +687,8 @@ private struct UninstallProgressView: View {
 
 // MARK: - Finished summary
 
-/// Replaces the progress once the run completes — the same outcome the old alert
-/// showed, but inline so the flow is one continuous sheet (confirm → run → done).
+/// Replaces the progress view once the run completes, so the flow stays one
+/// sheet (confirm, run, done).
 private struct UninstallSummaryView: View {
     let outcome: AppUninstaller.Outcome
     let onDone: () -> Void
@@ -738,9 +709,6 @@ private struct UninstallSummaryView: View {
                 }
                 if outcome.caskUninstalled > 0 {
                     summaryRow("Homebrew", "\(outcome.caskUninstalled) uninstalled")
-                }
-                if outcome.cliUninstalled > 0 {
-                    summaryRow("CLI tools", "\(outcome.cliUninstalled) uninstalled")
                 }
                 if !outcome.failures.isEmpty {
                     summaryRow("Couldn't remove", "\(outcome.failures.count) (in use or protected)", warn: true)
