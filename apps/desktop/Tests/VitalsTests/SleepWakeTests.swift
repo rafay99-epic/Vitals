@@ -48,29 +48,16 @@ struct SleepWakeTests {
     }
 }
 
-/// The sampler's skip flags are the idle-tick cost gate: when the window is
-/// closed and no widget/metric needs GPU, the snapshot carries nil and the model
-/// holds the last reading rather than paying an IOReport round-trip.
+/// The sampler's needs are the idle-tick cost gate: with nothing visible, the
+/// snapshot carries nil and the model holds the last reading rather than paying
+/// an IOReport round-trip or a process sweep.
 @MainActor
 struct SamplerSkipTests {
-    @Test func skippingGpuAndPowerYieldsNil() async {
-        let sampler = SensorSampler()
-        let snapshot = await sampler.sample(includeTopProcesses: false,
-                                            includeGPU: false,
-                                            includePower: false)
+    @Test func skippedReadsYieldNil() async {
+        let snapshot = await SensorSampler().sample(.init())
         #expect(snapshot.gpu == nil)
         #expect(snapshot.power == nil)
-        // Top processes are also gated — empty, never a stale leftover.
         #expect(snapshot.topProcesses.isEmpty)
-    }
-
-    @Test func skippingDefaultsKeepSampling() async {
-        // Defaults must preserve the original behavior so existing callers that
-        // rely on GPU/power (the probe, future tooling) aren't silently broken.
-        let sampler = SensorSampler()
-        let snapshot = await sampler.sample(includeTopProcesses: false)
-        // On a real Mac these are non-nil; on a VM/CI runner they may be nil —
-        // either is acceptable. We only assert the flags don't force nil.
-        _ = snapshot
+        #expect(snapshot.network?.wifi == nil)
     }
 }

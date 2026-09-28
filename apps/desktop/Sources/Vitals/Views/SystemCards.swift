@@ -3,7 +3,7 @@ import Charts
 
 /// Top CPU consumers, as bare content for a card to wrap.
 struct TopProcessesContent: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         if model.topProcesses.isEmpty {
@@ -35,7 +35,7 @@ struct TopProcessesContent: View {
 
 /// Every fan's live speed and mode, read-only. Fanless Macs say so.
 struct FanCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Fans", symbol: "fan") {
@@ -99,7 +99,7 @@ struct FanCard: View {
 }
 
 struct MemoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     private struct Segment: Identifiable {
         let label: String
@@ -210,8 +210,8 @@ struct MemoryCard: View {
 
 /// Battery detail rows, as bare content for a card to wrap.
 struct BatteryContent: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
 
     /// Charge-state SF Symbol for the section header (used by the dashboard).
     static func symbol(for battery: BatterySnapshot?) -> String {
@@ -329,7 +329,7 @@ struct BatteryContent: View {
 /// note until the first energy delta lands (or when IOReport is unavailable),
 /// never a fake 0 W.
 struct PowerCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Power", symbol: "bolt.fill") {

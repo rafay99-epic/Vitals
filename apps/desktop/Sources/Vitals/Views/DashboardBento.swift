@@ -14,7 +14,7 @@ import SwiftUI
 /// (the same classification the Sensors signals use), inventing no score. Tapping
 /// opens System ▸ Sensors for the full breakdown.
 struct DashboardHealthHero: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
     let drill: (NavSection) -> Void
     @State private var hovered = false
 
@@ -84,8 +84,8 @@ struct DashboardHealthHero: View {
 /// 60-sample sparkline, and drills into its System segment. Tiles for absent
 /// hardware (no GPU, no battery, no SMART) are simply omitted.
 struct DashboardTileGrid: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
     let drill: (NavSection) -> Void
 
     private let columns = [

@@ -6,7 +6,7 @@ import SwiftUI
 /// the CPU power rail. Everything cluster-aware degrades to the honest blended
 /// view when there's no trusted P/E split (Intel, a VM) — no fabricated labels.
 struct CPUView: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         MetricScroll {
@@ -22,7 +22,7 @@ struct CPUView: View {
 // MARK: - Hero
 
 private struct CPUHeroCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "CPU", symbol: "cpu") {
@@ -61,7 +61,7 @@ private struct CPUHeroCard: View {
 // MARK: - Clusters + per-core utilisation
 
 private struct CPUCoresCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Cores", symbol: "square.split.1x2") {
@@ -102,8 +102,8 @@ private struct CPUCoresCard: View {
 // MARK: - Temperature + CPU power rail
 
 private struct CPUThermalPowerCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         SectionCard(title: "Temperature", symbol: "thermometer.medium") {

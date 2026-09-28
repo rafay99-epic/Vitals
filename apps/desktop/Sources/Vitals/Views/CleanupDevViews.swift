@@ -7,7 +7,7 @@ import AppKit
 // MARK: - Developer page
 
 struct CleanupDeveloperPage: View {
-    @ObservedObject var model: CleanupModel
+    @Bindable var model: CleanupModel
     @State private var confirming = false
 
     var body: some View {

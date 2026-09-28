@@ -8,7 +8,7 @@ import Charts
 /// direct AppleSmartBattery reading; a machine with no battery says so rather
 /// than showing zeros.
 struct BatteryView: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         MetricScroll {
@@ -137,7 +137,7 @@ private struct BatteryAdapterCard: View {
 // MARK: - Charge history
 
 private struct BatteryHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Charge history", symbol: "chart.xyaxis.line") {
@@ -227,8 +227,8 @@ private struct BatteryHealthCard: View {
 // MARK: - Live electrical detail
 
 private struct BatteryDetailCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
     let battery: BatterySnapshot
 
     var body: some View {
@@ -263,7 +263,7 @@ private struct BatteryDetailCard: View {
 // MARK: - Power draw over time
 
 private struct BatteryPowerDrawCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Power draw", symbol: "bolt.fill") {

@@ -114,7 +114,7 @@ struct AppIconView: View {
 /// The Applications tab: every uninstallable app, multi-selectable, with a
 /// leftover-aware uninstall that moves everything to the Trash.
 struct AppsView: View {
-    @ObservedObject var model: AppsModel
+    @Bindable var model: AppsModel
     /// True only while Applications is the visible tab. The view stays mounted,
     /// so the scan starts on activation rather than on appear.
     var isActive: Bool
@@ -424,7 +424,7 @@ private struct AppRow: View {
 
 /// Shows exactly what will be moved to the Trash before anything happens.
 private struct UninstallConfirmationSheet: View {
-    @ObservedObject var model: AppsModel
+    @Bindable var model: AppsModel
     let staged: AppsModel.StagedUninstall
 
     private var hasSystem: Bool {

@@ -241,11 +241,15 @@ enum HardwareInfo {
     }
 
     static var uptimeText: String {
+        uptimeFormatter.string(from: ProcessInfo.processInfo.systemUptime) ?? "—"
+    }
+
+    private static let uptimeFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.day, .hour, .minute]
         formatter.unitsStyle = .abbreviated
-        return formatter.string(from: ProcessInfo.processInfo.systemUptime) ?? "—"
-    }
+        return formatter
+    }()
 
     private static func sysctlString(_ name: String) -> String? {
         var size = 0

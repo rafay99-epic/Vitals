@@ -77,44 +77,45 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
 
 /// User preferences, persisted to UserDefaults.
 @MainActor
-final class AppSettings: ObservableObject {
-    @Published var refreshInterval: Double { didSet { defaults.set(refreshInterval, forKey: "refreshInterval") } }
-    @Published var unit: TemperatureUnit { didSet { defaults.set(unit.rawValue, forKey: "temperatureUnit") } }
-    @Published var historyMinutes: Int { didSet { defaults.set(historyMinutes, forKey: "historyMinutes") } }
+@Observable
+final class AppSettings {
+    var refreshInterval: Double { didSet { defaults.set(refreshInterval, forKey: "refreshInterval") } }
+    var unit: TemperatureUnit { didSet { defaults.set(unit.rawValue, forKey: "temperatureUnit") } }
+    var historyMinutes: Int { didSet { defaults.set(historyMinutes, forKey: "historyMinutes") } }
     /// Doubles the sampling interval on battery (capped at 5 s). Low Power Mode
     /// floors it at 10 s regardless. See `PowerThrottle`.
-    @Published var reduceOnBattery: Bool { didSet { defaults.set(reduceOnBattery, forKey: "reduceOnBattery") } }
+    var reduceOnBattery: Bool { didSet { defaults.set(reduceOnBattery, forKey: "reduceOnBattery") } }
     /// Refreshed once per tick by `updatePowerState`, so the cadence reacts
     /// within one sample of a plug/unplug.
-    @Published private(set) var isOnBattery: Bool = PowerState.isOnBattery()
-    @Published private(set) var isLowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
+    private(set) var isOnBattery: Bool = PowerState.isOnBattery()
+    private(set) var isLowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
     /// Stored as a comma-joined list of raw values ("" = icon only).
-    @Published var menuBarMetrics: Set<MenuBarMetric> {
+    var menuBarMetrics: Set<MenuBarMetric> {
         didSet {
             defaults.set(MenuBarMetric.allCases.filter(menuBarMetrics.contains).map(\.rawValue).joined(separator: ","),
                          forKey: "menuBarMetrics")
         }
     }
     /// Icon style (SF Symbol + value) vs. plain text style (short word + value).
-    @Published var menuBarUseIcons: Bool { didSet { defaults.set(menuBarUseIcons, forKey: "menuBarUseIcons") } }
-    @Published var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
-    @Published var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
-    @Published var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
-    @Published var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
+    var menuBarUseIcons: Bool { didSet { defaults.set(menuBarUseIcons, forKey: "menuBarUseIcons") } }
+    var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
+    var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
+    var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
+    var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     /// Diagnostic log floor (see `Log`), separate from `loggingEnabled`, which is
     /// the readings history.
-    @Published var diagnosticLogLevel: LogLevel {
+    var diagnosticLogLevel: LogLevel {
         didSet {
             defaults.set(diagnosticLogLevel.rawValue, forKey: "diagnosticLogLevel")
             Log.configure(minimumLevel: diagnosticLogLevel)
         }
     }
-    @Published var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
+    var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     /// Pre-download a found update; installing still needs one tap.
-    @Published var autoDownloadUpdates: Bool { didSet { defaults.set(autoDownloadUpdates, forKey: "autoDownloadUpdates") } }
+    var autoDownloadUpdates: Bool { didSet { defaults.set(autoDownloadUpdates, forKey: "autoDownloadUpdates") } }
     /// True while Vitals is the focused app. Animations run only then; numbers
     /// stay live either way.
-    @Published private(set) var appActive: Bool = NSApp?.isActive ?? true
+    private(set) var appActive: Bool = NSApp?.isActive ?? true
 
     /// The sampling interval in effect: the user's pick adjusted for power state.
     /// History capacity still uses the base `refreshInterval`, so a throttled
@@ -126,15 +127,15 @@ final class AppSettings: ObservableObject {
                                reduceOnBattery: reduceOnBattery)
     }
     /// Scan Cleanup on open. Cleaning always needs selection + confirmation.
-    @Published var autoScanCleanup: Bool { didSet { defaults.set(autoScanCleanup, forKey: "autoScanCleanup") } }
-    @Published var theme: AppTheme {
+    var autoScanCleanup: Bool { didSet { defaults.set(autoScanCleanup, forKey: "autoScanCleanup") } }
+    var theme: AppTheme {
         didSet {
             defaults.set(theme.rawValue, forKey: "theme")
             applyTheme()
         }
     }
 
-    @Published var showMenuBar: Bool {
+    var showMenuBar: Bool {
         didSet {
             defaults.set(showMenuBar, forKey: "showMenuBar")
             // Never let the app become unreachable: no menu bar item means
@@ -143,24 +144,24 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var hideDockIcon: Bool {
+    var hideDockIcon: Bool {
         didSet {
             defaults.set(hideDockIcon, forKey: "hideDockIcon")
             applyActivationPolicy()
         }
     }
 
-    @Published var launchAtLogin: Bool {
+    var launchAtLogin: Bool {
         didSet {
             guard !syncingLoginItem else { return }
             updateLoginItem()
         }
     }
-    @Published private(set) var loginItemError: String?
+    private(set) var loginItemError: String?
 
     private let defaults: UserDefaults
-    private var syncingLoginItem = false
-    private var activeObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var syncingLoginItem = false
+    @ObservationIgnored private var activeObservers: [NSObjectProtocol] = []
 
     static let registeredDefaults: [String: Any] = [
             "refreshInterval": 2.0,

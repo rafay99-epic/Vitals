@@ -54,20 +54,20 @@ enum NavSection: String, CaseIterable, Identifiable {
 /// (the constraint the old capsule-tab shell solved by forbidding a sidebar
 /// outright — a *fixed* rail honours it too, while giving one clean nav level).
 struct ContentView: View {
-    @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(AppSettings.self) private var settings
+    @Environment(VitalsModel.self) private var model
     /// The selected destination, shared app-wide so the ⌘, command and the
     /// menu-bar gear can also land on the Settings section (now an in-window
     /// panel, not a separate dialog).
-    @EnvironmentObject private var navigator: Navigator
+    @Environment(Navigator.self) private var navigator
     /// The current section, read/written through the shared navigator.
     private var section: NavSection { navigator.section }
 
     // Per-section models, owned here so a scan started in one section survives
     // switching sections.
-    @StateObject private var appsModel = AppsModel()
-    @StateObject private var cleanupModel = CleanupModel()
-    @StateObject private var historyModel = HistoryModel()
+    @State private var appsModel = AppsModel()
+    @State private var cleanupModel = CleanupModel()
+    @State private var historyModel = HistoryModel()
 
     private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .history]
     private static let maintain: [NavSection] = [.storage, .cleanup, .applications]
@@ -80,6 +80,7 @@ struct ContentView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(Color(nsColor: .windowBackgroundColor))
+        .environment(\.animationsEnabled, settings.appActive)
         .frame(minWidth: 980, minHeight: 680)
         .onAppear {
             model.setMainWindowVisible(true)
@@ -89,6 +90,7 @@ struct ContentView: View {
             model.setVisibleSection(newSection.rawValue)
         }
         .onDisappear { model.setMainWindowVisible(false) }
+        .background(WindowReader { model.setMainWindow($0) })
     }
 
     // MARK: Sidebar
@@ -241,12 +243,33 @@ struct ContentView: View {
     }
 }
 
+/// Hands the hosting `NSWindow` to `onWindow` once the view lands in one.
+private struct WindowReader: NSViewRepresentable {
+    let onWindow: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView { ReaderView(onWindow: onWindow) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class ReaderView: NSView {
+        let onWindow: (NSWindow?) -> Void
+        init(onWindow: @escaping (NSWindow?) -> Void) {
+            self.onWindow = onWindow
+            super.init(frame: .zero)
+        }
+        @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindow(window)
+        }
+    }
+}
+
 /// The header's update affordance: a compact badged download icon when an
 /// update is available (one click installs, from any section), and a small
 /// spinner while it downloads and installs. Reads the shared `Updater`, so it
 /// stays in sync. Nothing shows when up to date.
 private struct HeaderUpdateButton: View {
-    @EnvironmentObject private var updater: Updater
+    @Environment(Updater.self) private var updater
     @State private var hovered = false
 
     var body: some View {
@@ -305,8 +328,8 @@ private struct HeaderUpdateButton: View {
 /// the top processes. Detail is a drill-in — the heavy per-subsystem cards live in
 /// the Monitor sections now, so nothing here is duplicated.
 struct DashboardView: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
     /// True only while the Dashboard is the visible section. The live history
     /// chart rebuilds its marks from `chartHistory` on every tick — gating it
     /// (and the hover lookup) on `isActive` keeps a kept-alive background
@@ -378,7 +401,12 @@ struct DashboardView: View {
                 Text("on battery")
                 Text("·")
             }
-            Text("Updates every \(settings.effectiveRefreshInterval, format: .number) s")
+            if model.sensorsStalled {
+                Label("Sensors not responding, readings paused", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            } else {
+                Text("Updates every \(settings.effectiveRefreshInterval, format: .number) s")
+            }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -388,7 +416,7 @@ struct DashboardView: View {
 
 /// Shown at the top of the dashboard while an update is available or installing.
 struct UpdateBanner: View {
-    @EnvironmentObject private var updater: Updater
+    @Environment(Updater.self) private var updater
 
     var body: some View {
         switch updater.status {

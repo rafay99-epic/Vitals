@@ -41,12 +41,13 @@ enum HistoryMetric: String, CaseIterable, Identifiable {
 /// model keeps the selected range, metric, and loaded result available when the
 /// user returns.
 @MainActor
-final class HistoryModel: ObservableObject {
-    @Published var range: HistoryRange = .day
-    @Published var metric: HistoryMetric = LaunchOverrides.historyMetric ?? .temp
-    @Published private(set) var samples: [HistorySample] = []
-    @Published private(set) var alertEvents: [AlertEvent] = []
-    @Published private(set) var loading = false
+@Observable
+final class HistoryModel {
+    var range: HistoryRange = .day
+    var metric: HistoryMetric = LaunchOverrides.historyMetric ?? .temp
+    private(set) var samples: [HistorySample] = []
+    private(set) var alertEvents: [AlertEvent] = []
+    private(set) var loading = false
 
     func reload() async {
         loading = true

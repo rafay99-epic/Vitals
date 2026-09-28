@@ -44,10 +44,10 @@ struct VitalsApp: App {
         // Monitor. No ⌘N duplicates; dock clicks and openWindow reuse it.
         Window("Vitals", id: "main") {
             ContentView()
-                .environmentObject(model)
-                .environmentObject(settings)
-                .environmentObject(updater)
-                .environmentObject(navigator)
+                .environment(model)
+                .environment(settings)
+                .environment(updater)
+                .environment(navigator)
         }
         .defaultSize(width: 1100, height: 760)
         // No system title bar: the sidebar carries branding and window dragging.

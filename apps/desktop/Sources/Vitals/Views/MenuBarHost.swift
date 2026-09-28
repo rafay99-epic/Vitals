@@ -6,8 +6,8 @@ import AppKit
 /// size the item to it without truncating (issues #45, #50). Static on purpose:
 /// see `MenuBarController` for why nothing here animates.
 struct MenuBarLabelView: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
 
     private var metrics: [MenuBarMetric] {
         MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)
@@ -44,8 +44,8 @@ struct MenuBarLabelView: View {
 
 /// The icon + value row.
 private struct MenuBarRow: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
 
     private var metrics: [MenuBarMetric] {
         MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)

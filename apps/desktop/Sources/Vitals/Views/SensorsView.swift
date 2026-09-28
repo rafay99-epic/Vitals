@@ -16,8 +16,8 @@ struct SensorsView: View {
 /// the per-core die grid below. Honest about gaps — an area with no sensor simply
 /// isn't listed, never shown as a fabricated 0°.
 private struct TemperaturesCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         SectionCard(title: "Temperatures", symbol: "thermometer.medium") {

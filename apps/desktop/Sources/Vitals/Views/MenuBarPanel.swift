@@ -4,9 +4,9 @@ import Charts
 /// The menu bar dropdown: live readings and sparklines, in the main window's
 /// design language.
 struct MenuBarPanel: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var navigator: Navigator
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
+    @Environment(Navigator.self) private var navigator
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {

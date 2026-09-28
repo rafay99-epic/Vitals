@@ -8,8 +8,8 @@ import AppKit
 /// on by default; if the user turns it off, the empty state invites turning it
 /// back on.
 struct HistoryView: View {
-    @EnvironmentObject private var settings: AppSettings
-    @ObservedObject var model: HistoryModel
+    @Environment(AppSettings.self) private var settings
+    @Bindable var model: HistoryModel
     let isActive: Bool
 
     typealias Metric = HistoryMetric
@@ -122,7 +122,7 @@ private struct HistoryControls: View {
 // MARK: - Chart
 
 private struct HistoryChartCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     let samples: [HistorySample]
     let metric: HistoryView.Metric
     let range: HistoryRange
@@ -338,7 +338,7 @@ private struct HistoryChartCard: View {
 // MARK: - Stats
 
 private struct HistoryStatsCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     let samples: [HistorySample]
     let metric: HistoryView.Metric
 

@@ -4,7 +4,8 @@ import SwiftUI
 /// State for the Applications tab: the installed-app list, selection, and
 /// the staged uninstall (scan results awaiting user confirmation).
 @MainActor
-final class AppsModel: ObservableObject {
+@Observable
+final class AppsModel {
     struct StagedUninstall: Identifiable {
         let id = UUID()
         var apps: [InstalledApp]
@@ -82,23 +83,23 @@ final class AppsModel: ObservableObject {
         var outcome: Outcome
     }
 
-    @Published private(set) var apps: [InstalledApp] = []
-    @Published private(set) var isScanning = false
-    @Published var selection: Set<URL> = []
-    @Published var searchText = ""
-    @Published var sortOrder: SortOrder = .name
-    @Published var staged: StagedUninstall?
-    @Published private(set) var isPreparingUninstall = false
+    private(set) var apps: [InstalledApp] = []
+    private(set) var isScanning = false
+    var selection: Set<URL> = []
+    var searchText = ""
+    var sortOrder: SortOrder = .name
+    var staged: StagedUninstall?
+    private(set) var isPreparingUninstall = false
     /// Non-nil while an uninstall is actually running — drives the in-sheet
     /// progress view. The sheet stays up (bound to `staged`) and swaps to this.
-    @Published private(set) var uninstallProgress: UninstallProgress?
-    @Published private(set) var lastOutcome: AppUninstaller.Outcome?
+    private(set) var uninstallProgress: UninstallProgress?
+    private(set) var lastOutcome: AppUninstaller.Outcome?
     /// Set when the Applications folder itself couldn't be read — distinguishes
     /// a genuine failure from simply having nothing removable installed.
-    @Published private(set) var loadError: String?
+    private(set) var loadError: String?
 
     private let inventory = AppInventory()
-    private var sizeTask: Task<Void, Never>?
+    @ObservationIgnored private var sizeTask: Task<Void, Never>?
 
     var filteredApps: [InstalledApp] {
         var result = apps

@@ -6,7 +6,8 @@ import Foundation
 /// thread and cause hitches under load.
 actor SensorSampler {
     struct Snapshot {
-        let readings: [HIDSensors.Reading]
+        /// Classified and sorted by label here, off the main thread.
+        let sensors: [VitalsModel.Sensor]
         let fans: [SMC.Fan]
         let hasSMC: Bool
         let cpuUsage: CPUUsage?
@@ -33,54 +34,58 @@ actor SensorSampler {
     // Same statefulness rule: per-driver disk counters diff into rates.
     private let disk = DiskStats()
 
-    // macOS's smoothed Maximum Capacity, refreshed rarely (it changes over
-    // weeks) on a background task so the per-tick sample never waits on the
-    // `system_profiler` spawn. Nil until the first read lands.
+    // macOS's smoothed Maximum Capacity changes over weeks, and reading it
+    // spawns `system_profiler`, so it's refreshed twice a day off the tick.
     private var batteryHealth: Double?
     private var batteryHealthCheckedAt = Date.distantPast
-    private static let batteryHealthInterval: TimeInterval = 600
+    private static let batteryHealthInterval: TimeInterval = 12 * 3600
 
-    // SSD SMART changes over hours/days, so it's read at most every few minutes
-    // off the sampling actor (the IOKit user-client round-trip shouldn't sit on
-    // the tick), and the cached snapshot is served in between.
+    // SSD SMART changes over hours/days: read every few minutes off the tick,
+    // cached in between.
     private var diskHealth: DiskHealthSnapshot?
     private var diskHealthCheckedAt = Date.distantPast
     private static let diskHealthInterval: TimeInterval = 300
 
-    /// `includeTopProcesses` gates the per-process rusage sweep — the heaviest
-    /// part of a tick (a syscall per PID). It's only needed when the window is
-    /// open; skipping it idle (menu-bar only) cuts the tick's cost noticeably.
-    ///
-    /// `includeGPU` / `includePower` gate the two IOReport samplers. They're
-    /// only read when a surface the user can actually see needs them (the
-    /// window's GPU/Power cards or a GPU-usage menu-bar metric). When skipped, the snapshot carries nil and `VitalsModel` holds
-    /// the last reading — so reopening the window shows the prior value until
-    /// the next sample refreshes it, never a fabricated zero.
-    func sample(includeTopProcesses: Bool, includeGPU: Bool = true, includePower: Bool = true) -> Snapshot {
-        let battery = Battery.read(officialHealth: batteryHealth)
-        if battery != nil { refreshBatteryHealthIfStale() }
-        refreshDiskHealthIfStale()
-        let processes = includeTopProcesses ? processSampler.sample(top: 5) : .empty
-        return Snapshot(
-            readings: hid.readAll(),
-            fans: smc?.fans() ?? [],
-            hasSMC: smc != nil,
-            cpuUsage: cpuSampler.sample(),
-            memory: MemoryStats.read(),
-            topProcesses: processes.byCPU,
-            topMemoryProcesses: processes.byMemory,
-            battery: battery,
-            gpu: includeGPU ? gpu.sample() : nil,
-            power: includePower ? power.sample() : nil,
-            diskHealth: diskHealth,
-            // One sysctl + a few CoreWLAN reads — cheap enough to sample
-            // unconditionally (like memory), and the menu-bar panel and history
-            // chart want a continuous series anyway.
-            network: network.sample(),
-            // A handful of IORegistry property reads — same cheap-and-
-            // continuous reasoning as network.
-            diskIO: disk.sample()
-        )
+    /// Which optional reads to take. Each is only on while a surface the user
+    /// can see needs it; skipped reads come back nil (or hold their last value,
+    /// for network details) and `VitalsModel` keeps the last reading on screen,
+    /// never a fabricated zero.
+    struct Needs {
+        /// The per-process rusage sweep, the heaviest part of a tick.
+        var topProcesses = false
+        var gpu = false
+        var power = false
+        /// Wi-Fi link details and the default route.
+        var networkDetails = false
+    }
+
+    func sample(_ needs: Needs) -> Snapshot {
+        // CoreWLAN and IOKit hand back autoreleased objects; drain them per
+        // sample instead of letting them pile up on the actor's thread.
+        autoreleasepool {
+            let battery = Battery.read(officialHealth: batteryHealth)
+            if battery != nil { refreshBatteryHealthIfStale() }
+            refreshDiskHealthIfStale()
+            let processes = needs.topProcesses ? processSampler.sample(top: 5) : .empty
+            return Snapshot(
+                sensors: VitalsModel.classify(hid.readAll())
+                    .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending },
+                fans: smc?.fans() ?? [],
+                hasSMC: smc != nil,
+                cpuUsage: cpuSampler.sample(),
+                memory: MemoryStats.read(),
+                topProcesses: processes.byCPU,
+                topMemoryProcesses: processes.byMemory,
+                battery: battery,
+                gpu: needs.gpu ? gpu.sample() : nil,
+                power: needs.power ? power.sample() : nil,
+                diskHealth: diskHealth,
+                // Byte counters are one sysctl; the menu bar and history want a
+                // continuous series, so they're read every tick.
+                network: network.sample(includeDetails: needs.networkDetails),
+                diskIO: disk.sample()
+            )
+        }
     }
 
     /// Refreshes the cached SSD SMART snapshot off the sampling actor if it's

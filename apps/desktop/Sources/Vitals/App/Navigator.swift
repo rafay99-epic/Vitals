@@ -7,8 +7,9 @@ import SwiftUI
 /// sidebar section (`.settings`), not a separate dialog, so "open settings" is
 /// just "select that section" — set `section` and bring the main window forward.
 @MainActor
-final class Navigator: ObservableObject {
-    @Published var section: NavSection = LaunchOverrides.section ?? .overview
+@Observable
+final class Navigator {
+    var section: NavSection = LaunchOverrides.section ?? .overview
 }
 
 /// Optional launch-argument deep links: `--section <id>` opens the window on

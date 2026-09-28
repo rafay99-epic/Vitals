@@ -4,7 +4,7 @@ import SwiftUI
 /// disclosure inside `CPUCard`.
 struct DieCell: View {
     let sensor: VitalsModel.Sensor
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         let tint = tempGradientColor(sensor.celsius)
@@ -34,7 +34,7 @@ struct DieCell: View {
 /// The per-core CPU temperature heat grid + a coolest/hottest legend. Shared by
 /// the Dashboard CPU card and the CPU tab so the two render the identical grid.
 struct CoreTempGrid: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     let sensors: [VitalsModel.Sensor]
 
     var body: some View {

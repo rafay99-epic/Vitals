@@ -86,10 +86,19 @@ final class NetworkStats {
         !excludedPrefixes.contains { name.hasPrefix($0) }
     }
 
+    /// Wi-Fi link details and the default route, from the last detailed read.
+    private var wifi: WiFiInfo?
+    private var primaryInterface: String?
+    private lazy var store = SCDynamicStoreCreate(nil, "Vitals.NetworkStats" as CFString, nil, nil)
+
     /// One reading. Rates are deltas versus the previous call; the first call
     /// reports 0 rates. Always returns a snapshot (empty links on total failure),
-    /// never nil — the model can display "no interfaces" honestly.
-    func sample() -> NetworkSnapshot {
+    /// never nil, so the model can display "no interfaces" honestly.
+    ///
+    /// `includeDetails` gates the Wi-Fi (seven CoreWLAN calls) and default-route
+    /// reads, which only the Overview and Network views show. Skipped reads hold
+    /// the previous details; the byte counters are read every time.
+    func sample(includeDetails: Bool) -> NetworkSnapshot {
         let counters = Self.readInterfaceCounters().filter { Self.isCountedInterface($0.name) }
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         // Elapsed since the last reading; 0 on the first call (no prior stamp),
@@ -132,6 +141,11 @@ final class NetworkStats {
             a.isActive == b.isActive ? a.name < b.name : a.isActive
         }
 
+        if includeDetails {
+            wifi = readWiFi()
+            primaryInterface = readPrimaryInterface()
+        }
+
         let totalInPerSec = links.reduce(0) { $0 + $1.bytesInPerSec }
         let totalOutPerSec = links.reduce(0) { $0 + $1.bytesOutPerSec }
         let totalBytesIn = links.reduce(UInt64(0)) { $0 + $1.totalBytesIn }
@@ -143,8 +157,8 @@ final class NetworkStats {
             totalOutPerSec: totalOutPerSec,
             totalBytesIn: totalBytesIn,
             totalBytesOut: totalBytesOut,
-            wifi: readWiFi(),
-            primaryInterfaceName: readPrimaryInterface()
+            wifi: wifi,
+            primaryInterfaceName: primaryInterface
         )
     }
 
@@ -259,7 +273,7 @@ final class NetworkStats {
     /// The primary (default-route) interface name from SystemConfiguration's
     /// global IPv4 state, or nil when it can't be determined.
     private func readPrimaryInterface() -> String? {
-        guard let store = SCDynamicStoreCreate(nil, "Vitals.NetworkStats" as CFString, nil, nil),
+        guard let store,
               let value = SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString) as? [String: Any]
         else { return nil }
         return value["PrimaryInterface"] as? String

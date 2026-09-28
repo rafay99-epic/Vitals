@@ -39,20 +39,21 @@ struct ReclaimResult {
 /// categories are removed in-process, system categories run through one
 /// administrator prompt via `PrivilegedShell` and a vetted, age-gated script.
 @MainActor
-final class CleanupModel: ObservableObject {
-    @Published private(set) var categories: [CleanupCategory] = []
-    @Published private(set) var depth: CleanDepth = .quick
-    @Published private(set) var isScanning = false
-    @Published private(set) var isCleaning = false
-    @Published private(set) var hasRun = false
-    @Published var selected: Set<CleanupCategory.Kind> = []
-    @Published private(set) var lastResult: DiskCleaner.CleanResult?
-    @Published private(set) var lastError: String?
+@Observable
+final class CleanupModel {
+    private(set) var categories: [CleanupCategory] = []
+    private(set) var depth: CleanDepth = .quick
+    private(set) var isScanning = false
+    private(set) var isCleaning = false
+    private(set) var hasRun = false
+    var selected: Set<CleanupCategory.Kind> = []
+    private(set) var lastResult: DiskCleaner.CleanResult?
+    private(set) var lastError: String?
     /// Time Machine local snapshots on the boot volume — reported, not deletable
     /// (macOS manages them and there's no honest byte size). nil when none / TM off.
-    @Published private(set) var localSnapshots: Int?
+    private(set) var localSnapshots: Int?
 
-    private var scanTask: Task<Void, Never>?
+    @ObservationIgnored private var scanTask: Task<Void, Never>?
 
     var selectedCategories: [CleanupCategory] {
         categories.filter { selected.contains($0.kind) }
@@ -211,17 +212,17 @@ final class CleanupModel: ObservableObject {
 
     // MARK: - Developer junk
 
-    @Published private(set) var devProjects: [DevJunkScanner.Project] = []
-    @Published var devSelection: Set<URL> = []
-    @Published private(set) var isDevScanning = false
-    @Published private(set) var isDevCleaning = false
-    @Published private(set) var hasDevRun = false
-    @Published private(set) var lastDevResult: ReclaimResult?
+    private(set) var devProjects: [DevJunkScanner.Project] = []
+    var devSelection: Set<URL> = []
+    private(set) var isDevScanning = false
+    private(set) var isDevCleaning = false
+    private(set) var hasDevRun = false
+    private(set) var lastDevResult: ReclaimResult?
 
-    private var devScanTask: Task<Void, Never>?
+    @ObservationIgnored private var devScanTask: Task<Void, Never>?
     /// The roots the current listing was scanned from — reused verbatim when
     /// deleting so `DevJunkScanner`'s root check validates against the same set.
-    private var devRoots: [URL] = []
+    @ObservationIgnored private var devRoots: [URL] = []
 
     var selectedDevArtifacts: [DevJunkScanner.Artifact] {
         devProjects.flatMap { project in

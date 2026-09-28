@@ -1,11 +1,12 @@
 import Foundation
 import AppKit
-import Combine
+import Observation
 
 /// Checks GitHub Releases for newer builds, downloads the DMG, and swaps the
 /// installed app. The repository is public, so requests are unauthenticated.
 @MainActor
-final class Updater: ObservableObject {
+@Observable
+final class Updater {
     enum Status: Equatable {
         case idle
         case checking
@@ -53,19 +54,18 @@ final class Updater: ObservableObject {
     nonisolated static var assetName: String? { Channel.current.assetName }
     nonisolated static var bundleInImage: String { "\(Channel.current.displayName).app" }
 
-    @Published private(set) var status: Status = .idle
-    @Published private(set) var lastChecked: Date?
+    private(set) var status: Status = .idle
+    private(set) var lastChecked: Date?
 
     private let notifications = NotificationManager()
-    private var timer: Timer?
-    private var activationObserver: NSObjectProtocol?
-    private var cancellables: Set<AnyCancellable> = []
-    private var notifiedVersion: String?
+    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    @ObservationIgnored private var notifiedVersion: String?
     /// The live settings, so a background check can read `autoDownloadUpdates`
     /// (silently pre-download) at the moment it finds an update.
-    private weak var settings: AppSettings?
+    @ObservationIgnored private weak var settings: AppSettings?
     /// A DMG already downloaded in the background, waiting to be installed.
-    private var pendingDMG: URL?
+    @ObservationIgnored private var pendingDMG: URL?
     private static let checkInterval: TimeInterval = 6 * 3600
     /// Don't re-check on every refocus — only if the last check is older than this.
     private static let activationRecheckAfter: TimeInterval = 30 * 60
@@ -94,36 +94,33 @@ final class Updater: ObservableObject {
     func startAutomaticChecks(settings: AppSettings) {
         guard Channel.current.updatesEnabled else { return }
         self.settings = settings
-        settings.$autoUpdateCheck
-            .removeDuplicates()
-            .sink { [weak self] enabled in
-                guard let self else { return }
-                self.timer?.invalidate()
-                self.timer = nil
-                if let observer = self.activationObserver {
-                    NotificationCenter.default.removeObserver(observer)
-                    self.activationObserver = nil
-                }
-                guard enabled else { return }
-                // Make update notifications actually deliverable: permission used
-                // to be requested only when overheat alerts were on, so with those
-                // off the "update available" notification was silently dropped.
-                self.notifications.requestAuthorizationIfNeeded()
-                Task { await self.check(userInitiated: false) }
-                let timer = Timer(timeInterval: Self.checkInterval, repeats: true) { [weak self] _ in
-                    Task { @MainActor in await self?.check(userInitiated: false) }
-                }
-                RunLoop.main.add(timer, forMode: .common)
-                self.timer = timer
-                // Re-check when the app is brought back to the foreground, so a
-                // release published while it was open (or idle) surfaces promptly.
-                self.activationObserver = NotificationCenter.default.addObserver(
-                    forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in await self?.checkOnActivation() }
-                }
-            }
-            .store(in: &cancellables)
+        applyAutomaticChecks(settings.autoUpdateCheck)
+        observeChanges(of: { settings.autoUpdateCheck }) { [weak self] in self?.applyAutomaticChecks($0) }
+    }
+
+    private func applyAutomaticChecks(_ enabled: Bool) {
+        self.timer?.invalidate()
+        self.timer = nil
+        if let observer = self.activationObserver {
+            NotificationCenter.default.removeObserver(observer)
+            self.activationObserver = nil
+        }
+        guard enabled else { return }
+        // Needed for the "update available" notification to be delivered.
+        self.notifications.requestAuthorizationIfNeeded()
+        Task { await self.check(userInitiated: false) }
+        let timer = Timer(timeInterval: Self.checkInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.check(userInitiated: false) }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+        // Re-check when the app is brought back to the foreground, so a
+        // release published while it was open (or idle) surfaces promptly.
+        self.activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.checkOnActivation() }
+        }
     }
 
     /// A check triggered by returning to the app, throttled so refocusing the

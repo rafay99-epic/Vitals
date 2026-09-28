@@ -9,7 +9,7 @@ import Charts
 /// Location access), and a rate only appears once two samples exist — nothing is
 /// smoothed or invented.
 struct NetworkView: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
     /// True only while Network is the visible segment. Gates the history chart so
     /// it never rebuilds marks in the background (same rule as GPU/Memory).
     let isActive: Bool
@@ -95,8 +95,8 @@ private struct NetworkHeroCard: View {
 // MARK: - Throughput history
 
 private struct NetworkHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
     /// True only while Network is showing. When false `chartHistory` resolves to
     /// empty, so the `Chart` builds no marks and stops reading `model.chartHistory`
     /// — no observation, no per-tick re-render while another tab is up.

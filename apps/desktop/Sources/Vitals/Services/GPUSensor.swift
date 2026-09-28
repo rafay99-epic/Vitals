@@ -45,13 +45,26 @@ struct GPUSnapshot {
 ///
 /// Lives behind the `SensorSampler` actor, so its cached state is serialized.
 final class GPUSampler {
-    private let device = MTLCreateSystemDefaultDevice()
-    private lazy var name = device?.name
-    private lazy var memoryTotal: UInt64? = device.map { $0.recommendedMaxWorkingSetSize }
+    /// Name and recommended working set, read once. The Metal device isn't kept:
+    /// a menu-bar app has no reason to hold a GPU device for its whole life.
+    private lazy var device: (name: String?, memoryTotal: UInt64?) = {
+        guard let device = MTLCreateSystemDefaultDevice() else { return (nil, nil) }
+        return (device.name, device.recommendedMaxWorkingSetSize)
+    }()
     private lazy var coreCount: Int? = Self.gpuCoreCount()
+    /// The IOAccelerator that publishes statistics, looked up once and retained.
+    private lazy var accelerator: io_service_t = Self.findAccelerator()
+
+    deinit {
+        if accelerator != 0 { IOObjectRelease(accelerator) }
+    }
 
     func sample() -> GPUSnapshot? {
-        let perf = Self.acceleratorPerformanceStatistics()
+        let name = device.name
+        // Just the one key, not a copy of the entry's whole property table.
+        let perf = accelerator == 0 ? nil : IORegistryEntryCreateCFProperty(
+            accelerator, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as? [String: Any]
         let utilization = perf?["Device Utilization %"] as? Int
         let renderer = perf?["Renderer Utilization %"] as? Int
         let tiler = perf?["Tiler Utilization %"] as? Int
@@ -71,31 +84,30 @@ final class GPUSampler {
             coreCount: coreCount,
             memoryUsed: memoryUsed.map(UInt64.init),
             memoryAllocated: memoryAllocated.map(UInt64.init),
-            memoryTotal: memoryTotal
+            memoryTotal: device.memoryTotal
         )
     }
 
-    /// The `PerformanceStatistics` dictionary of the first IOAccelerator that
-    /// exposes one. On Apple Silicon there is a single integrated GPU.
-    private static func acceleratorPerformanceStatistics() -> [String: Any]? {
+    /// The first IOAccelerator exposing `PerformanceStatistics`, retained (+1);
+    /// 0 when there's none (a VM). On Apple Silicon there's one integrated GPU.
+    private static func findAccelerator() -> io_service_t {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault,
                                            IOServiceMatching("IOAccelerator"),
-                                           &iterator) == KERN_SUCCESS else { return nil }
+                                           &iterator) == KERN_SUCCESS else { return 0 }
         defer { IOObjectRelease(iterator) }
 
         var service = IOIteratorNext(iterator)
         while service != 0 {
-            defer { IOObjectRelease(service) }
-            var propsRef: Unmanaged<CFMutableDictionary>?
-            if IORegistryEntryCreateCFProperties(service, &propsRef, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-               let props = propsRef?.takeRetainedValue() as? [String: Any],
-               let perf = props["PerformanceStatistics"] as? [String: Any] {
-                return perf
+            if let stats = IORegistryEntryCreateCFProperty(service, "PerformanceStatistics" as CFString,
+                                                           kCFAllocatorDefault, 0) {
+                stats.release()   // Create (+1): only probing for presence
+                return service
             }
+            IOObjectRelease(service)
             service = IOIteratorNext(iterator)
         }
-        return nil
+        return 0
     }
 
     /// Physical GPU core count, published on the GPU's device-tree node as

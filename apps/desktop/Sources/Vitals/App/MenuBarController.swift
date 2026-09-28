@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import Combine
 
 /// Owns the menu-bar status item and its dropdown (a transient `NSPopover`
 /// hosting `MenuBarPanel`). The label is a hosted SwiftUI view, so its width
@@ -8,14 +7,14 @@ import Combine
 /// CPU for every frame it changes, so any repeating animation here burns CPU
 /// continuously, even with every window closed.
 @MainActor
-final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
+final class MenuBarController: NSObject, NSPopoverDelegate {
     private let model: VitalsModel
     private let settings: AppSettings
     private let navigator: Navigator
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
-    private var cancellables: Set<AnyCancellable> = []
+    private var launchObserver: NSObjectProtocol?
 
     init(model: VitalsModel, settings: AppSettings, navigator: Navigator) {
         self.model = model
@@ -23,25 +22,22 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         self.navigator = navigator
         super.init()
 
-        // Show/hide with the preference. `dropFirst`: @Published replays the
-        // current value at subscribe, which would install mid `App.init`.
-        settings.$showMenuBar
-            .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] show in self?.setVisible(show) }
-            .store(in: &cancellables)
+        observeChanges(of: { settings.showMenuBar }) { [weak self] in self?.setVisible($0) }
         // Install only after launch finishes: an NSStatusItem created while
         // NSApplicationMain is still registering gets a zero-height window.
         if NSApp?.isRunning == true {
             setVisible(settings.showMenuBar)
         } else {
-            NotificationCenter.default.publisher(for: NSApplication.didFinishLaunchingNotification)
-                .prefix(1)
-                .sink { [weak self] _ in
+            launchObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didFinishLaunchingNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
                     guard let self else { return }
                     self.setVisible(self.settings.showMenuBar)
+                    self.launchObserver.map(NotificationCenter.default.removeObserver)
+                    self.launchObserver = nil
                 }
-                .store(in: &cancellables)
+            }
         }
     }
 
@@ -60,8 +56,8 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
         button.action = #selector(togglePopover)
 
         let label = MenuBarLabelView()
-            .environmentObject(model)
-            .environmentObject(settings)
+            .environment(model)
+            .environment(settings)
 
         let host = MenuBarHostingView(rootView: AnyView(label))
         // The label's unconstrained ideal width, independent of the button's
@@ -114,9 +110,9 @@ final class MenuBarController: NSObject, ObservableObject, NSPopoverDelegate {
             return
         }
         let panel = MenuBarPanel()
-            .environmentObject(model)
-            .environmentObject(settings)
-            .environmentObject(navigator)
+            .environment(model)
+            .environment(settings)
+            .environment(navigator)
 
         let popover = NSPopover()
         popover.behavior = .transient // dismiss on click outside / Esc

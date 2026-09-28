@@ -3,7 +3,7 @@ import SwiftUI
 /// The Cleanup section: Quick and Deep cache sweeps and per-project Developer
 /// junk behind one picker. Pages swap in place, so window geometry never changes.
 struct CleanupView: View {
-    @ObservedObject var model: CleanupModel
+    @Bindable var model: CleanupModel
     /// True only while Cleanup is the visible tab; the view stays mounted.
     var isActive: Bool
     /// Persisted so the chosen page sticks across launches. A stored page that
@@ -63,11 +63,11 @@ struct CleanupView: View {
 /// picker above chooses it. Quick stays in the user domain (no password); Deep
 /// adds age-gated system categories that need one administrator prompt.
 private struct CleanupClassicPage: View {
-    @ObservedObject var model: CleanupModel
+    @Bindable var model: CleanupModel
     /// True only while Cleanup is the visible tab.
     var isActive: Bool
     let depth: CleanDepth
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     @State private var confirming = false
     @State private var confirmingDestructive = false
 

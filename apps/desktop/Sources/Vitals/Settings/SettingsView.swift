@@ -392,9 +392,10 @@ private func settingsRow(_ label: String, @ViewBuilder control: () -> some View)
 // MARK: - General cards
 
 private struct ReadingsCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Readings", symbol: "thermometer.medium", tint: .orange) {
             settingsRow("Temperature unit") {
                 Picker("", selection: $settings.unit) {
@@ -429,9 +430,10 @@ private struct ReadingsCard: View {
 }
 
 private struct PowerSettingsCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Power", symbol: "bolt.fill", tint: .green) {
             settingsRow("Power source") {
                 HStack(spacing: 5) {
@@ -465,9 +467,10 @@ private struct PowerSettingsCard: View {
 }
 
 private struct AppearanceCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Appearance", symbol: "paintbrush", tint: .purple) {
             settingsRow("Theme") {
                 Picker("", selection: $settings.theme) {
@@ -484,9 +487,10 @@ private struct AppearanceCard: View {
 }
 
 private struct ApplicationCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Applications", symbol: "macwindow", tint: .teal) {
             SwitchRow(label: "Launch at login", isOn: $settings.launchAtLogin)
             if let error = settings.loginItemError {
@@ -507,9 +511,10 @@ private struct ApplicationCard: View {
 // MARK: - Menu bar
 
 private struct MenuBarCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Menu bar", symbol: "menubar.rectangle", tint: .blue) {
             SwitchRow(label: "Show in menu bar", isOn: $settings.showMenuBar)
             VStack(alignment: .leading, spacing: 10) {
@@ -543,9 +548,10 @@ private struct MenuBarCard: View {
 // MARK: - Cleanup
 
 private struct CleanupCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Cleanup", symbol: "sparkles", tint: .orange) {
             SwitchRow(
                 label: "Scan automatically on open",
@@ -559,9 +565,10 @@ private struct CleanupCard: View {
 // MARK: - Alerts cards
 
 private struct OverheatingCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Overheating", symbol: "flame", tint: .orange) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -583,10 +590,11 @@ private struct OverheatingCard: View {
 }
 
 private struct NotificationsCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     @State private var notificationsDenied = false
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Notifications", symbol: "bell.badge", tint: .red) {
             SwitchRow(label: "Notify when the CPU stays hot", isOn: $settings.notifyOverheat)
             SwitchRow(label: "Notify on high thermal pressure", isOn: $settings.notifyThermal)
@@ -616,10 +624,11 @@ private struct NotificationsCard: View {
 // MARK: - Updates card
 
 private struct SoftwareUpdatesCard: View {
-    @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var updater: Updater
+    @Environment(AppSettings.self) private var settings
+    @Environment(Updater.self) private var updater
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Software updates", symbol: "arrow.down.circle", tint: .green) {
             settingsRow("Installed version") {
                 Text(installedVersion)
@@ -705,9 +714,10 @@ private struct SoftwareUpdatesCard: View {
 // MARK: - Data cards
 
 private struct LoggingCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Logging", symbol: "doc.text", tint: .indigo) {
             SwitchRow(label: "Log readings to disk", isOn: $settings.loggingEnabled)
             settingsRow("History database") {
@@ -761,9 +771,10 @@ private struct LoggingCard: View {
 // MARK: - Developer cards
 
 private struct DiagnosticLoggingCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         SettingsCard(title: "Diagnostic logging", symbol: "ant", tint: .teal) {
             settingsRow("Level") {
                 Picker("", selection: $settings.diagnosticLogLevel) {

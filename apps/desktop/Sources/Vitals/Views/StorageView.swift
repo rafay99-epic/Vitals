@@ -3,7 +3,7 @@ import SwiftUI
 /// The internal SSD's SMART report: wear, endurance, TRIM, lifetime. A VM or
 /// external-only setup gets an explicit empty state, never a fabricated "100%".
 struct StorageView: View {
-    @EnvironmentObject private var vitals: VitalsModel
+    @Environment(VitalsModel.self) private var vitals
 
     var body: some View {
         if let disk = vitals.diskHealth {

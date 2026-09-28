@@ -5,8 +5,8 @@ import Charts
 /// segmented switcher. Replaces the four separate history cards — only the
 /// selected series renders, so the dashboard keeps a single live chart.
 struct PerformanceHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(VitalsModel.self) private var model
+    @Environment(AppSettings.self) private var settings
     /// True only while the Dashboard is visible. When false, `chartHistory`
     /// resolves to empty so the `Chart` builds no marks and — crucially —
     /// doesn't read `model.chartHistory`/`model.memory`, so it stops

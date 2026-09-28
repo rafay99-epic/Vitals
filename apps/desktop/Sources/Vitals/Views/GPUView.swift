@@ -8,7 +8,7 @@ import Charts
 /// block), so none is shown — labelling a generic die reading "GPU" would break
 /// the honesty rule.
 struct GPUView: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
     /// True only while the GPU tab is the visible one. The tab stays mounted for
     /// instant switching, so without this the history chart would rebuild its
     /// marks on every sample tick in the background — gating it keeps idle cost
@@ -69,7 +69,7 @@ private struct GPUHeroCard: View {
 // MARK: - Utilization breakdown + history
 
 private struct GPUUtilizationCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
     let gpu: GPUSnapshot
     let isActive: Bool
 
@@ -205,7 +205,7 @@ private struct GPUMemoryCard: View {
 // MARK: - Neural Engine + power rails
 
 private struct GPUPowerCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Power", symbol: "bolt.fill") {

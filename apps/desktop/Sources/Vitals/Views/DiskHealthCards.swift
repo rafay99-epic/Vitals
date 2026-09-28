@@ -96,7 +96,7 @@ struct DiskEnduranceCard: View {
 // MARK: - Lifetime counters
 
 struct DiskLifetimeCard: View {
-    @EnvironmentObject private var settings: AppSettings
+    @Environment(AppSettings.self) private var settings
     let disk: DiskHealthSnapshot
 
     var body: some View {

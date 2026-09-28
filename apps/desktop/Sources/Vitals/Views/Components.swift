@@ -302,10 +302,9 @@ struct Deferred<Content: View>: View {
 
 // MARK: - Animation gating
 
-/// Whether views in this subtree may run continuous animations. Off when GPU
-/// acceleration is disabled or Vitals isn't the focused app. Defaults to `true`,
-/// so any surface that doesn't inject it keeps animating (safe fallback). The
-/// live surfaces (dashboard, menu bar, widgets) inject `settings.animationsEnabled`.
+/// Whether views in this subtree may animate value changes. The main window
+/// injects `settings.appActive`, so nothing animates while Vitals is in the
+/// background. Defaults to `true` elsewhere (the menu-bar dropdown).
 private struct AnimationsEnabledKey: EnvironmentKey { static let defaultValue = true }
 
 extension EnvironmentValues {
@@ -325,7 +324,7 @@ private struct NumericTransition: ViewModifier {
 extension View {
     /// Animate digit changes with `.numericText()` — but only where
     /// `\.animationsEnabled` is true. Snaps with `.identity` otherwise, so no
-    /// per-tick transition runs while the app is backgrounded or accel is off.
+    /// per-tick transition runs while the app is backgrounded.
     func numericTransition() -> some View { modifier(NumericTransition()) }
 }
 

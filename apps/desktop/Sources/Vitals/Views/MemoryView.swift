@@ -30,7 +30,7 @@ struct MemoryView: View {
 // MARK: - Usage history
 
 private struct MemoryUsageHistoryCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         // One pass over the series, hoisted out of the per-sample chart closure:
@@ -96,7 +96,7 @@ private struct MemoryUsageHistoryCard: View {
 /// The full breakdown the hero's legend summarises, with each region's share of
 /// physical RAM spelled out — plus swap, which the bar doesn't cover.
 private struct MemoryCompositionCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Composition", symbol: "chart.pie.fill") {
@@ -135,7 +135,7 @@ private struct MemoryCompositionCard: View {
 /// unpressured Mac — that's the point: sustained page-outs or swap-ins are the
 /// signal that RAM is tight, so showing the real (often zero) rate matters.
 private struct MemoryActivityCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Activity", symbol: "waveform.path.ecg") {
@@ -179,7 +179,7 @@ private struct MemoryActivityCard: View {
 // MARK: - Top memory consumers
 
 private struct TopMemoryProcessesCard: View {
-    @EnvironmentObject private var model: VitalsModel
+    @Environment(VitalsModel.self) private var model
 
     var body: some View {
         SectionCard(title: "Top memory", symbol: "list.bullet") {

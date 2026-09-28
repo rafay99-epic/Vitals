@@ -87,10 +87,11 @@ enum Battery {
     /// figure (see `BatteryHealth`). It's preferred for `healthPercent` so the
     /// app matches System Settings exactly; the raw full-charge/design ratio is
     /// only a fallback for the first moments before it's read, or if it can't be.
+    /// The battery's registry entry, looked up once and kept (0 on a desktop).
+    private static let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+
     static func read(officialHealth: Double? = nil) -> BatterySnapshot? {
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard service != 0 else { return nil }
-        defer { IOObjectRelease(service) }
 
         var propsRef: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(service, &propsRef, kCFAllocatorDefault, 0) == KERN_SUCCESS,
