@@ -1,0 +1,60 @@
+apps/desktop/Sources/Vitals/Services/Log.swift
+  s_70840817465319::t_6d2e3c4fb090ee 73,77,95-100
+apps/desktop/Sources/Vitals/Services/AppUninstaller.swift
+  s_70840817465319::t_4a0c9b82712ba1 110
+apps/desktop/Sources/Vitals/Views/Components.swift
+  s_70840817465319::t_8ad3ce57bdca59 427-438
+apps/desktop/Sources/Vitals/Services/CrashReporter.swift
+  s_70840817465319::t_a864f39c985218 52,68,84,87
+apps/desktop/Sources/Vitals/Views/CleanupView.swift
+  s_70840817465319::t_19ef70f170f086 19,22,92-93
+apps/desktop/Sources/Vitals/Views/MemoryView.swift
+  s_70840817465319::t_19ef70f170f086 14
+apps/desktop/Sources/Vitals/Views/GPUView.swift
+  s_70840817465319::t_6764510d1fe59d 17,79
+apps/desktop/Sources/Vitals/Services/LogExport.swift
+  s_70840817465319::t_a864f39c985218 31-32,62-63,66
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_70840817465319::t_8ad3ce57bdca59 280
+apps/desktop/Sources/Vitals/Views/MenuBarHost.swift
+  s_70840817465319::t_bf8f9c180433a1 34,49-50
+apps/desktop/Sources/Vitals/Views/DashboardBento.swift
+  s_70840817465319::t_6d2e3c4fb090ee 52
+apps/desktop/Sources/Vitals/Views/MenuBarPanel.swift
+  s_70840817465319::t_8ad3ce57bdca59 67
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_70840817465319::t_c480ca2b91808c 211,215,217,221,225,229,231,233,369
+apps/desktop/Sources/Vitals/Services/HistoryReader.swift
+  s_70840817465319::t_8ad3ce57bdca59 60
+apps/desktop/Tests/VitalsTests/DownsampleTests.swift
+  s_70840817465319::t_59aefdfc97a726 5
+  s_70840817465319::t_8ad3ce57bdca59 24,28,33,39,45
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_70840817465319::t_19ef70f170f086 16,28
+apps/desktop/Sources/Vitals/Views/NetworkView.swift
+  s_70840817465319::t_6764510d1fe59d 18,95
+apps/desktop/Sources/Vitals/Views/PerformanceHistoryCard.swift
+  s_70840817465319::t_c480ca2b91808c 4-5,50,261-262
+apps/desktop/Sources/Vitals/Services/LeftoverScanner.swift
+  s_70840817465319::t_4a0c9b82712ba1 532-534
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_70840817465319::t_19ef70f170f086 89-90
+apps/desktop/Sources/Vitals/Services/LogFile.swift
+  s_70840817465319::t_a864f39c985218 99-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "56d2c381dcf191f4b88493f4aa2e027a177f7525",
+  "prompts": {},
+  "sessions": {
+    "s_70840817465319": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05bb6853-7761-4ba6-bb5b-fe82a241e45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
