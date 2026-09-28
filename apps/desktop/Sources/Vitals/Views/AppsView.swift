@@ -27,9 +27,9 @@ enum AppIconCache {
 
     private static let cache: NSCache<NSURL, NSImage> = {
         let cache = NSCache<NSURL, NSImage>()
-        // Backstop: entries are ~16 KB after flattening, so 512 caps this near
-        // 8 MB. Without a limit, NSCache only evicts under system memory
-        // pressure — which is how it grew to hundreds of MB of app icons.
+        // Flattening is what bounds memory: ~16 KB per icon, one per installed
+        // app. `countLimit` is a soft backstop (NSCache may briefly exceed it),
+        // not a hard cap; unbounded, it only evicted under memory pressure.
         cache.countLimit = 512
         return cache
     }()
