@@ -105,14 +105,13 @@ final class VitalsModel {
     @ObservationIgnored private var samplingStartedAt: Date?
     /// Window state that gates the heavy optional reads; see `windowOnScreen`.
     @ObservationIgnored private var mainWindowVisible = false
-    @ObservationIgnored private weak var mainWindow: NSWindow?
+    @ObservationIgnored private var mainWindowUnoccluded = true
     /// Narrows optional reads to what the visible section needs.
-    @ObservationIgnored private var visibleSectionID = "overview"
+    @ObservationIgnored private var visibleSection: NavSection = .overview
     /// Set by the sleep/wake observers. Also guards `start()` so a settings
     /// change made while asleep can't resume sampling before wake.
     @ObservationIgnored private var isAsleep = false
     @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
-    @ObservationIgnored private var occlusionObserver: NSObjectProtocol?
     @ObservationIgnored private var menuBarPanelVisible = false
 
     /// Call when the main window opens/closes (ContentView appear/disappear).
@@ -121,16 +120,11 @@ final class VitalsModel {
         publishChartsIfVisible()
     }
 
-    func setMainWindow(_ window: NSWindow?) {
-        mainWindow = window
-        occlusionObserver.map(NotificationCenter.default.removeObserver)
-        occlusionObserver = window.map {
-            NotificationCenter.default.addObserver(
-                forName: NSWindow.didChangeOcclusionStateNotification, object: $0, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.publishChartsIfVisible() }
-            }
-        }
+    /// Call when the main window becomes covered, minimized, hidden or moves
+    /// to another Space (false), and when it's back in view (true).
+    func setMainWindowUnoccluded(_ unoccluded: Bool) {
+        mainWindowUnoccluded = unoccluded
+        publishChartsIfVisible()
     }
 
     /// Call when the menu-bar dropdown opens/closes; its sparklines read charts.
@@ -140,28 +134,27 @@ final class VitalsModel {
     }
 
     /// Open and actually on screen: not minimized, hidden, fully covered, or on
-    /// another Space. Checked every tick.
-    private var windowOnScreen: Bool {
-        mainWindowVisible && (mainWindow?.occlusionState.contains(.visible) ?? true)
-    }
+    /// another Space.
+    private var windowOnScreen: Bool { mainWindowVisible && mainWindowUnoccluded }
 
     /// Call when navigation changes so optional reads follow the visible section.
-    func setVisibleSection(_ sectionID: String) { visibleSectionID = sectionID }
+    func setVisibleSection(_ section: NavSection) { visibleSection = section }
 
     /// For tests: whether the sampling timer is armed.
     internal var isSamplingTimerActive: Bool { timer != nil }
 
-    /// Optional reads needed this tick. GPU also feeds the GPU menu-bar metric;
-    /// the rest only matter with the window on screen.
+    /// Optional reads needed this tick. GPU also feeds the GPU menu-bar metric
+    /// and the dropdown's GPU row; the rest only matter with the window on screen.
     private var currentNeeds: SensorSampler.Needs {
-        let section = windowOnScreen ? visibleSectionID : nil
-        func showing(_ ids: String...) -> Bool { section.map(ids.contains) ?? false }
+        let section = windowOnScreen ? visibleSection : nil
+        func showing(_ sections: NavSection...) -> Bool { section.map(sections.contains) ?? false }
         return SensorSampler.Needs(
-            topProcesses: showing("overview", "memory"),
-            gpu: showing("overview", "gpu", "history")
+            topProcesses: showing(.overview, .memory),
+            gpu: showing(.overview, .gpu, .history)
+                || menuBarPanelVisible
                 || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage)),
-            power: showing("overview", "cpu", "gpu", "battery", "history"),
-            networkDetails: showing("overview", "network")
+            power: showing(.overview, .cpu, .gpu, .battery, .history),
+            networkDetails: showing(.overview, .network)
         )
     }
     private static let maxChartPoints = 300
@@ -182,6 +175,9 @@ final class VitalsModel {
         self.settings = settings
         observeChanges(of: { settings.effectiveRefreshInterval }) { [weak self] _ in self?.restartTimerIfAwake() }
         observeChanges(of: { settings.historyMinutes }) { [weak self] _ in self?.trimHistory() }
+        // Ask for notification permission at launch when an alert is on, and
+        // whenever one is turned on later.
+        if settings.notifyOverheat || settings.notifyThermal { notifications.requestAuthorizationIfNeeded() }
         observeChanges(of: { settings.notifyOverheat || settings.notifyThermal }) { [weak self] enabled in
             if enabled { self?.notifications.requestAuthorizationIfNeeded() }
         }
@@ -205,7 +201,6 @@ final class VitalsModel {
         samplingTask?.cancel()
         samplingTask = nil
         sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
-        occlusionObserver.map(NotificationCenter.default.removeObserver)
     }
 
     /// Floor of 0.5 s: a corrupted UserDefaults value of 0 would divide by zero below.
@@ -550,5 +545,13 @@ extension ProcessInfo.ThermalState {
         case .critical: return .red
         @unknown default: return .gray
         }
+    }
+}
+
+extension Array where Element == VitalsModel.Sample {
+    /// Whether any sample carries a reading for `series`. Charts and metric
+    /// tabs hide a series this Mac never reported.
+    func hasReading(_ series: KeyPath<VitalsModel.Sample, Double?>) -> Bool {
+        contains { $0[keyPath: series] != nil }
     }
 }

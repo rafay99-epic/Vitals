@@ -74,7 +74,7 @@ private struct GPUUtilizationCard: View {
                     meterRow("Renderer", gpu.rendererUtilization, tint: .indigo)
                     meterRow("Tiler", gpu.tilerUtilization, tint: .teal)
                 }
-                if model.chartHistory.contains(where: { $0.gpuUsage != nil }) {
+                if model.chartHistory.hasReading(\.gpuUsage) {
                     Divider()
                     Deferred { history }.frame(height: 150)
                 }

@@ -23,13 +23,24 @@ enum FanHelperRetirement {
     /// App side. No-op unless an old helper left its state file behind.
     static func releaseFans() {
         guard FileManager.default.fileExists(atPath: statePath), let smc = SMC() else { return }
-        let fans = smc.fans().map(\.id)
+        let fans = fanIDs(smc)
         do {
             try autoState(for: fans).write(to: URL(fileURLWithPath: statePath), options: .atomic)
             Log.notice(.fan, "released \(fans.count) fans to automatic control (fan control was removed)")
         } catch {
             Log.error(.fan, "couldn't reset the retired fan helper's state", error: error)
         }
+    }
+
+    /// Every fan the old helper might be driving: the ones its state file names,
+    /// every SMC fan slot, and every fan that reads right now. A fan whose speed
+    /// read fails must still be handed back.
+    private static func fanIDs(_ smc: SMC) -> [Int] {
+        let listed = FileManager.default.contents(atPath: statePath)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] }?
+            .compactMap { $0["fan"] as? Int } ?? []
+        let slots = 0..<(smc.read("FNum").map { Int($0) } ?? 0)
+        return Set(listed + Array(slots) + smc.fans().map(\.id)).sorted()
     }
 
     /// The state file telling an old helper to put every fan on automatic. Its
@@ -41,7 +52,7 @@ enum FanHelperRetirement {
     /// Root side: `Vitals --fan-daemon`, started by the old launchd job.
     static func runAsHelper() -> Never {
         if let smc = SMC() {
-            for fan in smc.fans() { smc.setFanAutomatic(fan.id) }
+            for fan in fanIDs(smc) { smc.setFanAutomatic(fan) }
         }
         try? FileManager.default.removeItem(atPath: plistPath)
         try? FileManager.default.removeItem(atPath: statePath)

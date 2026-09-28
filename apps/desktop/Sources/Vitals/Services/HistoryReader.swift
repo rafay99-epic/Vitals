@@ -154,3 +154,14 @@ enum HistoryExport {
         return formatter
     }()
 }
+
+extension Array {
+    /// Evenly thins to at most `maxCount` elements, keeping the first and last.
+    /// Mark count drives Swift Charts' rebuild cost. Steps by more than one index,
+    /// so no element (or id) repeats.
+    func thinned(to maxCount: Int) -> [Element] {
+        guard count > maxCount, maxCount > 1 else { return self }
+        let stride = Double(count - 1) / Double(maxCount - 1)
+        return (0..<maxCount).map { self[Int((Double($0) * stride).rounded())] }
+    }
+}

@@ -1,51 +1,5 @@
 import SwiftUI
 
-/// Every navigable destination, one flat tier in the sidebar: Overview, then
-/// a read-only Monitor group and a write/maintenance Maintain group.
-enum NavSection: String, CaseIterable, Identifiable {
-    case overview
-    case cpu, gpu, memory, battery, network, sensors, history
-    case storage, cleanup, applications
-    case settings
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .overview:     return "Overview"
-        case .cpu:          return "CPU"
-        case .gpu:          return "GPU"
-        case .memory:       return "Memory"
-        case .battery:      return "Battery"
-        case .network:      return "Network"
-        case .sensors:      return "Temps & Fans"
-        case .history:      return "History"
-        case .storage:      return "Disk Health"
-        case .cleanup:      return "Cleanup"
-        case .applications: return "Applications"
-        case .settings:     return "Settings"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .overview:     return "gauge.with.dots.needle.50percent"
-        case .cpu:          return "cpu"
-        case .gpu:          return "cpu.fill"
-        case .memory:       return "memorychip"
-        case .battery:      return "battery.100percent"
-        case .network:      return "network"
-        case .sensors:      return "thermometer.medium"
-        case .history:      return "chart.xyaxis.line"
-        case .storage:      return "internaldrive"
-        case .cleanup:      return "sparkles"
-        case .applications: return "square.grid.2x2"
-        case .settings:     return "gearshape"
-        }
-    }
-
-}
-
 /// Top-level navigation: a fixed left sidebar over one content canvas. The
 /// sidebar never collapses, so window geometry never changes from navigation.
 struct ContentView: View {
@@ -63,7 +17,7 @@ struct ContentView: View {
     @State private var historyModel = HistoryModel()
 
     private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .history]
-    private static let maintain: [NavSection] = [.storage, .cleanup, .applications]
+    private static let maintain: [NavSection] = [.diskHealth, .cleanup, .applications]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -77,13 +31,13 @@ struct ContentView: View {
         .frame(minWidth: 980, minHeight: 680)
         .onAppear {
             model.setMainWindowVisible(true)
-            model.setVisibleSection(section.rawValue)
+            model.setVisibleSection(section)
         }
         .onChange(of: section, initial: true) { _, newSection in
-            model.setVisibleSection(newSection.rawValue)
+            model.setVisibleSection(newSection)
         }
         .onDisappear { model.setMainWindowVisible(false) }
-        .background(WindowReader { model.setMainWindow($0) })
+        .background(WindowOcclusionReader { model.setMainWindowUnoccluded($0) })
     }
 
     // MARK: Sidebar
@@ -211,8 +165,8 @@ struct ContentView: View {
                 SensorsView()
             case .history:
                 HistoryView(model: historyModel)
-            case .storage:
-                StorageView()
+            case .diskHealth:
+                DiskHealthView()
             case .cleanup:
                 CleanupView(model: cleanupModel)
             case .applications:
@@ -231,23 +185,38 @@ struct ContentView: View {
     }
 }
 
-/// Hands the hosting `NSWindow` to `onWindow` once the view lands in one.
-private struct WindowReader: NSViewRepresentable {
-    let onWindow: (NSWindow?) -> Void
+/// Reports whether the hosting window is actually visible (not minimized,
+/// hidden, fully covered, or on another Space), now and on every change.
+private struct WindowOcclusionReader: NSViewRepresentable {
+    let onChange: (Bool) -> Void
 
-    func makeNSView(context: Context) -> NSView { ReaderView(onWindow: onWindow) }
+    func makeNSView(context: Context) -> NSView { ReaderView(onChange: onChange) }
     func updateNSView(_ nsView: NSView, context: Context) {}
 
     private final class ReaderView: NSView {
-        let onWindow: (NSWindow?) -> Void
-        init(onWindow: @escaping (NSWindow?) -> Void) {
-            self.onWindow = onWindow
+        let onChange: (Bool) -> Void
+        private var observer: NSObjectProtocol?
+
+        init(onChange: @escaping (Bool) -> Void) {
+            self.onChange = onChange
             super.init(frame: .zero)
         }
         @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
+
+        deinit { observer.map(NotificationCenter.default.removeObserver) }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            onWindow(window)
+            observer.map(NotificationCenter.default.removeObserver)
+            observer = nil
+            guard let window else { return }
+            onChange(window.occlusionState.contains(.visible))
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+            ) { [weak self, weak window] _ in
+                guard let window else { return }
+                self?.onChange(window.occlusionState.contains(.visible))
+            }
         }
     }
 }

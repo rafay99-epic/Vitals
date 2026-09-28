@@ -39,11 +39,6 @@ final class LogFile {
         }
     }
 
-    /// Blocks until every queued write has landed.
-    func flush() {
-        queue.sync {}
-    }
-
     private func write(_ jsonLine: Data) {
         guard let handle = openHandleIfNeeded() else { return }
         var data = jsonLine

@@ -52,14 +52,23 @@ actor SensorSampler {
         var networkDetails = false
     }
 
+    /// The previous tick's needs. Power and process CPU are deltas against the
+    /// last read, so the first read after a skipped stretch would average the
+    /// whole gap. That read only resets the baseline and reports nothing.
+    private var previousNeeds = Needs()
+
     func sample(_ needs: Needs) -> Snapshot {
+        defer { previousNeeds = needs }
         // CoreWLAN and IOKit return autoreleased objects; drain them per sample
         // so they don't pile up on the actor's thread.
-        autoreleasepool {
+        return autoreleasepool {
             let battery = Battery.read(officialHealth: batteryHealth)
             if battery != nil { refreshBatteryHealthIfStale() }
             refreshDiskHealthIfStale()
-            let processes = needs.topProcesses ? processSampler.sample(top: 5) : .empty
+            var processes = needs.topProcesses ? processSampler.sample(top: 5) : .empty
+            if !previousNeeds.topProcesses { processes = .empty }
+            var powerReading = needs.power ? power.sample() : nil
+            if !previousNeeds.power { powerReading = nil }
             return Snapshot(
                 sensors: VitalsModel.classify(hid.readAll())
                     .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending },
@@ -71,7 +80,7 @@ actor SensorSampler {
                 topMemoryProcesses: processes.byMemory,
                 battery: battery,
                 gpu: needs.gpu ? gpu.sample() : nil,
-                power: needs.power ? power.sample() : nil,
+                power: powerReading,
                 diskHealth: diskHealth,
                 // Byte counters are one sysctl, read every tick so the menu bar
                 // and history get a continuous series.

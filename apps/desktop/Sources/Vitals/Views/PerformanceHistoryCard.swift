@@ -41,9 +41,9 @@ struct PerformanceHistoryCard: View {
     private var available: [Metric] {
         Metric.allCases.filter { metric in
             switch metric {
-            case .gpu: return chartHistory.contains { $0.gpuUsage != nil }
-            case .power: return chartHistory.contains { $0.totalWatts != nil }
-            case .network: return chartHistory.contains { $0.netInPerSec != nil }
+            case .gpu: return chartHistory.hasReading(\.gpuUsage)
+            case .power: return chartHistory.hasReading(\.totalWatts)
+            case .network: return chartHistory.hasReading(\.netInPerSec)
             default: return true
             }
         }

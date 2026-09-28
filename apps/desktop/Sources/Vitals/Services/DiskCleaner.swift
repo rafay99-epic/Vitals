@@ -31,7 +31,6 @@ struct CleanupCategory: Identifiable {
         // Deep, user domain (no admin)
         case recentItems
         case deviceBackups
-        case aiHistory
         // Deep, system (admin, age-gated)
         case systemCaches
         case systemLogs
@@ -54,16 +53,7 @@ struct CleanupCategory: Identifiable {
         /// confirmation that names exactly what will be destroyed.
         var isDestructive: Bool {
             switch self {
-            case .deviceBackups, .aiHistory: return true
-            default: return false
-            }
-        }
-
-        /// Moved to the Trash (recoverable) instead of deleted in place, for
-        /// irreversible-if-gone user data like chat transcripts.
-        var movesToTrash: Bool {
-            switch self {
-            case .aiHistory: return true
+            case .deviceBackups: return true
             default: return false
             }
         }
@@ -91,7 +81,6 @@ struct CleanupCategory: Identifiable {
             case .trash: return "Trash"
             case .recentItems: return "Recent items"
             case .aiCaches: return "AI Tool Junk"
-            case .aiHistory: return "Old AI Chat Sessions"
             case .systemCaches: return "System caches"
             case .systemLogs: return "System logs"
             case .crashReports: return "Crash reports"
@@ -114,7 +103,6 @@ struct CleanupCategory: Identifiable {
             case .trash: return "Files already in the Trash, removed permanently"
             case .recentItems: return "Recently-opened file and server lists (the files stay)"
             case .aiCaches: return "Old caches, logs and temp files from AI coding tools you've used"
-            case .aiHistory: return "AI conversation transcripts older than 30 days — moved to the Trash"
             case .systemCaches: return "Old .cache/.tmp/.log files in /Library/Caches (7+ days)"
             case .systemLogs: return "Old system logs in /private/var/log (7+ days)"
             case .crashReports: return "Crash and diagnostic reports older than 7 days"
@@ -137,7 +125,6 @@ struct CleanupCategory: Identifiable {
             case .trash: return "trash"
             case .recentItems: return "clock.arrow.circlepath"
             case .aiCaches: return "sparkles"
-            case .aiHistory: return "bubble.left.and.bubble.right"
             case .systemCaches: return "gearshape"
             case .systemLogs: return "doc.badge.gearshape"
             case .crashReports: return "exclamationmark.triangle"
@@ -320,19 +307,10 @@ enum DiskCleaner {
         let backups = ((try? fm.contentsOfDirectory(at: backupRoot, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? [])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
 
-        var categories: [CleanupCategory] = [
+        return [
             .init(kind: .recentItems, items: recentLists, sizeBytes: 0),
             .init(kind: .deviceBackups, items: backups, sizeBytes: 0),
         ]
-
-        // Destructive, so only offered when there's actually something aged.
-        if !AIToolJunk.detectedTools(home: home).isEmpty {
-            let history = AIToolJunk.historyItems(home: home)
-            if !history.isEmpty {
-                categories.append(.init(kind: .aiHistory, items: history, sizeBytes: 0))
-            }
-        }
-        return categories
     }
 
     /// Cached iOS/iPadOS/iPod firmware (`.ipsw`) older than the retention
@@ -525,23 +503,16 @@ enum DiskCleaner {
         var usedAdmin = false
     }
 
-    /// Removes user-domain category items in-process: deleted in place (they
-    /// regenerate), except `movesToTrash` kinds. System categories go through
-    /// `systemCleanScript`, not here.
+    /// Removes user-domain category items in-process, deleted in place (they
+    /// regenerate). System categories go through `systemCleanScript`, not here.
     static func clean(_ categories: [CleanupCategory]) -> CleanResult {
         let fm = FileManager.default
         var result = CleanResult()
         for category in categories where !category.kind.requiresAdmin {
-            let toTrash = category.kind.movesToTrash
             for url in category.items {
                 let size = AppInventory.directorySize(url)
                 do {
-                    if toTrash {
-                        // On failure it's recorded, never permanently deleted.
-                        try fm.trashItem(at: url, resultingItemURL: nil)
-                    } else {
-                        try fm.removeItem(at: url)
-                    }
+                    try fm.removeItem(at: url)
                     result.freedBytes += size
                     result.removedItems += 1
                 } catch {

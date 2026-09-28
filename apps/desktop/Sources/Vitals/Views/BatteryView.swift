@@ -13,7 +13,7 @@ struct BatteryView: View {
                 if let adapter = battery.adapter {
                     BatteryAdapterCard(adapter: adapter)
                 }
-                if model.chartHistory.contains(where: { $0.batteryPercent != nil }) {
+                if model.chartHistory.hasReading(\.batteryPercent) {
                     BatteryHistoryCard()
                 }
                 BatteryHealthCard(battery: battery)
@@ -28,7 +28,7 @@ struct BatteryView: View {
             }
             // Power draw and sleep blockers matter on wall power too, so they
             // sit outside the battery gate.
-            if model.chartHistory.contains(where: { $0.totalWatts != nil }) {
+            if model.chartHistory.hasReading(\.totalWatts) {
                 BatteryPowerDrawCard()
             }
             SleepBlockersCard()
@@ -286,11 +286,11 @@ private struct BatteryPowerDrawCard: View {
 
 /// Apps holding a sleep assertion, re-read every 5 s while mounted.
 private struct SleepBlockersCard: View {
-    @State private var blockers: [SleepBlocker]?
+    @State private var model = SleepBlockersModel()
 
     var body: some View {
         SectionCard(title: "Sleep & wake", symbol: "moon.zzz.fill") {
-            if let blockers {
+            if let blockers = model.blockers {
                 if blockers.isEmpty {
                     // Scoped to the user's apps: a system daemon holding an
                     // assertion isn't listed, so don't promise the Mac will sleep.
@@ -321,12 +321,7 @@ private struct SleepBlockersCard: View {
                 HStack { ProgressView().controlSize(.small); Text("Checking…").font(.callout).foregroundStyle(.secondary) }
             }
         }
-        .task {
-            while !Task.isCancelled {
-                blockers = await Task.detached(priority: .utility) { PowerAssertions.blockers() }.value
-                try? await Task.sleep(for: .seconds(5))
-            }
-        }
+        .task { await model.watch() }
     }
 }
 

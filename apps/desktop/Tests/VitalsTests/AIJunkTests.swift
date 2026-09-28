@@ -4,8 +4,8 @@ import Foundation
 
 /// The AI-tool-junk scan must stay honest and safe: it lists nothing for a tool
 /// that isn't installed, never touches a live session's fresh temp directory,
-/// spares persistent memory, and only ever offers aged chat transcripts (files)
-/// through the Trash. These lock those guarantees against a fixture home/tmp.
+/// and never offers edit history. These lock those guarantees against a fixture
+/// home/tmp.
 struct AIJunkTests {
     // MARK: Fixtures
 
@@ -66,7 +66,6 @@ struct AIJunkTests {
             #expect(AIToolJunk.detectedTools(home: f.home).isEmpty)
             #expect(AIToolJunk.detectedTools(home: f.home).map(\.name).isEmpty)
             #expect(AIToolJunk.cacheItems(home: f.home, tmpRoot: f.tmpRoot, now: Date()).isEmpty)
-            #expect(AIToolJunk.historyItems(home: f.home, now: Date()).isEmpty)
         }
     }
 
@@ -119,53 +118,6 @@ struct AIJunkTests {
 
             let items = paths(AIToolJunk.cacheItems(home: f.home, tmpRoot: f.tmpRoot, now: Date()))
             #expect(!items.contains { $0.contains("file-history") })
-        }
-    }
-
-    // MARK: Chat transcripts
-
-    @Test func transcriptsAreExtensionAndAgeGated() throws {
-        try withFixture { f in
-            try f.dir(".claude")
-            let projects = ".claude/projects/acme"
-            let oldJSONL = try f.file("\(projects)/session-old.jsonl", ageDays: 40)   // included
-            try f.file("\(projects)/session-new.jsonl", ageDays: 5)                   // too new
-            try f.file("\(projects)/notes.txt", ageDays: 40)                          // wrong extension
-
-            let items = paths(AIToolJunk.historyItems(home: f.home, now: Date()))
-            #expect(items == [oldJSONL.standardizedFileURL.path])
-        }
-    }
-
-    @Test func memoryAndHistoryLogAreNeverTranscripts() throws {
-        try withFixture { f in
-            try f.dir(".claude")
-            let projects = ".claude/projects/acme"
-            let realTranscript = try f.file("\(projects)/session.jsonl", ageDays: 60)
-            // None of these may ever be offered, even though they're old:
-            try f.file("\(projects)/memory/index.jsonl", ageDays: 60)   // inside a `memory` dir
-            try f.file("\(projects)/memory/MEMORY.md", ageDays: 60)     // a MEMORY.md
-            try f.file(".claude/history.jsonl", ageDays: 60)            // top-level history log
-
-            let items = paths(AIToolJunk.historyItems(home: f.home, now: Date()))
-            #expect(items == [realTranscript.standardizedFileURL.path])
-        }
-    }
-
-    @Test func memoryGuardsAreCaseInsensitive() throws {
-        try withFixture { f in
-            try f.dir(".codex")
-            let sessions = ".codex/sessions"
-            // Codex's history scan has no extension filter, so this exercises the
-            // name guards themselves rather than an extension mismatch.
-            let realSession = try f.file("\(sessions)/session1.log", ageDays: 60)
-            // Case variants of the guarded names — must be spared even though a
-            // case-sensitive volume would treat them as distinct from "memory"/"MEMORY.md".
-            try f.file("\(sessions)/Memory/index.jsonl", ageDays: 60)   // capital-M dir
-            try f.file("\(sessions)/MeMoRy.MD", ageDays: 60)            // mixed-case MEMORY.md
-
-            let items = paths(AIToolJunk.historyItems(home: f.home, now: Date()))
-            #expect(items == [realSession.standardizedFileURL.path])
         }
     }
 
@@ -229,20 +181,6 @@ struct AIJunkTests {
         #expect(kind.minimumDepth == .quick)
         #expect(!kind.requiresAdmin)
         #expect(!kind.isDestructive)
-        #expect(!kind.movesToTrash)
-    }
-
-    @Test func aiHistoryIsDeepNonAdminDestructiveTrash() {
-        let kind = CleanupCategory.Kind.aiHistory
-        #expect(kind.minimumDepth == .deep)
-        #expect(!kind.requiresAdmin)
-        #expect(kind.isDestructive)
-        #expect(kind.movesToTrash)
-    }
-
-    @Test func onlyAIHistoryMovesToTrash() {
-        let trashed = CleanupCategory.Kind.allCases.filter(\.movesToTrash)
-        #expect(trashed == [.aiHistory])
     }
 
     @Test func quickScanStillHasNoAdminCategories() {

@@ -158,7 +158,7 @@ struct DashboardTileGrid: View {
                     subtitle: "of write endurance · \(DiskHealthSnapshot.condition(criticalWarning: disk.criticalWarning))",
                     symbol: diskSymbol(for: disk),
                     tint: diskWearTint(disk.wearLevel)
-                ) { drill(.storage) }
+                ) { drill(.diskHealth) }
             }
 
             DashboardTile(

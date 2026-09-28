@@ -436,9 +436,9 @@ struct DeviceCleanupTests {
 
     @Test func destructiveKindsAreEnumerated() {
         // The destructive set is consciously enumerated: irreversible-if-gone
-        // data only (device backups, and AI chat transcripts moved to the Trash).
+        // data only. AI chat transcripts are never offered at any depth.
         let destructive = CleanupCategory.Kind.allCases.filter(\.isDestructive)
-        #expect(destructive == [.deviceBackups, .aiHistory])
+        #expect(destructive == [.deviceBackups])
     }
 }
 

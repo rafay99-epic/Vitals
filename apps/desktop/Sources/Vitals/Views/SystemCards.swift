@@ -165,7 +165,9 @@ struct MemoryCard: View {
 
     private func legend(_ memory: MemorySnapshot) -> some View {
         let items = segments(memory) + [Segment(label: "Free", bytes: memory.free, color: .secondary.opacity(0.3))]
-        return LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], spacing: 4) {
+        // Fixed columns, never `.adaptive`: adaptive grids reflow mid-animation.
+        let columns = Array(repeating: GridItem(.flexible(), alignment: .leading), count: items.count)
+        return LazyVGrid(columns: columns, spacing: 4) {
             ForEach(items) { item in
                 HStack(spacing: 6) {
                     RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 9, height: 9)

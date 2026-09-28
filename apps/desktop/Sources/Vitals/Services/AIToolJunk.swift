@@ -10,8 +10,6 @@ struct AITool {
 /// tools. Lists only paths that exist, only for installed tools. Pass
 /// `home`/`tmpRoot`/`now` to test against a fixture.
 enum AIToolJunk {
-    /// AI chat transcripts older than this are offered for (destructive) removal.
-    static let historyAgeDays = 30
     /// A tmp working directory younger than this may back a live session, so it
     /// is left alone even when a tool is detected.
     static let tempAgeHours = 24
@@ -37,18 +35,6 @@ enum AIToolJunk {
         Tool.allCases
             .filter { FileManager.default.fileExists(atPath: $0.detectDir(home: home).path) }
             .flatMap { $0.cacheItems(home: home, tmpRoot: tmpRoot, now: now) }
-    }
-
-    /// Age-gated AI chat transcripts (files) from detected tools. Destructive to
-    /// remove, so gated to files older than `historyAgeDays` and never anything
-    /// that looks like persistent memory.
-    static func historyItems(
-        home: URL = FileManager.default.homeDirectoryForCurrentUser,
-        now: Date = Date()
-    ) -> [URL] {
-        Tool.allCases
-            .filter { FileManager.default.fileExists(atPath: $0.detectDir(home: home).path) }
-            .flatMap { $0.historyItems(home: home, now: now) }
     }
 
     // MARK: Tool table
@@ -139,21 +125,6 @@ enum AIToolJunk {
             }
         }
 
-        func historyItems(home: URL, now: Date) -> [URL] {
-            switch self {
-            case .claudeCode:
-                // Recursive `*.jsonl` transcripts under projects/. `history.jsonl`
-                // and the memory store live outside projects/, so they're never seen.
-                return agedFiles(under: home.appendingPathComponent(".claude/projects"),
-                                 extensions: ["jsonl"], olderThanDays: AIToolJunk.historyAgeDays, now: now)
-            case .codex:
-                return agedFiles(under: home.appendingPathComponent(".codex/sessions"),
-                                 extensions: nil, olderThanDays: AIToolJunk.historyAgeDays, now: now)
-            default:
-                return []
-            }
-        }
-
         /// Symlinks that name the *active* version (never listed): any symlink in
         /// `~/.local/bin`, plus sibling `latest`/`current` pointers next to the
         /// versions directory.
@@ -240,24 +211,3 @@ private func isVersionShaped(_ name: String) -> Bool {
     return rest.first?.isNumber == true
 }
 
-/// Regular files under `root` (recursive) older than `days`, optionally scoped
-/// by extension. Persistent memory is always spared: never a `MEMORY.md` or
-/// anything under a `memory` directory, case-insensitively like the volume.
-private func agedFiles(under root: URL, extensions: Set<String>?, olderThanDays days: Int, now: Date) -> [URL] {
-    let fm = FileManager.default
-    guard fm.fileExists(atPath: root.path) else { return [] }
-    let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
-    let keys: Set<URLResourceKey> = [.isRegularFileKey, .contentModificationDateKey]
-    guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: Array(keys),
-                                         options: [], errorHandler: { _, _ in true }) else { return [] }
-    var result: [URL] = []
-    for case let url as URL in enumerator {
-        guard let v = try? url.resourceValues(forKeys: keys), v.isRegularFile == true else { continue }
-        if let extensions, !extensions.contains(url.pathExtension.lowercased()) { continue }
-        if url.lastPathComponent.lowercased() == "memory.md" { continue }
-        if url.pathComponents.contains(where: { $0.lowercased() == "memory" }) { continue }
-        guard let modified = v.contentModificationDate, modified < cutoff else { continue }
-        result.append(url)
-    }
-    return result
-}

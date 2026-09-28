@@ -121,8 +121,12 @@ final class HistoryDatabase: @unchecked Sendable {
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);")
-        // Drop the removed per-app energy table from older files.
-        exec("DROP TABLE IF EXISTS app_energy;")
+        // v5: per-app energy logging was removed. Drop its table once and
+        // VACUUM so the file actually shrinks (a DROP alone keeps the pages).
+        if userVersion < 5 {
+            exec("DROP TABLE IF EXISTS app_energy;")
+            exec("VACUUM;")
+        }
         exec("PRAGMA user_version=5;")
     }
 
@@ -351,6 +355,14 @@ final class HistoryDatabase: @unchecked Sendable {
     }
 
     // MARK: SQLite helpers
+
+    private var userVersion: Int64 {
+        guard let db else { return 0 }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nil) == SQLITE_OK else { return 0 }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW ? sqlite3_column_int64(stmt, 0) : 0
+    }
 
     /// SQLite wants to know whether a bound string outlives the bind; TRANSIENT
     /// tells it to copy, which is always correct here.
