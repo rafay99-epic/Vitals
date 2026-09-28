@@ -51,6 +51,12 @@ final class AppEnergyModel: ObservableObject {
         timer = nil
     }
 
+    /// The view calls `stop()` on disappear; kill the timer here too so a
+    /// bypassed teardown can't leave it firing. Matches `VitalsModel`'s deinit.
+    deinit {
+        timer?.invalidate()
+    }
+
     /// Pause refreshes while the user scrolls the list (republishing mid-scroll
     /// rebuilds the rows and stutters), taking one immediately when it stops.
     func setScrolling(_ scrolling: Bool) {
