@@ -1,0 +1,116 @@
+apps/desktop/Sources/Vitals/Settings/AppSettings.swift
+  s_70840817465319::t_b4af1dcfc85512 163-164
+  s_70840817465319::t_a3f8db59483d85 80-84,87,90-91,93,100-104,107,113,115,118,130-131,138,147,154,160
+apps/desktop/Sources/Vitals/Services/SystemStats.swift
+  s_70840817465319::t_f16877d9b5cd3e 244-247,251-252
+apps/desktop/Sources/Vitals/Services/HIDSensors.swift
+  s_70840817465319::t_873f42a8ed58be 31-37,39-52,55-56,61-62,64
+apps/desktop/Sources/Vitals/App/Navigator.swift
+  s_70840817465319::t_a3f8db59483d85 10-12
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_70840817465319::t_e604ec5fafabb5 398,436,473,493,517,554,571,597,631,720,777
+  s_70840817465319::t_a3f8db59483d85 395,433,470,490,514,551,568,593,627-628,717,774
+apps/desktop/Sources/Vitals/Views/CleanupView.swift
+  s_70840817465319::t_a3f8db59483d85 6,66,70
+apps/desktop/Sources/Vitals/Updates/Updater.swift
+  s_70840817465319::t_acfe229eee1a20 3,97-101
+  s_70840817465319::t_b4af1dcfc85512 61-63,66,68
+  s_70840817465319::t_a3f8db59483d85 8-9,57-58
+  s_70840817465319::t_146b2099d5bd5d 102-123
+apps/desktop/Sources/Vitals/Views/DiskHealthCards.swift
+  s_70840817465319::t_a3f8db59483d85 99
+apps/desktop/Sources/Vitals/App/MenuBarController.swift
+  s_70840817465319::t_146b2099d5bd5d 10,17,25,31-34,37-38,40
+  s_70840817465319::t_a3f8db59483d85 59-60,113-115
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_70840817465319::t_a3f8db59483d85 11-12,125,341
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_70840817465319::t_a3f8db59483d85 11,140,230-231,266
+apps/desktop/Sources/Vitals/Views/PerformanceHistoryCard.swift
+  s_70840817465319::t_a3f8db59483d85 8-9
+apps/desktop/Sources/Vitals/Services/Battery.swift
+  s_70840817465319::t_6a2d4c2b9cde00 90-92
+apps/desktop/Sources/Vitals/Views/MenuBarHost.swift
+  s_70840817465319::t_a3f8db59483d85 9-10,47-48
+apps/desktop/Sources/Vitals/Services/SensorSampler.swift
+  s_70840817465319::t_4814cb9566b145 9-10
+  s_70840817465319::t_29c0314e950be9 37-38,41,43-44,49-88
+apps/desktop/Sources/Vitals/Views/Components.swift
+  s_70840817465319::t_30563f0f5e2515 305-307,327
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_70840817465319::t_a3f8db59483d85 7-8,86-92,95-96,99
+  s_70840817465319::t_b4af1dcfc85512 102
+apps/desktop/Sources/Vitals/Views/SensorsView.swift
+  s_70840817465319::t_a3f8db59483d85 19-20
+apps/desktop/Tests/VitalsTests/SleepWakeTests.swift
+  s_70840817465319::t_5ec0ed1eda1e79 51-53,56-57,61
+apps/desktop/Sources/Vitals/App/ObserveChanges.swift
+  s_70840817465319::t_a3f8db59483d85 1-40
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_70840817465319::t_a3f8db59483d85 74,384
+apps/desktop/Sources/Vitals/App/VitalsApp.swift
+  s_70840817465319::t_a3f8db59483d85 47-50
+apps/desktop/Sources/Vitals/Views/SystemCards.swift
+  s_70840817465319::t_a3f8db59483d85 6,38,102,213-214,332
+apps/desktop/Sources/Vitals/Services/GPUSensor.swift
+  s_70840817465319::t_de815807fc4f09 102-104
+  s_70840817465319::t_aa5ac226b903e4 48-53,55-60,63-67,87,91-93,97,105,107,110
+apps/desktop/Sources/Vitals/Views/NetworkView.swift
+  s_70840817465319::t_a3f8db59483d85 12,98-99
+apps/desktop/Sources/Vitals/Views/CPUView.swift
+  s_70840817465319::t_a3f8db59483d85 9,25,64,105-106
+apps/desktop/Sources/Vitals/Views/DashboardBento.swift
+  s_70840817465319::t_a3f8db59483d85 17,87-88
+apps/desktop/Sources/Vitals/Views/MenuBarPanel.swift
+  s_70840817465319::t_a3f8db59483d85 7-9
+apps/desktop/Sources/Vitals/Views/StorageView.swift
+  s_70840817465319::t_a3f8db59483d85 6
+apps/desktop/Sources/Vitals/Views/MemoryView.swift
+  s_70840817465319::t_a3f8db59483d85 33,99,138,182
+apps/desktop/Sources/Vitals/Services/NetworkStats.swift
+  s_70840817465319::t_d4de7452f8e7b2 89-93,96-101,161,276
+  s_70840817465319::t_11b5ebddf00486 144-148,160
+apps/desktop/Sources/Vitals/Views/TemperatureCards.swift
+  s_70840817465319::t_a3f8db59483d85 7,37
+apps/desktop/Sources/Vitals/Views/GPUView.swift
+  s_70840817465319::t_a3f8db59483d85 11,72,208
+apps/desktop/Sources/Vitals/Views/CleanupDevViews.swift
+  s_70840817465319::t_a3f8db59483d85 10
+apps/desktop/Sources/Vitals/Models/CleanupModel.swift
+  s_70840817465319::t_b4af1dcfc85512 56,222,225
+  s_70840817465319::t_a3f8db59483d85 42-51,54,215-220
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_70840817465319::t_30563f0f5e2515 83
+  s_70840817465319::t_27f981f64aafcc 93,246-263
+  s_70840817465319::t_a3f8db59483d85 57-58,62,68-70,272,331-332,419
+  s_70840817465319::t_b8ddfc5d9b5002 404-409
+  s_70840817465319::t_2c82d5034bd517 264-266
+apps/desktop/Sources/Vitals/Models/HistoryModel.swift
+  s_70840817465319::t_a3f8db59483d85 44-50
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_70840817465319::t_a3f8db59483d85 6-7,35-36,38-42,47-48,51,53-54,57-59,62,67,70,74,79,85,90,93
+  s_70840817465319::t_146b2099d5bd5d 188-190,192-194
+  s_70840817465319::t_27f981f64aafcc 122-123,125,140-147
+  s_70840817465319::t_769499e4e3d26d 368-371,379,411-412
+  s_70840817465319::t_0b68b047ade58a 91-92,121,283-285,287-290,292-301,303-305,309,312-313,316
+  s_70840817465319::t_4814cb9566b145 323,548,561,570
+  s_70840817465319::t_b4af1dcfc85512 43-45,65-66,82,88,116-117,120,124,128,134,136,177,180-182
+  s_70840817465319::t_29c0314e950be9 157-168,308,315,317
+  s_70840817465319::t_b8ddfc5d9b5002 171-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7499bb815429ad8929ecfea4cdc5d811f6c9fe04",
+  "prompts": {},
+  "sessions": {
+    "s_70840817465319": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05bb6853-7761-4ba6-bb5b-fe82a241e45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
