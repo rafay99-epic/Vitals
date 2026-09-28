@@ -1,0 +1,133 @@
+apps/desktop/Sources/Vitals/Services/SMC.swift
+  s_70840817465319::t_1169e20f48a616 5-7
+apps/desktop/Tests/VitalsTests/HistoryDatabaseTests.swift
+  s_70840817465319::t_0ae7c843bcd874 7-8,193,208,225,231,240-246
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_70840817465319::t_c116c5f482aaf4 169
+  s_70840817465319::t_ecd17d0e662a33 10-11,26,67,72-73,217,225,336
+  s_70840817465319::t_961fcce911373f 82
+  s_70840817465319::t_3130f0c010df1c 356
+apps/desktop/Sources/Vitals/Views/SensorsView.swift
+  s_70840817465319::t_569f3d277abad1 3-4
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_70840817465319::t_40180804a9bed5 5-7,68,77-78,85,122,139-140,507,543
+  s_70840817465319::t_45910b02f8a1bc 117,119,123,143,448,458,606,783,812
+apps/desktop/Sources/Vitals/Updates/Updater.swift
+  s_70840817465319::t_45319b7f89fa64 6
+  s_70840817465319::t_8ed06532ebe1b2 369,380,419,453,455,480
+apps/desktop/Sources/Vitals/Views/SystemCards.swift
+  s_70840817465319::t_ecc2ca055cdcc9 4,36,47,82-86
+  s_70840817465319::t_f6f699b7d5b77d 211
+apps/desktop/Tests/VitalsTests/SleepWakeTests.swift
+  s_70840817465319::t_84aeaca1ddca62 16
+apps/desktop/Sources/Vitals/Services/FanHelperRetirement.swift
+  s_70840817465319::t_1169e20f48a616 1-25,27,30-32,39-57
+  s_70840817465319::t_1b07a2705f242f 26,28-29,33-38
+apps/desktop/Sources/Vitals/Services/SensorSampler.swift
+  s_70840817465319::t_a3cbb86764c3e1 52,56,59,82
+apps/desktop/Sources/Vitals/Views/DiskHealthCards.swift
+  s_70840817465319::t_f6f699b7d5b77d 125-129
+apps/desktop/Sources/Vitals/Services/DataHome.swift
+  s_70840817465319::t_242e62cfa7fe92 3-4,7-9,20,22,27,30-31
+apps/desktop/Sources/Vitals/App/VitalsApp.swift
+  s_70840817465319::t_efd2cef94ceec0 5,7-14,29-33,35-39,44,53,57
+apps/desktop/Sources/Vitals/Services/PowerState.swift
+  s_70840817465319::t_a0181708ebf4fd 5-6,8,15,17-19,21,24
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_70840817465319::t_66701d0b2d8de5 4,6-8,10,35,38-40,42-43,51,75,130-132,155-156,159,315-319,321,323,327,332
+apps/desktop/Sources/Vitals/Views/Components.swift
+  s_70840817465319::t_40473a50fbe250 125-126,132,260,262
+apps/desktop/Sources/Vitals/Services/AlertLog.swift
+  s_70840817465319::t_242e62cfa7fe92 3,10-11
+apps/desktop/Sources/Vitals/Views/MenuBarHost.swift
+  s_70840817465319::t_4ed0df1be8220d 4-7,45,59,61,64-67
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_70840817465319::t_5bf52e66e43904 20,30,33-35,38,294,296-298,301-327,329-330,333-336,342
+apps/desktop/Sources/Vitals/Settings/AppSettings.swift
+  s_70840817465319::t_c82850024e613f 84-85,87-88,104-105,113,115-116,119-121,128,184,217,246-247,250,262,264-265
+apps/desktop/Sources/Vitals/Models/CleanupModel.swift
+  s_70840817465319::t_40e3093ae94d9f 4-5,7,27
+apps/desktop/Sources/Vitals/Views/CleanupView.swift
+  s_70840817465319::t_b8e16e00c05f20 3-4,9-10,51
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_70840817465319::t_125d5990ebd0d4 420
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_70840817465319::t_4e0195e964fc76 123,149,151-152,339,532-534,545-547,552-555
+  s_70840817465319::t_bc56f467cfcd1f 169-172,436-438,458
+apps/desktop/Sources/Vitals/Views/StorageView.swift
+  s_70840817465319::t_b1903c4fdf5715 3-4,20
+apps/desktop/Sources/Vitals/Services/AppInventory.swift
+  s_70840817465319::t_33f3a8e6ffcaf4 55,79,84
+  s_70840817465319::t_afedd1c2fe1a33 146-147,151-157,161,163
+  s_70840817465319::t_ff070ac54f0435 50
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_70840817465319::t_33f3a8e6ffcaf4 71-72,93,140,169,205,316,342,458,480,502-506,624
+apps/desktop/Tests/VitalsTests/VersionTests.swift
+  s_70840817465319::t_1b07a2705f242f 36-46
+apps/desktop/Sources/Vitals/Services/Log.swift
+  s_70840817465319::t_1e1d492362ee7e 156,175,177-180,205-206,229
+apps/desktop/Sources/Vitals/App/Channel.swift
+  s_70840817465319::t_d1a9cf34153073 23
+apps/desktop/Tests/VitalsTests/ChannelTests.swift
+  s_70840817465319::t_d1a9cf34153073 41-42
+apps/desktop/Tests/VitalsTests/GPUSensorTests.swift
+  s_70840817465319::t_d1a9cf34153073 4-5,8
+  s_70840817465319::t_9c440eeff23030 12-13
+apps/desktop/Sources/Vitals/App/MenuBarController.swift
+  s_70840817465319::t_88ebd74ac49e9e 5-9,20,26-27,33-34,67-68,92-93,140,154-155
+apps/desktop/Sources/Vitals/Services/DiskCleaner.swift
+  s_70840817465319::t_ec3a6cba9f705b 368,374,377
+apps/desktop/Sources/Vitals/Views/ProblemReportView.swift
+  s_70840817465319::t_7c59f35532536d 66,100
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_70840817465319::t_33f3a8e6ffcaf4 133-134,140,214,239,403
+apps/desktop/Sources/Vitals/Services/PowerAssertions.swift
+  s_70840817465319::t_6f90488800186a 2,79-139
+apps/desktop/Sources/Vitals/App/Main.swift
+  s_70840817465319::t_af797384252914 12,15-16
+apps/desktop/Sources/Vitals/Services/ProblemReport.swift
+  s_70840817465319::t_7c59f35532536d 21-22,44,53
+apps/desktop/Sources/Vitals/Views/CleanupDevViews.swift
+  s_70840817465319::t_2f9717da31fffc 4-5
+apps/desktop/Sources/Vitals/Views/Sparkline.swift
+  s_70840817465319::t_540c041c1d4d7d 1-57
+apps/desktop/Sources/Vitals/Views/DashboardBento.swift
+  s_70840817465319::t_f6f699b7d5b77d 168
+  s_70840817465319::t_540c041c1d4d7d 268
+  s_70840817465319::t_3130f0c010df1c 170,292,295-296
+apps/desktop/Tests/VitalsTests/PowerThrottleTests.swift
+  s_70840817465319::t_c6f432d9889e3d 5-6
+  s_70840817465319::t_84aeaca1ddca62 53
+apps/desktop/Tests/VitalsTests/DirectorySizeTests.swift
+  s_70840817465319::t_4f40034bd76b6d 1-4,22-23
+  s_70840817465319::t_cf4af3612dfac4 5-21
+apps/desktop/Sources/Vitals/Services/AppUninstaller.swift
+  s_70840817465319::t_882a82e96c08f2 115-116
+  s_70840817465319::t_86179f8e4dad55 94-95,117-118,168-169
+apps/desktop/Sources/Vitals/Services/HistoryReader.swift
+  s_70840817465319::t_242e62cfa7fe92 52-53,70,81-82,113
+apps/desktop/Sources/Vitals/Services/LeftoverScanner.swift
+  s_70840817465319::t_ec3a6cba9f705b 549,556-557,599,605,608
+apps/desktop/Tests/VitalsTests/CleanupTests.swift
+  s_70840817465319::t_d1a9cf34153073 72,82,88,101
+apps/desktop/Sources/Vitals/Services/PrivilegedShell.swift
+  s_70840817465319::t_f09194646c5ca8 33
+apps/desktop/Sources/Vitals/Views/MenuBarPanel.swift
+  s_70840817465319::t_8ebabec66aafeb 4-5,237-252,254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7ff06f85a532f6629c85c0fd2e249bb69ab3001c",
+  "prompts": {},
+  "sessions": {
+    "s_70840817465319": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05bb6853-7761-4ba6-bb5b-fe82a241e45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
