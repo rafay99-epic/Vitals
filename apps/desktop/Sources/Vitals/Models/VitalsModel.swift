@@ -112,10 +112,32 @@ final class VitalsModel {
     /// change made while asleep can't resume sampling before wake.
     @ObservationIgnored private var isAsleep = false
     @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var occlusionObserver: NSObjectProtocol?
+    @ObservationIgnored private var menuBarPanelVisible = false
 
     /// Call when the main window opens/closes (ContentView appear/disappear).
-    func setMainWindowVisible(_ visible: Bool) { mainWindowVisible = visible }
-    func setMainWindow(_ window: NSWindow?) { mainWindow = window }
+    func setMainWindowVisible(_ visible: Bool) {
+        mainWindowVisible = visible
+        publishChartsIfVisible()
+    }
+
+    func setMainWindow(_ window: NSWindow?) {
+        mainWindow = window
+        occlusionObserver.map(NotificationCenter.default.removeObserver)
+        occlusionObserver = window.map {
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification, object: $0, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.publishChartsIfVisible() }
+            }
+        }
+    }
+
+    /// Call when the menu-bar dropdown opens/closes; its sparklines read charts.
+    func setMenuBarPanelVisible(_ visible: Bool) {
+        menuBarPanelVisible = visible
+        publishChartsIfVisible()
+    }
 
     /// Open and actually on screen: not minimized, hidden, fully covered, or on
     /// another Space. Checked every tick.
@@ -183,6 +205,7 @@ final class VitalsModel {
         samplingTask?.cancel()
         samplingTask = nil
         sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        occlusionObserver.map(NotificationCenter.default.removeObserver)
     }
 
     /// Floor of 0.5 s: a corrupted UserDefaults value of 0 would divide by zero below.
@@ -240,6 +263,14 @@ final class VitalsModel {
         if history.count > maxHistory {
             history.removeFirst(history.count - maxHistory)
         }
+        publishChartsIfVisible()
+    }
+
+    /// Charts cost ~60 MB of transient GPU memory per redraw, and a covered or
+    /// minimized window still redraws. So `chartHistory` only moves while a chart
+    /// can be seen; `history` keeps recording, and the next reveal catches up.
+    private func publishChartsIfVisible() {
+        guard windowOnScreen || menuBarPanelVisible else { return }
         chartHistory = history.thinned(to: Self.maxChartPoints)
     }
 

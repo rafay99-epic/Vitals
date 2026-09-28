@@ -115,10 +115,12 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         popover.contentViewController = NSHostingController(rootView: panel)
         self.popover = popover
         button.highlight(true)
+        model.setMenuBarPanelVisible(true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
     func popoverDidClose(_ notification: Notification) {
+        model.setMenuBarPanelVisible(false)
         statusItem?.button?.highlight(false)
         popover = nil
     }

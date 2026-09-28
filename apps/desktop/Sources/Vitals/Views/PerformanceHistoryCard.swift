@@ -35,13 +35,15 @@ struct PerformanceHistoryCard: View {
         }
     }
 
-    /// GPU/Power/Network only when this Mac exposes a reading for them.
+    /// GPU/Power/Network only when the chart has data for them. Derived from
+    /// `chartHistory` alone, so a hidden window's frozen chart stays frozen instead
+    /// of redrawing whenever a live reading changes.
     private var available: [Metric] {
         Metric.allCases.filter { metric in
             switch metric {
-            case .gpu: return model.gpu != nil
-            case .power: return model.power != nil
-            case .network: return model.network != nil
+            case .gpu: return chartHistory.contains { $0.gpuUsage != nil }
+            case .power: return chartHistory.contains { $0.totalWatts != nil }
+            case .network: return chartHistory.contains { $0.netInPerSec != nil }
             default: return true
             }
         }
