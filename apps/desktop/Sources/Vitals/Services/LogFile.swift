@@ -96,3 +96,24 @@ final class LogFile {
         try? handle?.close()
     }
 }
+
+extension LogFile {
+    /// Both log files (rotated first) as raw text, plus the JSONL entries in it.
+    /// Crash backtraces are plain text, so they appear in `raw` but not
+    /// `entries`. Blocking: call off the main thread.
+    static func readAll() -> (raw: String, entries: [Log.Entry]) {
+        let raw = [DataHome.logPrevious, DataHome.logFile]
+            .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+        let entries = raw.split(separator: "\n").compactMap { line in
+            try? decoder.decode(Log.Entry.self, from: Data(line.utf8))
+        }
+        return (raw, entries)
+    }
+
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+}

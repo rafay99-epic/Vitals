@@ -208,29 +208,29 @@ struct ContentView: View {
         Group {
             switch section {
             case .overview:
-                DashboardView(isActive: true, drill: drill)
+                DashboardView(drill: drill)
             case .cpu:
                 CPUView()
             case .gpu:
-                GPUView(isActive: true)
+                GPUView()
             case .memory:
-                MemoryView(isActive: true)
+                MemoryView()
             case .battery:
                 BatteryView()
             case .network:
-                NetworkView(isActive: true)
+                NetworkView()
             case .sensors:
                 SensorsView()
             case .history:
-                HistoryView(model: historyModel, isActive: true)
+                HistoryView(model: historyModel)
             case .storage:
                 StorageView()
             case .cleanup:
-                CleanupView(model: cleanupModel, isActive: true)
+                CleanupView(model: cleanupModel)
             case .applications:
-                AppsView(model: appsModel, isActive: true)
+                AppsView(model: appsModel)
             case .settings:
-                SettingsView(isActive: true)
+                SettingsView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -330,11 +330,6 @@ private struct HeaderUpdateButton: View {
 struct DashboardView: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
-    /// True only while the Dashboard is the visible section. The live history
-    /// chart rebuilds its marks from `chartHistory` on every tick — gating it
-    /// (and the hover lookup) on `isActive` keeps a kept-alive background
-    /// dashboard from paying that cost every sample, mirroring GPU/Battery.
-    let isActive: Bool
     /// Jump to a Monitor section (tap a tile to drill into its detail).
     let drill: (NavSection) -> Void
 
@@ -371,7 +366,7 @@ struct DashboardView: View {
             UpdateBanner()
             DashboardHealthHero(drill: drill)
             DashboardTileGrid(drill: drill)
-            PerformanceHistoryCard(isActive: isActive)
+            PerformanceHistoryCard()
             HStack(alignment: .top, spacing: 16) {
                 PowerCard()
                 FanCard()

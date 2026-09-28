@@ -10,17 +10,12 @@ import Charts
 /// smoothed or invented.
 struct NetworkView: View {
     @Environment(VitalsModel.self) private var model
-    /// True only while Network is the visible segment. Gates the history chart so
-    /// it never rebuilds marks in the background (same rule as GPU/Memory).
-    let isActive: Bool
 
     var body: some View {
         MetricScroll {
             if let network = model.network {
                 NetworkHeroCard(network: network)
-                // Stays mounted (no 50–150 ms re-layout on return); its data goes
-                // empty when inactive so it stops observing per-tick updates.
-                NetworkHistoryCard(isActive: isActive)
+                NetworkHistoryCard()
                 NetworkInterfacesCard(links: network.links, primaryName: network.primaryInterfaceName)
                 if let wifi = network.wifi {
                     WiFiCard(wifi: wifi)
@@ -97,14 +92,7 @@ private struct NetworkHeroCard: View {
 private struct NetworkHistoryCard: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
-    /// True only while Network is showing. When false `chartHistory` resolves to
-    /// empty, so the `Chart` builds no marks and stops reading `model.chartHistory`
-    /// — no observation, no per-tick re-render while another tab is up.
-    let isActive: Bool
-
-    private var chartHistory: [VitalsModel.Sample] {
-        isActive ? model.chartHistory : []
-    }
+    private var chartHistory: [VitalsModel.Sample] { model.chartHistory }
 
     var body: some View {
         // One pass over the series for the Y ceiling, hoisted out of the per-sample

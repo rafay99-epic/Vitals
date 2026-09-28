@@ -49,9 +49,7 @@ enum CrashReporter {
     /// de-duped with an ack count, and an unclean exit is judged once (the
     /// previous session is only ever evaluated the launch after it ends).
     static func reportPreviousRunIfNeeded() {
-        let combined = [DataHome.logPrevious, DataHome.logFile]
-            .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
-            .joined(separator: "\n")
+        let (combined, entries) = LogFile.readAll()
         guard !combined.isEmpty else { return }
 
         // 1. Fatal-signal crash (plain-text marker from the C handler).
@@ -67,7 +65,7 @@ enum CrashReporter {
 
         // 2. Unclean exit with no crash (force quit, kill -9, power loss): the
         //    previous session has lines but never logged a clean shutdown.
-        if let previous = previousSession(in: combined), !previous.clean {
+        if let previous = previousSession(in: entries), !previous.clean {
             Log.notice(.app, "Previous session \(previous.id) didn't exit cleanly — force quit, kill, or power loss (no crash was recorded).")
         }
     }
@@ -83,12 +81,10 @@ enum CrashReporter {
 
     /// The most recent session that isn't the current one, and whether it logged
     /// a clean shutdown.
-    private static func previousSession(in text: String) -> (id: String, clean: Bool)? {
+    private static func previousSession(in entries: [Log.Entry]) -> (id: String, clean: Bool)? {
         var order: [String] = []
         var cleanBySession: [String: Bool] = [:]
-        for line in text.split(separator: "\n") {
-            guard let data = line.data(using: .utf8),
-                  let entry = try? Self.decoder.decode(Log.Entry.self, from: data) else { continue }
+        for entry in entries {
             if cleanBySession[entry.session] == nil {
                 order.append(entry.session)
                 cleanBySession[entry.session] = false
@@ -99,9 +95,4 @@ enum CrashReporter {
         return (previous, cleanBySession[previous] ?? false)
     }
 
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
 }

@@ -277,7 +277,7 @@ final class VitalsModel {
         if history.count > maxHistory {
             history.removeFirst(history.count - maxHistory)
         }
-        chartHistory = Self.downsample(history, to: Self.maxChartPoints)
+        chartHistory = history.thinned(to: Self.maxChartPoints)
     }
 
     /// Kicks off one sample on the sampler's executor and publishes the result
@@ -516,15 +516,6 @@ final class VitalsModel {
     private func alert(title: String, body: String, id: String) {
         notifications.send(title: title, body: body, id: id)
         AlertLog.record(message: "\(title). \(body)", at: Date())
-    }
-
-    /// Evenly thins `samples` to at most `maxCount` points, always keeping
-    /// the first and the newest. Indices step by more than one whenever
-    /// thinning happens, so no sample (or id) repeats.
-    static func downsample(_ samples: [Sample], to maxCount: Int) -> [Sample] {
-        guard samples.count > maxCount, maxCount > 1 else { return samples }
-        let stride = Double(samples.count - 1) / Double(maxCount - 1)
-        return (0..<maxCount).map { samples[Int((Double($0) * stride).rounded())] }
     }
 
     private static func average(of sensors: [Sensor], kind: Sensor.Kind) -> Double? {

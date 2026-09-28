@@ -107,7 +107,7 @@ enum AppUninstaller {
     /// `zap` stanza declares (Mole-style thoroughness, but brew-curated). The
     /// token is validated to brew's lowercase-alnum-hyphen shape.
     static func homebrewUninstall(cask: String) -> Bool {
-        guard let brew = brewExecutable(),
+        guard let brew = LeftoverScanner.brewExecutable(),
               cask.range(of: "^[a-z0-9][a-z0-9-]*$", options: .regularExpression) != nil else { return false }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: brew)
@@ -149,14 +149,6 @@ enum AppUninstaller {
             any = true
         }
         return any ? lines.joined(separator: "\n") : nil
-    }
-
-    private static func brewExecutable() -> String? {
-        for path in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
-        where FileManager.default.isExecutableFile(atPath: path) {
-            return path
-        }
-        return nil
     }
 
     /// Best-effort: tell launchd to stop a user launch agent before its plist

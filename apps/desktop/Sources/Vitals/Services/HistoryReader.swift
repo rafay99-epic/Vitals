@@ -57,14 +57,7 @@ enum HistoryReader {
     /// final exact down-sample (keeping first + last).
     static func load(range: HistoryRange, now: Date, maxPoints: Int = 600) -> [HistorySample] {
         let raw = HistoryDatabase.shared.samples(range: range, now: now, maxPoints: maxPoints)
-        return downsample(raw, to: maxPoints)
-    }
-
-    /// Even thinning to at most `maxCount`, keeping first and last.
-    private static func downsample(_ samples: [HistorySample], to maxCount: Int) -> [HistorySample] {
-        guard samples.count > maxCount, maxCount > 1 else { return samples }
-        let stride = Double(samples.count - 1) / Double(maxCount - 1)
-        return (0..<maxCount).map { samples[Int((Double($0) * stride).rounded())] }
+        return raw.thinned(to: maxPoints)
     }
 
     /// Shared with `HistoryExport`.

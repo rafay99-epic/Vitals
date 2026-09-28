@@ -70,11 +70,11 @@ enum LogLevel: Int, CaseIterable, Comparable, Codable, Identifiable {
 /// --predicate 'subsystem == "…vitals"'` can filter by area.
 enum LogCategory: String, CaseIterable, Identifiable, Codable {
     case app, sensors, smc, fan, sampler, updater, history
-    case cleanup, uninstall, storage, processes, widgets, settings, net
+    case cleanup, uninstall, settings, net
 
     var id: String { rawValue }
 
-    /// Pretty name for the console's category chip / filter menu.
+    /// Pretty name, used in the exported problem report.
     var title: String {
         switch self {
         case .app:        return "App"
@@ -86,25 +86,18 @@ enum LogCategory: String, CaseIterable, Identifiable, Codable {
         case .history:    return "History"
         case .cleanup:    return "Cleanup"
         case .uninstall:  return "Uninstall"
-        case .storage:    return "Storage"
-        case .processes:  return "Processes"
-        case .widgets:    return "Widgets"
         case .settings:   return "Settings"
         case .net:        return "Network"
         }
     }
 }
 
-/// The app's structured logger. Deliberately a free `enum` of statics, not an
-/// injected object: hardware services live far from the UI and any of them — on
-/// any thread, even the root fan daemon in its own process — can call
-/// `Log.error(.smc, "…")` without plumbing a dependency through. It writes to
-/// three places, cheapest first:
-///   1. **Unified logging** (`os.Logger`) — always, when the level passes. Near
-///      free, integrates with Console.app and the `log` CLI.
-///   2. **A rotating file** (`LogFile`, `~/.vitals/vitals.log`) so the
-///      problem-report flow can attach the recent tail with no extra tooling.
-///   3. **An in-memory sink** (set by `LogStore`) that feeds the in-app console.
+/// The app's structured logger: a free `enum` of statics, so any service on any
+/// thread can call `Log.error(.smc, "…")` without plumbing a dependency. It
+/// writes to two places:
+///   1. **Unified logging** (`os.Logger`), filterable in Console.app and `log`.
+///   2. **A rotating file** (`LogFile`, `~/.vitals/logs/vitals.log`) that the
+///      problem report attaches.
 ///
 /// Honesty over decoration applies to errors too: a swallowed failure leaves no
 /// trace, so the services route their `catch`/`try?` failures here instead.

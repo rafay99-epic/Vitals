@@ -115,9 +115,6 @@ struct AppIconView: View {
 /// leftover-aware uninstall that moves everything to the Trash.
 struct AppsView: View {
     @Bindable var model: AppsModel
-    /// True only while Applications is the visible tab. The view stays mounted,
-    /// so the scan starts on activation rather than on appear.
-    var isActive: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -132,8 +129,8 @@ struct AppsView: View {
                 .opacity(0.5)
             footer
         }
-        .onChange(of: isActive, initial: true) { _, active in
-            if active && model.apps.isEmpty { model.refresh() }
+        .onAppear {
+            if model.apps.isEmpty { model.refresh() }
         }
         .sheet(item: $model.staged) { staged in
             UninstallConfirmationSheet(model: model, staged: staged)

@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import Vitals
 
-/// `VitalsModel.downsample` thins history for chart rendering; it must
+/// `Array.thinned(to:)` thins history for chart rendering; it must
 /// preserve order and endpoints and never duplicate samples (duplicate
 /// ids break SwiftUI ForEach).
 @MainActor
@@ -21,28 +21,28 @@ struct DownsampleTests {
 
     @Test func smallInputPassesThroughUntouched() {
         let input = samples(100)
-        #expect(VitalsModel.downsample(input, to: 400).count == 100)
+        #expect(input.thinned(to: 400).count == 100)
     }
 
     @Test func thinsToRequestedCount() {
-        #expect(VitalsModel.downsample(samples(1800), to: 400).count == 400)
+        #expect(samples(1800).thinned(to: 400).count == 400)
     }
 
     @Test func keepsFirstAndNewestSample() {
         let input = samples(1800)
-        let thinned = VitalsModel.downsample(input, to: 400)
+        let thinned = input.thinned(to: 400)
         #expect(thinned.first?.id == input.first?.id)
         #expect(thinned.last?.id == input.last?.id)
     }
 
     @Test func neverDuplicatesSamples() {
-        let thinned = VitalsModel.downsample(samples(500), to: 400)
+        let thinned = samples(500).thinned(to: 400)
         let ids = Set(thinned.map(\.id))
         #expect(ids.count == thinned.count)
     }
 
     @Test func staysInChronologicalOrder() {
-        let thinned = VitalsModel.downsample(samples(1000), to: 64)
+        let thinned = samples(1000).thinned(to: 64)
         let times = thinned.map { $0.time }
         #expect(times == times.sorted())
     }

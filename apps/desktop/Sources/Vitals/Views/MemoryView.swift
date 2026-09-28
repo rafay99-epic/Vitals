@@ -8,18 +8,10 @@ import Charts
 /// heaviest memory consumers. Every number is a real reading: an idle rate shows
 /// 0/s, an absent figure shows "—", nothing is smoothed or invented.
 struct MemoryView: View {
-    /// True only while Memory is the visible segment. Gates the history chart so
-    /// it never rebuilds marks in the background (same rule as GPU/Battery).
-    let isActive: Bool
-
     var body: some View {
         MetricScroll {
             MemoryCard()
-            // Only mounted while active, so the chart isn't rebuilt every tick in
-            // the background. Memory always reads, so no "contains" guard needed.
-            if isActive {
-                MemoryUsageHistoryCard()
-            }
+            MemoryUsageHistoryCard()
             MemoryCompositionCard()
             MemoryActivityCard()
             TopMemoryProcessesCard()

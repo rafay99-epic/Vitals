@@ -1,19 +1,11 @@
 import SwiftUI
 import Charts
 
-/// One "over time" chart for the whole dashboard, with a Temp/CPU/GPU/Memory
-/// segmented switcher. Replaces the four separate history cards — only the
-/// selected series renders, so the dashboard keeps a single live chart.
+/// The Overview's one live chart, with a metric switcher. Only the selected
+/// series renders.
 struct PerformanceHistoryCard: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
-    /// True only while the Dashboard is visible. When false, `chartHistory`
-    /// resolves to empty so the `Chart` builds no marks and — crucially —
-    /// doesn't read `model.chartHistory`/`model.memory`, so it stops
-    /// re-rendering on every sample tick while another tab is up. The `Chart`
-    /// view itself stays mounted (no 50–150 ms re-layout on return); only its
-    /// data goes empty.
-    let isActive: Bool
     @State private var metric: Metric = .temp
     @State private var hoverTime: Date?
     @Namespace private var indicator
@@ -55,14 +47,7 @@ struct PerformanceHistoryCard: View {
         }
     }
 
-    /// The downsampled series the chart draws — emptied when this tab isn't
-    /// visible so the marks, the y-domain, and the hover lookup all collapse to
-    /// nothing and the chart stops subscribing to per-tick model updates. The
-    /// ternary short-circuits, so `model.chartHistory` is never read while
-    /// inactive (no observation → no re-render).
-    private var chartHistory: [VitalsModel.Sample] {
-        isActive ? model.chartHistory : []
-    }
+    private var chartHistory: [VitalsModel.Sample] { model.chartHistory }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -273,10 +258,8 @@ struct PerformanceHistoryCard: View {
             let rates = chartHistory.flatMap { [$0.netInPerSec, $0.netOutPerSec].compactMap { $0 } }
             return 0...max(((rates.max() ?? 0) / 1_000_000) * 1.15, 0.1)
         case .memory:
-            // Only read `model.memory` while active — otherwise the chart would
-            // re-render every tick (memory publishes each sample) for nothing.
-            let total = isActive ? (model.memory?.total ?? 1) : 1
-            return 0...max(gigabytes(total), 1)
+            // The constant physical total, not `model.memory`, which changes every tick.
+            return 0...max(gigabytes(model.memoryTotal), 1)
         case .temp:
             let temps = chartHistory.flatMap { [$0.averageCPU, $0.hottestCPU] }.map(settings.display)
             guard let lo = temps.min(), let hi = temps.max() else { return settings.display(30)...settings.display(90) }

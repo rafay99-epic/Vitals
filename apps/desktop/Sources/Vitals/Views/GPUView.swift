@@ -9,17 +9,12 @@ import Charts
 /// the honesty rule.
 struct GPUView: View {
     @Environment(VitalsModel.self) private var model
-    /// True only while the GPU tab is the visible one. The tab stays mounted for
-    /// instant switching, so without this the history chart would rebuild its
-    /// marks on every sample tick in the background — gating it keeps idle cost
-    /// to zero when another tab is up.
-    let isActive: Bool
 
     var body: some View {
         MetricScroll {
             if let gpu = model.gpu {
                 GPUHeroCard(gpu: gpu)
-                GPUUtilizationCard(gpu: gpu, isActive: isActive)
+                GPUUtilizationCard(gpu: gpu)
                 GPUMemoryCard(gpu: gpu)
                 GPUPowerCard()
             } else {
@@ -71,7 +66,6 @@ private struct GPUHeroCard: View {
 private struct GPUUtilizationCard: View {
     @Environment(VitalsModel.self) private var model
     let gpu: GPUSnapshot
-    let isActive: Bool
 
     var body: some View {
         SectionCard(title: "Utilization", symbol: "chart.bar.fill") {
@@ -82,8 +76,7 @@ private struct GPUUtilizationCard: View {
                     meterRow("Renderer", gpu.rendererUtilization, tint: .indigo)
                     meterRow("Tiler", gpu.tilerUtilization, tint: .teal)
                 }
-                // Only build the chart while this tab is showing — see GPUView.
-                if isActive, model.chartHistory.contains(where: { $0.gpuUsage != nil }) {
+                if model.chartHistory.contains(where: { $0.gpuUsage != nil }) {
                     Divider()
                     Deferred { history }.frame(height: 150)
                 }

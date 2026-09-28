@@ -10,11 +10,10 @@ import AppKit
 struct HistoryView: View {
     @Environment(AppSettings.self) private var settings
     @Bindable var model: HistoryModel
-    let isActive: Bool
 
     typealias Metric = HistoryMetric
 
-    private struct ReloadKey: Equatable { let active: Bool; let range: HistoryRange; let logging: Bool }
+    private struct ReloadKey: Equatable { let range: HistoryRange; let logging: Bool }
 
     var body: some View {
         MetricScroll {
@@ -24,13 +23,9 @@ struct HistoryView: View {
             if !model.alertEvents.isEmpty {
                 AlertHistoryCard(events: model.alertEvents)
             }
-            // Export lives outside the samples gate: per-app energy is logged
-            // independently of CPU-temp samples, so its CSV must stay reachable
-            // even on a Mac whose main history chart is empty.
             HistoryExportCard()
         }
-        .task(id: ReloadKey(active: isActive, range: model.range, logging: settings.loggingEnabled)) {
-            guard isActive else { return }
+        .task(id: ReloadKey(range: model.range, logging: settings.loggingEnabled)) {
             await model.reload()
         }
     }

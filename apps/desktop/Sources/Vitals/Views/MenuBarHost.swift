@@ -31,7 +31,7 @@ struct MenuBarLabelView: View {
         if metrics.isEmpty {
             Image(systemName: warning ? "flame.fill" : "thermometer.medium")
         } else if settings.menuBarUseIcons {
-            MenuBarRow()
+            MenuBarRow(metrics: metrics, warning: warning)
         } else {
             // Text style: short word + value, e.g. "Temp 57° · CPU 23% · RAM 12.8G".
             Text(metrics.map { "\($0.shortLabel) \(menuBarValue($0, model: model, settings: settings))" }
@@ -46,13 +46,8 @@ struct MenuBarLabelView: View {
 private struct MenuBarRow: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
-
-    private var metrics: [MenuBarMetric] {
-        MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)
-    }
-    private var warning: Bool {
-        model.averageCPUTemp.map { $0 >= settings.warnThreshold } ?? false
-    }
+    let metrics: [MenuBarMetric]
+    let warning: Bool
 
     var body: some View {
         HStack(spacing: 6) {

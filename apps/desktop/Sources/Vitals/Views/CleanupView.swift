@@ -4,8 +4,6 @@ import SwiftUI
 /// junk behind one picker. Pages swap in place, so window geometry never changes.
 struct CleanupView: View {
     @Bindable var model: CleanupModel
-    /// True only while Cleanup is the visible tab; the view stays mounted.
-    var isActive: Bool
     /// Persisted so the chosen page sticks across launches. A stored page that
     /// no longer exists falls back to Quick.
     @AppStorage("cleanupPage") private var page: CleanupPage = .quick
@@ -18,10 +16,10 @@ struct CleanupView: View {
             ZStack {
                 switch page {
                 case .quick:
-                    CleanupClassicPage(model: model, isActive: isActive, depth: .quick)
+                    CleanupClassicPage(model: model, depth: .quick)
                         .transition(.opacity)
                 case .deep:
-                    CleanupClassicPage(model: model, isActive: isActive, depth: .deep)
+                    CleanupClassicPage(model: model, depth: .deep)
                         .transition(.opacity)
                 case .developer:
                     CleanupDeveloperPage(model: model)
@@ -64,8 +62,6 @@ struct CleanupView: View {
 /// adds age-gated system categories that need one administrator prompt.
 private struct CleanupClassicPage: View {
     @Bindable var model: CleanupModel
-    /// True only while Cleanup is the visible tab.
-    var isActive: Bool
     let depth: CleanDepth
     @Environment(AppSettings.self) private var settings
     @State private var confirming = false
@@ -93,9 +89,8 @@ private struct CleanupClassicPage: View {
                 .opacity(0.5)
             footer
         }
-        .onChange(of: isActive, initial: true) { _, active in
-            guard active else { return }
-            // Mounting this page (or re-activating the tab) measures for its
+        .onAppear {
+            // Mounting this page measures for its
             // depth: if a scan already ran at the other depth, re-measure for
             // this one; otherwise honor auto-scan on the first run.
             if model.hasRun && model.depth != depth {

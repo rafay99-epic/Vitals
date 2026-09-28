@@ -6,9 +6,6 @@ import UserNotifications
 /// titled cards, grouped into sections split across two continuous columns. The
 /// search field live-filters cards by title and keywords.
 struct SettingsView: View {
-    /// True only while Settings is the visible section — gates the ⌘F shortcut so
-    /// it doesn't capture the key combo while another section is showing.
-    var isActive: Bool = true
     @State private var query = ""
     @FocusState private var searchFocused: Bool
 
@@ -44,7 +41,6 @@ struct SettingsView: View {
             Button("") { searchFocused = true }
                 .keyboardShortcut("f", modifiers: .command)
                 .opacity(0)
-                .disabled(!isActive)
                 .accessibilityHidden(true)
         }
     }

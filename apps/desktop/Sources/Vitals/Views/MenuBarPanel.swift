@@ -64,7 +64,7 @@ struct MenuBarPanel: View {
     /// than one per pixel, and a third of the marks makes the panel open
     /// noticeably snappier.
     private var sparkData: [VitalsModel.Sample] {
-        VitalsModel.downsample(model.chartHistory, to: 100)
+        model.chartHistory.thinned(to: 100)
     }
 
     /// Two fixed columns (never `.adaptive`, per the perf rules). Four metrics

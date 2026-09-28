@@ -49,7 +49,7 @@ struct DashboardHealthHero: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
-        .help("Open System ▸ Sensors")
+        .help("Open Temps & Fans")
     }
 
     /// The verdict: the worst level across every signal we can read. Identical

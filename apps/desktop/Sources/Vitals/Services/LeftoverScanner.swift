@@ -529,12 +529,9 @@ enum LeftoverScanner {
 
     // MARK: Homebrew
 
-    private static func brewExecutable() -> String? {
-        for path in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
-        where FileManager.default.isExecutableFile(atPath: path) {
-            return path
-        }
-        return nil
+    /// Homebrew's binary (Apple Silicon or Intel prefix), or nil when absent.
+    static func brewExecutable() -> String? {
+        ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].first(where: FileManager.default.isExecutableFile)
     }
 
     /// Tokens of every installed Homebrew cask. Empty if brew isn't present.

@@ -424,3 +424,15 @@ func pressureColor(_ pressure: MemoryPressure) -> Color {
     case .critical: return .red
     }
 }
+
+extension Array {
+    /// Evenly thins to at most `maxCount` elements, always keeping the first and
+    /// the last. Charts can't show more points than pixels, and mark count drives
+    /// Swift Charts' rebuild cost. Thinning steps by more than one index, so no
+    /// element (or id) repeats.
+    func thinned(to maxCount: Int) -> [Element] {
+        guard count > maxCount, maxCount > 1 else { return self }
+        let stride = Double(count - 1) / Double(maxCount - 1)
+        return (0..<maxCount).map { self[Int((Double($0) * stride).rounded())] }
+    }
+}
