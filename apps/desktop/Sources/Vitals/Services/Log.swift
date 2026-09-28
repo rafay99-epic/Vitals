@@ -153,8 +153,7 @@ enum Log {
         }
     }
 
-    /// One captured line. `Codable` so `LogFile` can persist it as JSONL and the
-    /// console can read it back.
+    /// One captured line, persisted as JSONL by `LogFile`.
     struct Entry: Identifiable, Codable, Equatable {
         let id: UUID
         let time: Date
@@ -173,25 +172,12 @@ enum Log {
 
     // MARK: Configuration (thread-safe)
 
-    private struct State {
-        var minimumLevel: LogLevel = .notice
-        var sink: ((Entry) -> Void)?
-    }
-    private static let state = OSAllocatedUnfairLock(initialState: State())
+    private static let minimumLevel = OSAllocatedUnfairLock(initialState: LogLevel.notice)
 
-    /// Sets the capture floor. Called from `AppSettings` whenever the user
-    /// changes the "Diagnostic logging" level (and once at launch).
-    static func configure(minimumLevel: LogLevel) {
-        state.withLock { $0.minimumLevel = minimumLevel }
-    }
-
-    /// The current capture floor — lets hot-path callers skip work entirely.
-    static var minimumLevel: LogLevel { state.withLock { $0.minimumLevel } }
-
-    /// Registers (or clears) the live in-memory consumer — `LogStore` plugs the
-    /// console in here. Held weakly by the closure the caller passes.
-    static func setSink(_ sink: ((Entry) -> Void)?) {
-        state.withLock { $0.sink = sink }
+    /// Sets the capture floor. Called from `AppSettings` at launch and whenever
+    /// the "Diagnostic logging" level changes.
+    static func configure(minimumLevel level: LogLevel) {
+        minimumLevel.withLock { $0 = level }
     }
 
     // MARK: Emit
@@ -199,10 +185,6 @@ enum Log {
     static func debug(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
                       file: String = #fileID, function: String = #function, line: Int = #line) {
         emit(.debug, category, message(), error, file, function, line)
-    }
-    static func info(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
-                     file: String = #fileID, function: String = #function, line: Int = #line) {
-        emit(.info, category, message(), error, file, function, line)
     }
     static func notice(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
                        file: String = #fileID, function: String = #function, line: Int = #line) {
@@ -220,18 +202,12 @@ enum Log {
     // MARK: Emit once (hot-path)
 
     /// Logs only the first time a given `key` is seen this launch. For failures
-    /// that recur every sample tick (a missing sensor subsystem, the fan daemon's
-    /// apply loop) — the first occurrence explains the symptom; the next thousand
-    /// would just flood. Same call site, captured automatically.
+    /// that recur every sample tick: the first occurrence explains the symptom,
+    /// the next thousand would just flood.
     static func noticeOnce(_ category: LogCategory, key: String, _ message: @autoclosure () -> String, error: Error? = nil,
                            file: String = #fileID, function: String = #function, line: Int = #line) {
         guard firstTime(key) else { return }
         emit(.notice, category, message(), error, file, function, line)
-    }
-    static func debugOnce(_ category: LogCategory, key: String, _ message: @autoclosure () -> String, error: Error? = nil,
-                          file: String = #fileID, function: String = #function, line: Int = #line) {
-        guard firstTime(key) else { return }
-        emit(.debug, category, message(), error, file, function, line)
     }
     static func errorOnce(_ category: LogCategory, key: String, _ message: @autoclosure () -> String, error: Error? = nil,
                           file: String = #fileID, function: String = #function, line: Int = #line) {
@@ -250,7 +226,7 @@ enum Log {
 
     private static func emit(_ level: LogLevel, _ category: LogCategory, _ message: @autoclosure () -> String,
                              _ error: Error?, _ file: String, _ function: String, _ line: Int) {
-        let (minimum, sink) = state.withLock { ($0.minimumLevel, $0.sink) }
+        let minimum = minimumLevel.withLock { $0 }
         // The whole point of the level guard: bail before building the string.
         guard minimum != .off, level >= minimum else { return }
 
@@ -264,7 +240,6 @@ enum Log {
         let entry = Entry(id: UUID(), time: Date(), session: session, level: level,
                           category: category, message: text, source: source, error: info)
         LogFile.shared.append(entry)
-        sink?(entry)
     }
 
     /// Force-writes a fault entry **synchronously**, bypassing the level filter —
@@ -277,7 +252,6 @@ enum Log {
         let entry = Entry(id: UUID(), time: Date(), session: session, level: .fault,
                           category: category, message: message, source: source, error: nil)
         LogFile.shared.appendSync(entry)
-        state.withLock { $0.sink }?(entry)
     }
 
     /// `#fileID` is "ModuleName/Dir/File.swift"; we only want "File.swift".

@@ -27,12 +27,6 @@ final class LogFile {
         return encoder
     }()
 
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
-
     /// Queues one entry for persistence. Returns at once — the JSON encode runs
     /// on the serial queue, not the (sometimes main) calling thread.
     func append(_ entry: Log.Entry) {
@@ -95,23 +89,6 @@ final class LogFile {
             return handle
         } catch {
             return nil
-        }
-    }
-
-    /// The most recent `limit` entries, oldest→newest, read across the rotated
-    /// and current files. Blocking (file read + parse), so callers run it off the
-    /// main thread. Malformed lines are skipped, never fatal.
-    func loadRecent(limit: Int) -> [Log.Entry] {
-        var lines: [Substring] = []
-        for url in [DataHome.logPrevious, DataHome.logFile] {
-            if let text = try? String(contentsOf: url, encoding: .utf8) {
-                lines.append(contentsOf: text.split(separator: "\n"))
-            }
-        }
-        let tail = lines.suffix(limit)
-        return tail.compactMap { line in
-            guard let data = line.data(using: .utf8) else { return nil }
-            return try? Self.decoder.decode(Log.Entry.self, from: data)
         }
     }
 

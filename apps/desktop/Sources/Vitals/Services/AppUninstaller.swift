@@ -17,7 +17,6 @@ enum AppUninstaller {
         /// than claim a clean finish.
         var adminCancelled = false
         var caskUninstalled = 0
-        var cliUninstalled = 0
         var errorMessage: String?
         /// Bundles the user couldn't trash (root-owned / App-Management-blocked)
         /// — the caller retries these through the admin removal path.
@@ -92,8 +91,8 @@ enum AppUninstaller {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
         process.arguments = ["delete", bundleID]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
@@ -113,8 +112,10 @@ enum AppUninstaller {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: brew)
         process.arguments = ["uninstall", "--cask", "--zap", cask]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        // Output is unused: discard it. An unread Pipe fills at ~64 KB and
+        // blocks the child, so a chatty `--zap` would hang here.
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
@@ -164,8 +165,8 @@ enum AppUninstaller {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         process.arguments = ["bootout", "gui/\(getuid())", agentPlist.path]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         try? process.run()
         process.waitUntilExit()
     }

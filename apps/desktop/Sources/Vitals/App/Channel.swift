@@ -20,7 +20,7 @@ enum Channel: String {
     }()
 
     /// Human-facing app name — matches `CFBundleName` and the `.app` on disk.
-    /// `FanDaemon.supportDir` and `Updater.bundleInImage` derive paths from this,
+    /// `FanHelperRetirement` and `Updater.bundleInImage` derive paths from this,
     /// so it must stay exactly what `build.sh` writes.
     var displayName: String {
         switch self {
@@ -36,15 +36,6 @@ enum Channel: String {
         case .stable:  return nil
         case .nightly: return "NIGHTLY"
         case .dev:     return "DEV"
-        }
-    }
-
-    /// Suffix appended to `com.syntaxlabtechnology.vitals` to form the bundle id.
-    var bundleSuffix: String {
-        switch self {
-        case .stable:  return ""
-        case .nightly: return ".nightly"
-        case .dev:     return ".dev"
         }
     }
 
@@ -73,11 +64,6 @@ enum Channel: String {
 
     /// Dev has no updater at all. Stable and Nightly both update from their feeds.
     var updatesEnabled: Bool { self != .dev }
-
-    /// Nightly orders builds by the monotonic CI build number (its pre-release
-    /// tag is reused, so the version string can't order them). Stable orders by
-    /// the numeric version.
-    var ordersByBuildNumber: Bool { self == .nightly }
 
     /// Extra build detail (branch@sha), baked in for Nightly and Dev so the
     /// About screen can show exactly what's running. nil on Stable.

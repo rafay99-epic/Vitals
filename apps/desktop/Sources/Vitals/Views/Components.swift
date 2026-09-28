@@ -122,79 +122,21 @@ struct LoadingStateView: View {
 
 // MARK: - Tab scaffold
 
-/// A monitoring tab's scrolling canvas, batched into one Liquid Glass pass when
-/// enabled — the shared chrome behind the GPU, Battery and Health tabs, matching
-/// the Dashboard's `LazyVStack` + `GlassEffectContainer` so every surface reads
-/// as one app. Lazy, so off-screen cards cost nothing until scrolled to.
+/// A monitoring section's scrolling canvas. Lazy, so off-screen cards cost
+/// nothing until scrolled to.
 struct MetricScroll<Content: View>: View {
-    @EnvironmentObject private var settings: AppSettings
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         ScrollView {
-            batched
+            LazyVStack(alignment: .leading, spacing: 16, content: content)
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-
-    @ViewBuilder
-    private var batched: some View {
-        #if compiler(>=6.2)
-        if #available(macOS 26.0, *), settings.glassEnabled {
-            GlassEffectContainer { stack }
-        } else {
-            stack
-        }
-        #else
-        stack
-        #endif
-    }
-
-    private var stack: some View {
-        LazyVStack(alignment: .leading, spacing: 16, content: content)
-    }
 }
 
 // MARK: - Cards
-
-struct StatCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-    let symbol: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(tint)
-                    .frame(width: 26, height: 26)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(tint.opacity(0.14))
-                    )
-                Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .numericTransition()
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .cardBackground()
-    }
-}
 
 struct SectionCard<Content: View>: View {
     let title: String
@@ -315,31 +257,9 @@ func statColumn(_ label: String, _ value: String, note: String? = nil) -> some V
 }
 
 extension View {
+    /// The shared card chrome: radius 12, control fill, hairline border.
     func cardBackground() -> some View {
-        modifier(CardBackground())
-    }
-}
-
-/// Card chrome: Liquid Glass on macOS 26 when enabled, classic bordered
-/// fill otherwise.
-struct CardBackground: ViewModifier {
-    @EnvironmentObject private var settings: AppSettings
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        #if compiler(>=6.2)
-        if #available(macOS 26.0, *), settings.glassEnabled {
-            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        } else {
-            classic(content)
-        }
-        #else
-        classic(content)
-        #endif
-    }
-
-    private func classic(_ content: Content) -> some View {
-        content.background(
+        background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(
@@ -347,32 +267,6 @@ struct CardBackground: ViewModifier {
                         .strokeBorder(.separator, lineWidth: 1)
                 )
         )
-    }
-}
-
-/// Window backdrop: a translucent material when Liquid Glass is on, the
-/// standard opaque window color otherwise. The frosting slider in Settings
-/// picks how much of the desktop blurs through.
-struct WindowBackdrop: ViewModifier {
-    @EnvironmentObject private var settings: AppSettings
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if settings.glassEnabled {
-            content.containerBackground(backdropMaterial, for: .window)
-        } else {
-            content.background(Color(nsColor: .windowBackgroundColor))
-        }
-    }
-
-    private var backdropMaterial: Material {
-        switch settings.glassIntensity {
-        case ..<0.2: return .ultraThinMaterial
-        case ..<0.4: return .thinMaterial
-        case ..<0.6: return .regularMaterial
-        case ..<0.8: return .thickMaterial
-        default: return .ultraThickMaterial
-        }
     }
 }
 
@@ -505,12 +399,6 @@ extension Array where Element == VitalsModel.Sample {
 func tempGradientColor(_ celsius: Double) -> Color {
     let t = min(max((celsius - 40) / 50, 0), 1)
     return Color(hue: 0.33 * (1 - t), saturation: 0.85, brightness: 0.88)
-}
-
-/// 0 at ≤40 °C rising to 1 at ≥90 °C — the same ramp `tempGradientColor` uses,
-/// exposed for driving widget glow intensity from a real temperature.
-func tempSeverity(_ celsius: Double) -> Double {
-    min(max((celsius - 40) / 50, 0), 1)
 }
 
 func gigabytes(_ bytes: UInt64) -> Double {

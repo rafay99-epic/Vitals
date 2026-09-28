@@ -122,3 +122,8 @@ struct DiskLifetimeCard: View {
         return rows
     }
 }
+
+/// The drive symbol, flagging a SMART critical warning if any.
+func diskSymbol(for disk: DiskHealthSnapshot?) -> String {
+    (disk?.criticalWarning ?? 0) == 0 ? "internaldrive.fill" : "internaldrive.badge.exclamationmark"
+}

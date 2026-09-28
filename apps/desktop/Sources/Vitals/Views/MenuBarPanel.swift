@@ -1,16 +1,13 @@
 import SwiftUI
 import Charts
 
-/// The window-style menu bar dropdown: live readings, sparklines, and quick
-/// fan control — in the same design language as the main window.
+/// The menu bar dropdown: live readings and sparklines, in the main window's
+/// design language.
 struct MenuBarPanel: View {
     @EnvironmentObject private var model: VitalsModel
     @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var fanControl: FanController
     @EnvironmentObject private var navigator: Navigator
     @Environment(\.openWindow) private var openWindow
-    @Namespace private var presetIndicator
-    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -234,104 +231,29 @@ struct MenuBarPanel: View {
 
     // MARK: Fans
 
-    private enum FanPreset: String, CaseIterable, Identifiable {
-        case auto = "Auto", quiet = "Quiet", med = "Med", max = "Max"
-        var id: String { rawValue }
-    }
-
     @ViewBuilder
     private var fanSection: some View {
         if let fan = model.fans.first {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack {
-                    Image(systemName: "fan")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.cyan)
-                        .frame(width: 24, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(.cyan.opacity(0.14))
-                        )
-                    Text("\(Int(fan.rpm)) rpm")
-                        .font(.system(.callout, design: .rounded, weight: .semibold))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Spacer()
-                    Text(isManual(fan) ? "Manual" : "Automatic")
+            HStack {
+                Image(systemName: "fan")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.cyan)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(.cyan.opacity(0.14))
+                    )
+                Text("\(Int(fan.rpm)) rpm")
+                    .font(.system(.callout, design: .rounded, weight: .semibold))
+                    .monospacedDigit()
+                    .numericTransition()
+                Spacer()
+                if let manual = fan.isManual {
+                    Text(manual ? "Manual" : "Automatic")
                         .font(.caption2.weight(.medium))
-                        .foregroundStyle(isManual(fan) ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-                }
-
-                if fanControl.isInstalled, fan.maxRPM > fan.minRPM {
-                    presetBar(fan)
-                } else if fanControl.needsRepair {
-                    Text("Repair fan control in the Vitals window before setting speed here.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                } else if !fanControl.isInstalled {
-                    Text("Enable fan control in the Vitals window to set speed here.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(manual ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
             }
-        }
-    }
-
-    private func presetBar(_ fan: SMC.Fan) -> some View {
-        HStack(spacing: 2) {
-            ForEach(FanPreset.allCases) { preset in
-                presetButton(preset, fan: fan)
-            }
-        }
-        .padding(3)
-        .frame(maxWidth: .infinity)
-        .background(Capsule().fill(.quaternary.opacity(0.45)))
-    }
-
-    private func presetButton(_ preset: FanPreset, fan: SMC.Fan) -> some View {
-        let selected = isSelected(preset, fan: fan)
-        return Button {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                apply(preset, fan: fan)
-            }
-        } label: {
-            Text(preset.rawValue)
-                .font(.system(size: 11.5, weight: .medium))
-                .padding(.vertical, 5)
-                .frame(maxWidth: .infinity)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-        .background {
-            if selected {
-                Capsule()
-                    .fill(.quaternary)
-                    .matchedGeometryEffect(id: "fan-preset", in: presetIndicator)
-            }
-        }
-        .disabled(fanControl.isWorking)
-    }
-
-    private func isSelected(_ preset: FanPreset, fan: SMC.Fan) -> Bool {
-        guard let command = fanControl.target(for: fan.id), command.mode == .manual else {
-            return preset == .auto
-        }
-        let target = Int(command.rpm)
-        switch preset {
-        case .auto: return false
-        case .quiet: return target == Int(fan.minRPM)
-        case .med: return target == Int((fan.minRPM + fan.maxRPM) / 2)
-        case .max: return target == Int(fan.maxRPM)
-        }
-    }
-
-    private func apply(_ preset: FanPreset, fan: SMC.Fan) {
-        switch preset {
-        case .auto: fanControl.setAuto(fan: fan.id)
-        case .quiet: fanControl.setTarget(fan: fan.id, rpm: Int(fan.minRPM))
-        case .med: fanControl.setTarget(fan: fan.id, rpm: Int((fan.minRPM + fan.maxRPM) / 2))
-        case .max: fanControl.setTarget(fan: fan.id, rpm: Int(fan.maxRPM))
         }
     }
 
@@ -348,26 +270,6 @@ struct MenuBarPanel: View {
             }
             .controlSize(.small)
             Spacer()
-            Button {
-                DiagnosticSnapshot.copyToPasteboard(model: model, settings: settings)
-                copied = true
-                Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.clipboard")
-                    .font(.system(size: 12))
-                    .foregroundStyle(copied ? AnyShapeStyle(.green) : AnyShapeStyle(.primary))
-            }
-            .controlSize(.small)
-            .help("Copy diagnostics to clipboard")
-            Button {
-                openWindow(id: "help")
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 12))
-            }
-            .controlSize(.small)
-            .help("Vitals Help")
             Button {
                 navigator.section = .settings
                 openWindow(id: "main")
@@ -387,11 +289,5 @@ struct MenuBarPanel: View {
             .controlSize(.small)
             .help("Quit Vitals")
         }
-    }
-
-    // MARK: Helpers
-
-    private func isManual(_ fan: SMC.Fan) -> Bool {
-        fanControl.target(for: fan.id)?.mode == .manual
     }
 }

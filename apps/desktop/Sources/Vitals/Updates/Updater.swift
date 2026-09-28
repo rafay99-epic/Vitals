@@ -3,8 +3,7 @@ import AppKit
 import Combine
 
 /// Checks GitHub Releases for newer builds, downloads the DMG, and swaps the
-/// installed app. The repository is private, so requests authenticate with
-/// the token from the locally signed-in GitHub CLI (`gh auth token`).
+/// installed app. The repository is public, so requests are unauthenticated.
 @MainActor
 final class Updater: ObservableObject {
     enum Status: Equatable {
@@ -367,13 +366,10 @@ final class Updater: ObservableObject {
         return nil  // no Nightly pre-release published yet
     }
 
-    /// Shared GET with auth + status handling. Returns nil for a 404 "nothing
-    /// published yet" once we know the token can see the (private) repo.
+    /// Shared GET with status handling. Returns nil for a 404 (nothing published yet).
     nonisolated private static func get(_ urlString: String) async throws -> Data? {
-        let token = githubToken()
         var request = URLRequest(url: URL(string: urlString)!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -381,9 +377,7 @@ final class Updater: ObservableObject {
         }
         switch http.statusCode {
         case 200: return data
-        case 404 where token == nil:
-            throw UpdateError(message: "Can't see the private repository. Install GitHub CLI and run “gh auth login”.")
-        case 404: return nil  // nothing published yet
+        case 404: return nil
         default: throw UpdateError(message: "GitHub returned HTTP \(http.statusCode).")
         }
     }
@@ -421,13 +415,8 @@ final class Updater: ObservableObject {
         }
         var request = URLRequest(url: assetURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
-        if let token = githubToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        // GitHub redirects asset downloads to S3, which rejects requests that
-        // still carry the Authorization header — strip it on redirect.
         // download(for:) streams to disk, so the DMG never sits in memory.
-        let (tempFile, response) = try await URLSession.shared.download(for: request, delegate: RedirectSanitizer())
+        let (tempFile, response) = try await URLSession.shared.download(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             try? FileManager.default.removeItem(at: tempFile)
             throw UpdateError(message: "Download failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)).")
@@ -461,37 +450,9 @@ final class Updater: ObservableObject {
 
     // MARK: - Helpers
 
+    /// Numeric compare, so "0.10" is newer than "0.9".
     nonisolated static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
-        func components(_ version: String) -> [Int] {
-            version.split(separator: ".").map { Int($0.prefix(while: \.isNumber)) ?? 0 }
-        }
-        let a = components(candidate)
-        let b = components(current)
-        for index in 0..<max(a.count, b.count) {
-            let lhs = index < a.count ? a[index] : 0
-            let rhs = index < b.count ? b[index] : 0
-            if lhs != rhs { return lhs > rhs }
-        }
-        return false
-    }
-
-    nonisolated static func githubToken() -> String? {
-        let candidates = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
-        for gh in candidates where FileManager.default.isExecutableFile(atPath: gh) {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: gh)
-            process.arguments = ["auth", "token"]
-            let stdout = Pipe()
-            process.standardOutput = stdout
-            process.standardError = Pipe()
-            guard (try? process.run()) != nil else { continue }
-            guard waitUntilExit(process, timeout: 10) else { continue }  // a wedged `gh` mustn't hang the update check
-            guard process.terminationStatus == 0 else { continue }
-            let token = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if let token, !token.isEmpty { return token }
-        }
-        return nil
+        candidate.compare(current, options: .numeric) == .orderedDescending
     }
 
     @discardableResult
@@ -516,7 +477,7 @@ final class Updater: ObservableObject {
 
     /// Waits for `process` up to `timeout` seconds. Returns true if it exited
     /// on its own; on overrun it terminates (then SIGKILLs) the process and
-    /// returns false, so a hung `gh`/`hdiutil`/`ditto` can never block forever.
+    /// returns false, so a hung `hdiutil`/`ditto` can never block forever.
     @discardableResult
     nonisolated private static func waitUntilExit(_ process: Process, timeout: TimeInterval) -> Bool {
         let done = DispatchSemaphore(value: 0)
@@ -531,18 +492,5 @@ final class Updater: ObservableObject {
             return false
         }
         return true
-    }
-
-    private final class RedirectSanitizer: NSObject, URLSessionTaskDelegate {
-        func urlSession(
-            _ session: URLSession,
-            task: URLSessionTask,
-            willPerformHTTPRedirection response: HTTPURLResponse,
-            newRequest request: URLRequest
-        ) async -> URLRequest? {
-            var sanitized = request
-            sanitized.setValue(nil, forHTTPHeaderField: "Authorization")
-            return sanitized
-        }
     }
 }

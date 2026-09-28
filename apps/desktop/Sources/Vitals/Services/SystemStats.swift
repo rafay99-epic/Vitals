@@ -170,8 +170,6 @@ struct MemorySnapshot {
     let swapOuts: UInt64
     let compressions: UInt64
     let decompressions: UInt64
-
-    var usedFraction: Double { total > 0 ? Double(used) / Double(total) : 0 }
 }
 
 /// Live virtual-memory activity, in pages per second, derived by diffing two

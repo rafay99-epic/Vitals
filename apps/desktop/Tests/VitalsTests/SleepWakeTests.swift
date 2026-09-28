@@ -13,7 +13,7 @@ struct SleepWakeTests {
         let name = "vitals.test.sleepwake.\(UUID().uuidString)"
         let suite = UserDefaults(suiteName: name)!
         suite.removePersistentDomain(forName: name)
-        let settings = AppSettings(defaults: suite, configURL: nil)
+        let settings = AppSettings(defaults: suite)
         return (VitalsModel(settings: settings), settings)
     }
 

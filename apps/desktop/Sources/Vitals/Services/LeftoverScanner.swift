@@ -214,12 +214,6 @@ enum LeftoverScanner {
         return candidates
     }
 
-    /// Backward-compatible alias — the user catalog is what "candidate paths"
-    /// has always meant.
-    static func candidatePaths(bundleID: String?, appName: String, home: URL) -> [(URL, Leftover.Category)] {
-        userCandidates(bundleID: bundleID, appName: appName, home: home)
-    }
-
     /// Exact system-level paths worth probing (admin, permanent). Always
     /// confined to allowlisted `/Library` roots — never `/System`.
     static func systemCandidates(bundleID: String?, appName: String) -> [(URL, Leftover.Category)] {
@@ -552,16 +546,17 @@ enum LeftoverScanner {
         process.arguments = ["list", "--cask", "-1"]
         let out = Pipe()
         process.standardOutput = out
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
             Log.notice(.uninstall, "couldn't launch brew to list casks — cask leftovers may be under-reported", error: error)
             return []
         }
+        // Drain before waiting: a full pipe blocks the child forever.
+        let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return [] }
-        let data = out.fileHandleForReading.readDataToEndOfFile()
         return (String(data: data, encoding: .utf8) ?? "")
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -601,18 +596,16 @@ enum LeftoverScanner {
             process.arguments = ["list", "--cask", token]
             let out = Pipe()
             process.standardOutput = out
-            process.standardError = Pipe()
+            process.standardError = FileHandle.nullDevice
             do {
                 try process.run()
             } catch {
                 return false
             }
+            let data = out.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             guard process.terminationStatus == 0 else { return false }
-            output = String(
-                data: out.fileHandleForReading.readDataToEndOfFile(),
-                encoding: .utf8
-            ) ?? ""
+            output = String(data: data, encoding: .utf8) ?? ""
         }
 
         let target = appURL.standardizedFileURL.resolvingSymlinksInPath()

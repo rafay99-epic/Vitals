@@ -7,8 +7,8 @@ import SwiftUI
 /// System/Applications sub-segment bars): one level, no tabs-in-tabs.
 enum NavSection: String, CaseIterable, Identifiable {
     case overview
-    case cpu, gpu, memory, battery, network, sensors, processes, history
-    case storage, cleanup, applications, loginItems
+    case cpu, gpu, memory, battery, network, sensors, history
+    case storage, cleanup, applications
     case settings
 
     var id: String { rawValue }
@@ -22,12 +22,10 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .battery:      return "Battery"
         case .network:      return "Network"
         case .sensors:      return "Temps & Fans"
-        case .processes:    return "Processes"
         case .history:      return "History"
-        case .storage:      return "Storage"
+        case .storage:      return "Disk Health"
         case .cleanup:      return "Cleanup"
         case .applications: return "Applications"
-        case .loginItems:   return "Login Items"
         case .settings:     return "Settings"
         }
     }
@@ -41,12 +39,10 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .battery:      return "battery.100percent"
         case .network:      return "network"
         case .sensors:      return "thermometer.medium"
-        case .processes:    return "list.bullet"
         case .history:      return "chart.xyaxis.line"
         case .storage:      return "internaldrive"
         case .cleanup:      return "sparkles"
         case .applications: return "square.grid.2x2"
-        case .loginItems:   return "power"
         case .settings:     return "gearshape"
         }
     }
@@ -68,17 +64,13 @@ struct ContentView: View {
     private var section: NavSection { navigator.section }
 
     // Per-section models, owned here so a scan started in one section survives
-    // switching sections (Processes, Apps, Login Items, Cleanup, Storage).
-    @StateObject private var processesModel = ProcessesModel()
-    @StateObject private var appEnergyModel = AppEnergyModel()
+    // switching sections.
     @StateObject private var appsModel = AppsModel()
-    @StateObject private var loginItemsModel = LoginItemsModel()
     @StateObject private var cleanupModel = CleanupModel()
-    @StateObject private var storageModel = StorageModel()
     @StateObject private var historyModel = HistoryModel()
 
-    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .processes, .history]
-    private static let maintain: [NavSection] = [.storage, .cleanup, .applications, .loginItems]
+    private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .history]
+    private static let maintain: [NavSection] = [.storage, .cleanup, .applications]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -87,7 +79,7 @@ struct ContentView: View {
             content
         }
         .ignoresSafeArea(edges: .top)
-        .modifier(WindowBackdrop())
+        .background(Color(nsColor: .windowBackgroundColor))
         .frame(minWidth: 980, minHeight: 680)
         .onAppear {
             model.setMainWindowVisible(true)
@@ -174,7 +166,7 @@ struct ContentView: View {
 
     /// A sidebar destination row — icon + label, the whole row a click target,
     /// the selected one filled. Overview + Monitor take ⌘1…⌘9 by visible
-    /// position; Maintain has its own ⌥⌘1…⌥⌘4 tier. Switching never animates
+    /// position; Maintain has its own ⌥⌘1…⌥⌘3 tier. Switching never animates
     /// geometry — only the selection fill moves.
     private func row(_ item: NavSection, shortcut: KeyboardShortcut?) -> some View {
         let selected = section == item
@@ -222,23 +214,19 @@ struct ContentView: View {
             case .memory:
                 MemoryView(isActive: true)
             case .battery:
-                BatteryView(appEnergyModel: appEnergyModel, isActive: true)
+                BatteryView()
             case .network:
                 NetworkView(isActive: true)
             case .sensors:
                 SensorsView()
-            case .processes:
-                ProcessesView(model: processesModel, isActive: true)
             case .history:
                 HistoryView(model: historyModel, isActive: true)
             case .storage:
-                StorageView(model: storageModel, isActive: true)
+                StorageView()
             case .cleanup:
                 CleanupView(model: cleanupModel, isActive: true)
             case .applications:
                 AppsView(model: appsModel, isActive: true)
-            case .loginItems:
-                LoginItemsView(model: loginItemsModel, isActive: true)
             case .settings:
                 SettingsView(isActive: true)
             }
@@ -345,27 +333,11 @@ struct DashboardView: View {
                         EmptyView()
                     }
                 } else {
-                    glassBatched
+                    cards
                 }
             }
             .padding(20)
         }
-    }
-
-    /// The dashboard's cards batched into one Liquid Glass pass. Kept per-view:
-    /// the section is mounted once, so this container is created once and never
-    /// re-initialized on switch.
-    @ViewBuilder
-    private var glassBatched: some View {
-        #if compiler(>=6.2)
-        if #available(macOS 26.0, *), settings.glassEnabled {
-            GlassEffectContainer { cards }
-        } else {
-            cards
-        }
-        #else
-        cards
-        #endif
     }
 
     /// Lazy so the window's first frame (and every frame of a resize
@@ -381,7 +353,7 @@ struct DashboardView: View {
                 PowerCard()
                 FanCard()
             }
-            DashboardProcessesCard(drill: drill)
+            DashboardProcessesCard()
             footer
         }
     }

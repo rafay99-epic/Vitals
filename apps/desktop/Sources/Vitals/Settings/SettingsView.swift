@@ -2,14 +2,9 @@ import SwiftUI
 import AppKit
 import UserNotifications
 
-/// Settings, hosted as the main window's last sidebar section (`.settings`) — a
-/// single searchable page, not a stack of tabs. Every setting is a titled card;
-/// cards are grouped into sections (General, Interface, Monitoring, Alerts,
-/// Updates, Data, Developer, About) that are split across **two page columns**,
-/// each a continuous top-to-bottom stack — so cards never strand an empty gap and
-/// the layout still fills the window width. A search field at the top live-filters
-/// the cards, so a setting is findable by name across the whole surface — no
-/// hunting through tabs.
+/// Settings, the main window's last sidebar section: one searchable page of
+/// titled cards, grouped into sections split across two continuous columns. The
+/// search field live-filters cards by title and keywords.
 struct SettingsView: View {
     /// True only while Settings is the visible section — gates the ⌘F shortcut so
     /// it doesn't capture the key combo while another section is showing.
@@ -70,8 +65,7 @@ struct SettingsView: View {
     }
 
     private func column(_ sections: [SettingsSectionModel]) -> some View {
-        // Lazy so opening Settings (or scrolling) only builds the sections near the
-        // viewport, not all eight at once — keeps open/search snappy.
+        // Lazy: only sections near the viewport are built.
         LazyVStack(alignment: .leading, spacing: 28) {
             ForEach(sections) { section in
                 SettingsSectionView(section: section, query: query)
@@ -80,17 +74,15 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    /// Sections split across the two page columns, hand-balanced by their card
-    /// weight so the columns end at roughly the same height — no big trailing gap.
-    /// Interface is the heaviest section (the long Menu-bar + Desktop-Widgets
-    /// cards), so it anchors the right column on its own; General anchors the left.
+    /// Sections split across the two columns, hand-balanced by card weight so the
+    /// columns end at roughly the same height.
     private var leftSections: [SettingsSectionModel] {
         Self.sections.filter { !Self.rightColumnTitles.contains($0.title) }
     }
     private var rightSections: [SettingsSectionModel] {
         Self.sections.filter { Self.rightColumnTitles.contains($0.title) }
     }
-    private static let rightColumnTitles: Set<String> = ["Interface", "Monitoring", "Updates", "Data"]
+    private static let rightColumnTitles: Set<String> = ["Menu bar", "Alerts", "Updates"]
 
     private var anyMatch: Bool {
         query.isEmpty || Self.sections.contains { $0.cards.contains { $0.matches(query) } }
@@ -122,34 +114,20 @@ struct SettingsView: View {
                   view: AnyView(ReadingsCard())),
             .init(title: "Power", keywords: "battery ac sampling reduce low power mode",
                   view: AnyView(PowerSettingsCard())),
-            .init(title: "Appearance", keywords: "theme light dark system gpu acceleration liquid glass frosting translucent",
+            .init(title: "Appearance", keywords: "theme light dark system",
                   view: AnyView(AppearanceCard())),
-            .init(title: "Applications", keywords: "launch at login startup hide dock icon menu bar only cli command line terminal system package manager scan inventory",
+            .init(title: "Applications", keywords: "launch at login startup hide dock icon menu bar only",
                   view: AnyView(ApplicationCard())),
         ]),
-        SettingsSectionModel(title: "Interface", cards: [
-            .init(title: "Tabs", keywords: "navigation labels size density",
-                  view: AnyView(TabsCard())),
-            .init(title: "Menu bar", keywords: "status item readings icons text animate menubar",
+        SettingsSectionModel(title: "Menu bar", cards: [
+            .init(title: "Menu bar", keywords: "status item readings icons text menubar",
                   view: AnyView(MenuBarCard())),
-            .init(title: "Desktop Widgets", keywords: "widgets float on top animate desktop panels placement behind icons battery disk",
-                  view: AnyView(WidgetsCard())),
-        ]),
-        SettingsSectionModel(title: "Monitoring", cards: [
-            .init(title: "Processes", keywords: "group helpers system processes confirm quit",
-                  view: AnyView(ProcessesCard())),
-            .init(title: "Storage", keywords: "analyze hidden files whole disk scan",
-                  view: AnyView(StorageCard())),
-            .init(title: "Cleanup", keywords: "scan automatically caches",
-                  view: AnyView(CleanupCard())),
         ]),
         SettingsSectionModel(title: "Alerts", cards: [
             .init(title: "Overheating", keywords: "hot threshold cpu temperature flame",
                   view: AnyView(OverheatingCard())),
             .init(title: "Notifications", keywords: "notify overheat thermal pressure",
                   view: AnyView(NotificationsCard())),
-            .init(title: "Custom alerts", keywords: "rule temperature fan disk battery process network download upload threshold disk read disk write",
-                  view: AnyView(CustomAlertsCard())),
         ]),
         SettingsSectionModel(title: "Updates", cards: [
             .init(title: "Software updates", keywords: "version automatic check download install release",
@@ -158,11 +136,11 @@ struct SettingsView: View {
         SettingsSectionModel(title: "Data", cards: [
             .init(title: "Logging", keywords: "log readings disk export csv history database",
                   view: AnyView(LoggingCard())),
-            .init(title: "Settings backup", keywords: "config json file mirror restore reinstall",
-                  view: AnyView(SettingsBackupCard())),
+            .init(title: "Cleanup", keywords: "scan automatically caches",
+                  view: AnyView(CleanupCard())),
         ]),
         SettingsSectionModel(title: "Developer", cards: [
-            .init(title: "Diagnostic logging", keywords: "level errors normal verbose console log file",
+            .init(title: "Diagnostic logging", keywords: "level errors normal verbose log file",
                   view: AnyView(DiagnosticLoggingCard())),
             .init(title: "Report a problem", keywords: "bug report email developer crash",
                   view: AnyView(ReportProblemCard())),
@@ -467,7 +445,7 @@ private struct PowerSettingsCard: View {
             }
             SwitchRow(
                 label: "Reduce sampling on battery",
-                caption: "Doubles the sampling interval (capped at 5 s) while on battery, and pauses the menu-bar icon animation. Low Power Mode slows sampling to 10 s regardless.",
+                caption: "Doubles the sampling interval (capped at 5 s) while on battery. Low Power Mode slows sampling to 10 s regardless.",
                 isOn: $settings.reduceOnBattery
             )
             settingsRow("Sampling rate") {
@@ -477,7 +455,7 @@ private struct PowerSettingsCard: View {
                     .foregroundStyle(.secondary)
             }
             if settings.isLowPowerMode {
-                Label("Low Power Mode is on — Vitals samples every 10 s to match macOS.", systemImage: "leaf.fill")
+                Label("Low Power Mode is on, so Vitals samples every 10 s to match macOS.", systemImage: "leaf.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -501,45 +479,6 @@ private struct AppearanceCard: View {
                 .labelsHidden()
                 .fixedSize()
             }
-            SwitchRow(
-                label: "GPU acceleration",
-                caption: "Use the GPU for Liquid Glass and animations. Turn off for opaque, motionless cards that stay light on the GPU — handy while gaming, compiling, or on battery.",
-                isOn: $settings.gpuAcceleration
-            )
-            SwitchRow(
-                label: "Liquid Glass",
-                caption: "Translucent window with glass cards. Needs GPU acceleration and macOS 26.",
-                isOn: $settings.liquidGlass
-            )
-            .disabled(!Hardware.supportsLiquidGlass || !settings.gpuAcceleration)
-            .opacity(Hardware.supportsLiquidGlass && settings.gpuAcceleration ? 1 : 0.5)
-            if !Hardware.supportsLiquidGlass {
-                Label(
-                    "Turned off automatically — this Mac has no hardware GPU (it's a virtual machine), so translucency would be software-rendered and use far too much memory.",
-                    systemImage: "cube.transparent"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                settingsRow("Frosting") {
-                    Slider(value: $settings.glassIntensity, in: 0...1)
-                        .frame(width: 170)
-                }
-                HStack {
-                    Spacer()
-                    HStack {
-                        Text("Clear")
-                        Spacer()
-                        Text("Frosted")
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 170)
-                }
-            }
-            .disabled(!settings.glassEnabled)
-            .opacity(settings.glassEnabled ? 1 : 0.5)
         }
     }
 }
@@ -561,44 +500,11 @@ private struct ApplicationCard: View {
                 isOn: $settings.hideDockIcon
             )
             .disabled(!settings.showMenuBar)
-            SwitchRow(
-                label: "Scan CLI and system applications",
-                caption: "Off by default for a faster first result. When enabled, Vitals also reads package-manager inventories and /System/Applications in parallel.",
-                isOn: $settings.scanCLIAndSystemApplications
-            )
         }
     }
 }
 
-// MARK: - Interface cards
-
-/// Navigation-bar appearance: label display mode and density. The tab *set*
-/// itself is fixed and curated (five tabs, fixed order) — there's deliberately
-/// no show/hide/reorder, so the app looks the same, designed, on every Mac.
-private struct TabsCard: View {
-    @EnvironmentObject private var settings: AppSettings
-
-    var body: some View {
-        SettingsCard(title: "Tabs", symbol: "menubar.rectangle", tint: .indigo) {
-            settingsRow("Labels") {
-                Picker("", selection: $settings.tabDisplayMode) {
-                    ForEach(TabDisplayMode.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-            }
-            settingsRow("Size") {
-                Picker("", selection: $settings.tabSize) {
-                    ForEach(TabSize.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-            }
-            Text("Dashboard · System · Storage · Cleanup · Applications. ⌘1–5 follow this order.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
+// MARK: - Menu bar
 
 private struct MenuBarCard: View {
     @EnvironmentObject private var settings: AppSettings
@@ -627,13 +533,6 @@ private struct MenuBarCard: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-                SwitchRow(
-                    label: "Animate icons",
-                    caption: "Gently spins the fan and breathes the rest. Needs GPU acceleration, and pauses on battery (when Reduce sampling is on) or in Low Power Mode.",
-                    isOn: $settings.menuBarAnimated
-                )
-                .disabled(!settings.menuBarUseIcons || !settings.gpuAcceleration)
-                .opacity(settings.menuBarUseIcons && settings.gpuAcceleration ? 1 : 0.5)
             }
             .disabled(!settings.showMenuBar)
             .opacity(settings.showMenuBar ? 1 : 0.5)
@@ -641,101 +540,7 @@ private struct MenuBarCard: View {
     }
 }
 
-private struct WidgetsCard: View {
-    @EnvironmentObject private var settings: AppSettings
-    @EnvironmentObject private var widgets: WidgetManager
-
-    var body: some View {
-        SettingsCard(title: "Desktop Widgets", symbol: "square.grid.2x2", tint: .pink) {
-            Text("Live panels on your desktop, from the same readings as the app. Drag to place, resize from the corner — every display arrangement remembers its own layout.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            ForEach(WidgetKind.allCases) { kind in
-                SwitchRow(
-                    label: kind.title,
-                    isOn: Binding(
-                        get: { widgets.isVisible(kind) },
-                        set: { _ in widgets.toggle(kind) }
-                    )
-                )
-            }
-            Divider().opacity(0.5)
-            // Label above the picker: three segments don't leave room for a
-            // side label in the card column (it wraps to a letter a line).
-            VStack(alignment: .leading, spacing: 6) {
-                HighlightLabel("Placement")
-                    .font(.system(size: 12.5))
-                // Titled for VoiceOver; `labelsHidden` keeps it visual-only
-                // (the HighlightLabel above is the visible, searchable label).
-                Picker("Placement", selection: $widgets.levelMode) {
-                    ForEach(WidgetLevelMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                HighlightLabel(widgets.levelMode.caption)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            SwitchRow(
-                label: "Animate widgets",
-                caption: "Widgets react to their readings: a rim glow that breathes with severity and a fan that spins faster as RPM climbs. Off: perfectly still panels.",
-                isOn: $settings.animateWidgets
-            )
-        }
-    }
-}
-
-// MARK: - Monitoring cards
-
-private struct ProcessesCard: View {
-    @EnvironmentObject private var settings: AppSettings
-
-    var body: some View {
-        SettingsCard(title: "Processes", symbol: "list.bullet", tint: .green) {
-            SwitchRow(
-                label: "Group app helpers",
-                caption: "Fold an app's helper processes into one row (e.g. Brave's many helpers → a single “Brave”).",
-                isOn: $settings.groupHelperProcesses
-            )
-            SwitchRow(
-                label: "Show system processes",
-                caption: "Also list root and background processes. They can't be quit without admin rights, so they're hidden by default.",
-                isOn: $settings.showSystemProcesses
-            )
-            SwitchRow(
-                label: "Confirm before quitting",
-                caption: "Ask before a normal Quit. Force Quit always asks regardless.",
-                isOn: $settings.confirmBeforeQuittingProcess
-            )
-        }
-    }
-}
-
-private struct StorageCard: View {
-    @EnvironmentObject private var settings: AppSettings
-
-    var body: some View {
-        SettingsCard(title: "Storage", symbol: "internaldrive", tint: .blue) {
-            SwitchRow(
-                label: "Analyze automatically on open",
-                caption: "Off by default — analysis walks your disk, so the Storage tab waits for you to press Analyze.",
-                isOn: $settings.autoAnalyzeStorage
-            )
-            SwitchRow(
-                label: "Include hidden files",
-                caption: "Count dotfiles and hidden folders (caches, the Trash). Applies on the next analyze.",
-                isOn: $settings.analyzerIncludesHidden
-            )
-            SwitchRow(
-                label: "Allow scanning the whole disk",
-                caption: "Adds a Scan whole disk action that walks every folder from the top of your drive, including system areas. It can take a while and use the disk heavily — Vitals confirms before each run.",
-                isOn: $settings.allowWholeDiskScan
-            )
-        }
-    }
-}
+// MARK: - Cleanup
 
 private struct CleanupCard: View {
     @EnvironmentObject private var settings: AppSettings
@@ -798,189 +603,13 @@ private struct NotificationsCard: View {
     }
 
     private var hasAnyAlert: Bool {
-        settings.notifyOverheat || settings.notifyThermal || settings.alertRules.contains(where: \.enabled)
+        settings.notifyOverheat || settings.notifyThermal
     }
 
     private func refreshNotificationStatus() async {
         guard NotificationManager.supported else { return }
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         notificationsDenied = status == .denied
-    }
-}
-
-private struct CustomAlertsCard: View {
-    @EnvironmentObject private var settings: AppSettings
-    @State private var expandedRule: UUID?
-
-    var body: some View {
-        SettingsCard(title: "Custom alerts", symbol: "bell.badge.waveform", tint: .blue) {
-            if settings.alertRules.isEmpty {
-                Text("Build your own alerts — get notified when a temperature, fan, disk, battery, or process crosses a line you set.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach($settings.alertRules) { $rule in
-                    AlertRuleRow(
-                        rule: $rule,
-                        isExpanded: Binding(
-                            get: { expandedRule == rule.id },
-                            set: { expandedRule = $0 ? rule.id : nil }
-                        ),
-                        onDelete: { settings.alertRules.removeAll { $0.id == rule.id } }
-                    )
-                    if rule.id != settings.alertRules.last?.id {
-                        Divider().opacity(0.5)
-                    }
-                }
-            }
-            Button {
-                let rule = AlertRule(metric: .cpuTemp)
-                settings.alertRules.append(rule)
-                expandedRule = rule.id
-            } label: {
-                Label("Add alert", systemImage: "plus.circle")
-            }
-            .controlSize(.small)
-            .padding(.top, 4)
-        }
-    }
-}
-
-/// One custom-alert row: a plain-language sentence with an enable switch, that
-/// expands into an editor (metric, condition, threshold, sustain). The threshold
-/// is stored canonically (°C) but shown/edited in the user's temperature unit.
-private struct AlertRuleRow: View {
-    @EnvironmentObject private var settings: AppSettings
-    @Binding var rule: AlertRule
-    @Binding var isExpanded: Bool
-    let onDelete: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Toggle("", isOn: $rule.enabled)
-                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
-                Image(systemName: rule.metric.symbol)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.blue)
-                    .frame(width: 22, height: 22)
-                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.blue.opacity(0.14)))
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { isExpanded.toggle() }
-                } label: {
-                    HStack {
-                        Text(sentence)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(rule.enabled ? .primary : .secondary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            if isExpanded { editor }
-        }
-    }
-
-    private var editor: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            settingsRow("Metric") {
-                Picker("", selection: metricBinding) {
-                    ForEach(AlertMetric.allCases) { Text($0.label).tag($0) }
-                }
-                .labelsHidden().fixedSize()
-            }
-            settingsRow("Condition") {
-                Picker("", selection: $rule.comparison) {
-                    ForEach(AlertComparison.allCases) { Text($0.label.capitalized).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Threshold").font(.system(size: 12.5))
-                    Spacer()
-                    Text(displayThreshold)
-                        .font(.system(.callout, design: .rounded, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(.blue)
-                }
-                Slider(value: thresholdBinding, in: thresholdRange, step: sliderStep)
-            }
-            settingsRow("Sustained for") {
-                Stepper(value: $rule.sustainedMinutes, in: 0...30, step: 1) {
-                    Text(rule.sustainedMinutes == 0 ? "Immediately" : "\(Int(rule.sustainedMinutes)) min")
-                        .font(.system(size: 12.5)).monospacedDigit()
-                }
-                .fixedSize()
-            }
-            HStack {
-                Spacer()
-                Button(role: .destructive, action: onDelete) {
-                    Label("Delete", systemImage: "trash")
-                }
-                .controlSize(.small)
-            }
-        }
-        .padding(.leading, 30)
-        .padding(.top, 2)
-    }
-
-    /// Switching the metric resets the condition + threshold to that metric's
-    /// sensible defaults, so a 90% threshold never carries over to "free disk".
-    private var metricBinding: Binding<AlertMetric> {
-        Binding(
-            get: { rule.metric },
-            set: { metric in
-                rule.metric = metric
-                rule.comparison = metric.defaultComparison
-                rule.threshold = metric.defaultThreshold
-            }
-        )
-    }
-
-    private var thresholdRange: ClosedRange<Double> {
-        let range = rule.metric.range
-        guard rule.metric.isTemperature else { return range }
-        return settings.display(range.lowerBound)...settings.display(range.upperBound)
-    }
-
-    private var sliderStep: Double { rule.metric.isTemperature ? 1 : rule.metric.step }
-
-    private var thresholdBinding: Binding<Double> {
-        Binding(
-            get: { rule.metric.isTemperature ? settings.display(rule.threshold) : rule.threshold },
-            set: { shown in
-                if rule.metric.isTemperature {
-                    rule.threshold = settings.unit == .fahrenheit ? (shown - 32) * 5 / 9 : shown
-                } else {
-                    rule.threshold = shown
-                }
-            }
-        )
-    }
-
-    private var displayThreshold: String {
-        if rule.metric.isTemperature {
-            return "\(Int(settings.display(rule.threshold).rounded()))\(settings.unit.symbol)"
-        }
-        switch rule.metric {
-        case .fanRPM:   return "\(Int(rule.threshold)) rpm"
-        case .diskFree: return "\(Int(rule.threshold)) GB"
-        case .networkDownload, .networkUpload: return "\(Int(rule.threshold)) MB/s"
-        case .diskRead, .diskWrite: return "\(Int(rule.threshold)) MB/s"
-        default:        return "\(Int(rule.threshold))%"
-        }
-    }
-
-    private var sentence: String {
-        var line = "\(rule.metric.label) \(rule.comparison.label) \(displayThreshold)"
-        if rule.sustainedMinutes > 0 { line += " for \(Int(rule.sustainedMinutes)) min" }
-        return line
     }
 }
 
@@ -1129,36 +758,10 @@ private struct LoggingCard: View {
     }
 }
 
-private struct SettingsBackupCard: View {
-    var body: some View {
-        SettingsCard(title: "Settings backup", symbol: "gearshape.2", tint: .blue) {
-            settingsRow("Config file") {
-                Button("Reveal") {
-                    NSWorkspace.shared.activateFileViewerSelecting([DataHome.configFile])
-                }
-                .controlSize(.small)
-                .disabled(!configExists)
-            }
-            Text("Your preferences are mirrored to \(folderDisplayPath)/config/config.json and restored automatically — so an update or reinstall keeps your setup. It's plain JSON: read it, back it up, or copy it to another Mac.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var configExists: Bool {
-        FileManager.default.fileExists(atPath: DataHome.configFile.path)
-    }
-
-    private var folderDisplayPath: String {
-        (DataHome.directory.path as NSString).abbreviatingWithTildeInPath
-    }
-}
-
 // MARK: - Developer cards
 
 private struct DiagnosticLoggingCard: View {
     @EnvironmentObject private var settings: AppSettings
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         SettingsCard(title: "Diagnostic logging", symbol: "ant", tint: .teal) {
@@ -1167,10 +770,6 @@ private struct DiagnosticLoggingCard: View {
                     ForEach(LogLevel.settingChoices) { Text($0.settingLabel).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-            }
-            settingsRow("Console") {
-                Button("Open Log Console") { openWindow(id: "logConsole") }
-                    .controlSize(.small)
             }
             settingsRow("Log file") {
                 HStack(spacing: 8) {
@@ -1181,7 +780,7 @@ private struct DiagnosticLoggingCard: View {
                 }
                 .controlSize(.small)
             }
-            Text("Records what the app's services are doing — separate from the readings log under Data. **Errors** logs only failures; **Normal** adds key events; **Verbose** traces everything (noisier). Written to \(folderDisplayPath)/logs/vitals.log. Open the console to read it live.")
+            Text("Records what the app's services are doing — separate from the readings log under Data. **Errors** logs only failures; **Normal** adds key events; **Verbose** traces everything (noisier). Written to \(folderDisplayPath)/logs/vitals.log.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -1197,7 +796,6 @@ private struct DiagnosticLoggingCard: View {
 }
 
 private struct ReportProblemCard: View {
-    @EnvironmentObject private var settings: AppSettings
     @State private var reporting = false
 
     var body: some View {
@@ -1211,9 +809,7 @@ private struct ReportProblemCard: View {
                 .foregroundStyle(.secondary)
         }
         .sheet(isPresented: $reporting) {
-            // The Settings panel has no VitalsModel in scope, so the report uses
-            // the static hardware/version header (model: nil).
-            ProblemReportView(model: nil, settings: settings)
+            ProblemReportView()
         }
     }
 }

@@ -1,12 +1,10 @@
 import Foundation
 import SwiftUI
 
-/// The Cleanup surface has five pages: the two classic depth-based cache sweeps
-/// (Quick / Deep), per-project Developer junk, a Large-&-Old Files review, and a
-/// content-verified Duplicates finder. Persisted by raw value in
-/// `@AppStorage("cleanupPage")`.
+/// The Cleanup pages: the depth-based cache sweeps (Quick / Deep) and
+/// per-project Developer junk. Persisted in `@AppStorage("cleanupPage")`.
 enum CleanupPage: String, CaseIterable, Identifiable {
-    case quick, deep, developer, files, duplicates
+    case quick, deep, developer
 
     var id: String { rawValue }
     var title: String {
@@ -14,8 +12,6 @@ enum CleanupPage: String, CaseIterable, Identifiable {
         case .quick: return "Quick"
         case .deep: return "Deep"
         case .developer: return "Developer"
-        case .files: return "Files"
-        case .duplicates: return "Duplicates"
         }
     }
     /// SF Symbol shown beside each mode in the picker menu.
@@ -24,13 +20,11 @@ enum CleanupPage: String, CaseIterable, Identifiable {
         case .quick: return "sparkles"
         case .deep: return "sparkles.rectangle.stack"
         case .developer: return "hammer"
-        case .files: return "doc.text.magnifyingglass"
-        case .duplicates: return "doc.on.doc"
         }
     }
 }
 
-/// Outcome of a Developer/Files sweep, surfaced to the view as an alert. Bytes
+/// Outcome of a Developer sweep, surfaced to the view as an alert. Bytes
 /// are the real freed amount the service confirmed (honesty over decoration).
 struct ReclaimResult {
     var freedBytes: UInt64
@@ -353,217 +347,8 @@ final class CleanupModel: ObservableObject {
 
     func dismissDevResult() { lastDevResult = nil }
 
-    // MARK: - Large & old files
-
-    @Published private(set) var largeFiles: [LargeFileScanner.Item] = []
-    @Published var filesSelection: Set<URL> = []
-    @Published private(set) var isFilesScanning = false
-    @Published private(set) var isFilesCleaning = false
-    @Published private(set) var hasFilesRun = false
-    @Published private(set) var lastFilesResult: ReclaimResult?
-    /// Minimum on-disk size to list; defaults to 100 MB.
-    @Published var filesMinSize: UInt64 = 100 * 1024 * 1024
-    /// Optional minimum age in days (nil = any age).
-    @Published var filesMinAgeDays: Int?
-
-    private var filesScanTask: Task<Void, Never>?
-
-    var selectedFiles: [LargeFileScanner.Item] {
-        largeFiles.filter { filesSelection.contains($0.url) }
-    }
-    var filesSelectedBytes: UInt64 { selectedFiles.reduce(0) { $0 + $1.sizeBytes } }
-    var filesSelectedCount: Int { filesSelection.count }
-    var filesTotalBytes: UInt64 { largeFiles.reduce(0) { $0 + $1.sizeBytes } }
-
-    func toggleFile(_ url: URL) {
-        if filesSelection.contains(url) { filesSelection.remove(url) } else { filesSelection.insert(url) }
-    }
-
-    func selectSuggested() {
-        filesSelection = Set(largeFiles.filter(\.isSuggested).map(\.url))
-    }
-
-    func clearFilesSelection() { filesSelection.removeAll() }
-
-    /// Lists big (and optionally old) personal files, largest first. Runs off the
-    /// main actor; changing the size/age filters and rescanning is the view's job.
-    func scanFiles() {
-        guard !isFilesCleaning else { return }
-        hasFilesRun = true
-        filesScanTask?.cancel()
-        isFilesScanning = true
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let filter = LargeFileScanner.Filter(minSizeBytes: filesMinSize, minAgeDays: filesMinAgeDays)
-
-        // Detached so stopFilesScan's cancel reaches Task.isCancelled inside
-        // LargeFileScanner.scan; a cancelled run returns without clearing
-        // isFilesScanning (only stopFilesScan and natural completion do).
-        filesScanTask = Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            let roots = LargeFileScanner.defaultRoots(home: home)
-            let items = LargeFileScanner.scan(roots: roots, filter: filter, home: home)
-            if Task.isCancelled { return }
-            await MainActor.run {
-                guard !Task.isCancelled else { return }
-                self.largeFiles = items
-                self.filesSelection.formIntersection(Set(items.map(\.url)))
-                self.isFilesScanning = false
-            }
-        }
-    }
-
-    func stopFilesScan() {
-        filesScanTask?.cancel()
-        isFilesScanning = false
-    }
-
-    /// Moves the selected files to the Trash (recoverable — these are the user's
-    /// own files), credits the confirmed freed bytes, clears selection, rescans.
-    func trashFiles() {
-        let targets = selectedFiles
-        guard !targets.isEmpty, !isFilesCleaning else { return }
-        isFilesCleaning = true
-
-        Task { [weak self] in
-            guard let self else { return }
-            let result = await Task.detached(priority: .userInitiated) {
-                LargeFileScanner.trash(targets)
-            }.value
-            lastFilesResult = ReclaimResult(freedBytes: result.freedBytes, failureCount: result.failures.count)
-            Log.notice(.cleanup, "trashed files freed \(ByteCountFormatter.string(fromByteCount: Int64(result.freedBytes), countStyle: .file))\(result.failures.isEmpty ? "" : ", \(result.failures.count) failed")")
-            isFilesCleaning = false
-            filesSelection.removeAll()
-            scanFiles()
-        }
-    }
-
-    func dismissFilesResult() { lastFilesResult = nil }
-
-    // MARK: - Duplicate files
-
-    @Published private(set) var duplicateGroups: [DuplicateScanner.Group] = []
-    @Published var dupSelection: Set<URL> = []
-    @Published private(set) var isDupScanning = false
-    @Published private(set) var isDupCleaning = false
-    @Published private(set) var hasDupRun = false
-    @Published private(set) var lastDupResult: ReclaimResult?
-    /// Minimum file size to consider — hashing is the cost, and duplicates below
-    /// this rarely matter for space. Defaults to 1 MB.
-    @Published var dupMinSize: UInt64 = 1024 * 1024
-
-    private var dupScanTask: Task<Void, Never>?
-
-    /// The files that will actually be trashed — the single source the footer and
-    /// the trash op both read. Enforces the page's promise that one copy of every
-    /// set always survives: if every copy in a group is selected (possible via
-    /// per-row toggles), the keeper (oldest) is dropped from the trash set, so the
-    /// last copy is never removed and the count/bytes reflect what really happens.
-    var selectedDuplicates: [DuplicateScanner.File] {
-        duplicateGroups.flatMap { group -> [DuplicateScanner.File] in
-            let selected = group.files.filter { dupSelection.contains($0.url) }
-            if selected.count == group.files.count, let keeper = group.keeper {
-                return selected.filter { $0.url != keeper.url }
-            }
-            return selected
-        }
-    }
-    var dupSelectedBytes: UInt64 { selectedDuplicates.reduce(0) { $0 + $1.sizeBytes } }
-    var dupSelectedCount: Int { selectedDuplicates.count }
-    /// Total reclaimable bytes across every set if one copy of each is kept.
-    var dupTotalWastedBytes: UInt64 { duplicateGroups.reduce(0) { $0 + $1.wastedBytes } }
-
-    /// True when exactly the redundant copies of `group` (all but the keeper) are
-    /// selected — the state the group-level toggle drives toward.
-    func isGroupRedundantSelected(_ group: DuplicateScanner.Group) -> Bool {
-        guard let keeper = group.keeper, !group.redundant.isEmpty else { return false }
-        return group.redundant.allSatisfy { dupSelection.contains($0.url) }
-            && !dupSelection.contains(keeper.url)
-    }
-
-    func selectedBytes(in group: DuplicateScanner.Group) -> UInt64 {
-        group.files.filter { dupSelection.contains($0.url) }.reduce(0) { $0 + $1.sizeBytes }
-    }
-
-    func toggleDuplicate(_ url: URL) {
-        if dupSelection.contains(url) { dupSelection.remove(url) } else { dupSelection.insert(url) }
-    }
-
-    /// Group toggle: select every redundant copy (keeping one) or clear the set.
-    func toggleDuplicateGroup(_ group: DuplicateScanner.Group) {
-        if isGroupRedundantSelected(group) {
-            for file in group.files { dupSelection.remove(file.url) }
-        } else {
-            for file in group.files { dupSelection.remove(file.url) }  // drop any stray keeper
-            for file in group.redundant { dupSelection.insert(file.url) }
-        }
-    }
-
-    /// Selects the redundant copies of every set — keeps one of each, the rest
-    /// become the trash candidates. Never selects a keeper.
-    func selectRedundantDuplicates() {
-        dupSelection = Set(duplicateGroups.flatMap { $0.redundant.map(\.url) })
-    }
-
-    func clearDupSelection() { dupSelection.removeAll() }
-
-    /// Lists sets of byte-for-byte identical files, most reclaimable first. Runs
-    /// off the main actor; changing the size filter and rescanning is the view's job.
-    func scanDuplicates() {
-        guard !isDupCleaning else { return }
-        hasDupRun = true
-        dupScanTask?.cancel()
-        isDupScanning = true
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let minSize = dupMinSize
-
-        // Detached so stopDupScan's cancel reaches Task.isCancelled inside the walk
-        // and the hashing; a cancelled run returns without clearing isDupScanning
-        // (only stopDupScan and natural completion do).
-        dupScanTask = Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            let roots = DuplicateScanner.defaultRoots(home: home)
-            let groups = DuplicateScanner.scan(roots: roots, minSizeBytes: minSize)
-            if Task.isCancelled { return }
-            await MainActor.run {
-                guard !Task.isCancelled else { return }
-                self.duplicateGroups = groups
-                self.dupSelection.formIntersection(Set(groups.flatMap { $0.files.map(\.url) }))
-                self.isDupScanning = false
-            }
-        }
-    }
-
-    func stopDupScan() {
-        dupScanTask?.cancel()
-        isDupScanning = false
-    }
-
-    /// Moves the selected copies to the Trash (recoverable — these are the user's
-    /// own files), credits the confirmed freed bytes, clears selection, rescans.
-    func trashDuplicates() {
-        let targets = selectedDuplicates
-        guard !targets.isEmpty, !isDupCleaning else { return }
-        isDupCleaning = true
-
-        Task { [weak self] in
-            guard let self else { return }
-            let result = await Task.detached(priority: .userInitiated) {
-                DuplicateScanner.trash(targets)
-            }.value
-            lastDupResult = ReclaimResult(freedBytes: result.freedBytes, failureCount: result.failures.count)
-            Log.notice(.cleanup, "trashed duplicates freed \(ByteCountFormatter.string(fromByteCount: Int64(result.freedBytes), countStyle: .file))\(result.failures.isEmpty ? "" : ", \(result.failures.count) failed")")
-            isDupCleaning = false
-            dupSelection.removeAll()
-            scanDuplicates()
-        }
-    }
-
-    func dismissDupResult() { lastDupResult = nil }
-
     deinit {
         scanTask?.cancel()
         devScanTask?.cancel()
-        filesScanTask?.cancel()
-        dupScanTask?.cancel()
     }
 }

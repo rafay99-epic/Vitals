@@ -113,7 +113,6 @@ final class VitalsModel: ObservableObject {
     private let settings: AppSettings
     private let sampler = SensorSampler()
     private let notifications = NotificationManager()
-    private let alertEngine = AlertEngine()
     private var timer: Timer?
     private var isSampling = false
     /// The one in-flight sample. Cancelling a Swift Task does not interrupt a
@@ -121,7 +120,7 @@ final class VitalsModel: ObservableObject {
     private var samplingTask: Task<Void, Never>?
     private var samplingID = UUID()
     /// Whether the main window is open. Top-process sampling (the costliest part
-    /// of a tick) is skipped when it's closed and no process-CPU alert needs it.
+    /// of a tick) is skipped when it's closed.
     private var mainWindowVisible = false
     /// The visible section narrows expensive optional reads while the window is
     /// open; Settings and maintenance screens do not need process/IOReport data.
@@ -132,10 +131,6 @@ final class VitalsModel: ObservableObject {
     /// suspended. The flag also guards `start()` so a settings change made while
     /// asleep can't restart sampling until wake.
     private var isAsleep = false
-    /// Whether a desktop widget showing GPU data (the GPU or Combined widget) is
-    /// on screen. The widget reads `self.gpu`, so the IOReport GPU sample is only
-    /// skipped when this is false too — never let a visible widget go stale.
-    private var gpuWidgetVisible = false
     /// `NSWorkspace` sleep/wake observers; removed in `deinit`.
     private var sleepObservers: [NSObjectProtocol] = []
 
@@ -146,28 +141,18 @@ final class VitalsModel: ObservableObject {
     /// surface instead of treating every open window as the Overview screen.
     func setVisibleSection(_ sectionID: String) { visibleSectionID = sectionID }
 
-    /// Call when a GPU-bearing widget (`.gpu` / `.combined`) appears/disappears
-    /// so the sampler keeps the IOReport GPU reading live while it's on screen.
-    func setGPUWidgetVisible(_ visible: Bool) { gpuWidgetVisible = visible }
-
     /// Test/diagnostic exposure of whether the sampling timer is armed. Sleep
     /// tears it down; wake rebuilds it.
     internal var isSamplingTimerActive: Bool { timer != nil }
 
     private var needsTopProcesses: Bool {
-        mainWindowVisible && ["overview", "memory", "processes"].contains(visibleSectionID)
-            || settings.alertRules.contains { $0.enabled && $0.metric == .processCPU }
+        mainWindowVisible && ["overview", "memory"].contains(visibleSectionID)
     }
-    /// Whether the IOReport GPU sample is needed this tick. The GPU reading is
-    /// only consumed by surfaces the user can see: the window's GPU card, a GPU
-    /// or Combined desktop widget, a GPU-usage menu-bar metric, or a GPU-usage
-    /// alert. Menu-bar-only with no GPU metric → skip the read and hold the last
-    /// value, cutting an IOReport round-trip every tick.
+    /// Whether the IOReport GPU sample is needed this tick: only for a surface the
+    /// user can see (the window's GPU views or a GPU menu-bar metric).
     private var needsGPU: Bool {
         mainWindowVisible && ["overview", "gpu", "history"].contains(visibleSectionID)
-            || gpuWidgetVisible
             || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage))
-            || settings.alertRules.contains { $0.enabled && $0.metric == .gpuUsage }
     }
     /// Whether the IOReport SoC-power sample is needed. Power appears in the
     /// overview, CPU/GPU/Battery detail, and History charts.
@@ -181,18 +166,16 @@ final class VitalsModel: ObservableObject {
     /// milliseconds; this only fires when a syscall has genuinely wedged.
     private static let sampleTimeout: TimeInterval = 5
 
+    /// At most one history row per 10 s, however fast the tick.
+    private static let logInterval: TimeInterval = 10
+    private var lastLoggedAt: Date = .distantPast
+
     // Overheat alerting state.
     private var hotSince: Date?
     private var lastHeatAlert: Date = .distantPast
     private var previousThermalState = ProcessInfo.processInfo.thermalState
     private static let heatAlertAfter: TimeInterval = 120
     private static let heatAlertCooldown: TimeInterval = 600
-
-    // Custom-rule alerting: free disk space is read on a throttle since it
-    // barely moves and statfs needn't run every tick.
-    private var diskFreeGB: Double?
-    private var diskCheckedAt: Date = .distantPast
-    private static let diskCheckInterval: TimeInterval = 30
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -229,10 +212,6 @@ final class VitalsModel: ObservableObject {
         settings.$notifyOverheat
             .merge(with: settings.$notifyThermal)
             .filter { $0 }
-            .sink { [weak self] _ in self?.notifications.requestAuthorizationIfNeeded() }
-            .store(in: &cancellables)
-        settings.$alertRules
-            .filter { $0.contains(where: \.enabled) }
             .sink { [weak self] _ in self?.notifications.requestAuthorizationIfNeeded() }
             .store(in: &cancellables)
 
@@ -357,8 +336,7 @@ final class VitalsModel: ObservableObject {
             }
             let snapshot = await self.sampler.sample(includeTopProcesses: includeTopProcesses,
                                                      includeGPU: includeGPU,
-                                                     includePower: includePower,
-                                                     includeAppEnergy: self.settings.loggingEnabled)
+                                                     includePower: includePower)
             guard !Task.isCancelled, self.samplingID == id else { return }
             self.apply(snapshot, sampledGPU: includeGPU)
             self.assignIfChanged(&self.sensorsStalled, to: false)
@@ -428,10 +406,6 @@ final class VitalsModel: ObservableObject {
         if let power = snapshot.power { self.power = power }
         assignIfChanged(&hasLoaded, to: true)
 
-        // Custom rules run every tick — disk/battery/process alerts shouldn't
-        // depend on temperature sensors being present.
-        evaluateAlertRules()
-
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
             history.append(Sample(
                 id: Date(),
@@ -459,7 +433,9 @@ final class VitalsModel: ObservableObject {
 
             checkAlerts(averageTemp: average)
 
-            if settings.loggingEnabled {
+            let now = Date()
+            if settings.loggingEnabled, now.timeIntervalSince(lastLoggedAt) >= Self.logInterval {
+                lastLoggedAt = now
                 HistoryDatabase.shared.append(HistoryDatabase.Entry(
                     averageTemp: average,
                     hottestTemp: hottest.celsius,
@@ -479,14 +455,8 @@ final class VitalsModel: ObservableObject {
                     // gap is honest, never a flat-held value.
                     socWatts: snapshot.power?.total,
                     batteryWatts: battery?.watts
-                ))
+                ), at: now)
             }
-        }
-
-        // Per-app energy is refreshed on its own cadence inside the sampler; when a
-        // fresh batch arrives, persist it (still gated on the logging setting).
-        if settings.loggingEnabled, let rows = snapshot.appEnergy {
-            HistoryDatabase.shared.appendAppEnergy(rows, at: Date())
         }
     }
 
@@ -559,11 +529,9 @@ final class VitalsModel: ObservableObject {
                 if let since = hotSince,
                    Date().timeIntervalSince(since) >= Self.heatAlertAfter,
                    Date().timeIntervalSince(lastHeatAlert) >= Self.heatAlertCooldown {
-                    notifications.send(
-                        title: "Your Mac is running hot",
-                        body: "Average CPU temperature has stayed above \(settings.format(settings.warnThreshold, decimals: 0)) for over 2 minutes — currently \(settings.formatWithUnit(averageTemp)).",
-                        id: "vitals.overheat"
-                    )
+                    alert(title: "Your Mac is running hot",
+                          body: "Average CPU temperature has stayed above \(settings.format(settings.warnThreshold, decimals: 0)) for over 2 minutes. Currently \(settings.formatWithUnit(averageTemp)).",
+                          id: "vitals.overheat")
                     lastHeatAlert = Date()
                 }
             } else {
@@ -574,83 +542,17 @@ final class VitalsModel: ObservableObject {
         if settings.notifyThermal,
            thermalState == .serious || thermalState == .critical,
            thermalState.rawValue > previousThermalState.rawValue {
-            notifications.send(
-                title: "Thermal pressure is \(thermalState.label)",
-                body: "macOS is throttling performance to cool down. Consider quitting heavy apps — check Top Processes in Vitals.",
-                id: "vitals.thermal"
-            )
+            alert(title: "Thermal pressure is \(thermalState.label)",
+                  body: "macOS is throttling performance to cool down. Consider quitting heavy apps; the Overview lists the top processes.",
+                  id: "vitals.thermal")
         }
         previousThermalState = thermalState
     }
 
-    // MARK: Custom alert rules
-
-    /// Runs the user's rules against the current readings and sends a
-    /// notification for each that fires. The engine handles the sustain/cooldown
-    /// timing; we just format the message in the user's units.
-    private func evaluateAlertRules() {
-        // Zero work in the common case: no rules, or none enabled.
-        guard settings.alertRules.contains(where: \.enabled) else { return }
-        let readings = currentAlertReadings()
-        for (rule, value) in alertEngine.evaluate(rules: settings.alertRules, readings: readings, now: Date()) {
-            let body = alertMessage(rule: rule, value: value, readings: readings)
-            notifications.send(title: "Vitals alert", body: body, id: "vitals.rule.\(rule.id.uuidString)")
-            AlertLog.record(message: body, at: Date())
-        }
-    }
-
-    private func currentAlertReadings() -> AlertReadings {
-        refreshDiskFreeIfStale()
-        let topProcess = topProcesses.max { $0.cpuPercent < $1.cpuPercent }
-        return AlertReadings(
-            cpuTemp: hottestCPUSensor?.celsius,
-            cpuUsage: cpuUsage,
-            gpuUsage: gpu?.utilization,
-            memoryUsedPercent: memory.map { $0.total > 0 ? Double($0.used) / Double($0.total) * 100 : 0 },
-            minFanRPM: fans.isEmpty ? nil : fans.map(\.rpm).min(),
-            diskFreeGB: diskFreeGB,
-            batteryPercent: battery?.percent,
-            topProcessCPU: topProcess?.cpuPercent,
-            topProcessName: topProcess?.name,
-            // Canonical MB/s to match the rule's stored threshold unit. Nil
-            // until the second sample — a rule can't fire on a placeholder.
-            networkDownMBps: network.map { $0.totalInPerSec / 1_000_000 },
-            networkUpMBps: network.map { $0.totalOutPerSec / 1_000_000 },
-            diskReadMBps: diskIO.map { $0.readPerSec / 1_000_000 },
-            diskWriteMBps: diskIO.map { $0.writePerSec / 1_000_000 }
-        )
-    }
-
-    private func refreshDiskFreeIfStale() {
-        guard Date().timeIntervalSince(diskCheckedAt) >= Self.diskCheckInterval else { return }
-        diskCheckedAt = Date()
-        if let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
-           let bytes = values.volumeAvailableCapacityForImportantUsage {
-            diskFreeGB = Double(bytes) / 1_073_741_824
-        }
-    }
-
-    /// A short, human notification body in the user's units. Process rules name
-    /// the offending app.
-    private func alertMessage(rule: AlertRule, value: Double, readings: AlertReadings) -> String {
-        let now = formattedAlertValue(rule.metric, value)
-        let limit = formattedAlertValue(rule.metric, rule.threshold)
-        if rule.metric == .processCPU {
-            return "\(readings.topProcessName ?? "A process") is using \(now) CPU — \(rule.comparison.label) your \(limit) alert."
-        }
-        return "\(rule.metric.label) is \(now) — \(rule.comparison.label) your \(limit) alert."
-    }
-
-    private func formattedAlertValue(_ metric: AlertMetric, _ value: Double) -> String {
-        if metric.isTemperature { return settings.formatWithUnit(value, decimals: 0) }
-        switch metric {
-        case .fanRPM:   return "\(Int(value)) rpm"
-        case .diskFree: return String(format: "%.0f GB", value)
-        // The reading is canonical MB/s; NetworkFormat speaks bytes/s.
-        case .networkDownload, .networkUpload, .diskRead, .diskWrite:
-            return NetworkFormat.rate(value * 1_000_000)
-        default:        return "\(Int(value))%"
-        }
+    /// Notifies and records the alert in History's recent-alerts list.
+    private func alert(title: String, body: String, id: String) {
+        notifications.send(title: title, body: body, id: id)
+        AlertLog.record(message: "\(title). \(body)", at: Date())
     }
 
     /// Evenly thins `samples` to at most `maxCount` points, always keeping

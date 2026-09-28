@@ -1,17 +1,12 @@
 import SwiftUI
 
-/// The Temps & Fans section: the thermal hardware in one place (TG Pro's
-/// pattern) — every temperature (the SSD's included, in the Temperatures card),
-/// the fans and their control — plus a one-click diagnostics snapshot. The SSD's
-/// *health* (wear, endurance, TRIM, lifetime) lives in Storage, next to disk
-/// space; only the drive temperature belongs here. Reuses `FanCard` and the
-/// diagnostics card verbatim rather than re-deriving them.
+/// The Temps & Fans section: every temperature Vitals can read, plus the fans.
+/// SSD *health* lives in Disk Health; only the drive temperature belongs here.
 struct SensorsView: View {
     var body: some View {
         MetricScroll {
             TemperaturesCard()
             FanCard()
-            HealthDiagnosticsCard()
         }
     }
 }

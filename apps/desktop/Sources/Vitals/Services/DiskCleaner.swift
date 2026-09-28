@@ -365,15 +365,16 @@ enum DiskCleaner {
         process.arguments = ["listlocalsnapshots", "/"]
         let out = Pipe()
         process.standardOutput = out
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
             return nil
         }
+        let data = out.fileHandleForReading.readDataToEndOfFile()   // drain before waiting
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return nil }
-        let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let text = String(data: data, encoding: .utf8) ?? ""
         let count = text.split(separator: "\n").filter { $0.contains("com.apple.TimeMachine.") }.count
         return count > 0 ? count : nil
     }

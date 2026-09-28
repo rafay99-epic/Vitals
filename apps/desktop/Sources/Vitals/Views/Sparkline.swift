@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// A lightweight line+fill sparkline drawn with `Path` — deliberately *not*
-/// Swift Charts. These widgets are always on screen, so the chart must be
-/// cheap to render every tick. Values are normalized to their own min/max.
-struct WidgetSparkline: View {
+/// Swift Charts: the dashboard tiles redraw every tick, so it must stay
+/// cheap. Values are normalized to their own min/max.
+struct Sparkline: View {
     let values: [Double]
     let tint: Color
 

@@ -1,20 +1,14 @@
 import SwiftUI
 
-/// The Cleanup tab: five pages behind one segmented picker — the classic Quick
-/// and Deep cache sweeps, per-project Developer junk, a Large-&-Old Files review,
-/// and a content-verified Duplicates finder. Pages swap **in place** (the
-/// performance rule: navigation never changes window geometry); each page keeps
-/// its own hero, scroll, and footer.
+/// The Cleanup section: Quick and Deep cache sweeps and per-project Developer
+/// junk behind one picker. Pages swap in place, so window geometry never changes.
 struct CleanupView: View {
     @ObservedObject var model: CleanupModel
     /// True only while Cleanup is the visible tab; the view stays mounted.
     var isActive: Bool
-    /// Persisted so the chosen page sticks across launches.
+    /// Persisted so the chosen page sticks across launches. A stored page that
+    /// no longer exists falls back to Quick.
     @AppStorage("cleanupPage") private var page: CleanupPage = .quick
-    /// The old two-value depth switch — migrated once into `page` so a user who
-    /// left Cleanup on Deep lands on the Deep page.
-    @AppStorage("cleanupDepth") private var legacyDepth: CleanDepth = .quick
-    @AppStorage("cleanupPageMigrated") private var pageMigrated = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,21 +26,10 @@ struct CleanupView: View {
                 case .developer:
                     CleanupDeveloperPage(model: model)
                         .transition(.opacity)
-                case .files:
-                    CleanupFilesPage(model: model)
-                        .transition(.opacity)
-                case .duplicates:
-                    CleanupDuplicatesPage(model: model)
-                        .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(response: 0.28, dampingFraction: 0.85), value: page)
-        }
-        .onAppear {
-            guard !pageMigrated else { return }
-            if legacyDepth == .deep { page = .deep }
-            pageMigrated = true
         }
     }
 
@@ -65,7 +48,7 @@ struct CleanupView: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
-            .disabled(model.isCleaning || model.isDevCleaning || model.isFilesCleaning || model.isDupCleaning)
+            .disabled(model.isCleaning || model.isDevCleaning)
             Spacer()
         }
         .padding(.horizontal, 20)

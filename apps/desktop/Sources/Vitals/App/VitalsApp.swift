@@ -2,17 +2,16 @@ import SwiftUI
 import AppKit
 
 struct VitalsApp: App {
-    // Keeps the app running when every window is closed, so the menu-bar item
-    // (now a custom status item, not MenuBarExtra) stays put.
+    // Keeps the app running when every window is closed, so the menu-bar item stays.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var settings: AppSettings
-    @StateObject private var model: VitalsModel
-    @StateObject private var updater: Updater
-    @StateObject private var fanControl: FanController
-    @StateObject private var widgets: WidgetManager
-    @StateObject private var menuBar: MenuBarController
-    @StateObject private var logStore: LogStore
-    @StateObject private var navigator: Navigator
+    // Plain constants, not @StateObject: the App struct must not observe the
+    // models, or every published change re-evaluates every scene and command.
+    // SwiftUI creates the App once, so these live for the process.
+    private let settings: AppSettings
+    private let model: VitalsModel
+    private let updater: Updater
+    private let navigator: Navigator
+    private let menuBar: MenuBarController
 
     init() {
         // Create the data home and migrate any legacy log before logging starts.
@@ -22,76 +21,41 @@ struct VitalsApp: App {
         let settings = AppSettings()
         let model = VitalsModel(settings: settings)
         let updater = Updater()
-        let fanControl = FanController()
         let navigator = Navigator()
         model.start()
         updater.startAutomaticChecks(settings: settings)
         settings.applyActivationPolicy()
         settings.applyTheme()
-        _settings = StateObject(wrappedValue: settings)
-        _model = StateObject(wrappedValue: model)
-        _updater = StateObject(wrappedValue: updater)
-        _fanControl = StateObject(wrappedValue: fanControl)
-        _navigator = StateObject(wrappedValue: navigator)
-        // Widgets observe the same model/settings — one data path, no re-polling.
-        _widgets = StateObject(wrappedValue: WidgetManager(model: model, settings: settings))
-        // The menu-bar status item hosts a live, compositor-animated label; its
-        // gear navigates the main window to the Settings section.
-        _menuBar = StateObject(wrappedValue: MenuBarController(model: model, settings: settings, fanControl: fanControl, navigator: navigator))
-        // Diagnostic log store: seeds from vitals.log and feeds the Logs tab.
-        // `AppSettings.init` already set the capture level before this point.
-        _logStore = StateObject(wrappedValue: LogStore())
+        self.settings = settings
+        self.model = model
+        self.updater = updater
+        self.navigator = navigator
+        menuBar = MenuBarController(model: model, settings: settings, navigator: navigator)
         Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.rawValue))")
-        // Surface a crash / unclean exit from the previous run, off the launch path.
-        Task.detached(priority: .utility) { CrashReporter.reportPreviousRunIfNeeded() }
+        Task.detached(priority: .utility) {
+            // Surface a crash / unclean exit from the previous run, off the launch path.
+            CrashReporter.reportPreviousRunIfNeeded()
+            FanHelperRetirement.releaseFans()
+        }
     }
 
     var body: some Scene {
         // Window (not WindowGroup): exactly one main window, like Activity
-        // Monitor — no ⌘N duplicates, dock clicks and openWindow always
-        // return the existing one.
+        // Monitor. No ⌘N duplicates; dock clicks and openWindow reuse it.
         Window("Vitals", id: "main") {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(settings)
                 .environmentObject(updater)
-                .environmentObject(fanControl)
-                .environmentObject(logStore)
-                .environmentObject(widgets)
                 .environmentObject(navigator)
-                .environment(\.animationsEnabled, settings.animationsEnabled)
         }
         .defaultSize(width: 1100, height: 760)
-        // No system title bar: ContentView's header carries branding, tabs,
-        // and window dragging. Traffic lights overlay the header's leading
-        // edge (it pads around them).
+        // No system title bar: the sidebar carries branding and window dragging.
         .windowStyle(.hiddenTitleBar)
         .commands {
             SettingsCommands(navigator: navigator)
-            HelpCommands()
+            CommandGroup(replacing: .help) {}
         }
-
-        Window("Vitals Help", id: "help") {
-            HelpView()
-        }
-        .windowResizability(.contentSize)
-        .defaultPosition(.center)
-
-        // The developer log console — its own window (opened from Settings →
-        // Developer), not a main-window tab. Needs the shared model/settings for
-        // the problem-report header and the live log store.
-        Window("Vitals Log Console", id: "logConsole") {
-            LogsView()
-                .environmentObject(model)
-                .environmentObject(settings)
-                .environmentObject(logStore)
-                .frame(minWidth: 760, minHeight: 480)
-        }
-        .defaultSize(width: 940, height: 620)
-        .defaultPosition(.center)
-
-        // The menu-bar item is a custom NSStatusItem managed by `MenuBarController`
-        // (created in init), not a MenuBarExtra scene — see that type for why.
     }
 }
 
@@ -112,18 +76,3 @@ struct SettingsCommands: Commands {
         }
     }
 }
-
-/// Points the Help menu at the in-app help window.
-struct HelpCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some Commands {
-        CommandGroup(replacing: .help) {
-            Button("Vitals Help") {
-                openWindow(id: "help")
-            }
-            .keyboardShortcut("?", modifiers: .command)
-        }
-    }
-}
-

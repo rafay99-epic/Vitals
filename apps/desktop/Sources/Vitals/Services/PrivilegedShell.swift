@@ -30,7 +30,7 @@ enum PrivilegedShell {
                 process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
                 process.arguments = ["-e", appleScript]
                 let stderr = Pipe()
-                process.standardOutput = Pipe()
+                process.standardOutput = FileHandle.nullDevice
                 process.standardError = stderr
                 do {
                     try process.run()

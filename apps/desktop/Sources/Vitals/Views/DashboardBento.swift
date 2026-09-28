@@ -165,9 +165,9 @@ struct DashboardTileGrid: View {
                     title: "Drive",
                     value: "\(disk.percentUsed)%",
                     subtitle: "of write endurance · \(DiskHealthSnapshot.condition(criticalWarning: disk.criticalWarning))",
-                    symbol: DiskContent.symbol(for: disk),
+                    symbol: diskSymbol(for: disk),
                     tint: diskWearTint(disk.wearLevel)
-                ) { drill(.sensors) }
+                ) { drill(.storage) }
             }
 
             DashboardTile(
@@ -265,7 +265,7 @@ struct DashboardTile: View {
                 // not its sparkline has data yet.
                 Group {
                     if series.count >= 2 {
-                        WidgetSparkline(values: series, tint: tint)
+                        Sparkline(values: series, tint: tint)
                     } else {
                         Color.clear
                     }
@@ -289,36 +289,11 @@ struct DashboardTile: View {
 
 // MARK: - Top processes
 
-/// The live top-CPU processes, glanceable on the Dashboard (Mole puts them on the
-/// status screen too). The whole card drills into System ▸ Processes — the full
-/// sortable, searchable, quittable manager.
+/// The live top-CPU processes, glanceable on the Dashboard.
 struct DashboardProcessesCard: View {
-    let drill: (NavSection) -> Void
-    @State private var hovered = false
-
     var body: some View {
-        Button { drill(.processes) } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Label("Top processes", systemImage: "list.bullet.rectangle")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("All processes")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(hovered ? AnyShapeStyle(.secondary) : AnyShapeStyle(.quaternary))
-                }
-                TopProcessesContent()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .cardBackground()
+        SectionCard(title: "Top processes", symbol: "list.bullet.rectangle") {
+            TopProcessesContent()
         }
-        .buttonStyle(.plain)
-        .onHover { hovered = $0 }
-        .help("Open System ▸ Processes")
     }
 }

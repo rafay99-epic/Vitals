@@ -406,7 +406,6 @@ private struct HistoryExportCard: View {
             HStack(spacing: 8) {
                 Button("Export CSV") { export(.csv) }
                 Button("Export JSON") { export(.json) }
-                Button("App Energy CSV") { export(.appEnergy) }
                 if let message {
                     Text(message).font(.caption).foregroundStyle(.secondary)
                 }
@@ -418,7 +417,7 @@ private struct HistoryExportCard: View {
         }
     }
 
-    private enum Format { case csv, json, appEnergy }
+    private enum Format { case csv, json }
 
     private func export(_ format: Format) {
         Task {
@@ -426,7 +425,6 @@ private struct HistoryExportCard: View {
                 switch format {
                 case .csv: return HistoryExport.csv()
                 case .json: return HistoryExport.json()
-                case .appEnergy: return HistoryExport.appEnergyCSV()
                 }
             }.value
             if let url {

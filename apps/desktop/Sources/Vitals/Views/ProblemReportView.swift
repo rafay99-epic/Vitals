@@ -5,11 +5,6 @@ import SwiftUI
 /// diagnostic summary in the body) and reveals the full log in Finder to attach.
 /// They review and send it themselves — nothing leaves the machine until they do.
 struct ProblemReportView: View {
-    /// Provided by the console (full live snapshot); nil from Settings (static
-    /// header). See `ProblemReport.diagnosticHeader`.
-    var model: VitalsModel?
-    var settings: AppSettings?
-
     @Environment(\.dismiss) private var dismiss
     @State private var detail = ""
     @State private var sending = false
@@ -68,7 +63,7 @@ struct ProblemReportView: View {
         .frame(width: 460)
         .alert("No mail app found", isPresented: $showNoMailHandler) {
             Button("Copy Report") {
-                ProblemReport.copyBody(description: detail, model: model, settings: settings)
+                ProblemReport.copyBody(description: detail)
                 dismiss()
             }
             Button("Cancel", role: .cancel) { showNoMailHandler = false }
@@ -102,7 +97,7 @@ struct ProblemReportView: View {
     private func send() async {
         sending = true
         defer { sending = false }
-        let outcome = await ProblemReport.send(description: detail, model: model, settings: settings)
+        let outcome = await ProblemReport.send(description: detail)
         switch outcome {
         case .opened:
             dismiss()

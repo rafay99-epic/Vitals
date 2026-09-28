@@ -18,8 +18,8 @@ enum ProblemReport {
     }
 
     /// Renders the log, reveals it, and opens a pre-filled mail draft.
-    static func send(description: String, model: VitalsModel?, settings: AppSettings?) async -> Outcome {
-        let header = diagnosticHeader(model: model, settings: settings)
+    static func send(description: String) async -> Outcome {
+        let header = compactHeader()
         let report = await Task.detached(priority: .userInitiated) { LogExport.writeReport(header: header) }.value
         let recent = await Task.detached(priority: .userInitiated) { LogExport.recentIssues(limit: 6) }.value
 
@@ -41,7 +41,7 @@ enum ProblemReport {
 
     /// Fallback when there's no mail handler: copy the body so the user can paste
     /// it into webmail; the report file is already revealed.
-    static func copyBody(description: String, model: VitalsModel?, settings: AppSettings?) {
+    static func copyBody(description: String) {
         let recent = LogExport.recentIssues(limit: 6)
         let body = mailBody(description: description, recent: recent, reportName: nil)
         NSPasteboard.general.clearContents()
@@ -50,17 +50,7 @@ enum ProblemReport {
 
     // MARK: - Headers / body
 
-    /// Full header for the attached report: the live snapshot when a model is
-    /// available (the console), else a static hardware/version header (Settings).
-    static func diagnosticHeader(model: VitalsModel?, settings: AppSettings?) -> String {
-        if let model, let settings {
-            return DiagnosticSnapshot.text(model: model, settings: settings)
-        }
-        return compactHeader()
-    }
-
-    /// One-liner for the mail body — kept short so the `mailto:` URL stays within
-    /// practical length limits.
+    /// One-liner header, short so the `mailto:` URL stays within practical limits.
     private static func compactHeader() -> String {
         "\(HardwareInfo.chipName) · \(HardwareInfo.osVersion) · Vitals \(Updater.currentVersion) · session \(Log.session)"
     }

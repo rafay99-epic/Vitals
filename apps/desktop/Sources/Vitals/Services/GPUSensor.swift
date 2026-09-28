@@ -35,12 +35,6 @@ struct GPUSnapshot {
         self.memoryAllocated = memoryAllocated
         self.memoryTotal = memoryTotal
     }
-
-    /// Fraction of the recommended working set in use, 0...1, when both are known.
-    var memoryFraction: Double? {
-        guard let used = memoryUsed, let total = memoryTotal, total > 0 else { return nil }
-        return min(Double(used) / Double(total), 1)
-    }
 }
 
 /// Reads GPU utilization and memory from the IOAccelerator registry entry — the
