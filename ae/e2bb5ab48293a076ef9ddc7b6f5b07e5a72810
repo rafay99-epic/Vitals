@@ -153,6 +153,7 @@ apps/desktop/Sources/Vitals/Views/Components.swift
 apps/desktop/Sources/Vitals/Views/AppsView.swift
   s_70840817465319::t_7ea30f7021b65c 4-5,16-17,38,79-80,108-109,131-133,415-416,435-436,607-608,690-691
   s_70840817465319::t_61efe4ee8e673e 33
+  s_70840817465319::t_9d7456388a6eb8 39
 apps/desktop/Sources/Vitals/Models/VitalsModel.swift
   s_70840817465319::t_aaba1c7d76b244 188
   s_70840817465319::t_f236cc19884cf5 306-307
