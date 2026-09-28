@@ -1,0 +1,19 @@
+docs/plans/2026-09-28-perf-cleanup-plan.html
+  s_70840817465319::t_0b1b785cdc9ddf 1-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "94a7a7eb2b45962ec757b2100fcbb8295a33e50c",
+  "prompts": {},
+  "sessions": {
+    "s_70840817465319": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05bb6853-7761-4ba6-bb5b-fe82a241e45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}

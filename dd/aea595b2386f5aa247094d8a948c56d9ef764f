@@ -1,0 +1,26 @@
+apps/desktop/Sources/Vitals/Services/SoCPower.swift
+  s_70840817465319::t_27c54e6971ca60 34-42
+apps/desktop/Tests/VitalsTests/ChannelTests.swift
+  s_70840817465319::t_81345be2e59344 72-80
+apps/desktop/Sources/Vitals/Services/DataHome.swift
+  s_70840817465319::t_59e66389a930af 12-17
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_70840817465319::t_d75c7fef108a8c 275,280,309-310,313
+  s_70840817465319::t_5c453a2865aaba 306-308
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ddaea595b2386f5aa247094d8a948c56d9ef764f",
+  "prompts": {},
+  "sessions": {
+    "s_70840817465319": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05bb6853-7761-4ba6-bb5b-fe82a241e45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
