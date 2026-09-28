@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// A lightweight line+fill sparkline drawn with `Path` — deliberately *not*
-/// Swift Charts: the dashboard tiles redraw every tick, so it must stay
-/// cheap. Values are normalized to their own min/max.
+/// A line+fill sparkline drawn with `Path`, not Swift Charts, so the Overview
+/// tiles stay cheap to redraw every tick. Values normalize to their own min/max.
 struct Sparkline: View {
     let values: [Double]
     let tint: Color

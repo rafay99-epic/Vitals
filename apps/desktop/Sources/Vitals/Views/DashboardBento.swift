@@ -1,18 +1,13 @@
 import SwiftUI
 
-// The Dashboard's overview surfaces: a health-score hero, the bento tile grid,
-// and the top-processes card. Each is a drill-in — tapping jumps to the matching
-// System segment. Honest throughout: a tile with no data yet simply omits its
-// sparkline rather than drawing a fabricated line, and an absent subsystem (no
-// GPU, no battery) drops its tile entirely.
+// Overview surfaces: health hero, tile grid, top processes. A tile with no
+// data yet omits its sparkline rather than drawing a fake line, and absent
+// hardware (no GPU, no battery) drops its tile.
 
 // MARK: - Health hero
 
-/// The single synthesizing read at the top: an honest "is my Mac OK right now?"
-/// verdict — the worst of macOS's thermal state, the hottest CPU sensor, memory
-/// pressure and cooling — beside the machine's identity. Reuses `SystemHealth`
-/// (the same classification the Sensors signals use), inventing no score. Tapping
-/// opens System ▸ Sensors for the full breakdown.
+/// The overall verdict (worst of thermal state, hottest CPU sensor, memory
+/// pressure, fans) beside the machine's identity. Opens Temps & Fans.
 struct DashboardHealthHero: View {
     @Environment(VitalsModel.self) private var model
     let drill: (NavSection) -> Void
@@ -52,8 +47,7 @@ struct DashboardHealthHero: View {
         .help("Open Temps & Fans")
     }
 
-    /// The verdict: the worst level across every signal we can read. Identical
-    /// composition to the Sensors signals — one source of truth, never two.
+    /// The worst level across every signal we can read.
     private var overallLevel: SystemHealth.Level {
         var levels: [SystemHealth.Level] = [SystemHealth.thermalLevel(model.thermalState)]
         if let hottest = model.hottestCPUSensor {
@@ -79,10 +73,8 @@ struct DashboardHealthHero: View {
 
 // MARK: - Bento tile grid
 
-/// The glance: one tile per subsystem in a fixed three-column grid (never
-/// adaptive, per the performance rules). Each tile shows the headline number, a
-/// 60-sample sparkline, and drills into its System segment. Tiles for absent
-/// hardware (no GPU, no battery, no SMART) are simply omitted.
+/// One tile per subsystem in a fixed three-column grid (never `.adaptive`, it
+/// reflows mid-animation). Tiles for absent hardware are omitted.
 struct DashboardTileGrid: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
@@ -147,8 +139,7 @@ struct DashboardTileGrid: View {
                 ) { drill(.network) }
             }
 
-            // Disk has no dedicated tab — its charts live in History, so this
-            // tile drills there rather than into a System segment of its own.
+            // Disk I/O has no section of its own; its charts live in History.
             if let diskIO = model.diskIO {
                 DashboardTile(
                     title: "Disk",
@@ -180,8 +171,7 @@ struct DashboardTileGrid: View {
         }
     }
 
-    /// The most recent ~60 samples for a sparkline — short enough to read as
-    /// "right now", long enough to show a trend.
+    /// The last 60 samples: short enough to read as "now", long enough for a trend.
     private func recent(_ key: (VitalsModel.Sample) -> Double) -> [Double] {
         model.chartHistory.suffix(60).map(key)
     }
@@ -199,7 +189,7 @@ struct DashboardTileGrid: View {
         return String(format: "of %.0f GB · %@", gigabytes(memory.total), memory.pressure.label)
     }
 
-    /// Upload rate plus the link it's riding — the primary (default-route)
+    /// Upload rate plus the link it's riding: the primary (default-route)
     /// interface when known, else the first active one, else just the rate.
     private func networkSubtitle(_ network: NetworkSnapshot) -> String {
         let up = "↑ " + NetworkFormat.rate(network.totalOutPerSec)
@@ -209,11 +199,9 @@ struct DashboardTileGrid: View {
         return "\(up) · \(link.displayName)"
     }
 
-    /// The tile's one-liner composes differently from the other battery
-    /// surfaces — while discharging the time estimate replaces the state, and
-    /// the fully-charged case drops the adapter suffix to fit a tile — but the
-    /// words and the clock format are `BatteryContent`'s shared pieces, so the
-    /// wording can't drift from the tab or the widget.
+    /// Composes differently from other battery surfaces (the time estimate replaces
+    /// the state while discharging; fully charged drops the adapter suffix) but
+    /// reuses `BatteryContent`'s wording and clock format.
     private func batterySubtitle(_ battery: BatterySnapshot) -> String {
         if battery.externalPower, battery.fullyCharged, !battery.isCharging { return "Fully charged" }
         if !battery.isCharging, !battery.externalPower, let minutes = battery.timeRemainingMinutes {
@@ -223,9 +211,8 @@ struct DashboardTileGrid: View {
     }
 }
 
-/// One bento tile: an icon-led header, a hero value, a one-line subtitle, and an
-/// optional sparkline. The whole tile is the click target — it drills into the
-/// matching System segment. A hover ring + chevron signal it's tappable.
+/// One tile: icon header, hero value, one-line subtitle, optional sparkline.
+/// The whole tile drills into its section.
 struct DashboardTile: View {
     let title: String
     let value: String

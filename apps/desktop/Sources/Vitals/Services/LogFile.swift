@@ -1,14 +1,10 @@
 import Foundation
 
-/// Mirrors structured log entries to `~/.vitals/vitals.log` as JSONL (one JSON
-/// object per line) so the diagnostic snapshot can attach the recent tail and a
-/// crash leaves a trail on disk. An append-only, size-capped JSONL file, rotated
-/// to `vitals-previous.log` when it grows past the cap. Best-effort — a failed
-/// write is dropped (a diagnostic log is not
-/// critical data, and we must never let logging itself throw into a caller).
+/// Append-only JSONL log at `DataHome.logFile`, rotated to `DataHome.logPrevious`
+/// past the size cap. Best-effort: a failed write is dropped so logging never
+/// throws into a caller.
 ///
-/// All writes hop onto one serial queue, so `Log.emit` (called from any thread)
-/// returns immediately and the file is only ever touched from a single place.
+/// All writes go through one serial queue, so `Log.emit` returns immediately.
 final class LogFile {
     static let shared = LogFile()
 
@@ -17,7 +13,6 @@ final class LogFile {
     private let queue = DispatchQueue(label: "com.syntaxlab.vitals.logfile", qos: .utility)
     private var handle: FileHandle?
     private var writesSinceSizeCheck = 0
-    /// Re-check size every ~200 lines rather than on every write.
     private static let writesPerSizeCheck = 200
 
     private static let encoder: JSONEncoder = {
@@ -27,8 +22,7 @@ final class LogFile {
         return encoder
     }()
 
-    /// Queues one entry for persistence. Returns at once — the JSON encode runs
-    /// on the serial queue, not the (sometimes main) calling thread.
+    /// The JSON encode runs on the serial queue, not the calling thread.
     func append(_ entry: Log.Entry) {
         queue.async { [weak self] in
             guard let self, let line = try? Self.encoder.encode(entry) else { return }
@@ -36,9 +30,8 @@ final class LogFile {
         }
     }
 
-    /// Writes an entry and blocks until it (and anything already queued) is on
-    /// disk. Used by the clean-shutdown marker and the exception handler, where
-    /// the process is about to die and the async queue would never drain.
+    /// Blocks until this entry and everything queued before it is written. For
+    /// the exception handler, where the async queue would never drain.
     func appendSync(_ entry: Log.Entry) {
         queue.sync {
             guard let line = try? Self.encoder.encode(entry) else { return }
@@ -46,7 +39,7 @@ final class LogFile {
         }
     }
 
-    /// Blocks until every queued write has landed. Called before the app exits.
+    /// Blocks until every queued write has landed.
     func flush() {
         queue.sync {}
     }
@@ -54,7 +47,7 @@ final class LogFile {
     private func write(_ jsonLine: Data) {
         guard let handle = openHandleIfNeeded() else { return }
         var data = jsonLine
-        data.append(0x0A)  // newline → JSONL
+        data.append(0x0A)
         try? handle.write(contentsOf: data)
         writesSinceSizeCheck += 1
         if writesSinceSizeCheck >= Self.writesPerSizeCheck {
@@ -98,9 +91,8 @@ final class LogFile {
 }
 
 extension LogFile {
-    /// Both log files (rotated first) as raw text, plus the JSONL entries in it.
-    /// Crash backtraces are plain text, so they appear in `raw` but not
-    /// `entries`. Blocking: call off the main thread.
+    /// Both log files (rotated first) as raw text, plus the decoded entries.
+    /// Crash backtraces are plain text, so they're only in `raw`. Blocking.
     static func readAll() -> (raw: String, entries: [Log.Entry]) {
         let raw = [DataHome.logPrevious, DataHome.logFile]
             .compactMap { try? String(contentsOf: $0, encoding: .utf8) }

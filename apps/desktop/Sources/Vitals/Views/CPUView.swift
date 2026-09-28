@@ -1,10 +1,8 @@
 import SwiftUI
 
-/// The CPU tab: a deeper look than the Dashboard's summary card. It splits the
-/// blended load into Performance vs Efficiency clusters, shows which *specific*
-/// cores are working (per-core utilisation), the per-core die temperatures, and
-/// the CPU power rail. Everything cluster-aware degrades to the honest blended
-/// view when there's no trusted P/E split (Intel, a VM) — no fabricated labels.
+/// The CPU section: Performance vs Efficiency cluster load, per-core
+/// utilisation, per-core die temperatures, and the CPU power rail. Without a
+/// trusted P/E split (Intel, a VM) it shows the blended view, no invented labels.
 struct CPUView: View {
     @Environment(VitalsModel.self) private var model
 
@@ -47,7 +45,7 @@ private struct CPUHeroCard: View {
     }
 
     /// "4 Performance · 6 Efficiency" when the split is trusted, otherwise the
-    /// honest total logical-core count.
+    /// total logical-core count.
     private var coreSummary: String {
         let performance = model.cpuPerCore.filter(\.isPerformance).count
         let efficiency = model.cpuPerCore.count - performance

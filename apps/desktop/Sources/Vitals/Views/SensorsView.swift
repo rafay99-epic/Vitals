@@ -11,10 +11,9 @@ struct SensorsView: View {
     }
 }
 
-/// Every temperature Vitals can read, gathered: the CPU average/hottest and macOS
-/// thermal state up top, the other hardware areas (GPU, SSD, battery) as rows, and
-/// the per-core die grid below. Honest about gaps — an area with no sensor simply
-/// isn't listed, never shown as a fabricated 0°.
+/// Every readable temperature: CPU average/hottest and thermal state, other
+/// areas (GPU, SSD, battery) as rows, then the per-core grid. An area with no
+/// sensor isn't listed rather than shown as 0°.
 private struct TemperaturesCard: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
@@ -23,8 +22,7 @@ private struct TemperaturesCard: View {
         SectionCard(title: "Temperatures", symbol: "thermometer.medium") {
             if model.hasLoaded && model.cpuSensors.isEmpty && model.gpuTemp == nil
                 && model.ssdTemp == nil && model.batteryTemp == nil {
-                // Only after the first sample — before it, the rows below show
-                // "—" rather than a false "unavailable" flash on first mount.
+                // Only after the first sample, so first mount doesn't flash "unavailable".
                 Text("Temperature sensors are unavailable on this Mac.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 60)
@@ -51,7 +49,7 @@ private struct TemperaturesCard: View {
         }
     }
 
-    /// Temperatures outside the CPU die — only the ones this Mac actually reports.
+    /// Temperatures outside the CPU die, only the ones this Mac actually reports.
     private var otherTemps: [MetricRow] {
         var rows: [MetricRow] = []
         if let gpu = model.gpuTemp {

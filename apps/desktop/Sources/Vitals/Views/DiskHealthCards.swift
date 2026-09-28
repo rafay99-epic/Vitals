@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Shared mapping from a drive's wear severity to a gauge colour, so the Storage
-/// SSD-health cards and the Dashboard SSD card can never drift apart (and a
-/// flagged drive shows orange/red, not green).
+/// Wear severity to gauge colour, shared by the Disk Health cards and the
+/// Overview drive tile. A flagged drive shows orange/red, not green.
 func diskWearTint(_ level: DiskHealthSnapshot.WearLevel) -> Color {
     switch level {
     case .normal:   return .green
@@ -11,12 +10,8 @@ func diskWearTint(_ level: DiskHealthSnapshot.WearLevel) -> Color {
     }
 }
 
-/// The internal SSD's health cards, straight from its own NVMe SMART log — wear,
-/// lifetime data written, TRIM, power-on time, cycles, unsafe shutdowns, spare
-/// blocks and temperature. Every figure is a counter the drive reports; nothing
-/// is estimated or invented. These are rendered in the **Storage** section (drive
-/// info, next to disk space); a Mac (or VM) without SMART simply omits them
-/// rather than showing a fake "100% healthy".
+// The internal SSD's health cards, from its NVMe SMART log. Every figure is a
+// drive-reported counter. A Mac (or VM) without SMART omits them.
 
 // MARK: - Wear / health hero
 
@@ -49,7 +44,7 @@ struct DiskHealthHeroCard: View {
         }
     }
 
-    /// "APPLE SSD AP0512Z · 512 GB" — whichever parts the drive reports.
+    /// "APPLE SSD AP0512Z · 512 GB": whichever parts the drive reports.
     private var identityLine: String? {
         let parts = [disk.model, disk.capacityBytes.map { formatBytes(UInt64($0)) }].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -114,8 +109,7 @@ struct DiskLifetimeCard: View {
         if let temp = disk.temperature {
             rows.append(MetricRow(symbol: "thermometer.medium", label: "Temperature", value: settings.formatWithUnit(temp)))
         }
-        // Surface media errors only if there are any — zero is the norm and
-        // listing it just adds noise.
+        // Media errors only show when nonzero; zero is the norm.
         if disk.mediaErrors > 0 {
             rows.append(MetricRow(symbol: "exclamationmark.triangle", label: "Media errors", value: "\(disk.mediaErrors)"))
         }

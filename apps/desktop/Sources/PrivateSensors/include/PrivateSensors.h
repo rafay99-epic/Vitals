@@ -9,9 +9,8 @@
 
 // ---------------------------------------------------------------------------
 // The HID event-system client is public API, but reading an event's value is
-// not. These three declarations (stable for years, used by every open-source
-// macOS monitor) are the only private surface we touch — they let us read the
-// temperature sensor events on Apple Silicon.
+// not. These private declarations (stable for years, used by every open-source
+// macOS monitor) read the temperature sensor events on Apple Silicon.
 // ---------------------------------------------------------------------------
 
 typedef struct CF_BRIDGED_TYPE(id) __IOHIDEvent * IOHIDEventRef;
@@ -30,8 +29,8 @@ double IOHIDEventGetFloatValue(IOHIDEventRef _Nonnull event, int32_t field);
 #define VITALS_HID_USAGE_TEMPERATURE_SENSOR 5
 
 // ---------------------------------------------------------------------------
-// AppleSMC parameter struct (fan speeds etc.). Defined here in C so the
-// memory layout matches what the kernel driver expects exactly.
+// AppleSMC parameter struct. Defined in C so the layout matches what the
+// kernel driver expects exactly.
 // ---------------------------------------------------------------------------
 
 typedef struct {
@@ -74,50 +73,36 @@ typedef struct {
 #define VITALS_SMC_CMD_GET_KEY_INFO 9
 
 // ---------------------------------------------------------------------------
-// SoC power, via IOReport's "Energy Model" group. IOReport is a private
-// framework with no link-time stub, so we resolve it with dlopen at runtime
-// (see shim.c) — if that fails, sampling reports "unavailable" rather than
-// crashing. The model accumulates per-rail energy counters; we sample the
-// delta between two reads and divide by the elapsed wall time to get watts.
-// Each channel carries its own unit label (mJ / uJ / nJ), honoured exactly so
-// the watt figures are real, never assumed. CPU/GPU/ANE are the aggregate SoC
-// rails — the same accounting `powermetrics` reports, with no root required.
-//
-// Every field below is filled only when a real delta was measured; `valid`
-// stays 0 on the first sample (no prior counter to diff against) and whenever
-// IOReport is missing, so callers can render an honest "—".
+// SoC power via IOReport's "Energy Model" group, the same accounting
+// `powermetrics` uses, without root. IOReport has no link-time stub, so it is
+// resolved with dlopen at runtime; failure means "unavailable", not a crash.
+// Watts = energy-counter delta between two reads / elapsed time. Each channel
+// carries its own unit label (mJ / uJ / nJ), which is honoured exactly.
 // ---------------------------------------------------------------------------
 
 typedef struct {
-    int    valid;       // 1 once a delta has been computed
+    int    valid;       // 0 on the first sample and when IOReport is missing
     double cpu_watts;   // CPU rail (E+P clusters), 0 if the channel is absent
     double gpu_watts;   // GPU rail
     double ane_watts;   // Apple Neural Engine rail
 } VitalsSoCPower;
 
-// Opens an IOReport subscription on the Energy Model. Returns an opaque handle,
-// or NULL if IOReport is unavailable. Create once and reuse — the subscription
-// and the previous sample live inside the handle.
+// Returns an opaque handle, or NULL if IOReport is unavailable. Create once and
+// reuse: the subscription and previous sample live inside the handle.
 void *_Nullable vitals_socpower_create(void);
 
-// Samples the rails since the previous call. Returns 1 and fills `out` when a
-// delta was measured, 0 otherwise (first call, or unavailable). Cheap: one
-// IOReport sample plus a dictionary diff.
+// Returns 1 and fills `out` when a delta was measured, 0 otherwise.
 int vitals_socpower_sample(void *_Nonnull handle, VitalsSoCPower *_Nonnull out);
 
 // Releases the subscription and any retained samples.
 void vitals_socpower_destroy(void *_Nullable handle);
 
 // ---------------------------------------------------------------------------
-// NVMe SSD SMART (the drive's Health Information log), via the IOKit NVMe SMART
-// user client. The interface, UUIDs and data struct come from Apple's own SDK
-// header (NVMeSMARTLibExternal.h), so the layout is exact — no guessing. The
-// read is read-only and needs no root. The device is found by the public
-// "NVMe SMART Capable" IORegistry property (class-agnostic, as Apple's header
-// recommends), so it degrades honestly to `valid == 0` on a Mac/VM that doesn't
-// expose it. All CoreFoundation/IOKit ownership stays in C; Swift sees only
-// plain scalars. The 128-bit NVMe counters are returned as their low 64 bits
-// (the real magnitude for these fields). One data unit = 512000 bytes.
+// NVMe SMART health log via the IOKit NVMe SMART user client. Layout comes from
+// Apple's SDK header (NVMeSMARTLibExternal.h). Read-only, no root. The device is
+// found by the public "NVMe SMART Capable" property (class-agnostic, as the
+// header recommends). All CF/IOKit ownership stays in C. The 128-bit NVMe
+// counters are returned as their low 64 bits.
 // ---------------------------------------------------------------------------
 
 typedef struct {
@@ -126,42 +111,35 @@ typedef struct {
     uint16_t temperature_k;             // composite temperature, in Kelvin
     uint8_t  available_spare;           // % remaining
     uint8_t  available_spare_threshold; // % at which the drive warns
-    uint8_t  percentage_used;           // wear — the drive's own estimate (0–100+)
-    uint64_t data_units_written;        // × 512000 = total bytes written (endurance)
+    uint8_t  percentage_used;           // wear estimate, can exceed 100
+    uint64_t data_units_written;        // × 512000 = bytes
     uint64_t data_units_read;
     uint64_t power_cycles;
     uint64_t power_on_hours;
     uint64_t unsafe_shutdowns;
     uint64_t media_errors;
-    // TRIM (NVMe Dataset Management / Deallocate) support. This is NOT a SMART
-    // field — it comes from the Identify Controller ONCS bitfield, the same
-    // source system_profiler reports "TRIM Support" from. Read on the same user
-    // client after the SMART log. `trim_known` is 0 when the drive/VM refused the
-    // Identify command, so the caller shows "Unknown" rather than guessing "No".
+    // TRIM is not a SMART field: it comes from the Identify Controller ONCS
+    // bitfield. `trim_known` is 0 when the drive refused Identify.
     uint8_t  trim_known;                // 1 when Identify Controller was read
     uint8_t  trim_supported;            // 1 when ONCS bit 2 (Dataset Management) is set
 } VitalsDiskSMART;
 
-// Reads the internal SSD's SMART health log. Returns 1 and fills `out` on
-// success, 0 otherwise (no SMART-capable device, or the read failed). Cheap
-// (a single user-client call), but call infrequently — SMART changes over days.
+// Returns 1 and fills `out` on success, 0 when there's no SMART-capable device
+// or the read failed. One user-client call.
 int vitals_nvme_smart_read(VitalsDiskSMART *_Nonnull out);
 
 // ---------------------------------------------------------------------------
-// Crash capture. Installs handlers for the fatal signals (SIGSEGV, SIGABRT,
-// SIGILL, SIGTRAP, SIGFPE, SIGBUS). Implemented in C because a signal handler
-// must be async-signal-safe — it can only call a small allow-list of functions
-// (open/write/backtrace_symbols_fd), which rules out Swift String/JSON/malloc.
+// Crash capture for SIGSEGV, SIGABRT, SIGILL, SIGTRAP, SIGFPE, SIGBUS. In C
+// because a signal handler must be async-signal-safe, which rules out Swift
+// strings, JSON, and malloc.
 //
-// On a fatal signal the handler appends a plain-text crash block (a marker line
-// naming the signal, then the symbolicated backtrace) to `log_path`, restores
-// the default disposition, and re-raises so the OS still produces its own crash
-// report. The block is intentionally NOT JSON — the in-app console skips it, but
-// it travels in the emailed log so the backtrace reaches the developer. On the
-// next launch Swift scans for the marker and surfaces a readable fault entry.
+// On a fatal signal the handler appends a plain-text block (a marker line naming
+// the signal, then raw return addresses) to `log_path`, restores the default
+// disposition, and re-raises so the OS still writes its own crash report. The
+// block is not JSON; LogExport and CrashReporter find it by its markers.
 //
-// `log_path` is copied internally; pass the resolved vitals.log path. Call once,
-// only from the GUI process (never the fan daemon or a CLI invocation).
+// `log_path` is copied internally. Call once, only from the GUI process (never
+// the `--fan-daemon` path or a CLI invocation).
 void vitals_install_crash_handlers(const char *_Nonnull log_path);
 
 #endif

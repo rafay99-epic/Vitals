@@ -1,12 +1,8 @@
 import SwiftUI
 import Charts
 
-/// The Battery tab: the full health picture System Settings keeps hidden —
-/// real capacity against design, cycle count, condition, the charge trend over
-/// time, the live USB-C / MagSafe adapter negotiation, and voltage / current /
-/// power / temperature straight from the pack's own gauge. Every figure is a
-/// direct AppleSmartBattery reading; a machine with no battery says so rather
-/// than showing zeros.
+/// The Battery section: capacity vs design, cycles, condition, charge trend,
+/// adapter negotiation, and the pack's electrical readings (AppleSmartBattery).
 struct BatteryView: View {
     @Environment(VitalsModel.self) private var model
 
@@ -106,10 +102,8 @@ private struct BatteryAdapterCard: View {
         }
     }
 
-    /// The live delivered watts when the charger reports them — even ~0 W when
-    /// the battery is full (honest, like a stopped fan reading 0 rpm), so the
-    /// "delivering" label always matches the number. Falls back to the rated
-    /// figure (labelled "rated"), then "Connected". Never a fabricated number.
+    /// Live delivered watts when the charger reports them (even ~0 W when full, so
+    /// "delivering" matches the number), else the rated figure, else "Connected".
     private var heroValue: String {
         if let delivered = adapter.deliveredWatts {
             return String(format: "%.1f W", delivered)
@@ -120,7 +114,7 @@ private struct BatteryAdapterCard: View {
 
     private var rows: [MetricRow] {
         var rows: [MetricRow] = []
-        // Show the rated cap alongside the live draw — they diverge as the battery fills.
+        // Show the rated cap alongside the live draw; they diverge as the battery fills.
         if adapter.deliveredWatts != nil, let watts = adapter.watts {
             rows.append(MetricRow(symbol: "bolt.fill", label: "Rated power", value: "\(watts) W"))
         }
@@ -141,9 +135,6 @@ private struct BatteryHistoryCard: View {
 
     var body: some View {
         SectionCard(title: "Charge history", symbol: "chart.xyaxis.line") {
-            // Only inserted by BatteryView while the tab is active, so the chart
-            // never rebuilds marks in the background (see GPUView). Deferred keeps
-            // the 50–150 ms first-layout cost off the tab-switch animation.
             Deferred { chart }.frame(height: 150)
         }
     }
@@ -293,7 +284,7 @@ private struct BatteryPowerDrawCard: View {
 
 // MARK: - Sleep & wake (power assertions)
 
-/// Apps holding a sleep assertion, re-read every 5 s while visible.
+/// Apps holding a sleep assertion, re-read every 5 s while mounted.
 private struct SleepBlockersCard: View {
     @State private var blockers: [SleepBlocker]?
 
@@ -363,8 +354,8 @@ struct MetricRow: Identifiable {
     var id: String { label }
 }
 
-/// A two-column key/value grid in the card language — fixed columns (never
-/// `.adaptive`, per the performance rules) so it doesn't reflow mid-animation.
+/// A two-column key/value grid. Fixed columns (never `.adaptive`) so it
+/// doesn't reflow mid-animation.
 struct MetricRowGrid: View {
     let rows: [MetricRow]
 

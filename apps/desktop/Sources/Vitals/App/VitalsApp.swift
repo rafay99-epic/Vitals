@@ -2,10 +2,7 @@ import SwiftUI
 import AppKit
 
 struct VitalsApp: App {
-    // Keeps the app running when every window is closed, so the menu-bar item stays.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    // Plain constants, not @StateObject: the App struct must not observe the
-    // models, or every published change re-evaluates every scene and command.
     // SwiftUI creates the App once, so these live for the process.
     private let settings: AppSettings
     private let model: VitalsModel
@@ -14,7 +11,7 @@ struct VitalsApp: App {
     private let menuBar: MenuBarController
 
     init() {
-        // Create the data home and migrate any legacy log before logging starts.
+        // Create the data home before logging starts.
         DataHome.prepare()
         // Arm crash capture before anything else can fault.
         CrashReporter.install()
@@ -40,8 +37,7 @@ struct VitalsApp: App {
     }
 
     var body: some Scene {
-        // Window (not WindowGroup): exactly one main window, like Activity
-        // Monitor. No ⌘N duplicates; dock clicks and openWindow reuse it.
+        // Window, not WindowGroup: one main window, no ⌘N duplicates.
         Window("Vitals", id: "main") {
             ContentView()
                 .environment(model)
@@ -59,8 +55,7 @@ struct VitalsApp: App {
     }
 }
 
-/// Replaces the default "Settings…" item in the app menu so ⌘, selects the
-/// in-window Settings section (and reopens the main window if it was closed).
+/// ⌘, selects the in-window Settings section, reopening the window if closed.
 struct SettingsCommands: Commands {
     let navigator: Navigator
     @Environment(\.openWindow) private var openWindow

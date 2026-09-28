@@ -1,11 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Owns the menu-bar status item and its dropdown (a transient `NSPopover`
-/// hosting `MenuBarPanel`). The label is a hosted SwiftUI view, so its width
-/// follows the readings. Keep it static: macOS re-snapshots a status item on the
-/// CPU for every frame it changes, so any repeating animation here burns CPU
-/// continuously, even with every window closed.
+/// Owns the status item and its `MenuBarPanel` popover. Keep the label static:
+/// macOS re-snapshots a status item on the CPU for every frame it changes, so
+/// any repeating animation burns CPU even with every window closed.
 @MainActor
 final class MenuBarController: NSObject, NSPopoverDelegate {
     private let model: VitalsModel
@@ -79,14 +77,11 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         resize(item: item, toFit: host)
     }
 
-    /// Slack (pt) added on top of the label's ideal width. Sub-pixel rounding on
-    /// fractional-scaled displays ("More Space", external monitors) can otherwise
-    /// shave the trailing glyph by a pixel and trip a truncation ellipsis; a
-    /// couple of points of headroom makes the readout scale-independent.
+    /// Headroom so sub-pixel rounding on fractional-scaled displays can't shave
+    /// the trailing glyph and trip a truncation ellipsis.
     private static let widthSlack: CGFloat = 2
 
-    /// Size the status item to the label's ideal width. Deferred to the next
-    /// runloop so it never resizes the button mid-layout; unchanged widths skip.
+    /// Deferred to the next runloop so it never resizes the button mid-layout.
     private func resize(item: NSStatusItem, toFit host: NSView) {
         DispatchQueue.main.async {
             let ideal = host.intrinsicContentSize.width
@@ -129,9 +124,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 }
 
-/// The status item's hosted label. Returns nil from `hitTest` so clicks fall
-/// through to the status-item button (the label is display-only) and toggle the
-/// dropdown.
+/// Returns nil from `hitTest` so clicks fall through to the status-item button.
 final class MenuBarHostingView: NSHostingView<AnyView> {
     /// Fires when the label's ideal size changes so the item can re-fit.
     var onIntrinsicSizeChange: (() -> Void)?
@@ -147,8 +140,7 @@ final class MenuBarHostingView: NSHostingView<AnyView> {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
 }
 
-/// Keeps the app alive when its windows are all closed; the menu-bar item is
-/// the app's home.
+/// Keeps the app alive when all windows are closed.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

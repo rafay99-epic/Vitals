@@ -1,12 +1,10 @@
 import SwiftUI
 import Charts
 
-/// The GPU tab: a deeper look than the Dashboard's summary card — utilization
-/// broken into renderer/tiler, the unified-memory working set, and live power
-/// for the GPU and Neural Engine rails. Apple Silicon exposes no GPU-specific
-/// temperature (CPU and GPU share one die and the diodes aren't labelled per
-/// block), so none is shown — labelling a generic die reading "GPU" would break
-/// the honesty rule.
+/// The GPU section: utilization (renderer/tiler), the unified-memory working
+/// set, and power rails. Apple Silicon exposes no GPU-specific temperature (the
+/// die diodes aren't labelled per block), so none is shown rather than
+/// labelling a generic die reading "GPU".
 struct GPUView: View {
     @Environment(VitalsModel.self) private var model
 
@@ -156,7 +154,7 @@ private struct GPUMemoryCard: View {
     }
 
     /// In-use (solid) within the driver's allocation (faint) within the working
-    /// set (track) — three honest depths of the same unified pool.
+    /// set (track): three depths of the same unified pool.
     private var bar: some View {
         GeometryReader { geometry in
             let total = max(Double(gpu.memoryTotal ?? gpu.memoryAllocated ?? gpu.memoryUsed ?? 1), 1)
@@ -213,8 +211,7 @@ private struct GPUPowerCard: View {
     }
 }
 
-/// A small fraction-filled bar in the card language, used for the GPU meters.
-// Shared meter fill, reused by the CPU card's P/E split.
+/// A fraction-filled bar in the card language, used by the GPU and CPU meters.
 func utilizationBar(fraction: Double, tint: Color) -> some View {
     GeometryReader { geometry in
         ZStack(alignment: .leading) {

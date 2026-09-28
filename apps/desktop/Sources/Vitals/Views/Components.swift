@@ -3,18 +3,15 @@ import Charts
 
 // MARK: - Empty / idle state
 
-/// A short, scannable hint chip used under an empty state to preview what the
-/// action surfaces (e.g. "Largest folders").
+/// A short hint chip shown under an empty state's copy.
 struct EmptyStateHint: Identifiable {
     let symbol: String
     let label: String
     var id: String { label }
 }
 
-/// The shared, polished empty/idle state: a tinted icon tile lifted off a soft
-/// glow, a headline, supporting copy, optional preview chips, and the primary
-/// action. One look for every "nothing here yet" moment so the app reads as a
-/// single, considered surface rather than a stack of placeholders.
+/// The shared empty/idle state: icon tile, headline, supporting copy,
+/// optional hint chips, and the primary action.
 struct EmptyStateView<Actions: View>: View {
     let symbol: String
     let tint: Color
@@ -88,9 +85,8 @@ struct EmptyStateView<Actions: View>: View {
     }
 }
 
-/// The loading sibling of `EmptyStateView`: same card chrome, a spinner where
-/// the icon tile sits. Used for the first-data fetch on tabs that don't have a
-/// card skeleton to show meanwhile.
+/// The loading sibling of `EmptyStateView`: same chrome, a spinner in place
+/// of the icon tile.
 struct LoadingStateView: View {
     let title: String
     var message: String?
@@ -120,7 +116,7 @@ struct LoadingStateView: View {
     }
 }
 
-// MARK: - Tab scaffold
+// MARK: - Section scaffold
 
 /// A monitoring section's scrolling canvas. Lazy, so off-screen cards cost
 /// nothing until scrolled to.
@@ -150,17 +146,15 @@ struct SectionCard<Content: View>: View {
                 .foregroundStyle(.secondary)
             content
         }
-        // maxHeight so paired cards in a row share the row's height (the
-        // background fills instead of leaving the shorter card stranded). In a
-        // vertical scroll the proposed height is the ideal, so it doesn't stretch.
+        // maxHeight lets paired cards in a row share the row's height. In a vertical
+        // scroll the proposed height is the ideal, so it doesn't stretch.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .cardBackground()
     }
 }
 
-/// A compact power readout tile in the shared card language. Shared by the GPU
-/// and Health tabs.
+/// One power rail readout tile, laid out by `PowerRails`.
 struct PowerTile: View {
     let title: String
     let watts: Double
@@ -195,9 +189,8 @@ func wattsText(_ watts: Double) -> String {
     watts < 10 ? String(format: "%.2f W", watts) : String(format: "%.1f W", watts)
 }
 
-/// The three SoC power rails (CPU / GPU / Neural Engine) as tiles plus the
-/// total-package row — the one power-card body, shared by every power card
-/// (Dashboard, Health, and the GPU tab) so they can't drift.
+/// The SoC power rails (CPU / GPU / Neural Engine) as tiles plus the package
+/// total. Every power card uses this body.
 struct PowerRails: View {
     let power: PowerSnapshot
 
@@ -220,9 +213,8 @@ struct PowerRails: View {
     }
 }
 
-/// A labelled utilisation meter (label · bar · %), used for the CPU P/E split on
-/// the Dashboard CPU card and per-cluster/per-core on the CPU tab — one meter
-/// component so they can't drift.
+/// A labelled utilisation meter (label, bar, %) for the CPU cluster and
+/// per-core rows.
 struct ClusterMeter: View {
     let label: String
     let percent: Double
@@ -239,10 +231,8 @@ struct ClusterMeter: View {
     }
 }
 
-/// A labelled statistic column (caption label · rounded mono value · optional
-/// note) — the shared building block for the Average/Hottest/CPU-power stats on
-/// the CPU and Sensors temperature cards, so the pattern can't drift between
-/// them. Mirrors the global `utilizationBar` helper.
+/// A labelled stat column (caption, rounded mono value, optional note), used
+/// by the CPU and Sensors temperature cards.
 func statColumn(_ label: String, _ value: String, note: String? = nil) -> some View {
     VStack(alignment: .leading, spacing: 2) {
         Text(label).font(.caption).foregroundStyle(.secondary)
@@ -272,13 +262,10 @@ extension View {
 
 // MARK: - Deferred mounting
 
-/// Mounts expensive content (Swift Charts cost 50–150 ms on first layout)
-/// just after the view appears, so window-open and tab-switch animations run
-/// against an empty placeholder of the same size instead of paying setup
-/// mid-animation. The placeholder is Color.clear — a real view, so `.task`
-/// reliably fires. The mount itself is **not** animated — it appears instantly
-/// (no `withAnimation`), so it never creates an animation transaction that
-/// could hitch a surrounding spring.
+/// Mounts expensive content (Swift Charts cost 50-150 ms on first layout) just
+/// after appear, so window-open animates against a same-size placeholder.
+/// `Color.clear` is a real view so `.task` fires. The mount is not animated,
+/// so it can't hitch a surrounding spring.
 struct Deferred<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var ready = false
@@ -322,9 +309,8 @@ private struct NumericTransition: ViewModifier {
 }
 
 extension View {
-    /// Animate digit changes with `.numericText()` — but only where
-    /// `\.animationsEnabled` is true. Snaps with `.identity` otherwise, so no
-    /// per-tick transition runs while the app is backgrounded.
+    /// `.numericText()` digit animation, or `.identity` when `\.animationsEnabled`
+    /// is false, so no per-tick transition runs while backgrounded.
     func numericTransition() -> some View { modifier(NumericTransition()) }
 }
 
@@ -371,10 +357,8 @@ struct HoverTooltip<Rows: View>: View {
 }
 
 extension Array where Element == VitalsModel.Sample {
-    /// Closest sample to `time` by binary search — the array is in ascending
-    /// time order (history is appended each tick; chartHistory is an ordered
-    /// downsample). O(log n) instead of the old O(n) `min` scan, which mattered
-    /// because this runs on every hover move over a chart.
+    /// Closest sample to `time` by binary search (samples are in ascending time
+    /// order). Runs on every hover move over a chart.
     func nearest(to time: Date?) -> VitalsModel.Sample? {
         guard let time, !isEmpty else { return nil }
         var lo = 0, hi = count - 1
@@ -408,14 +392,13 @@ func gigabytes(_ bytes: Double) -> Double {
     bytes / 1_073_741_824
 }
 
-/// Swap as "used of total", or "None" when no swap is configured. Shared by the
-/// Memory hero card and the composition grid so the two can't drift.
+/// Swap as "used of total", or "None" when no swap is configured.
 func swapSummary(_ memory: MemorySnapshot) -> String {
     guard memory.swapTotal > 0 else { return "None" }
     return String(format: "%.2f GB of %.1f GB", gigabytes(memory.swapUsed), gigabytes(memory.swapTotal))
 }
 
-/// Color for the macOS memory-pressure level — green/yellow/red like
+/// Color for the macOS memory-pressure level: green/yellow/red like
 /// Activity Monitor's pressure graph.
 func pressureColor(_ pressure: MemoryPressure) -> Color {
     switch pressure {
@@ -426,10 +409,9 @@ func pressureColor(_ pressure: MemoryPressure) -> Color {
 }
 
 extension Array {
-    /// Evenly thins to at most `maxCount` elements, always keeping the first and
-    /// the last. Charts can't show more points than pixels, and mark count drives
-    /// Swift Charts' rebuild cost. Thinning steps by more than one index, so no
-    /// element (or id) repeats.
+    /// Evenly thins to at most `maxCount` elements, keeping the first and last.
+    /// Mark count drives Swift Charts' rebuild cost. Steps by more than one index,
+    /// so no element (or id) repeats.
     func thinned(to maxCount: Int) -> [Element] {
         guard count > maxCount, maxCount > 1 else { return self }
         let stride = Double(count - 1) / Double(maxCount - 1)

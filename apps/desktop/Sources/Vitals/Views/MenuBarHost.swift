@@ -1,10 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// The menu-bar status item's label, hosted live in `MenuBarController`'s
-/// status item. `.fixedSize()` pins it to its ideal width so the controller can
-/// size the item to it without truncating (issues #45, #50). Static on purpose:
-/// see `MenuBarController` for why nothing here animates.
+/// The menu-bar status item's label. `.fixedSize()` pins it to its ideal width
+/// so `MenuBarController` can size the item without truncating. Static on
+/// purpose: see `MenuBarController` for why nothing here animates.
 struct MenuBarLabelView: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
@@ -33,7 +32,7 @@ struct MenuBarLabelView: View {
         } else if settings.menuBarUseIcons {
             MenuBarRow(metrics: metrics, warning: warning)
         } else {
-            // Text style: short word + value, e.g. "Temp 57° · CPU 23% · RAM 12.8G".
+            // e.g. "Temp 57° · CPU 23% · RAM 12.8G".
             Text(metrics.map { "\($0.shortLabel) \(menuBarValue($0, model: model, settings: settings))" }
                 .joined(separator: " · "))
                 .monospacedDigit()
@@ -68,8 +67,8 @@ private struct MenuBarRow: View {
     }
 }
 
-/// The live reading for one metric. A dash (never a fabricated value) stands in
-/// when a subsystem isn't present or hasn't reported yet.
+/// The live reading for one metric, or a dash when a subsystem isn't present
+/// or hasn't reported yet.
 @MainActor
 func menuBarValue(_ metric: MenuBarMetric, model: VitalsModel, settings: AppSettings) -> String {
     switch metric {

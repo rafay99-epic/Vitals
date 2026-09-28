@@ -1,16 +1,11 @@
 import Foundation
 
-/// Renders the diagnostic log into one **readable, date-grouped** text file for
-/// sharing — the JSONL in `vitals.log` is faithful but not something you want to
-/// read in an email. Entries are grouped under day headings, newest day last,
-/// each line `HH:mm:ss.SSS  LVL  category  message (file:line)` with any error
-/// detail on a continuation line. Raw signal-crash backtraces (the plain-text
-/// blocks the C handler writes) are extracted and appended verbatim at the end.
+/// Renders the JSONL log as readable text grouped by day, with signal-crash
+/// backtraces appended verbatim at the end.
 ///
-/// Blocking (reads + parses the whole log) — call off the main thread.
+/// Blocking (reads and parses the whole log). Call off the main thread.
 enum LogExport {
-    /// Writes the rendered report into `exports/` and returns its URL, or nil if
-    /// there's nothing logged yet / the write failed.
+    /// Writes the report into `exports/`. Nil if the write failed.
     static func writeReport(header: String) -> URL? {
         let body = renderedText(header: header)
         guard !body.isEmpty else { return nil }
@@ -26,7 +21,6 @@ enum LogExport {
         }
     }
 
-    /// The full rendered report as a string.
     static func renderedText(header: String) -> String {
         let (raw, unsorted) = LogFile.readAll()
         let entries = unsorted.sorted { $0.time < $1.time }
@@ -56,8 +50,7 @@ enum LogExport {
         return out
     }
 
-    /// The last `limit` error/fault entries as short one-liners, for the mail
-    /// body. Blocking (reads + parses) — call off the main thread.
+    /// The last `limit` error/fault entries as one-liners, for the mail body.
     static func recentIssues(limit: Int) -> [String] {
         let issues = LogFile.readAll().entries.filter { $0.level >= .error }.suffix(limit)
         return issues.map { entry in
@@ -77,8 +70,7 @@ enum LogExport {
         return text
     }
 
-    /// Pulls the plain-text crash blocks (between the C handler's markers) out of
-    /// the raw log so they can be appended whole — they aren't JSON.
+    /// The plain-text blocks between the C crash handler's markers.
     private static func crashBlocks(in raw: String) -> String {
         var blocks = ""
         var capturing = false

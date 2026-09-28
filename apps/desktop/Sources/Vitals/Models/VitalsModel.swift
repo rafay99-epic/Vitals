@@ -25,11 +25,11 @@ final class VitalsModel {
         let swapUsed: Double    // bytes
         let batteryPercent: Double?  // charge %, nil when no battery
         let totalWatts: Double?      // SoC package power, nil until the 2nd sample
-        let batteryWatts: Double?    // battery load watts (signed: + charging, − draining), nil off battery
-        let netInPerSec: Double?     // network download, bytes/s — nil until the 2nd sample
-        let netOutPerSec: Double?    // network upload, bytes/s — nil until the 2nd sample
-        let diskReadPerSec: Double?  // disk read, bytes/s — nil until the 2nd sample
-        let diskWritePerSec: Double? // disk write, bytes/s — nil until the 2nd sample
+        let batteryWatts: Double?    // signed: + charging, − draining; nil off battery
+        let netInPerSec: Double?     // bytes/s, nil until the 2nd sample
+        let netOutPerSec: Double?    // bytes/s, nil until the 2nd sample
+        let diskReadPerSec: Double?  // bytes/s, nil until the 2nd sample
+        let diskWritePerSec: Double? // bytes/s, nil until the 2nd sample
     }
 
     private(set) var cpuSensors: [Sensor] = []
@@ -46,47 +46,33 @@ final class VitalsModel {
     /// pixels, and Swift Charts rebuild cost scales with mark count.
     private(set) var chartHistory: [Sample] = []
     private(set) var cpuUsage: Double = 0
-    /// Per-cluster CPU utilisation (Apple Silicon). Nil when there's no trusted
-    /// P/E split — `cpuUsage` (the blended figure) still applies.
+    /// Per-cluster CPU utilisation (Apple Silicon). Nil without a trusted P/E split.
     private(set) var cpuClusters: (performance: Double, efficiency: Double)?
-    /// Per-core utilisation for the CPU tab's deep view. Empty without a trusted split.
+    /// Per-core utilisation. Empty without a trusted P/E split.
     private(set) var cpuPerCore: [CoreUsage] = []
     private(set) var memory: MemorySnapshot?
-    /// Live VM page-traffic rates (page-ins/outs, swap-ins/outs, compress/
-    /// decompress). Nil until the second sample — a rate needs a prior reading.
+    /// VM page-traffic rates. Nil until the second sample: a rate needs a prior reading.
     private(set) var memoryActivity: MemoryActivity?
     private(set) var thermalState = ProcessInfo.processInfo.thermalState
     private(set) var topProcesses: [ProcessSampler.Process] = []
-    /// The heaviest memory consumers, top-first. Sampled in the same sweep as
-    /// `topProcesses` (which is CPU-ordered), so it costs no extra syscalls.
+    /// Heaviest memory consumers, from the same sweep as the CPU-ordered `topProcesses`.
     private(set) var topMemoryProcesses: [ProcessSampler.Process] = []
-    /// The previous tick's cumulative VM counters + when they were read, kept to
-    /// diff into `memoryActivity`.
     @ObservationIgnored private var previousMemorySnapshot: MemorySnapshot?
     @ObservationIgnored private var previousMemorySnapshotAt: Date?
     private(set) var battery: BatterySnapshot?
-    /// The internal SSD's SMART health (wear, endurance, power-on hours…). Nil
-    /// on a Mac/VM that doesn't expose SMART, or for the first tick or two.
+    /// Internal SSD SMART health. Nil when SMART isn't exposed, or for the first tick or two.
     private(set) var diskHealth: DiskHealthSnapshot?
-    /// Live SoC power draw (CPU/GPU/ANE rails). Nil until the second sample —
-    /// power is an energy delta and needs a prior reading — and on the rare
-    /// machine where IOReport is unavailable.
+    /// SoC power draw. Nil until the second sample (energy delta) and when
+    /// IOReport is unavailable.
     private(set) var power: PowerSnapshot?
-    /// Live per-interface network throughput (Wi-Fi/Ethernet) plus Wi-Fi link
-    /// details. Nil until the second sample — the first reading has no prior
-    /// byte counters, so its 0 B/s rates would be placeholders, not
-    /// measurements (same rule as `memoryActivity`/`power`).
+    /// Network throughput plus Wi-Fi link details. Nil until the second sample:
+    /// the first reading has no prior byte counters.
     private(set) var network: NetworkSnapshot?
-    /// True once the first network reading landed; publication starts with the
-    /// second (see `network`).
     @ObservationIgnored private var hasNetworkBaseline = false
-    /// Whole-machine disk read/write throughput. Nil until the second sample —
-    /// the first reading has no prior byte counters (same rule as `network`).
+    /// Disk read/write throughput. Nil until the second sample, like `network`.
     private(set) var diskIO: DiskIOSnapshot?
-    /// True once the first disk reading landed; publication starts with the
-    /// second (see `diskIO`).
     @ObservationIgnored private var hasDiskIOBaseline = false
-    /// False until the first sample lands — drives the dashboard loading state.
+    /// False until the first sample lands; drives the loading state.
     private(set) var hasLoaded = false
     /// True while a sample is overdue (a sensor syscall wedged). The last
     /// readings stay on screen, and the Overview says they're paused.
@@ -94,9 +80,7 @@ final class VitalsModel {
 
     let memoryTotal = ProcessInfo.processInfo.physicalMemory
 
-    /// True only when a sample arrived but carried no usable readings at all
-    /// (no temps, no fans, no memory) — e.g. a VM or restricted hardware.
-    /// On real Macs memory always reads, so this stays false.
+    /// True when a sample arrived with no usable readings at all, e.g. a VM.
     var sensorsUnavailable: Bool {
         hasLoaded && cpuSensors.isEmpty && gpuTemp == nil && !hasSMC && memory == nil
     }
@@ -119,20 +103,14 @@ final class VitalsModel {
     /// blocking IOKit call, so the watchdog must not release this slot early.
     @ObservationIgnored private var samplingTask: Task<Void, Never>?
     @ObservationIgnored private var samplingStartedAt: Date?
-    /// Whether the main window is open, and the window itself (weak). Together
-    /// they gate the heavy optional reads; see `windowOnScreen`.
+    /// Window state that gates the heavy optional reads; see `windowOnScreen`.
     @ObservationIgnored private var mainWindowVisible = false
     @ObservationIgnored private weak var mainWindow: NSWindow?
-    /// The visible section narrows expensive optional reads while the window is
-    /// open; Settings and maintenance screens do not need process/IOReport data.
+    /// Narrows optional reads to what the visible section needs.
     @ObservationIgnored private var visibleSectionID = "overview"
-    /// True while the Mac is asleep — set by `NSWorkspace.willSleep/didWake`
-    /// observers. The timer is torn down on sleep and rebuilt on wake, so no
-    /// sensor reads happen (and no battery is burned) while the machine is
-    /// suspended. The flag also guards `start()` so a settings change made while
-    /// asleep can't restart sampling until wake.
+    /// Set by the sleep/wake observers. Also guards `start()` so a settings
+    /// change made while asleep can't resume sampling before wake.
     @ObservationIgnored private var isAsleep = false
-    /// `NSWorkspace` sleep/wake observers; removed in `deinit`.
     @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
 
     /// Call when the main window opens/closes (ContentView appear/disappear).
@@ -140,22 +118,19 @@ final class VitalsModel {
     func setMainWindow(_ window: NSWindow?) { mainWindow = window }
 
     /// Open and actually on screen: not minimized, hidden, fully covered, or on
-    /// another Space. Checked every tick, so a revealed window refreshes within
-    /// one sample.
+    /// another Space. Checked every tick.
     private var windowOnScreen: Bool {
         mainWindowVisible && (mainWindow?.occlusionState.contains(.visible) ?? true)
     }
 
-    /// Call when navigation changes so optional sensor work follows the visible
-    /// surface instead of treating every open window as the Overview screen.
+    /// Call when navigation changes so optional reads follow the visible section.
     func setVisibleSection(_ sectionID: String) { visibleSectionID = sectionID }
 
-    /// Test/diagnostic exposure of whether the sampling timer is armed. Sleep
-    /// tears it down; wake rebuilds it.
+    /// For tests: whether the sampling timer is armed.
     internal var isSamplingTimerActive: Bool { timer != nil }
 
-    /// The optional reads the visible surfaces need this tick. GPU also feeds a
-    /// GPU menu-bar metric; everything else only matters with the window on screen.
+    /// Optional reads needed this tick. GPU also feeds the GPU menu-bar metric;
+    /// the rest only matter with the window on screen.
     private var currentNeeds: SensorSampler.Needs {
         let section = windowOnScreen ? visibleSectionID : nil
         func showing(_ ids: String...) -> Bool { section.map(ids.contains) ?? false }
@@ -168,15 +143,13 @@ final class VitalsModel {
         )
     }
     private static let maxChartPoints = 300
-    /// A sample overdue by this long counts as wedged. Generous: a real sample
-    /// takes milliseconds.
+    /// A sample overdue by this long counts as wedged. A real sample takes milliseconds.
     private static let sampleTimeout: TimeInterval = 5
 
     /// At most one history row per 10 s, however fast the tick.
     private static let logInterval: TimeInterval = 10
     @ObservationIgnored private var lastLoggedAt: Date = .distantPast
 
-    // Overheat alerting state.
     @ObservationIgnored private var hotSince: Date?
     @ObservationIgnored private var lastHeatAlert: Date = .distantPast
     @ObservationIgnored private var previousThermalState = ProcessInfo.processInfo.thermalState
@@ -185,17 +158,14 @@ final class VitalsModel {
 
     init(settings: AppSettings) {
         self.settings = settings
-        // Anything that changes the effective cadence restarts the timer.
         observeChanges(of: { settings.effectiveRefreshInterval }) { [weak self] _ in self?.restartTimerIfAwake() }
         observeChanges(of: { settings.historyMinutes }) { [weak self] _ in self?.trimHistory() }
-        // Ask for notification permission as soon as any alert is enabled.
         observeChanges(of: { settings.notifyOverheat || settings.notifyThermal }) { [weak self] enabled in
             if enabled { self?.notifications.requestAuthorizationIfNeeded() }
         }
 
-        // Pause sampling on system sleep and resume on wake — no sensor reads,
-        // no wakeups, no battery drain while the Mac is suspended. Registered
-        // last: the closures capture self, which must be fully initialized.
+        // Pause sampling across system sleep. Registered last: the closures
+        // capture self, which must be fully initialized.
         let workspace = NSWorkspace.shared.notificationCenter
         sleepObservers = [
             workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -215,8 +185,7 @@ final class VitalsModel {
         sleepObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 
-    /// Never below 0.5 s — the Picker only offers 1/2/5, but a corrupted
-    /// UserDefaults value of 0 would otherwise divide-by-zero here and below.
+    /// Floor of 0.5 s: a corrupted UserDefaults value of 0 would divide by zero below.
     private var safeRefreshInterval: Double { max(0.5, settings.refreshInterval) }
 
     private var maxHistory: Int {
@@ -241,19 +210,15 @@ final class VitalsModel {
         start()
     }
 
-    /// Restarts the timer only while awake **and already running** — a cadence-
-    /// relevant setting change made while asleep must not resume sampling until
-    /// the Mac wakes, and the `timer != nil` guard blocks a re-entrant call
-    /// during the first `start()` (where `tick()` runs before `self.timer` is
-    /// assigned) from scheduling a second, leaked timer.
+    /// Restarts only while awake and already running. The `timer != nil` guard
+    /// blocks a re-entrant call during the first `start()` (where `tick()` runs
+    /// before `self.timer` is assigned) from leaking a second timer.
     private func restartTimerIfAwake() {
         guard !isAsleep, timer != nil else { return }
         restartTimer()
     }
 
-    /// Tears down the sampling timer on system sleep. An in-flight tick (if any)
-    /// is allowed to finish — it's one harmless extra sample — but no new ticks
-    /// fire until `handleWake`.
+    /// An in-flight tick may finish; no new ticks fire until `handleWake`.
     private func handleSleep() {
         guard !isAsleep else { return }
         isAsleep = true
@@ -262,10 +227,8 @@ final class VitalsModel {
         Log.notice(.sampler, "system sleeping — sampling paused")
     }
 
-    /// Rebuilds the sampling timer on wake and immediately takes a fresh sample
-    /// so readings recover from the gap at once. The cadence is re-read from
-    /// `effectiveRefreshInterval`, so a power-source change that happened during
-    /// sleep (unplugged in clamshell, woken on battery) takes effect immediately.
+    /// Samples at once and re-reads the cadence, so a power-source change made
+    /// during sleep takes effect immediately.
     private func handleWake() {
         guard isAsleep else { return }
         isAsleep = false
@@ -280,14 +243,10 @@ final class VitalsModel {
         chartHistory = history.thinned(to: Self.maxChartPoints)
     }
 
-    /// Kicks off one sample on the sampler's executor and publishes the result
-    /// back here. One sample at a time: a tick that finds the previous one still
-    /// running is dropped, so a slow machine never queues reads.
-    ///
-    /// A sensor syscall can wedge (a stuck IOKit driver, a degraded VM), and
-    /// cancelling can't interrupt it. So a tick that finds the sample overdue
-    /// flags the readings stale and cancels, but keeps the slot occupied until
-    /// the call returns rather than stacking blocked tasks.
+    /// One sample at a time: a tick that finds the previous one running is dropped.
+    /// A wedged sensor syscall can't be cancelled, so an overdue sample flags
+    /// readings stale but keeps the slot until it returns, rather than stacking
+    /// blocked tasks.
     private func tick() {
         guard !isAsleep else { return }
         if isSampling {
@@ -301,8 +260,7 @@ final class VitalsModel {
         }
         isSampling = true
         samplingStartedAt = Date()
-        // Keep the cadence in sync with the power source first. A change may
-        // restart the timer and re-enter `tick`, which `isSampling` makes a no-op.
+        // May restart the timer and re-enter `tick`; `isSampling` makes that a no-op.
         settings.updatePowerState()
 
         let needs = currentNeeds
@@ -322,14 +280,6 @@ final class VitalsModel {
     private func apply(_ snapshot: SensorSampler.Snapshot, sampledGPU: Bool) {
         let classified = snapshot.sensors
         cpuSensors = classified.filter { $0.kind == .cpu }
-        // Gate the cheap, often-stable scalars: `@Published` fires
-        // `objectWillChange` on every assignment regardless of whether the value
-        // actually moved, so reassigning `thermalState` to the same enum each
-        // tick would still invalidate every observing view. Only reassign when
-        // the value genuinely changes — the temperature Double?s drift most
-        // ticks but the compare is trivial, and `thermalState`/`hasSMC`/
-        // `hasLoaded`/`sensorsStalled` barely move, so their observers (Health
-        // tab, Fan card, the loading state) skip re-rendering on a normal tick.
         assignIfChanged(&gpuTemp, to: Self.average(of: classified, kind: .gpu))
         assignIfChanged(&ssdTemp, to: Self.average(of: classified, kind: .storage))
         assignIfChanged(&batteryTemp, to: Self.average(of: classified, kind: .battery))
@@ -353,21 +303,12 @@ final class VitalsModel {
         diskHealth = snapshot.diskHealth
         updateNetwork(snapshot.network)
         updateDiskIO(snapshot.diskIO)
-        // Only reassign GPU when it was actually sampled this tick. When the
-        // window/widgets/metric don't need it, the sampler returns nil and we
-        // hold the last reading — so reopening the window shows the prior value
-        // until the next tick refreshes it, never a fabricated blank.
+        // Skipped reads hold the last value for display. History below uses only
+        // this tick's fresh readings, so a skip is a gap, not a stale value.
         if sampledGPU { gpu = snapshot.gpu }
-        // Power is nil both when skipped and when IOReport had no delta this
-        // tick; `if let` holds the last good reading in either case. The history
-        // Sample uses the fresh `snapshot.power?.total`, so a skip is an honest
-        // gap in the chart, not a flat-held value.
         if let power = snapshot.power { self.power = power }
         assignIfChanged(&hasLoaded, to: true)
 
-        // Only this tick's GPU reading goes into history. The sticky `gpu` holds
-        // the last value for display, and logging it on a skipped tick would
-        // record a stale number as live.
         let freshGPU = sampledGPU ? snapshot.gpu : nil
         if let average = averageCPUTemp, let hottest = hottestCPUSensor {
             history.append(Sample(
@@ -381,12 +322,8 @@ final class VitalsModel {
                 memoryUsed: Double(memory?.used ?? 0),
                 swapUsed: Double(memory?.swapUsed ?? 0),
                 batteryPercent: battery?.percent,
-                // The fresh tick's reading (not the sticky `self.power`), so a
-                // missed IOReport sample is an honest gap, not a flat-held value.
                 totalWatts: snapshot.power?.total,
                 batteryWatts: battery?.watts,
-                // The published reading (nil until the 2nd sample), so the
-                // first tick is an honest gap, never a fabricated 0 B/s.
                 netInPerSec: network?.totalInPerSec,
                 netOutPerSec: network?.totalOutPerSec,
                 diskReadPerSec: diskIO?.readPerSec,
@@ -414,8 +351,6 @@ final class VitalsModel {
                     netOutBps: network?.totalOutPerSec,
                     diskReadBps: diskIO?.readPerSec,
                     diskWriteBps: diskIO?.writePerSec,
-                    // Fresh readings (nil until the 2nd power/battery sample), so a
-                    // gap is honest, never a flat-held value.
                     socWatts: snapshot.power?.total,
                     batteryWatts: battery?.watts
                 ), at: now)
@@ -423,14 +358,11 @@ final class VitalsModel {
         }
     }
 
-    /// Turn the snapshot's running VM counters into per-second rates by diffing
-    /// against the previous tick. Publishes nil until a second sample lands (a
-    /// rate needs two readings), and treats a counter that went backwards — a
-    /// 32-bit wrap or a stat reset — as zero rather than a fabricated spike.
+    /// Diffs VM counters against the previous tick into per-second rates. A
+    /// counter that went backwards (32-bit wrap or stat reset) reads as zero,
+    /// not a spike.
     private func updateMemoryActivity(_ memory: MemorySnapshot?) {
-        // Memory unavailable (a VM/restricted Mac): drop the published rates and
-        // the baseline so the UI stops presenting the last sample's rates as live
-        // and doesn't compute a bogus rate against a stale prior reading on return.
+        // Drop rates and baseline so a stale prior reading isn't diffed on return.
         guard let memory else {
             memoryActivity = nil
             previousMemorySnapshot = nil
@@ -457,10 +389,8 @@ final class VitalsModel {
         )
     }
 
-    /// Publishes the network reading from the second sample onward. The first
-    /// reading has no prior counters, so its 0 B/s rates are placeholders, not
-    /// measurements — a rate needs two readings. A skipped read (nil) holds the
-    /// last published snapshot rather than blanking live surfaces, like `gpu`.
+    /// Publishes from the second sample onward: the first has no prior counters,
+    /// so its 0 B/s rates are placeholders. A skipped read (nil) holds the last value.
     private func updateNetwork(_ snapshot: NetworkSnapshot?) {
         guard let snapshot else { return }
         if hasNetworkBaseline {
@@ -470,9 +400,7 @@ final class VitalsModel {
         }
     }
 
-    /// Same second-sample rule as `updateNetwork`: the first disk reading has
-    /// no prior counters, so its 0 B/s rates are placeholders, not
-    /// measurements. A skipped read (nil) holds the last published snapshot.
+    /// Same second-sample rule as `updateNetwork`.
     private func updateDiskIO(_ snapshot: DiskIOSnapshot?) {
         guard let snapshot else { return }
         if hasDiskIOBaseline {
@@ -524,13 +452,8 @@ final class VitalsModel {
         return values.reduce(0, +) / Double(values.count)
     }
 
-    /// Reassign `target` only when `newValue` differs — `@Published` fires
-    /// `objectWillChange` on every assignment regardless of whether the value
-    /// moved, so this gates the cheap, often-stable Equatable properties
-    /// (`thermalState`, `hasSMC`, `hasLoaded`, `sensorsStalled`, the temperature
-    /// Double?s) so their observers skip re-rendering on a tick where nothing
-    /// actually changed. Generic over `Equatable` so it costs nothing for the
-    /// array/struct properties, which stay ungated.
+    /// Skips the write when unchanged, so views reading an often-stable value
+    /// (`thermalState`, `hasLoaded`, …) don't re-render on every tick.
     private func assignIfChanged<T: Equatable>(_ target: inout T, to newValue: T) {
         guard target != newValue else { return }
         target = newValue
@@ -565,7 +488,7 @@ final class VitalsModel {
         case .cpu:
             if n.contains("pacc") { return "P\(number)" }
             if n.contains("eacc") { return "E\(number)" }
-            // M-series dies report as "PMU tdieN" / "PMU2 tdieN" — two banks.
+            // M-series dies report as "PMU tdieN" / "PMU2 tdieN": two banks.
             if n.contains("tdie") { return n.contains("pmu2") ? "B\(number)" : "A\(number)" }
             return name
         case .gpu: return number.isEmpty ? "GPU" : "GPU \(number)"

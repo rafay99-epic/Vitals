@@ -9,7 +9,7 @@ import SQLite3
 final class HistoryDatabase: @unchecked Sendable {
     static let shared = HistoryDatabase(file: DataHome.historyDatabaseFile)
 
-    /// One row of readings to log. Same shape the CSV logger used.
+    /// One row of readings to log.
     struct Entry {
         let averageTemp: Double
         let hottestTemp: Double
@@ -101,23 +101,17 @@ final class HistoryDatabase: @unchecked Sendable {
             battery_watts  REAL
         );
         """)
-        // Migrations (v1 → v2 network, v2 → v3 disk I/O): earlier versions
-        // shipped `samples` without the newer columns, and CREATE TABLE IF NOT
-        // EXISTS won't touch an existing table. Column *presence* is the gate —
-        // not `user_version` — so a crash between the ALTER and the version
-        // stamp can't wedge a half-migrated database, and re-running is always
-        // a no-op.
+        // Older files lack newer columns and CREATE TABLE IF NOT EXISTS won't add
+        // them. Column *presence* is the gate, not `user_version`, so a crash
+        // mid-migration can't wedge the file and re-running is a no-op.
         addSampleColumnIfMissing("net_in_bps")
         addSampleColumnIfMissing("net_out_bps")
         addSampleColumnIfMissing("disk_read_bps")
         addSampleColumnIfMissing("disk_write_bps")
-        // v3 → v4: system-on-chip package watts + battery load watts.
         addSampleColumnIfMissing("soc_watts")
         addSampleColumnIfMissing("battery_watts")
-        // UNIQUE(ts, message): a fired alert is identified by when + what, so
-        // re-importing the alert log (e.g. a crash between import and retire) can't
-        // duplicate rows — INSERT OR IGNORE makes it idempotent. Distinct alerts
-        // differ in ts (the cooldown spaces repeats), so none are lost.
+        // A fired alert is identified by when + what. Distinct alerts differ in ts
+        // (the cooldown spaces repeats), so INSERT OR IGNORE loses none.
         exec("""
         CREATE TABLE IF NOT EXISTS alerts (
             id      INTEGER PRIMARY KEY,
@@ -127,15 +121,14 @@ final class HistoryDatabase: @unchecked Sendable {
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);")
-        // v5: per-app energy logging was removed; reclaim its rows.
+        // Drop the removed per-app energy table from older files.
         exec("DROP TABLE IF EXISTS app_energy;")
         exec("PRAGMA user_version=5;")
     }
 
-    /// Adds a `REAL` column to `samples` if it isn't there yet. SQLite's ALTER
-    /// TABLE has no IF NOT EXISTS, so existence comes from `table_info` — which
-    /// makes the migration idempotent regardless of what version stamp the file
-    /// carries. `column` is always one of our own constant names, never input.
+    /// Adds a `REAL` column to `samples` if missing. SQLite's ALTER TABLE has no
+    /// IF NOT EXISTS, so existence comes from `table_info`. `column` is always a
+    /// constant name, never input.
     private func addSampleColumnIfMissing(_ column: String) {
         guard let db else { return }
         var stmt: OpaquePointer?
@@ -203,10 +196,9 @@ final class HistoryDatabase: @unchecked Sendable {
 
     // MARK: Reads
 
-    /// Readings within `range`, oldest→newest. For ranges with more rows than
-    /// `maxPoints` it thins in SQL (every Nth row by rowid) so a huge "all" query
-    /// still returns a chart-sized set without loading the whole table into memory.
-    /// The caller (`HistoryReader.load`) does the final exact down-sample.
+    /// Readings within `range`, oldest→newest. Over `maxPoints` rows it thins in
+    /// SQL (every Nth rowid) so "all" never loads the whole table.
+    /// `HistoryReader.load` does the final exact down-sample.
     func samples(range: HistoryRange, now: Date, maxPoints: Int) -> [HistorySample] {
         queue.sync {
             guard let db else { return [] }
@@ -216,10 +208,9 @@ final class HistoryDatabase: @unchecked Sendable {
             guard count > 0 else { return [] }
             let stride = maxPoints > 0 ? max(1, count / Int64(maxPoints)) : 1
 
-            // `cutoff` and `stride` are computed Int64s (never user input), so
-            // inlining them is safe — and lets the thinned query also pin the true
-            // first/last in-range rows, so the chart's endpoints are the real
-            // newest/oldest readings, not just the nearest surviving sample.
+            // `cutoff` and `stride` are computed Int64s, never input, so inlining
+            // is safe. The thinned query also pins the true first/last rows so the
+            // chart's endpoints are real readings.
             var sql = "SELECT ts, avg_cpu, hottest_cpu, gpu_temp, fan_rpm, cpu_usage, memory_gb, thermal_state, battery_pct, gpu_usage, gpu_mem_gb, net_in_bps, net_out_bps, disk_read_bps, disk_write_bps, soc_watts, battery_watts FROM samples WHERE ts >= \(cutoff)"
             if stride > 1 {
                 sql += " AND (id % \(stride) = 0"
@@ -276,9 +267,8 @@ final class HistoryDatabase: @unchecked Sendable {
         }
     }
 
-    /// Stream every readings row, oldest→newest, to `body` — without materializing
-    /// the whole table. Used by CSV export so a year of history (~3M rows) never
-    /// loads into memory at once. Runs on the serial queue; call off the main thread.
+    /// Streams every readings row, oldest→newest, to `body` without materializing
+    /// the table (CSV export of ~3M rows). Call off the main thread.
     func forEachSample(_ body: (HistorySample) -> Void) {
         queue.sync {
             guard let db else { return }

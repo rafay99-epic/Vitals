@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// One shared formatter: the class-method form allocates internally per call,
-/// and size labels re-render across hundreds of rows on every scan publish.
+/// One shared formatter: the class-method form allocates per call, and size
+/// labels render across hundreds of rows.
 @MainActor private let byteFormatter: ByteCountFormatter = {
     let formatter = ByteCountFormatter()
     formatter.countStyle = .file
@@ -13,12 +13,8 @@ import AppKit
     byteFormatter.string(fromByteCount: Int64(bytes))
 }
 
-/// Process-wide icon cache: NSWorkspace lookups are not cheap, and list rows
-/// re-render on every size update — without this, each render refetched every
-/// App icon loading. The cache lookup is instant; the load itself
-/// (`NSWorkspace.shared.icon(forFile:)`) touches disk + decodes the image, so
-/// it runs off-main via `Task.detached` — a cold cache miss never blocks the
-/// main thread, which is what held the Processes tab's first frame.
+/// Process-wide icon cache. `NSWorkspace.icon(forFile:)` hits disk and decodes
+/// the image, so misses load off-main via `Task.detached`.
 enum AppIconCache {
     /// The largest size any row draws an icon at is 28 pt; bake a 32 pt @2x
     /// (64 px) bitmap so it stays crisp everywhere while costing a fixed ~16 KB.
@@ -34,14 +30,13 @@ enum AppIconCache {
         return cache
     }()
 
-    /// Instant cache check — nil on miss. `NSCache` is thread-safe.
+    /// Instant cache check, nil on miss. `NSCache` is thread-safe.
     static func cached(for url: URL) -> NSImage? {
         cache.object(forKey: url as NSURL)
     }
 
-    /// Synchronous icon load — call off-main (`Task.detached`). `NSWorkspace`
-    /// and `NSCache` are both thread-safe, so this needs no actor hop. Stores
-    /// the flattened result so the next `cached(for:)` hits.
+    /// Synchronous icon load; call off-main. `NSWorkspace` and `NSCache` are both
+    /// thread-safe, so no actor hop is needed. Caches the flattened icon.
     nonisolated static func loadIcon(for url: URL) -> NSImage {
         let icon = flatten(NSWorkspace.shared.icon(forFile: url.path))
         cache.setObject(icon, forKey: url as NSURL)
@@ -81,9 +76,8 @@ enum AppIconCache {
     }
 }
 
-/// An app icon that loads off-main on a cache miss and shows a neutral
-/// placeholder meanwhile. Shared by the Processes and Applications tabs so
-/// neither blocks its first frame on `NSWorkspace.shared.icon(forFile:)`.
+/// An app icon that loads off-main on a cache miss, with a neutral placeholder
+/// meanwhile.
 struct AppIconView: View {
     let url: URL
     let size: CGFloat
@@ -111,8 +105,8 @@ struct AppIconView: View {
     }
 }
 
-/// The Applications tab: every uninstallable app, multi-selectable, with a
-/// leftover-aware uninstall that moves everything to the Trash.
+/// The Applications section: every uninstallable app, multi-selectable, with a
+/// leftover-aware uninstall.
 struct AppsView: View {
     @Bindable var model: AppsModel
 
@@ -134,10 +128,9 @@ struct AppsView: View {
         }
         .sheet(item: $model.staged) { staged in
             UninstallConfirmationSheet(model: model, staged: staged)
-                // Don't let a swipe/Esc dismiss the sheet mid-removal (the work
-                // keeps running) or at the summary (dismissing without Done would
-                // strand a stale lastOutcome and reopen onto it next time) — only
-                // the in-sheet buttons drive it.
+                // Don't let a swipe/Esc dismiss the sheet mid-removal (the work keeps
+                // running) or at the summary (a stale lastOutcome would reopen next time).
+                // Only the in-sheet buttons drive it.
                 .interactiveDismissDisabled(model.uninstallProgress != nil || model.lastOutcome != nil)
         }
     }
@@ -419,7 +412,8 @@ private struct AppRow: View {
 
 // MARK: - Confirmation sheet
 
-/// Shows exactly what will be moved to the Trash before anything happens.
+/// Shows exactly what will be removed, and whether it goes to the Trash or is
+/// deleted permanently, before anything happens.
 private struct UninstallConfirmationSheet: View {
     @Bindable var model: AppsModel
     let staged: AppsModel.StagedUninstall
@@ -438,9 +432,8 @@ private struct UninstallConfirmationSheet: View {
                 confirmation
             }
         }
-        // A shared minimum height so the sheet doesn't snap its window size
-        // between the confirm / progress / summary states — the transitions
-        // settle in place instead of jumping.
+        // Fixed width + shared min height so the sheet doesn't resize between the
+        // confirm / progress / summary states.
         .frame(width: 560)
         .frame(minHeight: 340, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: model.uninstallProgress == nil)
@@ -611,9 +604,8 @@ private struct UninstallConfirmationSheet: View {
 
 // MARK: - Live progress
 
-/// Shown in place of the confirmation while the uninstall runs, so the work is
-/// never invisible: the current step's label, a bar (or spinner for one app),
-/// and a list that fills in per app as each finishes.
+/// Shown in place of the confirmation while the uninstall runs: the current
+/// step, a bar (or spinner for one app), and per-app results as they finish.
 private struct UninstallProgressView: View {
     let progress: AppsModel.UninstallProgress
 
@@ -623,7 +615,6 @@ private struct UninstallProgressView: View {
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 8) {
-                // The phase label is the "is it stuck?" answer — always current.
                 Text(progress.phase.label)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -696,8 +687,8 @@ private struct UninstallProgressView: View {
 
 // MARK: - Finished summary
 
-/// Replaces the progress once the run completes — the same outcome the old alert
-/// showed, but inline so the flow is one continuous sheet (confirm → run → done).
+/// Replaces the progress view once the run completes, so the flow stays one
+/// sheet (confirm, run, done).
 private struct UninstallSummaryView: View {
     let outcome: AppUninstaller.Outcome
     let onDone: () -> Void

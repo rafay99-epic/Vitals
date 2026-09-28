@@ -2,8 +2,7 @@ import Foundation
 import IOKit.ps
 
 enum PowerState {
-    /// True when running on battery. Always false on a desktop Mac. Cheap
-    /// enough to call once per tick.
+    /// Always false on a desktop Mac. Cheap enough to call once per tick.
     static func isOnBattery() -> Bool {
         // Copy (+1) → takeRetainedValue; Get (+0) → takeUnretainedValue.
         guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue() else { return false }
@@ -12,7 +11,7 @@ enum PowerState {
     }
 }
 
-/// The power-aware sampling cadence. Pure, so it's testable without IOKit.
+/// Power-aware sampling cadence.
 ///
 /// - AC: the user's chosen interval.
 /// - Battery (with `reduceOnBattery`): doubled, capped at 5 s.

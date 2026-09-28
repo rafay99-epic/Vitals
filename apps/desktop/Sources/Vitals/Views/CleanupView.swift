@@ -33,9 +33,7 @@ struct CleanupView: View {
 
     private var picker: some View {
         HStack {
-            // A pull-down menu, not a segment row: the mode label shows the current
-            // page with its icon, and the list scales without crowding the bar
-            // (matches the History metric picker).
+            // A pull-down menu so the label shows the current page with its icon.
             Picker(selection: $page) {
                 ForEach(CleanupPage.allCases) { option in
                     Label(option.title, systemImage: option.symbol).tag(option)
@@ -56,10 +54,8 @@ struct CleanupView: View {
 
 // MARK: - Quick / Deep page
 
-/// The classic cache sweep — today's Cleanup behavior, one page per depth. The
-/// old in-hero depth picker is gone; `depth` is fixed and the four-way page
-/// picker above chooses it. Quick stays in the user domain (no password); Deep
-/// adds age-gated system categories that need one administrator prompt.
+/// The cache sweep, one page per depth. Quick stays in the user domain (no
+/// password); Deep adds age-gated system categories behind one admin prompt.
 private struct CleanupClassicPage: View {
     @Bindable var model: CleanupModel
     let depth: CleanDepth
@@ -90,9 +86,8 @@ private struct CleanupClassicPage: View {
             footer
         }
         .onAppear {
-            // Mounting this page measures for its
-            // depth: if a scan already ran at the other depth, re-measure for
-            // this one; otherwise honor auto-scan on the first run.
+            // If a scan already ran at the other depth, re-measure for this one;
+            // otherwise honor auto-scan on the first run.
             if model.hasRun && model.depth != depth {
                 model.scan(depth: depth)
             } else if settings.autoScanCleanup && !model.hasRun {
@@ -161,7 +156,7 @@ private struct CleanupClassicPage: View {
     }
 
     /// Destructive categories that end up in the Trash (recoverable) rather
-    /// than deleted in place — split from the permanent ones so the second
+    /// than deleted in place. Split from the permanent ones so the second
     /// confirmation never overstates what's about to happen.
     private var destructiveTrashCategories: [CleanupCategory] {
         model.selectedDestructiveCategories.filter { $0.kind.movesToTrash }

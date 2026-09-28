@@ -1,23 +1,18 @@
 import AppKit
 
-/// Composes a problem report to the developer via a `mailto:` link: the user's
-/// note plus a compact diagnostic header and recent issues go in the body, and
-/// the full rendered log (`LogExport`) is revealed in Finder for the user to
-/// attach. `mailto:` opens whatever the user set as their default mail handler
-/// (so it works with Gmail-as-default, not only Apple Mail), and — like any mail
-/// path — they review and press Send themselves. Nothing leaves the machine
-/// automatically.
+/// Drafts a problem report via `mailto:` (the user's default mail handler) and
+/// reveals the rendered log in Finder to attach. The user reviews and sends it;
+/// nothing leaves the machine automatically.
 @MainActor
 enum ProblemReport {
     static let recipient = "99marafay@gmail.com"
 
     enum Outcome {
         case opened                     // mail draft opened, log revealed
-        case noMailHandler(report: URL?)  // no default mail app — fall back
+        case noMailHandler(report: URL?)  // no default mail app
         case failed(String)
     }
 
-    /// Renders the log, reveals it, and opens a pre-filled mail draft.
     static func send(description: String) async -> Outcome {
         let header = compactHeader()
         let report = await Task.detached(priority: .userInitiated) { LogExport.writeReport(header: header) }.value
@@ -28,7 +23,6 @@ enum ProblemReport {
             return .failed("Couldn't build the email.")
         }
 
-        // Reveal the rendered report first so it's waiting in Finder to attach.
         if let report { NSWorkspace.shared.activateFileViewerSelecting([report]) }
 
         guard NSWorkspace.shared.open(url) else {
@@ -39,8 +33,7 @@ enum ProblemReport {
         return .opened
     }
 
-    /// Fallback when there's no mail handler: copy the body so the user can paste
-    /// it into webmail; the report file is already revealed.
+    /// Fallback when there's no mail handler: copy the body for pasting into webmail.
     static func copyBody(description: String) {
         let recent = LogExport.recentIssues(limit: 6)
         let body = mailBody(description: description, recent: recent, reportName: nil)
@@ -50,7 +43,7 @@ enum ProblemReport {
 
     // MARK: - Headers / body
 
-    /// One-liner header, short so the `mailto:` URL stays within practical limits.
+    /// Short so the `mailto:` URL stays within practical limits.
     private static func compactHeader() -> String {
         "\(HardwareInfo.chipName) · \(HardwareInfo.osVersion) · Vitals \(Updater.currentVersion) · session \(Log.session)"
     }
@@ -72,9 +65,8 @@ enum ProblemReport {
             lines.append("Please attach the file just revealed in Finder (\(reportName)) — it has the full log.")
         }
         var body = lines.joined(separator: "\n")
-        // mailto: URLs are length-limited in practice (~2000 chars), and
-        // percent-encoding inflates the body well beyond its character count —
-        // so cap conservatively and let the attached report carry the detail.
+        // mailto: URLs are limited to ~2000 chars in practice, and percent-encoding
+        // inflates the body, so cap conservatively.
         if body.count > 1200 { body = String(body.prefix(1200)) + "\n…(truncated — see the attached log)" }
         return body
     }

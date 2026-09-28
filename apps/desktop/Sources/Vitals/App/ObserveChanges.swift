@@ -1,10 +1,8 @@
 import Observation
 
-/// Calls `action` on the main actor each time `value()` changes (never for the
-/// initial value): `withObservationTracking` re-armed after every change. The
-/// `@Observable` replacement for `$property.dropFirst().removeDuplicates().sink`.
-/// Lives as long as the observed object keeps mutating, so use it for
-/// app-lifetime wiring and capture `self` weakly in both closures.
+/// Calls `action` on the main actor each time `value()` changes, never for the
+/// initial value. Re-arms forever, so use it for app-lifetime wiring and
+/// capture `self` weakly in both closures.
 @MainActor
 func observeChanges<T: Equatable>(of value: @escaping @MainActor () -> T,
                                   _ action: @escaping @MainActor (T) -> Void) {

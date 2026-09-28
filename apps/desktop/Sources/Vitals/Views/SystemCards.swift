@@ -213,7 +213,7 @@ struct BatteryContent: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
 
-    /// Charge-state SF Symbol for the section header (used by the dashboard).
+    /// Charge-state SF Symbol.
     static func symbol(for battery: BatterySnapshot?) -> String {
         guard let battery else { return "battery.100percent" }
         if battery.isCharging { return "battery.100percent.bolt" }
@@ -226,11 +226,9 @@ struct BatteryContent: View {
         }
     }
 
-    // One wording, one tint rule, one clock format for every battery surface
-    // (Battery tab, dashboard card, battery widget) — shared here so the
-    // copies can't drift apart.
+    // Shared wording, tint, and clock format for every battery surface.
 
-    /// "Charging" / "On power adapter" / "On battery" — the charge-state line.
+    /// "Charging" / "On power adapter" / "On battery": the charge-state line.
     static func stateLine(for battery: BatterySnapshot) -> String {
         if battery.isCharging { return "Charging" }
         if battery.externalPower { return battery.fullyCharged ? "Fully charged, on power adapter" : "On power adapter" }
@@ -324,10 +322,9 @@ struct BatteryContent: View {
 
 }
 
-/// SoC power at a glance on the Dashboard — total package draw plus the CPU /
-/// GPU / Neural Engine rails. Reuses the shared `PowerTile`; shows an honest
-/// note until the first energy delta lands (or when IOReport is unavailable),
-/// never a fake 0 W.
+/// SoC power on the Overview: package total plus the CPU / GPU / Neural Engine
+/// rails. Shows a note until the first energy delta lands (or when IOReport is
+/// unavailable), never a fake 0 W.
 struct PowerCard: View {
     @Environment(VitalsModel.self) private var model
 

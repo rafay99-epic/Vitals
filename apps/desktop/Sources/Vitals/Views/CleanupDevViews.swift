@@ -99,8 +99,8 @@ struct CleanupDeveloperPage: View {
         if model.devTotalBytes > 0 { return formatBytes(model.devTotalBytes) }
         if model.isDevScanning { return "Scanning…" }
         guard model.hasDevRun else { return "—" }
-        // Projects found but every artifact measured to 0 bytes: show the honest
-        // total, not "Nothing found" (which is only for an empty result).
+        // Projects found but every artifact measured 0 bytes: show the total.
+        // "Nothing found" is only for an empty result.
         return model.devProjects.isEmpty ? "Nothing found" : formatBytes(model.devTotalBytes)
     }
 
@@ -169,7 +169,7 @@ struct CleanupDeveloperPage: View {
         }
     }
 
-    /// Which of a project's own artifacts are selected — scoped so a toggle in
+    /// Which of a project's own artifacts are selected, scoped so a toggle in
     /// one project doesn't change (and re-render) every other project's row.
     private func selectedArtifactURLs(in project: DevJunkScanner.Project) -> Set<URL> {
         Set(project.artifacts.map(\.url).filter(model.devSelection.contains))

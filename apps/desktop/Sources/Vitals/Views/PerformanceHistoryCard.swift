@@ -66,13 +66,13 @@ struct PerformanceHistoryCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .cardBackground()
-        // Keep the selection valid if the GPU segment disappears.
+        // Keep the selection valid if a metric's reading disappears.
         .onChange(of: available) { _, list in
             if !list.contains(metric) { metric = .temp }
         }
     }
 
-    // MARK: Segmented switcher (matches the header tab capsule)
+    // MARK: Switcher
 
     private var switcher: some View {
         HStack(spacing: 2) {
@@ -113,7 +113,7 @@ struct PerformanceHistoryCard: View {
                     }
             }
         }
-        // Scope the legend/colors to the selected metric's series only — a global
+        // Scope the legend/colors to the selected metric's series only. A global
         // scale would list every series (Memory/Swap) even on the Temp view.
         .chartForegroundStyleScale(domain: seriesStyle.domain, range: seriesStyle.range)
         .chartYScale(domain: yDomain)

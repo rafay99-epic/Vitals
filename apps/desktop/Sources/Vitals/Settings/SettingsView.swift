@@ -2,9 +2,8 @@ import SwiftUI
 import AppKit
 import UserNotifications
 
-/// Settings, the main window's last sidebar section: one searchable page of
-/// titled cards, grouped into sections split across two continuous columns. The
-/// search field live-filters cards by title and keywords.
+/// One searchable page of cards, grouped into sections across two columns.
+/// Search filters cards by title and keywords.
 struct SettingsView: View {
     @State private var query = ""
     @FocusState private var searchFocused: Bool
@@ -16,10 +15,7 @@ struct SettingsView: View {
             ScrollView {
                 Group {
                     if anyMatch {
-                        // Two columns of whole sections. Each column is one
-                        // continuous vertical stack, so cards never strand a gap
-                        // (the worst case is one column ending slightly lower at the
-                        // very bottom — the section split below keeps them even).
+                        // Each column is one continuous stack, so cards never strand a gap.
                         HStack(alignment: .top, spacing: 24) {
                             column(leftSections)
                             column(rightSections)
@@ -34,9 +30,8 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Carry the query down so the building blocks can highlight matches.
         .environment(\.settingsSearchQuery, query)
-        // ⌘F focuses search (Find), scoped to when Settings is on screen.
+        // ⌘F focuses search while Settings is on screen.
         .background {
             Button("") { searchFocused = true }
                 .keyboardShortcut("f", modifiers: .command)
@@ -45,8 +40,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Page title + search, with a top inset that clears the traffic-light strip
-    /// the way the sidebar header does.
+    /// Top inset clears the traffic-light strip, like the sidebar header.
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text("Settings")
@@ -61,7 +55,6 @@ struct SettingsView: View {
     }
 
     private func column(_ sections: [SettingsSectionModel]) -> some View {
-        // Lazy: only sections near the viewport are built.
         LazyVStack(alignment: .leading, spacing: 28) {
             ForEach(sections) { section in
                 SettingsSectionView(section: section, query: query)
@@ -70,8 +63,7 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    /// Sections split across the two columns, hand-balanced by card weight so the
-    /// columns end at roughly the same height.
+    /// Hand-balanced by card weight so the columns end at roughly the same height.
     private var leftSections: [SettingsSectionModel] {
         Self.sections.filter { !Self.rightColumnTitles.contains($0.title) }
     }
@@ -99,10 +91,7 @@ struct SettingsView: View {
 
     // MARK: - The section registry
     //
-    // Listed in reading order; the page splits these sections across two columns
-    // (see `rightColumnTitles`). Each card carries searchable `keywords` (its
-    // controls' labels) so a query like "battery" or "log" surfaces the right cards
-    // even when the word isn't in the title.
+    // `keywords` hold each card's control labels so search finds words not in the title.
 
     static let sections: [SettingsSectionModel] = [
         SettingsSectionModel(title: "General", cards: [
@@ -174,10 +163,8 @@ struct SettingsSectionModel: Identifiable {
     let cards: [SettingsCardModel]
 }
 
-/// One section: a header rule, an optional full-width prologue (the About hero),
-/// then its cards as a single continuous stack (the section *is* one page column),
-/// so cards never strand a gap beside a taller sibling. Hidden entirely when the
-/// search filters out all of its cards.
+/// A header rule, an optional prologue (the About hero), then its cards.
+/// Hidden when search filters out all of its cards.
 private struct SettingsSectionView: View {
     let section: SettingsSectionModel
     let query: String
@@ -188,8 +175,6 @@ private struct SettingsSectionView: View {
             VStack(alignment: .leading, spacing: 14) {
                 sectionHeader
                 if let prologue = section.prologue { prologue }
-                // One continuous stack — the section *is* a column, so its cards
-                // never leave a gap beside a taller sibling.
                 ForEach(visible) { $0.view }
             }
         }
@@ -208,8 +193,7 @@ private struct SettingsSectionView: View {
     }
 }
 
-/// The search box — design-language rounded field, not the dated system search
-/// control. Live-filters as you type; the clear button resets it.
+/// Rounded design-language field in place of the system search control.
 private struct SettingsSearchField: View {
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
@@ -252,17 +236,15 @@ private struct SettingsSearchQueryKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// The live Settings search query, read by the building-block labels so they
-    /// can accent the matched substring wherever it appears.
+    /// The Settings search query, read by `HighlightLabel`.
     var settingsSearchQuery: String {
         get { self[SettingsSearchQueryKey.self] }
         set { self[SettingsSearchQueryKey.self] = newValue }
     }
 }
 
-/// A text label that accents the run matching the current search query — so when
-/// a card surfaces from a search, the user sees *why* it matched. Base font/colour
-/// come from the call site's modifiers; the matched run overrides to the accent.
+/// Accents the first run matching the search query (2+ chars), so the user sees
+/// why a card matched.
 private struct HighlightLabel: View {
     let text: String
     @Environment(\.settingsSearchQuery) private var query
@@ -345,8 +327,7 @@ private struct SwitchRow: View {
     }
 }
 
-/// One selectable menu-bar reading: a tinted icon tile, its label, and a switch
-/// that adds/removes it from the shown set.
+/// A switch that adds/removes one reading from the menu-bar set.
 private struct MenuBarMetricToggle: View {
     let metric: MenuBarMetric
     @Binding var selection: Set<MenuBarMetric>
@@ -741,8 +722,7 @@ private struct LoggingCard: View {
     }
 
     private var logSizeText: String {
-        // Sum the database and its WAL/SHM sidecars — recent rows can sit in the
-        // -wal file before a checkpoint, so the main file alone understates usage.
+        // Include WAL/SHM sidecars: recent rows sit in -wal until a checkpoint.
         let fm = FileManager.default
         let base = DataHome.historyDatabaseFile.path
         let paths = [base, base + "-wal", base + "-shm"]
@@ -753,9 +733,7 @@ private struct LoggingCard: View {
         return "currently " + ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)
     }
 
-    /// Exports the whole database as a timestamped CSV into the data home's
-    /// `exports/` folder and reveals it — reusing `HistoryExport` so the format
-    /// matches the History tab's export exactly.
+    /// Same `HistoryExport` path as the History section, so the format matches.
     private func exportCSV() {
         Task.detached {
             guard let destination = HistoryExport.csv() else { return }
@@ -823,8 +801,7 @@ private struct ReportProblemCard: View {
 
 // MARK: - About
 
-/// The app identity hero at the top of the About section — icon, name + channel
-/// badge, version, tagline. Full-width, centered, above the About cards.
+/// Icon, name, channel badge, and version above the About cards.
 private struct AboutHero: View {
     private var versionLine: String {
         var line: String
@@ -834,7 +811,7 @@ private struct AboutHero: View {
         } else {
             line = "Version \(Updater.currentVersion) (build \(build))"
         }
-        // Nightly and Dev builds stamp the exact branch@sha so you know what's running.
+        // Nightly and Dev builds stamp branch@sha.
         if let info = Channel.buildInfo { line += " · \(info)" }
         return line
     }

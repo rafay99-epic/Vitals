@@ -41,7 +41,7 @@ enum FanHelperRetirement {
     /// Root side: `Vitals --fan-daemon`, started by the old launchd job.
     static func runAsHelper() -> Never {
         if let smc = SMC() {
-            for fan in smc.fans() { try? smc.setFanAutomatic(fan.id) }
+            for fan in smc.fans() { smc.setFanAutomatic(fan.id) }
         }
         try? FileManager.default.removeItem(atPath: plistPath)
         try? FileManager.default.removeItem(atPath: statePath)
@@ -50,8 +50,7 @@ enum FanHelperRetirement {
         let launchctl = Process()
         launchctl.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         launchctl.arguments = ["bootout", "system/\(label)"]
-        try? launchctl.run()
-        launchctl.waitUntilExit()
+        if (try? launchctl.run()) != nil { launchctl.waitUntilExit() }
         exit(0)
     }
 }

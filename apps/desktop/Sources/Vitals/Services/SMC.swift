@@ -23,17 +23,16 @@ final class SMC {
 
     private let connection: io_connect_t
 
-    /// A key's type and size never change, but fetching them costs a kernel
-    /// round-trip — half the SMC traffic before this cache existed. Missing
-    /// keys are remembered too, so absent keys (no F0Md on some machines)
-    /// aren't re-queried every tick.
+    /// A key's type and size never change but cost a kernel round-trip to fetch.
+    /// Missing keys (no F0Md on some machines) are cached too so they aren't
+    /// re-queried every tick.
     private var keyInfoCache: [UInt32: SMCKeyInfoData] = [:]
     private var missingKeys: Set<UInt32> = []
 
     init?() {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         guard service != 0 else {
-            Log.noticeOnce(.smc, key: "smc-no-service", "AppleSMC service not found — fan readings and control are unavailable")
+            Log.noticeOnce(.smc, key: "smc-no-service", "AppleSMC service not found — fan readings are unavailable")
             return nil
         }
         defer { IOObjectRelease(service) }
@@ -69,15 +68,14 @@ final class SMC {
     }
 
     /// Returns the fan to macOS automatic control. Requires root.
-    func setFanAutomatic(_ fan: Int) throws {
+    func setFanAutomatic(_ fan: Int) {
         try? write("F\(fan)Md", value: 0)  // auto
         try? write("Ftst", value: 0)       // clear the diagnostic unlock
     }
 
     // MARK: - Key access
 
-    /// Reads a key and decodes it to a Double, or nil if the key is missing
-    /// or has a type we don't understand.
+    /// Nil if the key is missing or its type isn't decoded.
     func read(_ key: String) -> Double? {
         guard let keyCode = Self.fourCC(key), let info = keyInfo(for: keyCode) else { return nil }
 
@@ -149,6 +147,7 @@ final class SMC {
 
     // MARK: - Codecs
 
+    // `flt ` is native byte order; the integer and fixed-point types are big-endian.
     private static func decode(_ bytes: [UInt8], type: UInt32) -> Double? {
         switch string(fromFourCC: type) {
         case "flt ":

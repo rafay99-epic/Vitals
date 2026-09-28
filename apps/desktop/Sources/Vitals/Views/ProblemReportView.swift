@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// A sheet for emailing the developer a problem report: the user explains what
-/// happened, and Vitals opens a pre-addressed mail draft (with a compact
-/// diagnostic summary in the body) and reveals the full log in Finder to attach.
-/// They review and send it themselves — nothing leaves the machine until they do.
+/// A sheet for emailing the developer a problem report: opens a pre-addressed
+/// mail draft with a diagnostic summary and reveals the log in Finder to attach.
+/// Nothing leaves the machine until the user sends it.
 struct ProblemReportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var detail = ""

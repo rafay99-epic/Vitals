@@ -1,9 +1,7 @@
 import Foundation
 
-/// Owns the sensor sources and takes every sample off the main thread.
-/// One tick issues hundreds of syscalls — per-process rusage, the HID
-/// sensor sweep, SMC fan reads — which would otherwise run on the UI
-/// thread and cause hitches under load.
+/// Owns the sensor sources and takes every sample off the main thread. One tick
+/// issues hundreds of syscalls, which would hitch the UI on the main thread.
 actor SensorSampler {
     struct Snapshot {
         /// Classified and sorted by label here, off the main thread.
@@ -28,28 +26,23 @@ actor SensorSampler {
     private let processSampler = ProcessSampler()
     private let gpu = GPUSampler()
     private let power = SoCPowerSampler()
-    // Stateful: holds the previous tick's byte counters to diff into rates, so
-    // it must be the same instance every sample.
+    // Network and disk diff counters between ticks, so each must be the same
+    // instance every sample.
     private let network = NetworkStats()
-    // Same statefulness rule: per-driver disk counters diff into rates.
     private let disk = DiskStats()
 
-    // macOS's smoothed Maximum Capacity changes over weeks, and reading it
-    // spawns `system_profiler`, so it's refreshed twice a day off the tick.
+    // Changes over weeks and spawns `system_profiler`: refreshed twice a day.
     private var batteryHealth: Double?
     private var batteryHealthCheckedAt = Date.distantPast
     private static let batteryHealthInterval: TimeInterval = 12 * 3600
 
-    // SSD SMART changes over hours/days: read every few minutes off the tick,
-    // cached in between.
+    // SMART changes over hours: refreshed every 5 minutes.
     private var diskHealth: DiskHealthSnapshot?
     private var diskHealthCheckedAt = Date.distantPast
     private static let diskHealthInterval: TimeInterval = 300
 
-    /// Which optional reads to take. Each is only on while a surface the user
-    /// can see needs it; skipped reads come back nil (or hold their last value,
-    /// for network details) and `VitalsModel` keeps the last reading on screen,
-    /// never a fabricated zero.
+    /// Optional reads, each on only while a visible surface needs it. Skipped
+    /// reads come back nil or empty; network details hold their last value.
     struct Needs {
         /// The per-process rusage sweep, the heaviest part of a tick.
         var topProcesses = false
@@ -60,8 +53,8 @@ actor SensorSampler {
     }
 
     func sample(_ needs: Needs) -> Snapshot {
-        // CoreWLAN and IOKit hand back autoreleased objects; drain them per
-        // sample instead of letting them pile up on the actor's thread.
+        // CoreWLAN and IOKit return autoreleased objects; drain them per sample
+        // so they don't pile up on the actor's thread.
         autoreleasepool {
             let battery = Battery.read(officialHealth: batteryHealth)
             if battery != nil { refreshBatteryHealthIfStale() }
@@ -80,18 +73,16 @@ actor SensorSampler {
                 gpu: needs.gpu ? gpu.sample() : nil,
                 power: needs.power ? power.sample() : nil,
                 diskHealth: diskHealth,
-                // Byte counters are one sysctl; the menu bar and history want a
-                // continuous series, so they're read every tick.
+                // Byte counters are one sysctl, read every tick so the menu bar
+                // and history get a continuous series.
                 network: network.sample(includeDetails: needs.networkDetails),
                 diskIO: disk.sample()
             )
         }
     }
 
-    /// Refreshes the cached SSD SMART snapshot off the sampling actor if it's
-    /// stale, serving the last good value in between. Stamps the time up front so
-    /// a slow user-client call can't spawn a second read; only a successful read
-    /// replaces the cache (mirrors `refreshBatteryHealthIfStale`).
+    /// Reads off the actor when stale. The time is stamped up front so a slow
+    /// read can't start a second one; only a successful read replaces the cache.
     private func refreshDiskHealthIfStale() {
         guard Date().timeIntervalSince(diskHealthCheckedAt) >= Self.diskHealthInterval else { return }
         diskHealthCheckedAt = Date()
@@ -105,9 +96,7 @@ actor SensorSampler {
         if let value { diskHealth = value }
     }
 
-    /// Kicks off a background read of macOS's Maximum Capacity if the cached
-    /// value is stale. Stamps the time up front so a slow read can't spawn a
-    /// second `system_profiler`; only a successful read updates the cache.
+    /// Same stamping and caching rules as `refreshDiskHealthIfStale`.
     private func refreshBatteryHealthIfStale() {
         guard Date().timeIntervalSince(batteryHealthCheckedAt) >= Self.batteryHealthInterval else { return }
         batteryHealthCheckedAt = Date()

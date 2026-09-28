@@ -60,16 +60,14 @@ struct MenuBarPanel: View {
 
     // MARK: Sparklines
 
-    /// The dropdown's charts are 36 px tall — 100 points is already more
-    /// than one per pixel, and a third of the marks makes the panel open
-    /// noticeably snappier.
+    /// The dropdown's charts are 36 px tall, so 100 points is already more than
+    /// one per pixel, and fewer marks open the panel faster.
     private var sparkData: [VitalsModel.Sample] {
         model.chartHistory.thinned(to: 100)
     }
 
-    /// Two fixed columns (never `.adaptive`, per the perf rules). Four metrics
-    /// land as a clean 2×2; three fill the first row plus one. A single row of
-    /// four was far too narrow — labels and values truncated to "Te…"/"M…/12…".
+    /// Two fixed columns (never `.adaptive`). A single row of four truncated the
+    /// labels and values.
     private let sparkColumns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
 
     private var sparklines: some View {

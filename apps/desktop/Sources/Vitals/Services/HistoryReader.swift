@@ -1,8 +1,8 @@
 import Foundation
 
-/// One row of logged history — a database row, or a parsed legacy CSV line
-/// during import. Mirrors `HistoryDatabase.Entry`. Optionals are readings that
-/// weren't available when the row was written (a subsystem that wasn't present).
+/// One row of logged history. Mirrors `HistoryDatabase.Entry`. Optionals are
+/// readings that weren't available when the row was written (a missing
+/// subsystem, or a column added after the row was logged).
 struct HistorySample: Identifiable, Codable {
     let time: Date
     let avgTemp: Double
@@ -15,12 +15,12 @@ struct HistorySample: Identifiable, Codable {
     let batteryPercent: Double?
     let gpuUsage: Double?
     let gpuMemoryGB: Double?
-    let netInBps: Double?    // network download, bytes/s — nil for rows logged before v2
+    let netInBps: Double?    // network download, bytes/s
     let netOutBps: Double?   // network upload, bytes/s
-    let diskReadBps: Double?  // disk read, bytes/s — nil for rows logged before v3
+    let diskReadBps: Double?  // disk read, bytes/s
     let diskWriteBps: Double? // disk write, bytes/s
-    let socWatts: Double?     // system-on-chip package watts — nil before v4
-    let batteryWatts: Double? // battery load watts (signed) — nil before v4
+    let socWatts: Double?     // system-on-chip package watts
+    let batteryWatts: Double? // battery load watts (signed)
     var id: Date { time }
 }
 
@@ -52,9 +52,8 @@ enum HistoryRange: String, CaseIterable, Identifiable {
 /// Reads logged history back for the History section. Blocking (a SQLite range
 /// query), so always call it off the main thread.
 enum HistoryReader {
-    /// Loads samples within `range`, oldest→newest, downsampled to `maxPoints`
-    /// for drawing. The database returns a coarse-thinned set; this applies the
-    /// final exact down-sample (keeping first + last).
+    /// Samples within `range`, oldest→newest. The database thins coarsely; this
+    /// applies the exact down-sample to `maxPoints` (keeping first + last).
     static func load(range: HistoryRange, now: Date, maxPoints: Int = 600) -> [HistorySample] {
         let raw = HistoryDatabase.shared.samples(range: range, now: now, maxPoints: maxPoints)
         return raw.thinned(to: maxPoints)
@@ -68,16 +67,15 @@ enum HistoryReader {
     }()
 }
 
-/// Writes the logged history into the data home's `exports/` folder. Blocking
-/// (queries/encodes the whole log), so it's called off the main thread.
+/// Writes the logged history into the data home's `exports/` folder. Blocking,
+/// so call it off the main thread.
 enum HistoryExport {
     /// The CSV header. New columns only ever append at the end, so older
     /// exports keep the same positions.
     static let csvHeader = "timestamp,avg_cpu_temp_c,hottest_cpu_temp_c,gpu_temp_c,fan_rpm,cpu_usage_pct,memory_used_gb,thermal_state,battery_pct,gpu_usage_pct,gpu_mem_used_gb,net_in_bps,net_out_bps,disk_read_bps,disk_write_bps,soc_watts,battery_watts\n"
 
-    /// Writes the whole database out as CSV (every row, no down-sampling); returns
-    /// the new file, or nil if there's nothing logged yet. Streams row-by-row to a
-    /// `FileHandle` so a year of history never materializes in memory.
+    /// Writes every row as CSV, streamed so a year of history never sits in
+    /// memory. Nil if nothing is logged yet.
     static func csv() -> URL? {
         guard let destination = prepareDestination(extension: "csv") else { return nil }
         let fm = FileManager.default
@@ -97,7 +95,7 @@ enum HistoryExport {
             }
         }
         guard wroteAny else {
-            try? fm.removeItem(at: destination)   // nothing logged yet — no empty file (handle closed by defer)
+            try? fm.removeItem(at: destination)   // no empty file
             return nil
         }
         return destination
@@ -127,7 +125,7 @@ enum HistoryExport {
         return fields.joined(separator: ",") + "\n"
     }
 
-    /// Parses the whole log and writes it as a JSON array; nil if empty.
+    /// Writes the whole log as a JSON array (loaded in memory); nil if empty.
     static func json() -> URL? {
         let samples = HistoryReader.load(range: .all, now: Date(), maxPoints: .max)
         guard !samples.isEmpty else { return nil }

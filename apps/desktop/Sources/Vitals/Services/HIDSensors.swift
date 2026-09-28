@@ -14,8 +14,6 @@ final class HIDSensors {
 
     init() {
         guard let client = IOHIDEventSystemClientCreate(kCFAllocatorDefault) else {
-            // The whole temperature subsystem is unavailable — explains an empty
-            // Temperatures section in a support report. One-time at startup.
             Log.noticeOnce(.sensors, key: "hid-client-create", "couldn't create the HID event-system client — no temperature sensors will be read")
             self.client = nil
             return
@@ -28,9 +26,8 @@ final class HIDSensors {
         self.client = client
     }
 
-    /// The temperature services and their names never change at runtime, and
-    /// copying them costs an IPC round-trip per sensor, so they're cached and
-    /// only re-listed every few minutes (or when the list comes back empty).
+    /// Listing services and copying names costs an IPC round-trip per sensor, so
+    /// they're cached and re-listed every 5 minutes or when the list is empty.
     private var sensors: [(service: IOHIDServiceClient, name: String)] = []
     private var listedAt = Date.distantPast
     private static let relistInterval: TimeInterval = 300
@@ -42,7 +39,7 @@ final class HIDSensors {
             guard let event = IOHIDServiceClientCopyEvent(sensor.service, Int64(VITALS_HID_EVENT_TEMPERATURE), 0, 0)
             else { return nil }
             let value = IOHIDEventGetFloatValue(event, temperatureField)
-            // Discard sensors that report nonsense (unpowered or reserved slots).
+            // Unpowered or reserved slots report nonsense values.
             guard value > 0, value < 128 else { return nil }
             return Reading(name: sensor.name, celsius: value)
         }

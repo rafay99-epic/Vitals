@@ -1,8 +1,8 @@
 import Foundation
 import AppKit
 
-/// One application found on disk. Protected applications remain visible for
-/// storage accounting but cannot be selected for removal.
+/// One application found on disk. Protected apps stay listed but can never be
+/// selected for removal.
 struct InstalledApp: Identifiable, Hashable {
     let id: URL          // the .app bundle URL
     let name: String
@@ -17,11 +17,8 @@ struct InstalledApp: Identifiable, Hashable {
     let requiresAdmin: Bool
 }
 
-/// A counting gate over concurrent directory walks. Every sizing stream of one
-/// `AppInventory` shares it, so however many streams are open at once (an
-/// overview scan plus a drill-down plus a fallback), the *total* number of
-/// walks touching the disk never exceeds `width` — streams queue behind each
-/// other instead of multiplying.
+/// A counting gate shared by every sizing stream of one `AppInventory`, so the
+/// total number of concurrent directory walks never exceeds `width`.
 actor SizingGate {
     private let width: Int
     private var inUse = 0
@@ -47,10 +44,9 @@ actor SizingGate {
     }
 }
 
-/// Finds top-level applications. Apple and Vitals bundles are returned as protected rows
-/// for honest inventory accounting; the removal path still refuses it.
+/// Finds top-level applications. Apple and Vitals bundles come back as
+/// protected rows; the removal path refuses them.
 actor AppInventory {
-    /// Shared by every stream this inventory produces — see `SizingGate`.
     let gate = SizingGate(width: 6)
     nonisolated static let searchDirectories: [URL] = [
         URL(fileURLWithPath: "/Applications", isDirectory: true),
@@ -70,8 +66,7 @@ actor AppInventory {
         return nil
     }
 
-    /// Apps Vitals refuses to touch. They remain visible through
-    /// `protectionReason` so storage accounting is complete.
+    /// Apps Vitals refuses to touch.
     nonisolated static func isProtected(bundleID: String?, url: URL) -> Bool {
         protectionReason(bundleID: bundleID, url: url) != nil
     }
@@ -113,10 +108,9 @@ actor AppInventory {
         return apps.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
-    /// Streams (url, size) pairs as sizes finish computing, a few at a time so
-    /// a folder full of multi-gigabyte apps doesn't saturate the disk. The
-    /// worker stops promptly when the consumer goes away — no orphaned disk
-    /// churn after a rescan or window close.
+    /// Streams (url, size) pairs as sizes finish, a few at a time so large apps
+    /// don't saturate the disk. The worker is cancelled when the consumer goes
+    /// away.
     nonisolated func sizes(for urls: [URL], concurrency: Int = 6) -> AsyncStream<(URL, UInt64)> {
         AsyncStream { continuation in
             let worker = Task.detached(priority: .utility) { [gate] in

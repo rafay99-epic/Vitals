@@ -11,8 +11,7 @@ enum Main {
         } else if arguments.contains("--fan-daemon") {
             FanHelperRetirement.runAsHelper()
         } else {
-            // Single instance, like Activity Monitor: a second launch hands
-            // off to the running app instead of starting a duplicate. A
+            // Single instance: a second launch activates the running app. A
             // retiring fan helper (activationPolicy .prohibited) doesn't count.
             let myPID = NSRunningApplication.current.processIdentifier
             if let bundleID = Bundle.main.bundleIdentifier,
@@ -29,7 +28,6 @@ enum Main {
 // MARK: - CLI tools
 
 /// `Vitals --probe` prints one round of raw readings to stdout and exits.
-/// Useful for sanity-checking the sensors without launching the GUI.
 private func runProbe() {
     print("== Vitals probe ==")
     print(HardwareInfo.chipName, "·", HardwareInfo.osVersion)

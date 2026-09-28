@@ -1,11 +1,8 @@
 import Foundation
 import PrivateSensors
 
-/// Live power draw of the SoC's main rails, in watts. Every figure is a real
-/// IOReport energy delta divided by elapsed time — never an assumed maximum or
-/// a derived percentage. The Neural Engine in particular reads near-zero at idle
-/// and only climbs under Core ML / vision work, which is exactly the honest
-/// signal: it says so when nothing is using it.
+/// SoC rail power in watts: IOReport energy deltas over elapsed time. The Neural
+/// Engine reads near zero unless Core ML or vision work is running.
 struct PowerSnapshot {
     let cpuWatts: Double
     let gpuWatts: Double
@@ -14,13 +11,11 @@ struct PowerSnapshot {
     var total: Double { cpuWatts + gpuWatts + aneWatts }
 }
 
-/// Samples the SoC power rails through the IOReport C shim. Holds the IOReport
-/// subscription for its lifetime (creating one per tick is the costly part) and
-/// reports `nil` whenever a reading isn't available — IOReport missing, or the
-/// very first sample, which has no prior counter to diff against.
+/// SoC rail power through the IOReport C shim. Holds one subscription for its
+/// lifetime, since creating one is the costly part. Nil when IOReport is missing
+/// or on the first sample (nothing to diff against).
 ///
-/// Lives behind the `SensorSampler` actor, so the underlying handle is only ever
-/// touched from one executor.
+/// Lives behind the `SensorSampler` actor, so the handle is used from one executor.
 final class SoCPowerSampler {
     private let handle: UnsafeMutableRawPointer?
 

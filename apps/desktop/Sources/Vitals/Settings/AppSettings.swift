@@ -35,7 +35,6 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
     case cpuTemp, cpuUsage, gpuUsage, memory, fan, network, disk
     var id: String { rawValue }
 
-    /// Label shown in the Settings picker.
     var label: String {
         switch self {
         case .cpuTemp:  return "CPU temperature"
@@ -48,7 +47,6 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
         }
     }
 
-    /// SF Symbol shown before the value — matches the dashboard subsystems.
     var symbol: String {
         switch self {
         case .cpuTemp:  return "thermometer.medium"
@@ -61,7 +59,7 @@ enum MenuBarMetric: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Compact word used in the menu bar's Text style (in place of the symbol).
+    /// Used in place of the symbol when `menuBarUseIcons` is off.
     var shortLabel: String {
         switch self {
         case .cpuTemp:  return "Temp"
@@ -85,8 +83,7 @@ final class AppSettings {
     /// Doubles the sampling interval on battery (capped at 5 s). Low Power Mode
     /// floors it at 10 s regardless. See `PowerThrottle`.
     var reduceOnBattery: Bool { didSet { defaults.set(reduceOnBattery, forKey: "reduceOnBattery") } }
-    /// Refreshed once per tick by `updatePowerState`, so the cadence reacts
-    /// within one sample of a plug/unplug.
+    /// Refreshed once per tick by `updatePowerState`.
     private(set) var isOnBattery: Bool = PowerState.isOnBattery()
     private(set) var isLowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
     /// Stored as a comma-joined list of raw values ("" = icon only).
@@ -96,7 +93,6 @@ final class AppSettings {
                          forKey: "menuBarMetrics")
         }
     }
-    /// Icon style (SF Symbol + value) vs. plain text style (short word + value).
     var menuBarUseIcons: Bool { didSet { defaults.set(menuBarUseIcons, forKey: "menuBarUseIcons") } }
     var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
     var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
@@ -113,13 +109,11 @@ final class AppSettings {
     var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     /// Pre-download a found update; installing still needs one tap.
     var autoDownloadUpdates: Bool { didSet { defaults.set(autoDownloadUpdates, forKey: "autoDownloadUpdates") } }
-    /// True while Vitals is the focused app. Animations run only then; numbers
-    /// stay live either way.
+    /// True while Vitals is the focused app. View animations run only then.
     private(set) var appActive: Bool = NSApp?.isActive ?? true
 
-    /// The sampling interval in effect: the user's pick adjusted for power state.
-    /// History capacity still uses the base `refreshInterval`, so a throttled
-    /// chart keeps its time span and only gets sparser.
+    /// The user's interval adjusted for power state. History capacity uses the
+    /// base `refreshInterval`, so a throttled chart keeps its span and gets sparser.
     var effectiveRefreshInterval: Double {
         PowerThrottle.interval(base: refreshInterval,
                                isOnBattery: isOnBattery,
@@ -138,8 +132,7 @@ final class AppSettings {
     var showMenuBar: Bool {
         didSet {
             defaults.set(showMenuBar, forKey: "showMenuBar")
-            // Never let the app become unreachable: no menu bar item means
-            // the Dock icon must stay.
+            // No menu bar item means the Dock icon must stay, or the app is unreachable.
             if !showMenuBar { hideDockIcon = false }
         }
     }
@@ -204,8 +197,7 @@ final class AppSettings {
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
 
-        // SMAppService.status is an XPC round-trip; in init it sat directly
-        // on the launch path and delayed the first frame. Load it async.
+        // SMAppService.status is an XPC round-trip; loaded async to keep it off the launch path.
         launchAtLogin = false
         syncingLoginItem = true
         Task { [weak self] in
@@ -226,8 +218,7 @@ final class AppSettings {
             },
         ]
 
-        // didSet doesn't fire during init, so push the stored level into the
-        // logger by hand — done last, once every stored property exists.
+        // didSet doesn't fire during init, so push the stored level by hand.
         Log.configure(minimumLevel: diagnosticLogLevel)
     }
 
@@ -244,8 +235,8 @@ final class AppSettings {
 
     // MARK: Power state
 
-    /// Refreshes the power state. Called once per tick; reassigns only on a real
-    /// transition, since `@Published` fires on every assignment.
+    /// Called once per tick. Writes only on a real transition, so observers of
+    /// the cadence don't re-run every tick.
     func updatePowerState() {
         let onBattery = PowerState.isOnBattery()
         let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
@@ -253,8 +244,7 @@ final class AppSettings {
         if isLowPowerMode != lowPower { isLowPowerMode = lowPower }
     }
 
-    /// Test seam to force a power state without touching IOKit/`ProcessInfo`.
-    /// Underscored to signal it's not part of the app's API.
+    /// Test seam: forces a power state without touching IOKit/`ProcessInfo`.
     func _setPowerStateForTesting(isOnBattery: Bool, isLowPowerMode: Bool) {
         self.isOnBattery = isOnBattery
         self.isLowPowerMode = isLowPowerMode
