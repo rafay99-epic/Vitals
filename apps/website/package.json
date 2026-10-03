@@ -16,7 +16,7 @@
     "@tanstack/react-router": "^1.170.18",
     "@vercel/analytics": "^2.0.1",
     "convex": "^1.42.3",
-    "react": "^19.2.6",
+    "react": "^19.2.8",
     "react-dom": "^19.2.6",
     "tailwindcss": "^4.3.1"
   },
