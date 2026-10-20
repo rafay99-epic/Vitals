@@ -1,25 +1,30 @@
-import { StatusScreen } from './StatusScreen'
-import { statusButton } from './statusStyles'
+import { SUPPORT_EMAIL } from '../lib/links'
+import { buttonClass } from '../components/ui/buttonClass'
+import { Em } from '../components/ui/text'
 import { useTitle } from '../lib/useTitle'
+import { StatusScreen } from './StatusScreen'
+import { ALARM_HIGH } from '../lib/channels'
 
-/// The fallback shown when something throws — used both by the top-level
-/// ErrorBoundary (render errors outside the router) and as the router's
-/// errorComponent (errors inside a route). A full reload is the recovery path:
-/// it rebuilds clean state, which is exactly what you want after a crash.
 export default function ErrorScreen() {
-  useTitle('Something went wrong — Vitals')
+  useTitle('Something stopped · Vitals')
   return (
     <StatusScreen
-      eyebrow="ERROR · NO SIGNAL"
-      title="Something went wrong"
-      message="This page hit an unexpected error and couldn’t finish loading. Reloading usually clears it."
+      beats={[0.28, 0.3, 0.9, 0.15, 0.75, 0.1]}
+      stroke={ALARM_HIGH}
+      title={
+        <>
+          Something <Em className="text-mute">stopped.</Em>
+        </>
+      }
+      message="This page hit an error and could not finish loading. Your Mac is fine. Reloading usually clears it."
+      code={['error · this page', 'nothing was sent anywhere']}
       actions={
         <>
-          <button type="button" onClick={() => window.location.reload()} style={statusButton.primary}>
-            Reload page
+          <button type="button" onClick={() => window.location.reload()} className={`${buttonClass('primary')} cursor-pointer border-0`}>
+            Reload
           </button>
-          <a href="/" style={statusButton.secondary}>
-            Back to Vitals
+          <a href={`mailto:${SUPPORT_EMAIL}`} className={buttonClass('line')}>
+            Report a problem
           </a>
         </>
       }

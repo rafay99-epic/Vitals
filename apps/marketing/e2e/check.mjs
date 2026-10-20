@@ -78,10 +78,10 @@ try {
   const mobileScroll = await page.evaluate(() => document.documentElement.scrollWidth)
   check('no horizontal overflow', mobileScroll === 390, `scrollWidth ${mobileScroll}`)
   check(
-    'live sparklines render points',
+    'live traces render a waveform',
     await page.evaluate(() => {
-      const poly = document.querySelector('polyline[points]')
-      return Boolean(poly && poly.getAttribute('points').length > 10)
+      const path = document.querySelector('svg[data-trace] path[d]')
+      return Boolean(path && path.getAttribute('d').length > 40)
     }),
   )
 
@@ -141,8 +141,8 @@ try {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`${BASE}/no-such-page-xyz`, { waitUntil: 'networkidle' })
   console.log('/no-such-page-xyz:')
-  check('renders the not-found message', await page.evaluate(() => document.body.textContent.includes('This page isn’t here')))
-  check('offers a way back to Vitals', await page.evaluate(() => [...document.querySelectorAll('a')].some((a) => a.textContent.includes('Back to Vitals'))))
+  check('renders the not-found message', await page.evaluate(() => document.body.textContent.includes('No pulse at this address')))
+  check('offers a way back to Vitals', await page.evaluate(() => [...document.querySelectorAll('a')].some((a) => a.textContent.includes('Back to the chart'))))
   const notFoundScroll = await page.evaluate(() => document.documentElement.scrollWidth)
   check('no horizontal overflow', notFoundScroll === 390, `scrollWidth ${notFoundScroll}`)
 

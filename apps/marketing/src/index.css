@@ -1,115 +1,216 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "InstrumentSerif";
+  src: url("/fonts/InstrumentSerif-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "InstrumentSerif-Italic";
+  src: url("/fonts/InstrumentSerif-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist-Medium";
+  src: url("/fonts/Geist-Medium.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist-SemiBold";
+  src: url("/fonts/Geist-SemiBold.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "GeistMono";
+  src: url("/fonts/GeistMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "GeistMono-Medium";
+  src: url("/fonts/GeistMono-Medium.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --color-bg: #000000;
+  --color-raise: #0a0a0a;
+  --color-sheet: #0e0e0e;
+  --color-line: #141414;
+  --color-line2: #1f1f1f;
+  --color-line3: #2c2c2c;
+  --color-mute: #5c5c5c;
+  --color-dim: #8b8b8b;
+  --color-ink2: #c9c9c9;
+  --color-ink: #ffffff;
+  --color-pulse: #5cf2a6;
+  --color-eeg: #f2ec6b;
+  --color-press: #ff6b8b;
+  --color-temp: #ffb45c;
+  --color-resp: #74d4ff;
+  --color-oxy: #c8a8ff;
+  --color-drip: #6f9bff;
+  --color-tele: #b9c4d0;
+  --color-alarm-high: #ff4d6d;
+  --color-alarm-medium: #ffb45c;
+  --color-alarm-low: #74d4ff;
+
+  --font-serif: "InstrumentSerif", "Times New Roman", serif;
+  --font-serif-italic: "InstrumentSerif-Italic", "Times New Roman", serif;
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-sans-medium: "Geist-Medium", system-ui, sans-serif;
+  --font-sans-semibold: "Geist-SemiBold", system-ui, sans-serif;
+  --font-mono: "GeistMono", ui-monospace, monospace;
+  --font-mono-medium: "GeistMono-Medium", ui-monospace, monospace;
+
+  --text-tag: 10px;
+  --text-tag--line-height: 1.3;
+  --text-meta: 11px;
+  --text-meta--line-height: 1.5;
+
+  --ease-chart: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 :root {
-  /* Dark theme: fixes native scrollbars, form controls, etc. */
   color-scheme: dark;
 }
 
 html {
   -webkit-tap-highlight-color: transparent;
+  background: #000;
 }
 
-/* Smooth in-page navigation (e.g. the nav's Download button → #download),
-   disabled for reduced-motion users. */
 @media (prefers-reduced-motion: no-preference) {
   html {
     scroll-behavior: smooth;
   }
 }
 
-/* Anchor targets clear the fixed nav instead of hiding under it. */
-section[id],
-[id].vt-anchor {
-  scroll-margin-top: 88px;
+section[id] {
+  scroll-margin-top: 24px;
 }
 
 body {
   margin: 0;
-  background: #060608;
-  color: #f5f5f7;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  background: #000;
+  color: #fff;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   touch-action: manipulation;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Headings avoid orphan/widow lines. */
 h1,
 h2,
 h3 {
   text-wrap: balance;
+  font-weight: 400;
 }
 
 ::selection {
-  background: rgba(10, 132, 255, 0.4);
+  background: rgba(92, 242, 166, 0.35);
 }
 
-/* Consistent keyboard focus ring. Inline styles don't set `outline`, so this
-   applies cleanly across the inline-styled buttons/links. */
-:where(a, button, [tabindex]):focus-visible {
-  outline: 2px solid #4aa3ff;
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid #0d99ff;
   outline-offset: 3px;
-  border-radius: 7px;
 }
 
-/* Film grain overlay. */
-.vt-grain {
-  opacity: 0.05;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
+.trace-draw path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
 }
 
-/* CommandBox copy icon: cross-fade copy↔check with a tiny spring. */
-.vt-cmd-icon {
-  position: absolute;
-  inset: 0;
+.trace-draw.is-drawn path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1600ms var(--ease-chart);
+}
+
+.rise {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.is-shown .rise,
+.rise.is-shown {
+  opacity: 1;
+  transform: none;
   transition:
-    opacity 0.2s ease,
-    transform 0.28s cubic-bezier(0.2, 1.4, 0.5, 1);
+    opacity 600ms ease,
+    transform 600ms var(--ease-chart);
 }
+
+.hold-trace {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 220ms ease-out;
+}
+
+[data-holding="true"] .hold-trace {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1300ms linear;
+}
+
+input[type="range"].hairline {
+  appearance: none;
+  background: linear-gradient(#2c2c2c, #2c2c2c) center / 100% 1px no-repeat;
+  height: 28px;
+}
+
+input[type="range"].hairline::-webkit-slider-thumb {
+  appearance: none;
+  width: 2px;
+  height: 26px;
+  background: #fff;
+}
+
+input[type="range"].hairline::-moz-range-thumb {
+  width: 2px;
+  height: 26px;
+  background: #fff;
+  border: 0;
+  border-radius: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .vt-cmd-icon {
-    transition: opacity 0.12s linear;
+  .rise {
+    opacity: 1;
+    transform: none;
   }
-}
 
-@keyframes vt-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes vt-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.82); }
-}
-
-/* Releases page: data appears, states fade, skeletons shimmer. All motion is
-   gated on prefers-reduced-motion so reduced-motion users get static content. */
-@keyframes vt-release-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes vt-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes vt-shimmer {
-  0% { background-position: -450px 0; }
-  100% { background-position: 450px 0; }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .vt-appear { animation: vt-fade-in 0.35s ease both; }
-  .vt-release-row {
-    animation: vt-release-in 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-    animation-delay: calc(var(--vt-i, 0) * 45ms);
+  .trace-draw path {
+    stroke-dashoffset: 0;
   }
-  .vt-skeleton-sheen {
-    background-image: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.10) 37%, rgba(255,255,255,0.04) 63%);
-    background-size: 900px 100%;
-    animation: vt-shimmer 1.4s linear infinite;
+
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
   }
 }

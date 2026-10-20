@@ -1,77 +1,91 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
+import type { Channel } from './channels'
 
-// Faithful port of the design prototype's data simulation: same seeds, same
-// 1.6 s tick, same clamps, so the page demos "every number is real" motion.
-const TEMP0 = [45, 44, 45, 46, 45, 44, 45, 47, 46, 45, 44, 45, 46, 45, 46, 45, 44, 45, 46, 47, 46, 45, 45, 45]
-const CPU0 = [12, 14, 11, 18, 22, 15, 12, 20, 28, 18, 14, 12, 16, 22, 40, 30, 18, 14, 22, 55, 80, 45, 28, 21]
-const MEM0 = [12.2, 12.3, 12.3, 12.4, 12.4, 12.3, 12.4, 12.5, 12.4, 12.4, 12.3, 12.4, 12.5, 12.4, 12.4, 12.5, 12.4, 12.4, 12.5, 12.4, 12.4, 12.4, 12.4, 12.4]
+const HISTORY = 120
+const TICK_MS = 1500
 
-export function spark(arr: number[], min: number, max: number, w: number, h: number) {
-  const n = arr.length
-  const pts = arr
-    .map((v, i) => {
-      const x = n <= 1 ? 0 : (i / (n - 1)) * w
-      let t = (v - min) / (max - min)
-      t = Math.max(0, Math.min(1, t))
-      const y = h - t * (h - 3) - 2
-      return x.toFixed(1) + ',' + y.toFixed(1)
-    })
-    .join(' ')
-  return { line: pts, area: '0,' + h + ' ' + pts + ' ' + w + ',' + h }
+export interface Vitals {
+  readonly cpu: number
+  readonly gpu: number
+  readonly mem: number
+  readonly temp: number
+  readonly fans: number
+  readonly batt: number
+  readonly power: number
+  readonly down: number
+  readonly tick: number
+  readonly levels: Readonly<Record<Channel, readonly number[]>>
 }
 
-export function useLiveVitals() {
-  const [state, setState] = useState({ temp: TEMP0, cpu: CPU0, mem: MEM0, tick: 0 })
+const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value))
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setState((s) => {
-        let nt = Math.round(s.temp[s.temp.length - 1] + (Math.random() * 4 - 2))
-        nt = Math.max(40, Math.min(52, nt))
-        let nc = Math.round(s.cpu[s.cpu.length - 1] + (Math.random() * 34 - 17))
-        nc = Math.max(5, Math.min(100, nc))
-        let nm = +(s.mem[s.mem.length - 1] + (Math.random() * 0.4 - 0.2)).toFixed(1)
-        nm = Math.max(11.6, Math.min(13.4, nm))
-        return {
-          temp: [...s.temp.slice(-23), nt],
-          cpu: [...s.cpu.slice(-23), nc],
-          mem: [...s.mem.slice(-23), nm],
-          tick: s.tick + 1,
-        }
-      })
-    }, 1600)
-    return () => clearInterval(timer)
-  }, [])
+const level = (vitals: Omit<Vitals, 'levels' | 'tick'>): Record<Channel, number> => ({
+  pulse: vitals.cpu / 100,
+  eeg: vitals.gpu / 100,
+  press: vitals.mem / 16,
+  temp: (vitals.temp - 40) / 60,
+  resp: (vitals.fans - 1500) / 5000,
+  oxy: vitals.batt / 100,
+  drip: vitals.power / 60,
+  tele: vitals.down / 10,
+})
 
-  const { temp, cpu, mem, tick } = state
-  const tempVal = temp[temp.length - 1]
-  const cpuPct = cpu[cpu.length - 1]
-  const memVal = mem[mem.length - 1]
-  const avgCpu = Math.max(38, tempVal - 3)
-  const ts = spark(temp, 38, 54, 100, 40)
-  const cs = spark(cpu, 0, 100, 100, 40)
-  const ms = spark(mem, 9, 16, 100, 40)
-  const fan = tempVal > 49 ? 1200 + (tempVal - 49) * 190 : 0
+const byChannel = <T>(make: (key: Channel) => T): Record<Channel, T> => ({
+  pulse: make('pulse'),
+  eeg: make('eeg'),
+  press: make('press'),
+  temp: make('temp'),
+  resp: make('resp'),
+  oxy: make('oxy'),
+  drip: make('drip'),
+  tele: make('tele'),
+})
 
-  return {
-    avgCpu,
-    tempVal,
-    cpuPct: cpuPct + '%',
-    memVal: memVal.toFixed(1) + 'G',
-    tempLine: ts.line,
-    tempArea: ts.area,
-    cpuLine: cs.line,
-    cpuPctArea: cs.area,
-    memLine: ms.line,
-    memArea: ms.area,
-    chartCpu: spark(temp, 0, 64, 1000, 200).line,
-    chartHot: spark(temp.map((v) => v + 3), 0, 64, 1000, 200).line,
-    chartGpu: spark(temp.map((v) => v - 4), 0, 64, 1000, 200).line,
-    cpuTemp: tempVal,
-    fanLabel: fan === 0 ? 'Idle' : Math.round(fan / 10) * 10 + ' rpm',
-    gpuLoad: 8 + (tick % 6) * 3 + '%',
-    power: (8 + (tempVal - 42) * 0.45).toFixed(1) + ' W',
+export function nextVitals(previous: Vitals, random: () => number = Math.random): Vitals {
+  const spike = random() < 0.1 ? 34 : 0
+  const cpu = clamp(previous.cpu + (random() - 0.5) * 14 + spike - (previous.cpu > 60 ? 13 : 0), 6, 97)
+  const gpu = clamp(previous.gpu + (random() - 0.5) * 10, 3, 88)
+  const temp = clamp(previous.temp + (cpu - 35) * 0.07 + (random() - 0.5) * 2, 44, 96)
+  const fans = clamp(1800 + (temp - 44) * 75 + (random() - 0.5) * 120, 1800, 6400)
+  const mem = clamp(previous.mem + (random() - 0.5) * 0.35, 9.5, 15.6)
+  const power = clamp(6 + cpu * 0.32 + gpu * 0.12 + (random() - 0.5) * 2, 3, 60)
+  const down = clamp(previous.down + (random() - 0.5) * 0.9, 0.02, 9.6)
+  const values = { cpu, gpu, mem, temp, fans, batt: previous.batt, power, down }
+  const now = level(values)
+  const levels = byChannel((key) => [...previous.levels[key], now[key]].slice(-HISTORY))
+  return { ...values, tick: previous.tick + 1, levels }
+}
+
+const seed = (): Vitals => {
+  const empty = byChannel((): readonly number[] => [])
+  const start: Vitals = { cpu: 23, gpu: 18, mem: 12.8, temp: 61, fans: 3120, batt: 85, power: 14.2, down: 1.2, tick: 0, levels: empty }
+  const warmed = Array.from({ length: HISTORY }).reduce<Vitals>((vitals) => nextVitals(vitals), start)
+  return { ...warmed, cpu: 23, temp: 61, tick: 0 }
+}
+
+let current = seed()
+const listeners = new Set<() => void>()
+let timer: ReturnType<typeof setInterval> | null = null
+
+const advance = () => {
+  if (document.hidden) return
+  current = nextVitals(current)
+  for (const listener of listeners) listener()
+}
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener)
+  timer ??= setInterval(advance, TICK_MS)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size > 0 || timer === null) return
+    clearInterval(timer)
+    timer = null
   }
 }
 
-export type LiveVitals = ReturnType<typeof useLiveVitals>
+const snapshot = () => current
+
+export function useLiveVitals(): Vitals {
+  return useSyncExternalStore(subscribe, snapshot, snapshot)
+}

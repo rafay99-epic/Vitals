@@ -1,25 +1,30 @@
-import { REPO_URL } from '../lib/links'
-import { StatusScreen } from './StatusScreen'
-import { statusButton } from './statusStyles'
+import { useLocation } from '@tanstack/react-router'
+import { buttonClass } from '../components/ui/buttonClass'
+import { Em } from '../components/ui/text'
 import { useTitle } from '../lib/useTitle'
+import { StatusScreen } from './StatusScreen'
+import { MUTE } from '../lib/channels'
 
-/// The 404 page — the router's notFoundComponent, rendered client-side for any
-/// path that doesn't match a route. No fabricated content: it says plainly that
-/// the page isn't here and points back to the real ones.
 export default function NotFound() {
-  useTitle('Page not found — Vitals')
+  useTitle('No pulse · Vitals')
+  const path = useLocation({ select: (location) => location.pathname })
   return (
     <StatusScreen
-      eyebrow="404 · NO SIGNAL"
-      title="This page isn’t here"
-      message="The link may be broken, or the page may have moved. Every real reading lives back on the dashboard."
+      beats={[0.3, 0.28, 0.32]}
+      stroke={MUTE}
+      title={
+        <>
+          No pulse <Em className="text-mute">at this address.</Em>
+        </>
+      }
+      code={['404', path, 'the link may be old']}
       actions={
         <>
-          <a href="/" style={statusButton.primary}>
-            Back to Vitals
+          <a href="/" className={buttonClass('primary')}>
+            Back to the chart
           </a>
-          <a href={REPO_URL} target="_blank" rel="noreferrer" style={statusButton.secondary}>
-            View on GitHub
+          <a href="/releases" className={buttonClass('line')}>
+            Chart notes
           </a>
         </>
       }
