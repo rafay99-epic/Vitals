@@ -32,13 +32,12 @@ const readNotified = async (): Promise<ReadonlyArray<string>> => {
 const deliver = (alerts: ReadonlyArray<Alert>, show: boolean, openNow: ReadonlyArray<Alert> | null = null) =>
   serialized(async () => {
     const notified = await readNotified();
-    const delivered: Array<string> = [];
-    for (const alert of alerts) {
-      if (notified.includes(alert.id) || delivered.includes(alert.id)) continue;
-      if (show) await notifyAlert(alert);
-      delivered.push(alert.id);
-    }
-    const stillOpen = openNow === null ? notified : notified.filter((id) => openNow.some((alert) => alert.id === id));
+    const seen = new Set(notified);
+    const fresh = [...new Map(alerts.filter((alert) => !seen.has(alert.id)).map((alert) => [alert.id, alert])).values()];
+    if (show) await Promise.all(fresh.map((alert) => notifyAlert(alert)));
+    const delivered = fresh.map((alert) => alert.id);
+    const open = openNow === null ? null : new Set<string>(openNow.map((alert) => alert.id));
+    const stillOpen = open === null ? notified : notified.filter((id) => open.has(id));
     if (delivered.length === 0 && stillOpen.length === notified.length) return;
     await SecureStore.setItemAsync(STATE_KEY, JSON.stringify([...stillOpen, ...delivered].slice(-NOTIFIED_KEPT)), KEYCHAIN_OPTIONS);
   });

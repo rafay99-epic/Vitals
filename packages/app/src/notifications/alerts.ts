@@ -27,9 +27,7 @@ export const prepareNotifications = async (): Promise<boolean> => {
   await Notifications.setNotificationCategoryAsync(CATEGORY, [
     { identifier: CALM_ACTION, buttonTitle: "Calm down", options: { opensAppToForeground: true } },
   ]);
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted) return true;
-  return (await Notifications.requestPermissionsAsync()).granted;
+  return (await Notifications.getPermissionsAsync()).granted;
 };
 
 export const notificationPermission = async (): Promise<PermissionState> => {

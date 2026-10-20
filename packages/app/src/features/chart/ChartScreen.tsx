@@ -1,111 +1,105 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { formatBytes, formatCelsius, formatPercent, formatRate, formatRpm, formatWatts } from "@vitals/shared";
-import { colors, Screen, Section, type SeriesSource, Sparkline } from "@vitals/ui";
-import { Pressable, Text, View } from "react-native";
+import type { KeepAwakeState, LiveSample, MacInfo } from "@vitals/contracts";
+import { formatClock } from "@vitals/shared";
+import { type Channel, CHANNEL_ORDER, ChannelRow, channels, Screen, useWide } from "@vitals/ui";
+import { Text } from "react-native";
 
+import { TabHeader } from "../../components/TabHeader.tsx";
 import { useRemote } from "../../connection/useRemote.ts";
-import type { LiveStackParams, MetricKind } from "../../navigation/types.ts";
-import { useLatest, useLiveTopics } from "./hooks.ts";
-import { StatusHeader } from "./StatusHeader.tsx";
+import type { ChartStackParams } from "../../navigation/types.ts";
+import { useStore } from "../../state/useStore.ts";
+import { useLatest, useSignal } from "../../state/useVitals.ts";
+import { ChartBanners } from "./ChartBanners.tsx";
+import { CHANNELS, CHART_COMPACT, CHART_FULL, LIVE_STATE, LIVE_TOPICS, rowState } from "./channels.ts";
+import { EventStrip } from "./EventStrip.tsx";
+import { useLiveTopics } from "./hooks.ts";
+import { isBroken, LinkState } from "./LinkState.tsx";
+import { LiveText } from "../../components/LiveText.tsx";
 
-type Props = NativeStackScreenProps<LiveStackParams, "Live">;
+type Props = NativeStackScreenProps<ChartStackParams, "Chart">;
 
-export function LiveScreen({ navigation }: Props) {
-  useLiveTopics(["cpu", "gpu", "thermal", "fans", "memory", "battery", "power", "network"]);
+type RowSize = "full" | "compact" | "lane";
+
+const keepAwakeText = (state: KeepAwakeState): string => (state.until === null ? "keeping awake" : `keeping awake · until ${formatClock(state.until)}`);
+
+function ChartMeta({ mac }: { readonly mac: MacInfo | null }) {
+  const keepAwake = useStore(useRemote().events.keepAwake);
+  if (keepAwake?.active === true) return <Text className="text-alarm-medium">{keepAwakeText(keepAwake)}</Text>;
+  return <Text>{mac === null ? "waiting for the Mac" : `${mac.chip} · ${mac.os}`}</Text>;
+}
+
+const RULES = new Map(CHANNEL_ORDER.map((key) => [key, new Set(CHANNELS[key].rules)]));
+
+function LiveChannel({ channel, size, memoryMax, onOpen }: { readonly channel: Channel; readonly size: RowSize; readonly memoryMax: number | null; readonly onOpen: (channel: Channel) => void }) {
   const remote = useRemote();
-  const open = (kind: MetricKind) => navigation.navigate("Metric", { kind });
-  const cpu = useLatest((sample) => sample?.cpu?.overall ?? null);
-  const gpu = useLatest((sample) => sample?.gpu?.utilization ?? null);
-  const temp = useLatest((sample) => sample?.thermal?.cpuC ?? null);
-  const thermalState = useLatest((sample) => sample?.thermal?.state ?? null);
-  const fan = useLatest((sample) => sample?.fans?.[0]?.rpm ?? null);
-  const hasFans = useLatest((sample) => (sample?.fans?.length ?? 0) > 0);
-  const memoryUsed = useLatest((sample) => sample?.memory?.usedBytes ?? null);
-  const memoryTotal = useLatest((sample) => sample?.memory?.totalBytes ?? null);
-  const pressure = useLatest((sample) => sample?.memory?.pressure ?? null);
-  const battery = useLatest((sample) => sample?.battery ?? null);
-  const watts = useLatest((sample) => (sample?.power === undefined || sample.power === null ? null : sample.power.cpuWatts + sample.power.gpuWatts + sample.power.aneWatts));
-  const netIn = useLatest((sample) => sample?.network?.inBytesPerSec ?? null);
-  const netOut = useLatest((sample) => sample?.network?.outBytesPerSec ?? null);
-
+  const def = CHANNELS[channel];
+  const signal = useSignal();
+  const alarmed = useStore(remote.events.alerts).some((alert) => RULES.get(channel)?.has(alert.rule) === true);
+  const live = useLatest(LIVE_STATE[channel]);
+  const label = channels[channel].label;
   return (
-    <Screen>
-      <StatusHeader />
-      <Section title="Now">
-        <MetricRow label="CPU" value={formatPercent(cpu)} source={remote.live.series("cpu")} max={100} onPress={() => open("cpu")} />
-        <MetricRow label="GPU" value={formatPercent(gpu)} source={remote.live.series("gpu")} max={100} color={colors.violet} onPress={() => open("gpu")} />
-        <MetricRow
-          label="Temperature"
-          value={formatCelsius(temp)}
-          detail={thermalState === null || thermalState === "nominal" ? undefined : `thermal ${thermalState}`}
-          source={remote.live.series("cpuTemp")}
-          min={20}
-          max={110}
-          color={colors.warn}
-          onPress={() => open("thermal")}
-        />
-        {hasFans ? <MetricRow label="Fans" value={formatRpm(fan)} source={remote.live.series("fan")} onPress={() => open("fans")} /> : null}
-        <MetricRow
-          label="Memory"
-          value={memoryUsed === null || memoryTotal === null ? "--" : `${formatBytes(memoryUsed)} / ${formatBytes(memoryTotal, 0)}`}
-          detail={pressure === null || pressure === "normal" ? undefined : `pressure ${pressure}`}
-          source={remote.live.series("memoryUsed")}
-          max={memoryTotal ?? undefined}
-          color={pressure === "critical" ? colors.bad : pressure === "warning" ? colors.warn : colors.ok}
-          onPress={() => open("memory")}
-        />
-        {battery === null ? null : (
-          <MetricRow
-            label="Battery"
-            value={formatPercent(battery.percent)}
-            detail={battery.charging ? "charging" : battery.externalPower ? "on power" : battery.timeRemainingMinutes === null ? undefined : `${Math.round(battery.timeRemainingMinutes / 60)}h left`}
-            source={remote.live.series("battery")}
-            max={100}
-            color={colors.ok}
-            onPress={() => open("battery")}
-          />
-        )}
-        <MetricRow label="Power" value={formatWatts(watts)} source={remote.live.series("socWatts")} color={colors.warn} onPress={() => open("power")} />
-        <MetricRow
-          label="Network"
-          value={netIn === null || netOut === null ? "--" : `↓ ${formatRate(netIn)}  ↑ ${formatRate(netOut)}`}
-          source={remote.live.series("netIn")}
-          onPress={() => open("network")}
-        />
-      </Section>
-    </Screen>
+    <ChannelRow
+      channel={channel}
+      source={remote.live.series(def.series)}
+      value={<LiveText select={def.reading} />}
+      min={def.min}
+      max={channel === "press" ? memoryMax : def.max}
+      state={rowState(live, alarmed, signal)}
+      size={size}
+      onPress={() => onOpen(channel)}
+      accessibilityHint={`Opens the ${label} chart.`}
+    />
   );
 }
 
-function MetricRow({
-  label,
-  value,
-  detail,
-  source,
-  onPress,
-  min = 0,
-  max,
-  color = colors.accent,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly detail?: string | undefined;
-  readonly source: SeriesSource;
-  readonly onPress: () => void;
-  readonly min?: number;
-  readonly max?: number | undefined;
-  readonly color?: string;
-}) {
+type Hardware = "both" | "fans" | "battery" | "neither";
+
+const HARDWARE: Record<Hardware, ReadonlySet<Channel>> = {
+  both: new Set(),
+  fans: new Set(["oxy"]),
+  battery: new Set(["resp"]),
+  neither: new Set(["oxy", "resp"]),
+};
+
+const hardware = (fansHint: boolean, batteryHint: boolean) => (sample: LiveSample | null): Hardware => {
+  const fans = sample?.fans === undefined ? fansHint : sample.fans.length > 0;
+  const battery = sample?.battery === undefined ? batteryHint : sample.battery !== null;
+  if (fans && battery) return "both";
+  if (fans) return "fans";
+  return battery ? "battery" : "neither";
+};
+
+type Hint = `${boolean}-${boolean}`;
+
+const HARDWARE_OF: Record<Hint, (sample: LiveSample | null) => Hardware> = {
+  "true-true": hardware(true, true),
+  "true-false": hardware(true, false),
+  "false-true": hardware(false, true),
+  "false-false": hardware(false, false),
+};
+
+const hintOf = (mac: MacInfo | null): Hint => `${mac?.hasFans !== false}-${mac?.hasBattery !== false}`;
+
+export function ChartScreen({ navigation }: Props) {
+  useLiveTopics(LIVE_TOPICS);
+  const remote = useRemote();
+  const state = useStore(remote.connection.state);
+  const wide = useWide();
+  const mac = state._tag === "Ready" ? state.hello.mac : null;
+  const missing = HARDWARE[useLatest(HARDWARE_OF[hintOf(mac)])];
+  if (isBroken(state)) return <LinkState state={state} who={mac?.name ?? "Your Mac"} />;
+  const shown = (channel: Channel) => !missing.has(channel);
+  const memoryMax = mac?.memoryBytes ?? null;
+  const open = (channel: Channel) => navigation.navigate("Channel", { channel });
+  const row = (size: RowSize) => (channel: Channel) => <LiveChannel key={channel} channel={channel} size={size} memoryMax={memoryMax} onOpen={open} />;
+  const rows = wide
+    ? [...CHART_FULL, ...CHART_COMPACT].filter(shown).map(row("lane"))
+    : [...CHART_FULL.filter(shown).map(row("full")), ...CHART_COMPACT.map(row("compact"))];
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label} ${value}`} className="border-b border-line py-3 active:bg-line">
-      <View className="flex-row items-baseline justify-between">
-        <Text className="text-[15px] text-ink">{label}</Text>
-        <Text className="font-mono text-[15px] text-ink">{value}</Text>
-      </View>
-      {detail === undefined ? null : <Text className="font-mono text-[11px] text-warn">{detail}</Text>}
-      <View className="mt-2">
-        <Sparkline source={source} height={28} color={color} min={min} {...(max === undefined ? {} : { max })} />
-      </View>
-    </Pressable>
+    <Screen top={<ChartBanners />}>
+      <TabHeader meta={<ChartMeta mac={mac} />} />
+      {rows}
+      {wide ? <EventStrip /> : null}
+    </Screen>
   );
 }

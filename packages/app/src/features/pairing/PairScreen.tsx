@@ -1,88 +1,105 @@
-import { normalizeCode, parsePairingUrl } from "@vitals/client-runtime";
+import { normalizeCode, parsePairingDeepLink, parsePairingUrl, type PairingLink } from "@vitals/client-runtime";
 import { PAIRING_CODE_LENGTH } from "@vitals/contracts";
-import { Banner, Screen, Section, TextButton } from "@vitals/ui";
-import { useState } from "react";
-import { Platform, Text, TextInput, View } from "react-native";
+import { Button, CodeInput, Field, Mark, Mono, Row, Screen, Section, Serif } from "@vitals/ui";
+import { useRef, useState } from "react";
+import { Platform, View } from "react-native";
 
 import { sessions } from "../../connection/session.ts";
-import { success } from "../../lib/haptics";
+import { haptics } from "../../lib/haptics";
 import { useStore } from "../../state/useStore.ts";
 import { QrScanner } from "./QrScanner";
 
-const initialBaseUrl = Platform.OS === "web" && typeof globalThis.location !== "undefined" ? globalThis.location.origin : "https://";
+const WEB = Platform.OS === "web";
+const initialBaseUrl = WEB && typeof globalThis.location !== "undefined" ? globalThis.location.origin : "https://";
+
+const SAVED_IN = WEB ? "a secure cookie" : "the keychain";
+
+const linkFrom = (raw: string): PairingLink | null => parsePairingUrl(raw) ?? parsePairingDeepLink(raw);
+
+function Viewfinder({ onCode }: { readonly onCode: (value: string) => void }) {
+  const last = useRef<string | null>(null);
+  const scanned = (value: string) => {
+    if (value === last.current) return;
+    last.current = value;
+    onCode(value);
+  };
+  return (
+    <View className="gap-3 px-[22px] pb-2">
+      <View className="aspect-square overflow-hidden bg-raise">
+        <QrScanner onCode={scanned} />
+        <View className="absolute left-4 top-4 h-8 w-8 border-l-2 border-t-2 border-pulse" pointerEvents="none" />
+        <View className="absolute right-4 top-4 h-8 w-8 border-r-2 border-t-2 border-pulse" pointerEvents="none" />
+        <View className="absolute bottom-4 left-4 h-8 w-8 border-b-2 border-l-2 border-pulse" pointerEvents="none" />
+        <View className="absolute bottom-4 right-4 h-8 w-8 border-b-2 border-r-2 border-pulse" pointerEvents="none" />
+      </View>
+      <Mono className="text-center">Point the camera at the code on your Mac</Mono>
+    </View>
+  );
+}
+
+function Progress() {
+  return (
+    <Section title="Pairing">
+      <Row plain label="Checking the code with your Mac" detail={`The session is kept in ${SAVED_IN}.`} value="now" valueTone="pulse" />
+    </Section>
+  );
+}
 
 export function PairScreen() {
   const pairing = useStore(sessions.pairing);
   const [baseUrl, setBaseUrl] = useState(initialBaseUrl);
   const [code, setCode] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
   const error = localError ?? pairing.error;
 
-  const submit = (raw: string) => {
-    const link = parsePairingUrl(raw);
+  const start = (link: PairingLink | null) => {
+    if (pairing.busy) return;
     if (link === null) {
-      setLocalError("That is not a Vitals pairing code. Check the Mac address and the 12 character code.");
+      haptics.error();
+      setLocalError("That is not a Vitals pairing code. Check the Mac address and the 12 letter code.");
       return;
     }
     setLocalError(null);
-    setScanning(false);
-    void sessions.pairWith(link).then((paired) => {
-      if (paired) success();
-    });
+    void sessions.handleLink(link).then((paired) => (paired ? haptics.success() : haptics.error()));
   };
+
+  const submit = () => start(parsePairingUrl(`${baseUrl.trim().replace(/\/$/, "")}/pair#code=${code}`));
 
   return (
     <Screen>
-      <Text className="mt-10 text-3xl font-semibold text-ink">Pair with your Mac</Text>
-      <Text className="mt-2 text-[15px] text-dim">
-        In Vitals on the Mac, open Remote, then Pair new device. Scan the code or type it here. Both devices need Tailscale on.
-      </Text>
-      {error === null ? null : <Banner text={error} tone="bad" />}
-      {Platform.OS === "web" ? null : (
+      <View className="gap-3 px-[22px] pb-4 pt-8">
+        <Mark width={42} />
+        <Serif size="l" accessibilityRole="header">
+          Pair with your Mac
+        </Serif>
+        <Mono>In Vitals on the Mac, open Remote, then Pair new device.</Mono>
+      </View>
+      {WEB ? null : (
         <Section title="Scan">
-          {scanning ? (
-            <QrScanner onCode={submit} />
-          ) : (
-            <TextButton label="Scan pairing QR" onPress={() => setScanning(true)} disabled={pairing.busy} />
-          )}
+          <Viewfinder onCode={(value) => start(linkFrom(value))} />
         </Section>
       )}
       <Section title="Or enter it">
-        {Platform.OS === "web" ? null : (
-          <>
-            <Text className="mb-1 text-xs text-mute">Mac address</Text>
-            <TextInput
-              value={baseUrl}
-              onChangeText={setBaseUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              placeholder="https://your-mac.tailnet.ts.net:7445"
-              placeholderTextColor="#6b6b6b"
-              className="mb-4 min-h-11 border border-line px-3 font-mono text-[15px] text-ink"
-            />
-          </>
-        )}
-        <Text className="mb-1 text-xs text-mute">Pairing code</Text>
-        <TextInput
-          value={code}
-          onChangeText={(value) => setCode(normalizeCode(value))}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          maxLength={PAIRING_CODE_LENGTH + 2}
-          placeholder="ABCD EFGH JKLM"
-          placeholderTextColor="#6b6b6b"
-          className="min-h-11 border border-line px-3 font-mono text-lg tracking-widest text-ink"
-        />
-        <View className="mt-4">
-          <TextButton
-            label={pairing.busy ? "Pairing" : "Pair"}
-            onPress={() => submit(`${baseUrl.replace(/\/$/, "")}/pair#code=${normalizeCode(code)}`)}
-            disabled={pairing.busy || code.length !== PAIRING_CODE_LENGTH}
+        {WEB ? null : (
+          <Field
+            label="Mac address"
+            mono
+            value={baseUrl}
+            onChangeText={setBaseUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            placeholder="https://your-mac.tailnet.ts.net:7443"
+            hint="Your Mac's Tailscale name, shown with the code"
           />
+        )}
+        <CodeInput value={code} length={PAIRING_CODE_LENGTH} onChange={(value) => setCode(normalizeCode(value))} onSubmit={submit} error={error} />
+        <View className="px-[22px] pb-5 pt-2">
+          <Button label={pairing.busy ? "Pairing" : "Pair"} block disabled={pairing.busy || code.length !== PAIRING_CODE_LENGTH} onPress={submit} />
         </View>
       </Section>
+      {pairing.busy ? <Progress /> : null}
+      <Mono className="px-[22px] pt-6">Pairing stays on your tailnet. Nothing goes through our servers.</Mono>
     </Screen>
   );
 }

@@ -1,90 +1,185 @@
 import { useFocusEffect } from "@react-navigation/native";
-import type { GuardRule, GuardState } from "@vitals/contracts";
-import { formatBytes } from "@vitals/shared";
-import { Banner, Row, Screen, Section, Stat, TextButton } from "@vitals/ui";
+import type { Alert, GuardRule, GuardSettings, GuardState } from "@vitals/contracts";
+import { formatBytes, formatClock } from "@vitals/shared";
+import { BeatSwitch, Columns, EmptyState, HoldRow, KeyValueGrid, Row, Screen, Section, type Tone, useWide } from "@vitals/ui";
 import { useCallback, useState } from "react";
-import { Switch, Text, View } from "react-native";
 
+import { AlertBanner } from "../../components/AlertBanner.tsx";
+import { TabHeader } from "../../components/TabHeader.tsx";
 import { useRemote } from "../../connection/useRemote.ts";
+import { haptics } from "../../lib/haptics";
 import { useScopes } from "../../state/useScopes.ts";
 import { useStore } from "../../state/useStore.ts";
+import { bytes } from "../../state/vitals.ts";
+import { WARD_NAMES } from "../../state/wards.ts";
+import { PRESSURE_TONE, RULES, THERMAL_TONE } from "./rules.ts";
 
-const RULE_TITLES: Record<GuardRule["kind"], string> = {
-  memoryPressure: "Memory pressure critical for 10 s",
-  swapGrowth: "Swap above 4 GB and growing",
-  cpuSaturated: "CPU above 90% for a minute",
-  agentOverload: "Six or more agent processes",
-  emulatorStack: "Two or more emulators under pressure",
-  thermal: "Thermal pressure serious or worse",
+const SEVERITY_TONE: Record<Alert["severity"], Tone> = { warning: "alarmMedium", critical: "alarmHigh" };
+
+const capitalize = (word: string): string => `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+
+const guardMeta = (guard: GuardState | null): string => {
+  if (guard === null) return "Pressure Guard · reading the Mac";
+  if (!guard.settings.enabled) return "Pressure Guard · off";
+  const on = guard.settings.rules.filter((rule) => rule.enabled).length;
+  return `Pressure Guard · watching ${String(on)} of ${String(guard.settings.rules.length)} rules`;
 };
 
-export function GuardScreen() {
+function Header({ alerts, guard }: { readonly alerts: ReadonlyArray<Alert>; readonly guard: GuardState | null }) {
+  const meta = guardMeta(guard);
+  if (alerts.length > 0) return <TabHeader meta={meta} />;
+  if (guard?.calmApplied === true) return <TabHeader title="Calmed." titleTone="pulse" meta={meta} />;
+  return <TabHeader title="Alarms." meta={meta} />;
+}
+
+function Readouts({ guard }: { readonly guard: GuardState | null }) {
+  const swap = bytes(guard?.swapUsedBytes);
+  return (
+    <KeyValueGrid
+      items={[
+        { key: "Pressure", value: guard === null ? "--" : capitalize(guard.pressure), tone: guard === null ? "ink" : PRESSURE_TONE[guard.pressure] },
+        { key: "Swap", value: swap.value, unit: swap.unit },
+        { key: "Thermal", value: guard === null ? "--" : capitalize(guard.thermal), tone: guard === null ? "ink" : THERMAL_TONE[guard.thermal] },
+      ]}
+    />
+  );
+}
+
+function OpenAlerts({ alerts, locked }: { readonly alerts: ReadonlyArray<Alert>; readonly locked: boolean }) {
+  return alerts.map((alert) => <AlertBanner key={alert.id} alert={alert} locked={locked} />);
+}
+
+function Calm({ guard, alerts, locked }: { readonly guard: GuardState | null; readonly alerts: ReadonlyArray<Alert>; readonly locked: boolean }) {
   const remote = useRemote();
+  const calmed = guard?.calmApplied === true;
+  return (
+    <Section title="Calm">
+      <HoldRow
+        label="Calm"
+        hint={"lower agent priority\npause idle emulators"}
+        locked={locked}
+        onStart={haptics.soft}
+        onCommit={() => {
+          haptics.success();
+          void remote.run({ _tag: "CalmDown", alertId: alerts[0]?.id ?? null });
+        }}
+      />
+      <Row label="Undo calm" detail={calmed ? "restores every calmed process" : "nothing is calmed"} locked={locked || !calmed} onPress={() => void remote.run({ _tag: "UndoCalm" })} />
+    </Section>
+  );
+}
+
+function Rules({ guard, locked, onChange }: { readonly guard: GuardState | null; readonly locked: boolean; readonly onChange: (settings: GuardSettings) => void }) {
+  if (guard === null) return <EmptyState title="Reading the rules." detail="Pressure Guard answers once the Mac is connected." />;
+  const settings = guard.settings;
+  const toggle = (rule: GuardRule, enabled: boolean) => {
+    haptics.light();
+    onChange({ ...settings, rules: settings.rules.map((item) => (item.kind === rule.kind ? { ...item, enabled } : item)) });
+  };
+  return (
+    <Section title="Rules" trailing="fire after the hold">
+      <Row
+        label="Pressure Guard"
+        detail={settings.enabled ? "watching this Mac" : "off: no alarms, no calming"}
+        locked={locked}
+        trailing={<BeatSwitch value={settings.enabled} disabled={locked} accessibilityLabel="Pressure Guard" onChange={(enabled) => onChange({ ...settings, enabled })} />}
+      />
+      {settings.rules.map((rule) => (
+        <Row
+          key={rule.kind}
+          label={RULES[rule.kind].title}
+          detail={RULES[rule.kind].detail(rule)}
+          locked={locked || !settings.enabled}
+          trailing={
+            <BeatSwitch
+              value={rule.enabled}
+              disabled={locked || !settings.enabled}
+              accessibilityLabel={`${RULES[rule.kind].title}, alarm rule`}
+              onChange={(enabled) => toggle(rule, enabled)}
+            />
+          }
+        />
+      ))}
+    </Section>
+  );
+}
+
+function Wards({ guard }: { readonly guard: GuardState | null }) {
+  const groups = (guard?.groups ?? []).filter((group) => group.count > 0 && group.group !== "protected");
+  return (
+    <Section title="Wards a calm touches">
+      {groups.length === 0 ? <EmptyState title="Quiet wards." detail="No agents, emulators or dev servers are running." /> : null}
+      {groups.map((group) => (
+        <Row key={group.group} label={WARD_NAMES[group.group]} value={`${String(group.count)} · ${group.cpuPercent.toFixed(0)}% · ${formatBytes(group.memoryBytes)}`} />
+      ))}
+    </Section>
+  );
+}
+
+function AlarmLog() {
+  const remote = useRemote();
+  const entries = useStore(remote.events.log);
+  return (
+    <Section title="Alarm log" trailing="this session">
+      {entries.length === 0 ? <EmptyState title="No alarms." detail="Alarms raised while Vitals is open on this device show here." /> : null}
+      {entries.map((entry) => (
+        <Row
+          key={entry.id}
+          label={entry.summary}
+          detail={entry.clearedAt === null ? `${formatClock(entry.raisedAt)} · open` : `${formatClock(entry.raisedAt)} to ${formatClock(entry.clearedAt)}`}
+          value={entry.clearedAt === null ? entry.severity : "cleared"}
+          valueTone={entry.clearedAt === null ? SEVERITY_TONE[entry.severity] : "dim"}
+        />
+      ))}
+    </Section>
+  );
+}
+
+export function AlarmsScreen() {
+  const remote = useRemote();
+  const wide = useWide();
   const alerts = useStore(remote.events.alerts);
-  const [state, setState] = useState<GuardState | null>(null);
-  const canOperate = useScopes().includes("operate");
+  const [guard, setGuard] = useState<GuardState | null>(null);
+  const locked = !useScopes().includes("operate");
 
-  useFocusEffect(useCallback(() => remote.connection.watch((client) => client["guard.watch"]({}), setState), [remote]));
+  useFocusEffect(useCallback(() => remote.connection.watch((client) => client["guard.watch"]({}), setGuard), [remote]));
 
-  const update = (next: GuardState["settings"]) =>
-    void remote.connection.call((client) => client["guard.update"](next)).then((result) => {
-      if (result.ok) setState((current) => (current === null ? current : { ...current, settings: result.value }));
+  const update = (settings: GuardSettings) =>
+    void remote.connection.call((client) => client["guard.update"](settings)).then((result) => {
+      if (result.ok) setGuard((current) => (current === null ? current : { ...current, settings: result.value }));
       else remote.show(result.error.message, "bad");
     });
 
-  const active = state?.active ?? alerts;
+  const open = guard?.active ?? alerts;
 
   return (
     <Screen>
-      <View className="mt-4 flex-row gap-6">
-        <Stat label="Pressure" value={state?.pressure ?? "--"} tone={state?.pressure === "critical" ? "bad" : state?.pressure === "warning" ? "warn" : "ok"} />
-        <Stat label="Thermal" value={state?.thermal ?? "--"} />
-        <Stat label="Swap" value={state === null ? "--" : formatBytes(state.swapUsedBytes)} />
-      </View>
-      {active.map((alert) => (
-        <Banner key={alert.id} text={`${alert.summary}. ${alert.plan.summary}.`} tone={alert.severity === "critical" ? "bad" : "warn"} />
-      ))}
-      <Section title="Calm down">
-        <View className="flex-row gap-2">
-          <View className="flex-1">
-            <TextButton
-              label="Calm down now"
-              disabled={!canOperate}
-              onPress={() => void remote.run({ _tag: "CalmDown", alertId: active[0]?.id ?? null })}
-            />
-          </View>
-          <View className="flex-1">
-            <TextButton label="Undo" disabled={!canOperate || state?.calmApplied !== true} onPress={() => void remote.run({ _tag: "UndoCalm" })} />
-          </View>
-        </View>
-        <Text className="mt-2 text-xs text-mute">Pauses idle emulators and lowers agent priority. Nothing is killed. Undo restores everything.</Text>
-      </Section>
-      <Section title="Groups">
-        {(state?.groups ?? [])
-          .filter((group) => group.count > 0 && group.group !== "protected")
-          .map((group) => (
-            <Row key={group.group} label={group.group} value={`${group.count} · ${group.cpuPercent.toFixed(0)}% · ${formatBytes(group.memoryBytes)}`} />
-          ))}
-      </Section>
-      {state === null ? null : (
-        <Section title="Rules">
-          <View className="flex-row items-center justify-between border-b border-line py-2.5">
-            <Text className="text-[15px] text-ink">Pressure Guard</Text>
-            <Switch value={state.settings.enabled} disabled={!canOperate} onValueChange={(enabled) => update({ ...state.settings, enabled })} />
-          </View>
-          {state.settings.rules.map((rule) => (
-            <View key={rule.kind} className="flex-row items-center justify-between border-b border-line py-2.5">
-              <Text className="flex-1 pr-3 text-[15px] text-ink">{RULE_TITLES[rule.kind]}</Text>
-              <Switch
-                value={rule.enabled}
-                disabled={!canOperate || !state.settings.enabled}
-                onValueChange={(enabled) =>
-                  update({ ...state.settings, rules: state.settings.rules.map((item) => (item.kind === rule.kind ? { ...item, enabled } : item)) })
-                }
-              />
-            </View>
-          ))}
-        </Section>
+      <Header alerts={open} guard={guard} />
+      <OpenAlerts alerts={open} locked={locked} />
+      {wide ? (
+        <Columns
+          main={
+            <>
+              <Rules guard={guard} locked={locked} onChange={update} />
+              <AlarmLog />
+            </>
+          }
+          side={
+            <>
+              <Readouts guard={guard} />
+              <Calm guard={guard} alerts={open} locked={locked} />
+              <Wards guard={guard} />
+            </>
+          }
+        />
+      ) : (
+        <>
+          <Readouts guard={guard} />
+          <Calm guard={guard} alerts={open} locked={locked} />
+          <Rules guard={guard} locked={locked} onChange={update} />
+          <Wards guard={guard} />
+          <AlarmLog />
+        </>
       )}
     </Screen>
   );

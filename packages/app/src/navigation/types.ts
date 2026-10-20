@@ -1,14 +1,19 @@
-export type MetricKind = "cpu" | "gpu" | "thermal" | "fans" | "memory" | "battery" | "power" | "network";
+import type { Channel } from "@vitals/ui";
 
-export type LiveStackParams = {
-  Live: undefined;
-  Metric: { kind: MetricKind };
+export type ChartStackParams = {
+  Chart: undefined;
+  Channel: { readonly channel: Channel };
+};
+
+export type RecordStackParams = {
+  Record: undefined;
+  Diagnostics: undefined;
 };
 
 export type TabParams = {
-  LiveTab: undefined;
-  Control: undefined;
-  Processes: undefined;
-  Guard: undefined;
-  More: undefined;
+  ChartTab: undefined;
+  Orders: undefined;
+  Ward: undefined;
+  Alarms: undefined;
+  RecordTab: undefined;
 };

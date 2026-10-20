@@ -33,6 +33,7 @@ const launchPairingLink = async (): Promise<PairingLink | null> => {
 class SessionManager {
   readonly session = new Store<Session>({ status: "loading" });
   readonly pairing = new Store<PairingState>({ busy: false, error: null });
+  readonly welcome = new Store<boolean>(false);
   private teardown: (() => void) | null = null;
   private started = false;
   private readonly usedCodes = new Set<string>();
@@ -48,6 +49,7 @@ class SessionManager {
   start(): void {
     if (this.started) return;
     this.started = true;
+    this.listenForLinks();
     void (async () => {
       if (await this.handleLink(await launchPairingLink())) return;
       const credentials = await loadCredentials();
@@ -57,6 +59,14 @@ class SessionManager {
     })().catch((error: unknown) => {
       this.pairing.set({ busy: false, error: error instanceof Error ? error.message : "Could not read this device's pairing. Pair again." });
       this.session.set({ status: "unpaired" });
+    });
+  }
+
+  private listenForLinks(): void {
+    if (Platform.OS === "web") return;
+    Linking.addEventListener("url", ({ url }) => void this.handleLink(parsePairingDeepLink(url)));
+    AppState.addEventListener("change", (state) => {
+      if (state === "active") void launchPairingLink().then((link) => this.handleLink(link));
     });
   }
 
@@ -95,8 +105,13 @@ class SessionManager {
     }
     if (previous !== null && previous.deviceId !== credentials.deviceId) void unpair(previous.baseUrl, previous.token);
     this.pairing.set({ busy: false, error: null });
+    this.welcome.set(true);
     this.open(credentials);
     return true;
+  }
+
+  finishWelcome(): void {
+    this.welcome.set(false);
   }
 
   async forget(): Promise<void> {
@@ -188,10 +203,3 @@ class SessionManager {
 }
 
 export const sessions = new SessionManager();
-
-if (Platform.OS !== "web") {
-  Linking.addEventListener("url", ({ url }) => void sessions.handleLink(parsePairingDeepLink(url)));
-  AppState.addEventListener("change", (state) => {
-    if (state === "active") void launchPairingLink().then((link) => sessions.handleLink(link));
-  });
-}
