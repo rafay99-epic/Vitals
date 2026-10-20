@@ -1,0 +1,483 @@
+packages/ui/src/controls/SlideToConfirm.tsx
+  s_1d0dcbd2b75ee5::t_fe39c0576c4d8a 1-53
+packages/contracts/src/system.ts
+  s_1d0dcbd2b75ee5::t_4e53d5188bfb51 1-63
+  s_1d0dcbd2b75ee5::t_3d502043b24d1b 64-65
+packages/contracts/src/rpc.ts
+  s_1d0dcbd2b75ee5::t_62ec6e26246ea4 1-124
+apps/desktop/Sources/Vitals/Services/RunningApps.swift
+  s_1d0dcbd2b75ee5::t_291c8115ff9aed 8
+  s_1d0dcbd2b75ee5::t_d1c1b06deb8e4e 1-7,9-42
+apps/gateway/src/ws/route.ts
+  s_1d0dcbd2b75ee5::t_f86b5832bf416c 1-164
+packages/contracts/src/stats.ts
+  s_1d0dcbd2b75ee5::t_8830161b063bf0 1-182
+  s_1d0dcbd2b75ee5::t_f11c7e612c602d 183
+packages/ui/src/controls/ActionMenu.tsx
+  s_1d0dcbd2b75ee5::t_16dd736125adb3 1-48
+apps/desktop/Sources/Vitals/Remote/GatewayProcess.swift
+  s_1d0dcbd2b75ee5::t_4679f928d8ffa3 1-90
+packages/contracts/src/scopes.ts
+  s_1d0dcbd2b75ee5::t_47aeddc12ffcaa 1-32
+packages/client-runtime/src/index.ts
+  s_1d0dcbd2b75ee5::t_5b2f197f050ca2 1-4
+apps/gateway/src/auth/Auth.ts
+  s_1d0dcbd2b75ee5::t_498f03df2a51cc 1-144
+packages/contracts/src/index.ts
+  s_1d0dcbd2b75ee5::t_a1577756be0dcc 1-11
+packages/contracts/src/ids.ts
+  s_1d0dcbd2b75ee5::t_7ad5900d92db84 1-30
+packages/contracts/src/processes.ts
+  s_1d0dcbd2b75ee5::t_dcb5c9e3cf0915 1-62
+packages/contracts/src/activity.ts
+  s_1d0dcbd2b75ee5::t_d45da9bdead632 1-30
+packages/app/src/lib/device.ts
+  s_1d0dcbd2b75ee5::t_574556e0263400 11-13
+  s_1d0dcbd2b75ee5::t_fe7c57c8811418 8-10
+  s_1d0dcbd2b75ee5::t_82598b002d60d5 14-16
+  s_1d0dcbd2b75ee5::t_70028ff7b2691f 1-7,17-18
+packages/ui/src/charts/Heatstrip.tsx
+  s_1d0dcbd2b75ee5::t_16b32239085a0f 1-49
+packages/app/src/notifications/alerts.web.ts
+  s_1d0dcbd2b75ee5::t_8d1bd51d34ec43 16
+  s_1d0dcbd2b75ee5::t_d1d98ed23935fe 13-15
+  s_1d0dcbd2b75ee5::t_13f54bc09a9709 17-19
+  s_1d0dcbd2b75ee5::t_9913783e768d42 1-12,20-21
+packages/ui/src/controls/HoldButton.tsx
+  s_1d0dcbd2b75ee5::t_154704c08611e7 1-53
+  s_1d0dcbd2b75ee5::t_253fb0b1095774 54-55
+packages/shared/src/index.ts
+  s_1d0dcbd2b75ee5::t_77a5645bbaf413 1-3
+apps/gateway/src/bridge/Bridge.ts
+  s_1d0dcbd2b75ee5::t_9ae8ae692fa03d 1-28,30-53,55,59-117,125-130,132-147,149-189,193-194
+  s_1d0dcbd2b75ee5::t_83f68e2a7cdf4e 118-119,122,124
+  s_1d0dcbd2b75ee5::t_7d7e4419a986fc 120-121,123
+  s_1d0dcbd2b75ee5::t_413d4011edd2bb 56-58
+  s_1d0dcbd2b75ee5::t_89eb3a4a7dd6ae 29
+  s_1d0dcbd2b75ee5::t_9e2ff15d746496 54
+  s_1d0dcbd2b75ee5::t_737bdb3f2b60fe 131
+  s_1d0dcbd2b75ee5::t_c44a20a969747f 148
+  s_1d0dcbd2b75ee5::t_e9b3d2397f452d 190-192
+packages/contracts/src/commands.ts
+  s_1d0dcbd2b75ee5::t_843993c0eadd40 1-101
+packages/tailscale/src/index.ts
+  s_1d0dcbd2b75ee5::t_1972108ecbeb37 96
+  s_1d0dcbd2b75ee5::t_c10b04ea95ee86 1-74,99-103
+  s_1d0dcbd2b75ee5::t_2ed70f405bab2f 75-82,84
+  s_1d0dcbd2b75ee5::t_587af8a0629f31 83,85-95,97-98
+packages/contracts/src/guard.ts
+  s_1d0dcbd2b75ee5::t_865ca7152dbf42 1-63
+apps/desktop/Sources/Vitals/Views/Remote/GuardView.swift
+  s_1d0dcbd2b75ee5::t_3b8db4bf9310a4 1-93
+apps/gateway/src/activity/ActivityLog.ts
+  s_1d0dcbd2b75ee5::t_eb90e5b97ad217 1-222
+  s_1d0dcbd2b75ee5::t_257563aa79a495 223-224
+apps/gateway/src/main.ts
+  s_1d0dcbd2b75ee5::t_375c50d79c01af 1-16
+apps/gateway/src/commands/CommandService.ts
+  s_1d0dcbd2b75ee5::t_ef1842d46c2b0a 1-148
+apps/desktop/Sources/Vitals/Views/Remote/RemoteView.swift
+  s_1d0dcbd2b75ee5::t_476245083e6507 1-191
+apps/desktop/Sources/Vitals/Remote/RemoteSample.swift
+  s_1d0dcbd2b75ee5::t_415db8f9452b8f 1-132
+packages/ui/src/charts/useSeriesValue.ts
+  s_1d0dcbd2b75ee5::t_6abee576dfb701 1-13
+apps/desktop/Sources/Vitals/Services/PressureGuard.swift
+  s_1d0dcbd2b75ee5::t_80dd92ec0edf6c 1-197
+apps/gateway/src/config.ts
+  s_1d0dcbd2b75ee5::t_ba52e196bae52c 1-45
+packages/contracts/src/bridge.ts
+  s_1d0dcbd2b75ee5::t_4ad7fd3f5308cb 1-115
+apps/gateway/src/live/Hubs.ts
+  s_1d0dcbd2b75ee5::t_2abd0587cea168 1-149,151
+  s_1d0dcbd2b75ee5::t_4e445b638f9401 150,152-155
+apps/gateway/src/ws/handlers.ts
+  s_1d0dcbd2b75ee5::t_239691ce21d163 1-89
+  s_1d0dcbd2b75ee5::t_3ec8a2521b7b86 90-91
+apps/gateway/test/harness.ts
+  s_1d0dcbd2b75ee5::t_b3893182fb2358 1-237
+  s_1d0dcbd2b75ee5::t_bfb7e0c4beee34 238-248
+apps/desktop/Sources/Vitals/Models/RemoteModel.swift
+  s_1d0dcbd2b75ee5::t_b016e0a7b4dd03 1-564
+  s_1d0dcbd2b75ee5::t_286dd51548c100 565-579
+apps/desktop/Sources/Vitals/Remote/ActivityStore.swift
+  s_1d0dcbd2b75ee5::t_7c7f1ae9296b20 1-164
+apps/desktop/Sources/Vitals/Models/ActivityModel.swift
+  s_1d0dcbd2b75ee5::t_78fa88473739a1 1-79
+packages/ui/src/controls/Countdown.tsx
+  s_1d0dcbd2b75ee5::t_41b53c42a241d3 1-33
+  s_1d0dcbd2b75ee5::t_14de46a0616a2d 34-37
+apps/desktop/Tests/VitalsTests/RemoteTests.swift
+  s_1d0dcbd2b75ee5::t_8b35f616f5c695 1-271
+  s_1d0dcbd2b75ee5::t_b2bea8289d1890 272-277
+apps/gateway/src/admin/Admin.ts
+  s_1d0dcbd2b75ee5::t_7b1bea0b955581 1-58
+packages/ui/src/charts/BandChart.tsx
+  s_1d0dcbd2b75ee5::t_0371287f2ba7f8 1-74
+packages/shared/src/ids.ts
+  s_1d0dcbd2b75ee5::t_282cdebe991a5d 1-17
+  s_1d0dcbd2b75ee5::t_b2703ce0c28c2f 18-25
+apps/desktop/Sources/Vitals/Remote/BridgeMessages.swift
+  s_1d0dcbd2b75ee5::t_0f0b89f44a4ce3 1-302
+apps/gateway/src/guard/AlertDispatcher.ts
+  s_1d0dcbd2b75ee5::t_f0f2b74f75e315 1-73
+apps/desktop/Sources/Vitals/Services/PowerControl.swift
+  s_1d0dcbd2b75ee5::t_29e828247ba622 1-142
+packages/client-runtime/src/pairing.ts
+  s_1d0dcbd2b75ee5::t_28d2ad33be8d2b 1-59
+apps/gateway/src/persistence/sqlite.ts
+  s_1d0dcbd2b75ee5::t_852896c6e065d4 1-47
+packages/contracts/src/auth.ts
+  s_1d0dcbd2b75ee5::t_83960f703603b1 1-67
+apps/gateway/src/persistence/RemoteStore.ts
+  s_1d0dcbd2b75ee5::t_a0ba851af3d2bd 1-266
+packages/shared/src/ringBuffer.ts
+  s_1d0dcbd2b75ee5::t_0421240a1df5e8 1-30
+apps/gateway/src/app.ts
+  s_1d0dcbd2b75ee5::t_6a2f0e24ed4a30 1-61
+  s_1d0dcbd2b75ee5::t_272659accf9cbf 62
+packages/client-runtime/src/connection.ts
+  s_1d0dcbd2b75ee5::t_8b1370cfd541a3 1-286
+  s_1d0dcbd2b75ee5::t_eef7aadcbc2ce7 287-297
+apps/gateway/test/gateway.test.ts
+  s_1d0dcbd2b75ee5::t_0ffca5cdfd9ca5 128-137
+  s_1d0dcbd2b75ee5::t_3d31aa15d2e6ef 1-127,138-175
+  s_1d0dcbd2b75ee5::t_d3eaca3f8c94fa 176-200
+apps/gateway/src/persistence/Store.ts
+  s_1d0dcbd2b75ee5::t_b3b50fa65ad055 1-9
+apps/desktop/Sources/Vitals/Remote/CommandRouter.swift
+  s_1d0dcbd2b75ee5::t_cf157cb5021754 1-123
+apps/desktop/Sources/Vitals/Views/Remote/ActivityView.swift
+  s_1d0dcbd2b75ee5::t_1c325c39a4c23e 1-118
+apps/gateway/src/persistence/migrations.ts
+  s_1d0dcbd2b75ee5::t_55c5bf5c469ddc 1-122
+apps/desktop/Sources/Vitals/Remote/RemoteWire.swift
+  s_1d0dcbd2b75ee5::t_d5a93e6243a5a9 1-398
+apps/desktop/Sources/Vitals/Services/ProcessGroups.swift
+  s_1d0dcbd2b75ee5::t_99aa1f5aa5ccec 1-83
+  s_1d0dcbd2b75ee5::t_5138fa702455bf 84
+packages/ui/src/primitives.tsx
+  s_1d0dcbd2b75ee5::t_58287bbe8c74dc 1-89
+  s_1d0dcbd2b75ee5::t_777fd871acfcf1 90-116
+packages/ui/src/charts/StackedArea.tsx
+  s_1d0dcbd2b75ee5::t_a18a8a2442a2ee 1-89
+apps/gateway/src/tailscale/Serve.ts
+  s_1d0dcbd2b75ee5::t_c23694fd01601c 1-93
+  s_1d0dcbd2b75ee5::t_1629c047cec25e 94-112
+packages/ui/src/charts/ArcGauge.tsx
+  s_1d0dcbd2b75ee5::t_c8d52e54057a45 1-36
+apps/desktop/Sources/Vitals/Services/Emulators.swift
+  s_1d0dcbd2b75ee5::t_78d8f70deaf35a 1-37,40-78
+  s_1d0dcbd2b75ee5::t_3bfdc305bcf883 38-39
+packages/ui/src/controls/Segmented.tsx
+  s_1d0dcbd2b75ee5::t_2d95f2a98ebc23 1-30
+apps/gateway/src/events/EventLog.ts
+  s_1d0dcbd2b75ee5::t_b7f591ad4ff1a2 1-78,93-108,110-124
+  s_1d0dcbd2b75ee5::t_34ddbb64a65f13 79-92
+  s_1d0dcbd2b75ee5::t_dc1b769ca3f461 109
+apps/desktop/Sources/Vitals/Services/SystemControl.swift
+  s_1d0dcbd2b75ee5::t_d8731b4ae0af36 1-80
+packages/tailscale/test/tailscale.test.ts
+  s_1d0dcbd2b75ee5::t_bf1ca7620049da 1-37
+  s_1d0dcbd2b75ee5::t_c3043fe119deb5 38-49
+apps/gateway/src/http/routes.ts
+  s_1d0dcbd2b75ee5::t_04a12d9c4c4708 1-49
+apps/desktop/Sources/Vitals/Views/Remote/PairingSheet.swift
+  s_1d0dcbd2b75ee5::t_ae0f4969fdf2e5 1-74
+  s_1d0dcbd2b75ee5::t_75aadf368dcc30 75-76
+packages/ui/src/charts/Sparkline.tsx
+  s_1d0dcbd2b75ee5::t_2f8dd54ffddadb 1-72
+  s_1d0dcbd2b75ee5::t_987fa94e24352b 73
+packages/shared/src/format.ts
+  s_1d0dcbd2b75ee5::t_274662d1c1931f 1-23
+packages/ui/src/index.ts
+  s_1d0dcbd2b75ee5::t_32d01f33e7ba7c 1-13
+apps/gateway/src/ws/Connections.ts
+  s_1d0dcbd2b75ee5::t_50d18d4aa5f087 1-42
+.coderabbit.yaml
+  s_1d0dcbd2b75ee5::t_4089e1955405c1 98,105
+.github/labeler.yml
+  s_1d0dcbd2b75ee5::t_c5f7105173606b 14
+.github/workflows/ci.yml
+  s_1d0dcbd2b75ee5::t_dcd05fc0cc377d 21-22,28-29,75-83,127-139
+.github/workflows/convex.yml
+  s_1d0dcbd2b75ee5::t_f7a59bacc3c6fe 22-23,29-30,39-43,48,50,57-61,66,68,70,80-84,89,94,96,100
+.github/workflows/marketing.yml
+  s_1d0dcbd2b75ee5::t_e338197fb42106 1,10,12-13,15,18,20-21,23,31-35,40,42,44,46,48,53
+.github/workflows/nightly.yml
+  s_1d0dcbd2b75ee5::t_5138a4599d9ac1 85-97
+.github/workflows/remote.yml
+  s_1d0dcbd2b75ee5::t_e8df5b7e5762bd 1-58
+.oxlintrc.json
+  s_1d0dcbd2b75ee5::t_7c53d88ded212d 1-86
+CLAUDE.md
+  s_1d0dcbd2b75ee5::t_d2f5176c12700d 4,138-139,141-142,144-147,261-288,324,328,337,353,358,362-363,379
+CONTRIBUTING.md
+  s_1d0dcbd2b75ee5::t_3322e20c0946a4 24,30-32
+README.md
+  s_1d0dcbd2b75ee5::t_e0d25d2aa0fc5b 28-32,34,39-47,50
+SECURITY.md
+  s_1d0dcbd2b75ee5::t_c066fefc58fb19 67
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_1d0dcbd2b75ee5::t_1c3714425079cb 82,85-86,98-100,111
+apps/desktop/Sources/Vitals/Models/VitalsModel.swift
+  s_1d0dcbd2b75ee5::t_8b7aa3ae15c67e 8,99,116-131,171-175,234,321,327,331,341,343,345-348,354-355,443,453
+apps/desktop/Sources/Vitals/Services/Battery.swift
+  s_1d0dcbd2b75ee5::t_e73579be491cd6 5,39
+apps/desktop/Sources/Vitals/Services/DiskHealth.swift
+  s_1d0dcbd2b75ee5::t_2517cbed0044d6 6
+apps/desktop/Sources/Vitals/Services/DiskStats.swift
+  s_1d0dcbd2b75ee5::t_c76025cb5e7487 6
+apps/desktop/Sources/Vitals/Services/GPUSensor.swift
+  s_1d0dcbd2b75ee5::t_82cd9886df6aa0 6
+apps/desktop/Sources/Vitals/Services/HistoryDatabase.swift
+  s_1d0dcbd2b75ee5::t_d26e257277619c 258-309
+apps/desktop/Sources/Vitals/Services/Log.swift
+  s_1d0dcbd2b75ee5::t_a5f2b8bd8967c7 68,85
+apps/desktop/Sources/Vitals/Services/NetworkStats.swift
+  s_1d0dcbd2b75ee5::t_84593fca08a681 33
+apps/desktop/Sources/Vitals/Services/Notifications.swift
+  s_1d0dcbd2b75ee5::t_ce0c5716ff2cf9 17-18,24-25,28-36,44,71-75,91-95,148-157
+apps/desktop/Sources/Vitals/Services/ProcessControl.swift
+  s_1d0dcbd2b75ee5::t_9b3cee12554727 1-34
+apps/desktop/Sources/Vitals/Services/ProcessSampler.swift
+  s_1d0dcbd2b75ee5::t_f83e8117c08924 8,16-26,32,34,37-46,56,123-180,195-197
+apps/desktop/Sources/Vitals/Services/SMC.swift
+  s_1d0dcbd2b75ee5::t_3fc6ddfdb50d24 9
+apps/desktop/Sources/Vitals/Services/SensorSampler.swift
+  s_1d0dcbd2b75ee5::t_1fa78ed907e0b5 21,54,70-74,93-94
+apps/desktop/Sources/Vitals/Services/SoCPower.swift
+  s_1d0dcbd2b75ee5::t_ad156b82565251 6
+apps/desktop/Sources/Vitals/Services/SystemStats.swift
+  s_1d0dcbd2b75ee5::t_85760684903c98 26,135,215
+apps/desktop/Sources/Vitals/Settings/AppSettings.swift
+  s_1d0dcbd2b75ee5::t_ffa59d49ae6216 100-103,203-205
+apps/desktop/Sources/Vitals/Updates/Updater.swift
+  s_1d0dcbd2b75ee5::t_da2eeb2024de85 57
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_1d0dcbd2b75ee5::t_893fb8745bc817 253-258,273-279,336,338-339,342-345,348
+apps/desktop/Sources/Vitals/Views/Components.swift
+  s_1d0dcbd2b75ee5::t_328efa516e9a79 319-320,322-325,327-340,348,350,353-366
+apps/desktop/Sources/Vitals/Views/MenuBarPanel.swift
+  s_1d0dcbd2b75ee5::t_f028267060ffc3 62-63,78-80,84-86,90-92,97-99,105-107,113-115,120,133
+apps/desktop/Sources/Vitals/Views/PerformanceHistoryCard.swift
+  s_1d0dcbd2b75ee5::t_bcf33268bef07e 115
+apps/desktop/build.sh
+  s_1d0dcbd2b75ee5::t_6a11bf615db278 100-123
+apps/gateway/test/client-runtime.test.ts
+  s_1d0dcbd2b75ee5::t_6836f38ebc3c35 1-95
+apps/gateway/tsconfig.json
+  s_1d0dcbd2b75ee5::t_cdffd06c21b7a0 1-5
+apps/marketing/package.json
+  s_1d0dcbd2b75ee5::t_0c958d1e7f30dc 2,9
+apps/marketing/src/components/Footer.tsx
+  s_1d0dcbd2b75ee5::t_6537c24c58c1ee 5-6,52
+apps/marketing/src/main.tsx
+  s_1d0dcbd2b75ee5::t_0571a5d6e94551 24-27
+apps/marketing/src/pages/LegalLayout.tsx
+  s_1d0dcbd2b75ee5::t_81384100217a5c 6-7,62
+apps/marketing/src/pages/Privacy.tsx
+  s_1d0dcbd2b75ee5::t_1e4ea4d2ffea8e 8,16-18,84-87,117-148,171,183,195,205,212,220,228
+apps/marketing/src/pages/StatusScreen.tsx
+  s_1d0dcbd2b75ee5::t_c2a6cbb50e6f04 5-6,114
+apps/marketing/src/routeTree.gen.ts
+  s_1d0dcbd2b75ee5::t_b529ce4d50e540 13-15,17-19,27-34,74-78,88-99
+apps/mobile/.gitignore
+  s_1d0dcbd2b75ee5::t_c04e5bfd290983 1-4
+apps/mobile/app.config.ts
+  s_1d0dcbd2b75ee5::t_aba74772955e82 1-44
+apps/mobile/babel.config.js
+  s_1d0dcbd2b75ee5::t_8f35fe5236ba56 1-6
+apps/mobile/eas.json
+  s_1d0dcbd2b75ee5::t_2c7a1d490e762a 1-19
+apps/mobile/global.css
+  s_1d0dcbd2b75ee5::t_5c10d36afed2fb 1-19
+apps/mobile/index.ts
+  s_1d0dcbd2b75ee5::t_59284d98ed8b83 1-5
+apps/mobile/metro.config.js
+  s_1d0dcbd2b75ee5::t_55a057c2587a1c 1-9
+apps/mobile/nativewind-env.d.ts
+  s_1d0dcbd2b75ee5::t_ff519000b035b6 1
+apps/mobile/package.json
+  s_1d0dcbd2b75ee5::t_f407b6bee18860 1-51
+apps/mobile/postcss.config.mjs
+  s_1d0dcbd2b75ee5::t_f33cab9f429633 1-5
+apps/mobile/src/Root.tsx
+  s_1d0dcbd2b75ee5::t_ea55e3efa22cd4 1-7
+apps/mobile/src/css.d.ts
+  s_1d0dcbd2b75ee5::t_cd05b5351795a6 1
+apps/mobile/tsconfig.json
+  s_1d0dcbd2b75ee5::t_b46f9354cea46c 1-18
+apps/web/.gitignore
+  s_1d0dcbd2b75ee5::t_494f6472c5832e 1-3
+apps/web/app.config.ts
+  s_1d0dcbd2b75ee5::t_11963ec5e64a6b 1-13
+apps/web/babel.config.js
+  s_1d0dcbd2b75ee5::t_8fda1853d6209a 1-6
+apps/web/global.css
+  s_1d0dcbd2b75ee5::t_aedbfde2b3ddd0 1-19
+apps/web/index.ts
+  s_1d0dcbd2b75ee5::t_b13e91551fe90c 1-7
+apps/web/metro.config.js
+  s_1d0dcbd2b75ee5::t_a8b0a74571c2a1 1-9
+apps/web/nativewind-env.d.ts
+  s_1d0dcbd2b75ee5::t_8fd2e0bb5acff1 1
+apps/web/package.json
+  s_1d0dcbd2b75ee5::t_cbbbd2f62912f0 1-45
+apps/web/postcss.config.mjs
+  s_1d0dcbd2b75ee5::t_87c853fac71a75 1-5
+apps/web/public/index.html
+  s_1d0dcbd2b75ee5::t_fe4355e9765784 1-23
+apps/web/src/Root.tsx
+  s_1d0dcbd2b75ee5::t_f6472775371e87 1-7
+apps/web/src/css.d.ts
+  s_1d0dcbd2b75ee5::t_cdff71a514449c 1
+apps/web/tsconfig.json
+  s_1d0dcbd2b75ee5::t_704ac3f31ed844 1-18
+convex/README.md
+  s_1d0dcbd2b75ee5::t_1f9b46b70cc3b0 8
+knip.jsonc
+  s_1d0dcbd2b75ee5::t_8e2fcf94ef333e 1-39
+package.json
+  s_1d0dcbd2b75ee5::t_b92def423985e0 4,10-11,15,18-22,31-37
+packages/app/package.json
+  s_1d0dcbd2b75ee5::t_351ad344a4eb50 1-81
+packages/app/src/App.tsx
+  s_1d0dcbd2b75ee5::t_9f67e1ae951983 1-114
+packages/app/src/connection/useRemote.ts
+  s_1d0dcbd2b75ee5::t_e6a71935239336 1-11
+packages/app/src/features/control/ControlScreen.tsx
+  s_1d0dcbd2b75ee5::t_844bce9e6b3c8d 1-194
+packages/app/src/features/guard/GuardScreen.tsx
+  s_1d0dcbd2b75ee5::t_5d393e8acf25ad 1-85
+packages/app/src/features/live/HistoryPanel.tsx
+  s_1d0dcbd2b75ee5::t_5fa135f8d8ddf6 1-87
+packages/app/src/features/live/LiveScreen.tsx
+  s_1d0dcbd2b75ee5::t_18fdda3ccedc38 1-111
+packages/app/src/features/live/MetricScreen.tsx
+  s_1d0dcbd2b75ee5::t_d569b33c962180 1-254
+packages/app/src/features/live/StatusHeader.tsx
+  s_1d0dcbd2b75ee5::t_22c85938715a5e 1-69
+packages/app/src/features/live/hooks.ts
+  s_1d0dcbd2b75ee5::t_14e88c5a37d73d 1-20
+packages/app/src/features/more/MoreScreen.tsx
+  s_1d0dcbd2b75ee5::t_05bf69307dfa78 1-107
+packages/app/src/features/pairing/PairScreen.tsx
+  s_1d0dcbd2b75ee5::t_945cac9f2d0352 1-84
+packages/app/src/features/processes/ProcessesScreen.tsx
+  s_1d0dcbd2b75ee5::t_a071ccb6a7832c 1-101
+packages/app/src/index.ts
+  s_1d0dcbd2b75ee5::t_be14fb7c3b1b14 1
+packages/app/src/nativewind-env.d.ts
+  s_1d0dcbd2b75ee5::t_0bc42204baf85e 1
+packages/app/src/notifications/alerts.ts
+  s_1d0dcbd2b75ee5::t_70b87bafcf0dce 1-60
+packages/app/src/persistence/outbox.web.ts
+  s_022d341eae1f33::t_6e2fb6bb0dd574 1-19
+packages/app/src/state/live.ts
+  s_1d0dcbd2b75ee5::t_325b2da9ac5502 1-154
+packages/app/src/state/remote.ts
+  s_1d0dcbd2b75ee5::t_30554e23af379b 1-104
+packages/app/src/state/useScopes.ts
+  s_1d0dcbd2b75ee5::t_7f2b5be5daad7a 1-10
+packages/app/tsconfig.json
+  s_1d0dcbd2b75ee5::t_206060412eade0 1-15
+packages/client-runtime/package.json
+  s_1d0dcbd2b75ee5::t_aa1dfddbc28eb5 1-19
+packages/client-runtime/src/backoff.ts
+  s_1d0dcbd2b75ee5::t_9219a9c9581305 1-8
+packages/client-runtime/src/store.ts
+  s_1d0dcbd2b75ee5::t_5c28efcc20dd10 1-32
+packages/client-runtime/tsconfig.json
+  s_1d0dcbd2b75ee5::t_1efda92c071dd9 1-5
+packages/contracts/fixtures/bridge/from-app.json
+  s_1d0dcbd2b75ee5::t_8975f67a2505b5 1-26
+packages/contracts/fixtures/bridge/to-app.json
+  s_1d0dcbd2b75ee5::t_ce758b186f74a9 1-19
+packages/contracts/package.json
+  s_1d0dcbd2b75ee5::t_9928399fbc3707 1-18
+packages/contracts/test/bridge.test.ts
+  s_1d0dcbd2b75ee5::t_71cadbf62d4558 1-31
+packages/contracts/test/commands.test.ts
+  s_1d0dcbd2b75ee5::t_bb28b2c875b65e 1-25
+packages/contracts/tsconfig.json
+  s_1d0dcbd2b75ee5::t_216a107f2a0831 1-5
+packages/shared/package.json
+  s_1d0dcbd2b75ee5::t_3111a76e6f5465 1-15
+packages/shared/tsconfig.json
+  s_1d0dcbd2b75ee5::t_8a0a7af990e783 1-5
+packages/tailscale/package.json
+  s_1d0dcbd2b75ee5::t_7b384e92034594 1-15
+packages/tailscale/tsconfig.json
+  s_1d0dcbd2b75ee5::t_6502e8b509cc35 1-5
+packages/ui/package.json
+  s_1d0dcbd2b75ee5::t_51a6bbefd82af3 1-31
+packages/ui/src/nativewind-env.d.ts
+  s_1d0dcbd2b75ee5::t_e6b140d722413d 1
+packages/ui/src/series.ts
+  s_1d0dcbd2b75ee5::t_f60111489fe9f6 1-4
+packages/ui/src/theme.ts
+  s_1d0dcbd2b75ee5::t_f609e5e5fa4959 1-17
+packages/ui/tsconfig.json
+  s_1d0dcbd2b75ee5::t_29b701dda78771 1-16
+tsconfig.base.json
+  s_1d0dcbd2b75ee5::t_e712d875c8183e 1-23
+turbo.json
+  s_1d0dcbd2b75ee5::t_8acc3584548e06 37-41
+apps/desktop/Sources/Vitals/App/Navigator.swift
+  s_1d0dcbd2b75ee5::t_ec7e341906f7ad 8,26,44
+apps/desktop/Sources/Vitals/App/VitalsApp.swift
+  s_1d0dcbd2b75ee5::t_a9511255fe0ab1 11,31,49
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_1d0dcbd2b75ee5::t_a7f59222c15f07 20,174-175
+packages/app/src/features/pairing/QrScanner.tsx
+  s_1d0dcbd2b75ee5::t_d7db989e51f763 1-26
+packages/app/src/features/pairing/QrScanner.web.tsx
+  s_1d0dcbd2b75ee5::t_83aea4c4d1d707 1-3
+packages/app/src/lib/haptics.ts
+  s_1d0dcbd2b75ee5::t_70cf446b126dad 1-13
+packages/app/src/lib/haptics.web.ts
+  s_1d0dcbd2b75ee5::t_129ab79c461f37 1-5
+packages/app/src/persistence/credentials.ts
+  s_1d0dcbd2b75ee5::t_005ff5021cafb8 1-15
+packages/app/src/persistence/credentials.web.ts
+  s_1d0dcbd2b75ee5::t_2714a4b3c3545b 1-13
+packages/app/src/persistence/credentialsSchema.ts
+  s_1d0dcbd2b75ee5::t_c37d8c070ebda8 1-19
+packages/app/src/persistence/outbox.ts
+  s_1d0dcbd2b75ee5::t_45a435a2e1c38b 1-27
+packages/app/src/persistence/outboxShared.ts
+  s_1d0dcbd2b75ee5::t_375d408a2f2793 1-15
+packages/app/src/state/events.ts
+  s_1d0dcbd2b75ee5::t_32322795ed0088 1-77
+packages/app/src/state/useStore.ts
+  s_1d0dcbd2b75ee5::t_4658ac1b43a08e 1-11
+pnpm-lock.yaml
+  s_1d0dcbd2b75ee5::t_9fd6445fd43886 1-9480
+pnpm-workspace.yaml
+  s_1d0dcbd2b75ee5::t_3795b28fa23eee 1-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "42bd7dfa725ea55f5a52ed8d77a33ffe04dedce1",
+  "prompts": {},
+  "sessions": {
+    "s_022d341eae1f33": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46673afe-0002-474c-84da-83f4fa2403ea",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    },
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
