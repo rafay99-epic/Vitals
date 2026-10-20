@@ -276,14 +276,7 @@ private struct SettingsCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 9) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(tint)
-                    .frame(width: 26, height: 26)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(tint.opacity(0.14))
-                    )
+                IconTile(symbol: symbol, tint: tint)
                 HighlightLabel(title)
                     .font(.system(size: 13, weight: .semibold))
             }
@@ -291,14 +284,7 @@ private struct SettingsCard<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.quaternary.opacity(0.35))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.separator.opacity(0.5), lineWidth: 1)
-        )
+        .insetCard(fill: 0.35)
     }
 }
 
@@ -340,14 +326,7 @@ private struct MenuBarMetricToggle: View {
             }
         )) {
             HStack(spacing: 8) {
-                Image(systemName: metric.symbol)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.blue)
-                    .frame(width: 22, height: 22)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(.blue.opacity(0.14))
-                    )
+                IconTile(symbol: metric.symbol, tint: .blue, size: 22, font: .system(size: 11, weight: .medium), cornerRadius: 6)
                 HighlightLabel(metric.label)
                     .font(.system(size: 12.5))
             }

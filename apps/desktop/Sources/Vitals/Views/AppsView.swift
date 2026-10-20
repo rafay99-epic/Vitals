@@ -1,18 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// One shared formatter: the class-method form allocates per call, and size
-/// labels render across hundreds of rows.
-@MainActor private let byteFormatter: ByteCountFormatter = {
-    let formatter = ByteCountFormatter()
-    formatter.countStyle = .file
-    return formatter
-}()
-
-@MainActor func formatBytes(_ bytes: UInt64) -> String {
-    byteFormatter.string(fromByteCount: Int64(bytes))
-}
-
 /// Process-wide icon cache. `NSWorkspace.icon(forFile:)` hits disk and decodes
 /// the image, so misses load off-main via `Task.detached`.
 enum AppIconCache {
@@ -138,16 +126,7 @@ struct AppsView: View {
     // MARK: Hero
 
     private var hero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(model.apps.count) applications")
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .contentTransition(.numericText())
-                Text(heroSubtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        PageHero(value: "\(model.apps.count) applications", subtitle: heroSubtitle) {
             searchField
             Picker("", selection: $model.sortOrder) {
                 ForEach(AppsModel.SortOrder.allCases) { order in
@@ -258,14 +237,7 @@ struct AppsView: View {
                     .equatable()
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.quaternary.opacity(0.3))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(.separator.opacity(0.5), lineWidth: 1)
-            )
+            .insetCard()
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
@@ -348,9 +320,7 @@ private struct AppRow: View, Equatable {
             toggle()
         } label: {
             HStack(spacing: 11) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 15))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                SelectionMark(selected: isSelected, size: 15)
                 AppIconView(url: app.id, size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
@@ -359,10 +329,7 @@ private struct AppRow: View, Equatable {
                         if app.isRunning {
                             Text("Running")
                                 .font(.caption2.weight(.medium))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(.green.opacity(0.16)))
-                                .foregroundStyle(.green)
+                                .capsuleTag(.green, fill: 0.16, horizontal: 5, vertical: 1)
                         }
                         if app.requiresAdmin && app.protectedReason == nil {
                             Image(systemName: "lock")
@@ -520,16 +487,12 @@ private struct UninstallConfirmationSheet: View {
                 if staged.casks[app.id] != nil {
                     Text("Homebrew")
                         .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(.yellow.opacity(0.18)))
-                        .foregroundStyle(.yellow)
+                        .capsuleTag(.yellow, horizontal: 5, vertical: 1)
                 }
                 if staged.bundlesNeedingAdmin.contains(app.id) {
                     Label("admin · permanent", systemImage: "lock.fill")
                         .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(.orange.opacity(0.16)))
-                        .foregroundStyle(.orange)
+                        .capsuleTag(.orange, fill: 0.16, horizontal: 5, vertical: 1)
                         .help("Installed by a pkg (root-owned) — removed permanently with your password")
                 }
                 Spacer()

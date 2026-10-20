@@ -161,9 +161,7 @@ private struct NetworkInterfacesCard: View {
     var body: some View {
         SectionCard(title: "Interfaces", symbol: "network") {
             if links.isEmpty {
-                Text("No network interfaces.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("No network interfaces.")
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(links, id: \.name) { link in
@@ -176,7 +174,7 @@ private struct NetworkInterfacesCard: View {
 
     private func row(_ link: NetworkLink) -> some View {
         HStack(spacing: 12) {
-            iconTile(link)
+            IconTile(symbol: symbol(for: link.kind), tint: link.isActive ? .mint : .secondary)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(link.displayName).font(.callout).fontWeight(.medium)
@@ -190,15 +188,6 @@ private struct NetworkInterfacesCard: View {
             Spacer(minLength: 8)
             trailing(link)
         }
-    }
-
-    private func iconTile(_ link: NetworkLink) -> some View {
-        let tint: Color = link.isActive ? .mint : .secondary
-        return Image(systemName: symbol(for: link.kind))
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(tint)
-            .frame(width: 26, height: 26)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.14)))
     }
 
     private func symbol(for kind: NetworkLink.Kind) -> String {
@@ -227,10 +216,7 @@ private struct NetworkInterfacesCard: View {
     private var primaryTag: some View {
         Text("Primary")
             .font(.caption2.weight(.medium))
-            .foregroundStyle(.mint)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(.mint.opacity(0.15)))
+            .capsuleTag(.mint, fill: 0.15, horizontal: 7, vertical: 2)
     }
 }
 

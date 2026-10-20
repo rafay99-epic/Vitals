@@ -7,9 +7,7 @@ struct TopProcessesContent: View {
 
     var body: some View {
         if model.topProcesses.isEmpty {
-            Text("Gathering…")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 120)
+            CardPlaceholder("Gathering…", minHeight: 120)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(model.topProcesses) { process in
@@ -119,9 +117,7 @@ struct MemoryCard: View {
                     swapAndPressure(memory)
                 }
             } else {
-                Text("Memory statistics unavailable.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("Memory statistics unavailable.")
             }
         }
     }
@@ -170,8 +166,7 @@ struct MemoryCard: View {
         return LazyVGrid(columns: columns, spacing: 4) {
             ForEach(items) { item in
                 HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 9, height: 9)
-                    Text(item.label).foregroundStyle(.secondary)
+                    LegendSwatch(color: item.color, label: item.label).foregroundStyle(.secondary)
                     Spacer()
                     Text(String(format: "%.2f GB", gigabytes(item.bytes))).monospacedDigit()
                 }
@@ -203,10 +198,7 @@ struct MemoryCard: View {
     private func pressureBadge(_ pressure: MemoryPressure) -> some View {
         Text(pressure.label)
             .font(.caption.weight(.medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(pressureColor(pressure).opacity(0.18)))
-            .foregroundStyle(pressureColor(pressure))
+            .capsuleTag(pressureColor(pressure))
     }
 }
 
@@ -299,9 +291,7 @@ struct BatteryContent: View {
                     Spacer()
                 }
             } else {
-                Text("No battery found.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("No battery found.")
             }
         }
     }

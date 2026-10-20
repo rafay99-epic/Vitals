@@ -77,7 +77,7 @@ struct HistoryView: View {
             message: model.loading
                 ? "Loading the logged readings."
                 : "Logging is on, but nothing's been recorded for this range yet. Check back in a few minutes."
-        ) { EmptyView() }
+        )
     }
 }
 
@@ -432,11 +432,7 @@ private struct AlertHistoryCard: View {
             VStack(spacing: 10) {
                 ForEach(events) { event in
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "bell.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .frame(width: 22, height: 22)
-                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.orange.opacity(0.14)))
+                        IconTile(symbol: "bell.fill", tint: .orange, size: 22, font: .caption, cornerRadius: 6)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(event.message)
                                 .font(.callout)

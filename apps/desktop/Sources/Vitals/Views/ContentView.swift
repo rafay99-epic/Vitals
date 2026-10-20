@@ -301,9 +301,7 @@ struct DashboardView: View {
                         tint: .orange,
                         title: "No sensor data",
                         message: "Vitals couldn't read this Mac's temperature, fan, or memory sensors. This usually means a virtual machine or restricted hardware access — readings will appear here once they're available."
-                    ) {
-                        EmptyView()
-                    }
+                    )
                 } else {
                     cards
                 }

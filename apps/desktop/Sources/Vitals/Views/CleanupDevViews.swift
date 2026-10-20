@@ -64,35 +64,17 @@ struct CleanupDeveloperPage: View {
     // MARK: Hero
 
     private var hero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(heroValue)
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                Text("Build artifacts and dependencies — all regenerable")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if model.isDevScanning {
-                ProgressView()
-                    .controlSize(.small)
-                Button(role: .cancel) { model.stopDevScan() } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                .controlSize(.large)
-                .help("Stop scanning")
-            } else {
-                Button { model.scanDev() } label: {
-                    Label(model.hasDevRun ? "Rescan" : "Scan", systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(model.isDevCleaning)
-                .help("Find regenerable build artifacts")
-            }
+        PageHero(value: heroValue, subtitle: "Build artifacts and dependencies — all regenerable") {
+            ScanButtons(
+                isScanning: model.isDevScanning,
+                hasRun: model.hasDevRun,
+                disabled: model.isDevCleaning,
+                help: "Find regenerable build artifacts",
+                scan: { model.scanDev() },
+                stop: { model.stopDevScan() }
+            )
         }
+        .monospacedDigit()
     }
 
     private var heroValue: String {
@@ -236,17 +218,7 @@ private struct DevProjectRow: View {
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(selected ? AnyShapeStyle(Color.accentColor.opacity(0.10)) : AnyShapeStyle(.quaternary.opacity(0.3)))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(
-                    selected ? AnyShapeStyle(Color.accentColor.opacity(0.55)) : AnyShapeStyle(.separator.opacity(0.5)),
-                    lineWidth: 1
-                )
-        )
+        .insetCard(selected: selected)
         .animation(.easeOut(duration: 0.15), value: selected)
     }
 
@@ -254,15 +226,8 @@ private struct DevProjectRow: View {
         HStack(spacing: 8) {
             Button { toggleProject() } label: {
                 HStack(spacing: 11) {
-                    Image(systemName: "folder.badge.gearshape")
-                        .font(.system(size: 13, weight: .medium))
+                    IconTile(symbol: "folder.badge.gearshape", tint: .orange, size: 28, font: .system(size: 13, weight: .medium))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.orange)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color.orange.opacity(0.14))
-                        )
                     VStack(alignment: .leading, spacing: 2) {
                         Text(project.name)
                             .font(.system(size: 13, weight: .semibold))
@@ -277,9 +242,7 @@ private struct DevProjectRow: View {
                     }
                     Spacer(minLength: 10)
                     sizeLabel
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                    SelectionMark(selected: selected)
                 }
                 .contentShape(Rectangle())
             }
@@ -353,9 +316,7 @@ private struct DevArtifactRow: View {
                         .contentTransition(.numericText())
                         .foregroundStyle(.secondary)
                 }
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                SelectionMark(selected: selected, size: 14)
             }
             .padding(.leading, 47)
             .padding(.trailing, 14)

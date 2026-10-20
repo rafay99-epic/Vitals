@@ -38,10 +38,7 @@ struct MenuBarPanel: View {
                     Text(model.thermalState.label)
                         .font(.caption.weight(.medium))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(model.thermalState.tint.opacity(0.14)))
-                .foregroundStyle(model.thermalState.tint)
+                .capsuleTag(model.thermalState.tint, fill: 0.14)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
@@ -134,14 +131,7 @@ struct MenuBarPanel: View {
                 .frame(height: 36)
         }
         .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(.quaternary.opacity(0.4))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(.separator.opacity(0.4), lineWidth: 1)
-        )
+        .insetCard(fill: 0.4, border: 0.4, cornerRadius: 9)
     }
 
     @ViewBuilder
@@ -174,14 +164,7 @@ struct MenuBarPanel: View {
     private var fanSection: some View {
         if let fan = model.fans.first {
             HStack {
-                Image(systemName: "fan")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.cyan)
-                    .frame(width: 24, height: 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(.cyan.opacity(0.14))
-                    )
+                IconTile(symbol: "fan", tint: .cyan, size: 24, cornerRadius: 6)
                 Text("\(Int(fan.rpm)) rpm")
                     .font(.system(.callout, design: .rounded, weight: .semibold))
                     .monospacedDigit()

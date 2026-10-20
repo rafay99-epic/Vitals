@@ -169,37 +169,15 @@ private struct CleanupClassicPage: View {
     // MARK: Hero
 
     private var hero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(heroValue)
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .contentTransition(.numericText())
-                Text(heroSubtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if model.isScanning {
-                ProgressView()
-                    .controlSize(.small)
-                Button(role: .cancel) {
-                    model.cancelScan()
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                .controlSize(.large)
-                .help("Stop scanning")
-            } else {
-                Button {
-                    model.scan(depth: depth)
-                } label: {
-                    Label(model.hasRun ? "Rescan" : "Scan", systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(model.isCleaning)
-                .help("Measure what's reclaimable")
-            }
+        PageHero(value: heroValue, subtitle: heroSubtitle) {
+            ScanButtons(
+                isScanning: model.isScanning,
+                hasRun: model.hasRun,
+                disabled: model.isCleaning,
+                help: "Measure what's reclaimable",
+                scan: { model.scan(depth: depth) },
+                stop: { model.cancelScan() }
+            )
         }
     }
 
@@ -384,14 +362,7 @@ private struct CategoryCard: View {
         Button(action: toggle) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 9) {
-                    Image(systemName: category.kind.symbol)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(category.kind.tint)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(category.kind.tint.opacity(0.14))
-                        )
+                    IconTile(symbol: category.kind.symbol, tint: category.kind.tint, size: 28, font: .system(size: 13, weight: .medium))
                     Text(category.kind.title)
                         .font(.system(size: 13, weight: .semibold))
                     if category.kind.requiresAdmin {
@@ -403,15 +374,11 @@ private struct CategoryCard: View {
                     if category.kind.isDestructive {
                         Text("PERMANENT")
                             .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(.red.opacity(0.16)))
-                            .foregroundStyle(.red)
+                            .capsuleTag(.red, fill: 0.16, horizontal: 5, vertical: 1)
                             .help("Not regenerable — deleted permanently and can't be recovered")
                     }
                     Spacer()
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                    SelectionMark(selected: isSelected)
                 }
 
                 Text(category.kind.detail)
@@ -444,17 +411,7 @@ private struct CategoryCard: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.10)) : AnyShapeStyle(.quaternary.opacity(0.35)))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.55)) : AnyShapeStyle(.separator.opacity(0.5)),
-                        lineWidth: 1
-                    )
-            )
+            .insetCard(fill: 0.35, selected: isSelected)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)

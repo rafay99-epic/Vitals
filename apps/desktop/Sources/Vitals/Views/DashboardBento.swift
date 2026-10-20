@@ -227,11 +227,7 @@ struct DashboardTile: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Image(systemName: symbol)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(tint)
-                        .frame(width: 26, height: 26)
-                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.14)))
+                    IconTile(symbol: symbol, tint: tint)
                     Text(title)
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(.secondary)

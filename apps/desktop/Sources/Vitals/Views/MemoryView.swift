@@ -88,9 +88,7 @@ private struct MemoryCompositionCard: View {
             if let memory = model.memory {
                 MetricRowGrid(rows: rows(memory))
             } else {
-                Text("Memory statistics unavailable.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("Memory statistics unavailable.")
             }
         }
     }
@@ -133,9 +131,7 @@ private struct MemoryActivityCard: View {
             } else {
                 // No memory reading (VM/restricted Mac) is permanently unavailable; a real
                 // Mac shows "Gathering…" only until the first rate (two readings) lands.
-                Text(model.memory == nil ? "Memory activity unavailable." : "Gathering…")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder(model.memory == nil ? "Memory activity unavailable." : "Gathering…")
             }
         }
     }
@@ -166,9 +162,7 @@ private struct TopMemoryProcessesCard: View {
     var body: some View {
         SectionCard(title: "Top memory", symbol: "list.bullet") {
             if model.topMemoryProcesses.isEmpty {
-                Text("Gathering…")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 120)
+                CardPlaceholder("Gathering…", minHeight: 120)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(model.topMemoryProcesses) { process in
