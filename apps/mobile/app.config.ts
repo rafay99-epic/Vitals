@@ -35,6 +35,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ["expo-camera", { cameraPermission: "Scan the pairing code shown in Vitals on your Mac." }],
     ["expo-notifications", { color: "#ffffff" }],
     "expo-background-task",
+    [
+      "expo-build-properties",
+      {
+        android: {
+          extraProguardRules: [
+            "-keep class * extends androidx.room.RoomDatabase { <init>(); }",
+            "-keep class androidx.work.impl.WorkDatabase_Impl { *; }",
+            "-keep class androidx.work.** { *; }",
+          ].join("\n"),
+        },
+      },
+    ],
     "expo-secure-store",
     "expo-sqlite",
   ],

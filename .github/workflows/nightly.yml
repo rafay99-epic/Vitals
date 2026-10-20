@@ -52,10 +52,32 @@ jobs:
       - name: Lint
         run: swiftlint --reporter github-actions-logging
 
+  remote:
+    name: Remote checks before nightly
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm oxlint
+      - name: Typecheck and test
+        run: pnpm turbo typecheck test --filter=@vitals/*
+
   nightly:
     name: Build and publish Nightly pre-release
     runs-on: macos-26
-    needs: test
+    needs: [test, remote]
     # Only this job writes releases (least privilege; the test job stays read-only).
     # pull-requests: read lets changelog.sh read PR titles/labels for the notes.
     permissions:

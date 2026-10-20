@@ -11,18 +11,10 @@ import { notifyAlert } from "./alerts";
 const TASK = "vitals.alerts";
 const STATE_KEY = "vitals.remote.alerts";
 const INTERVAL_MINUTES = 15;
-const NOTIFIED_KEPT = 50;
+const NOTIFIED_KEPT = 100;
 
-const AlertWatchState = Schema.Struct({ seq: Schema.Int, notified: Schema.Array(Schema.String) });
-type AlertWatchState = typeof AlertWatchState.Type;
-const decodeState = Schema.decodeUnknownOption(Schema.fromJsonString(AlertWatchState));
-
-const readState = async (): Promise<AlertWatchState | null> => {
-  const raw = await SecureStore.getItemAsync(STATE_KEY, KEYCHAIN_OPTIONS);
-  if (raw === null) return null;
-  const decoded = decodeState(raw);
-  return decoded._tag === "Some" ? decoded.value : null;
-};
+const Notified = Schema.Array(Schema.String);
+const decodeNotified = Schema.decodeUnknownOption(Schema.fromJsonString(Notified));
 
 let queue: Promise<unknown> = Promise.resolve();
 const serialized = <A>(task: () => Promise<A>): Promise<A> => {
@@ -31,38 +23,37 @@ const serialized = <A>(task: () => Promise<A>): Promise<A> => {
   return next;
 };
 
-const update = (change: (state: AlertWatchState | null) => AlertWatchState) =>
+const readNotified = async (): Promise<ReadonlyArray<string>> => {
+  const raw = await SecureStore.getItemAsync(STATE_KEY, KEYCHAIN_OPTIONS);
+  const decoded = raw === null ? null : decodeNotified(raw);
+  return decoded?._tag === "Some" ? decoded.value : [];
+};
+
+const record = (notified: ReadonlyArray<string>, ids: ReadonlyArray<string>) =>
+  SecureStore.setItemAsync(STATE_KEY, JSON.stringify([...notified, ...ids].slice(-NOTIFIED_KEPT)), KEYCHAIN_OPTIONS);
+
+const deliver = (alerts: ReadonlyArray<Alert>, show: boolean) =>
   serialized(async () => {
-    const next = change(await readState());
-    await SecureStore.setItemAsync(STATE_KEY, JSON.stringify(next), KEYCHAIN_OPTIONS);
-    return next;
+    const notified = await readNotified();
+    const delivered: Array<string> = [];
+    for (const alert of alerts) {
+      if (notified.includes(alert.id) || delivered.includes(alert.id)) continue;
+      if (show) await notifyAlert(alert);
+      delivered.push(alert.id);
+    }
+    if (delivered.length > 0) await record(notified, delivered);
   });
 
-export const rememberAlertSeq = async (seq: number): Promise<void> => {
-  await update((state) => (state === null ? { seq, notified: [] } : { ...state, seq: Math.max(state.seq, seq) }));
-};
+export const markAlertsSeen = (alerts: ReadonlyArray<Alert>): Promise<void> => deliver(alerts, false);
 
-export const notifyOnce = async (alert: Alert): Promise<void> => {
-  let fresh = false;
-  await update((state) => {
-    const notified = state?.notified ?? [];
-    fresh = !notified.includes(alert.id);
-    return { seq: state?.seq ?? 0, notified: fresh ? [...notified, alert.id].slice(-NOTIFIED_KEPT) : notified };
-  });
-  if (fresh) await notifyAlert(alert);
-};
+export const notifyOnce = (alert: Alert): Promise<void> => deliver([alert], true);
 
 const checkAlerts = async (): Promise<void> => {
   const credentials = await loadCredentials();
   if (credentials === null) return;
-  const state = await readState();
-  const open = await fetchOpenAlerts(credentials.baseUrl, credentials.token, state?.seq ?? 0);
+  const open = await fetchOpenAlerts(credentials.baseUrl, credentials.token, 0);
   if (open === null) throw new Error("Mac unreachable");
-  if (state === null) return rememberAlertSeq(open.lastSeq);
-  const restarted = open.lastSeq < state.seq;
-  const alerts = restarted ? ((await fetchOpenAlerts(credentials.baseUrl, credentials.token, 0))?.alerts ?? []) : open.alerts;
-  for (const alert of alerts) await notifyOnce(alert);
-  await update((current) => ({ seq: open.lastSeq, notified: current?.notified ?? [] }));
+  await deliver(open.alerts, true);
 };
 
 TaskManager.defineTask(TASK, async () => {

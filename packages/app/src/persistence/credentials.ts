@@ -14,8 +14,9 @@ export const saveCredentials = async (credentials: Credentials): Promise<void> =
   await SecureStore.setItemAsync(KEY, JSON.stringify(credentials), KEYCHAIN_OPTIONS);
 };
 
-export const clearCredentials = async (): Promise<void> => {
+export const clearCredentials = async (): Promise<boolean> => {
   const credentials = await loadCredentials();
-  if (credentials !== null) await unpair(credentials.baseUrl, credentials.token);
+  const revoked = credentials === null || (await unpair(credentials.baseUrl, credentials.token));
   await SecureStore.deleteItemAsync(KEY, KEYCHAIN_OPTIONS);
+  return revoked;
 };

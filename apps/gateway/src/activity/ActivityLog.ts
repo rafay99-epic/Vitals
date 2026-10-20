@@ -185,6 +185,7 @@ class ActivityWriter {
     const oldestFirst = [
       "DELETE FROM frames WHERE seq IN (SELECT seq FROM frames ORDER BY seq LIMIT ?)",
       "DELETE FROM events WHERE seq IN (SELECT seq FROM events ORDER BY seq LIMIT ?)",
+      "DELETE FROM system_events WHERE seq IN (SELECT seq FROM system_events ORDER BY seq LIMIT ?)",
       "DELETE FROM rollups_minute WHERE rowid IN (SELECT rowid FROM rollups_minute ORDER BY minute LIMIT ?)",
     ];
     for (const sql of oldestFirst) {

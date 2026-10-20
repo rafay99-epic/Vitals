@@ -21,4 +21,6 @@ export const notifyAlert = async (alert: Alert): Promise<void> => {
   notification.addEventListener("click", () => globalThis.focus());
 };
 
+export const forgetCalmAction = async (): Promise<void> => {};
+
 export const onCalmAction = (_handler: () => void): (() => void) => () => {};

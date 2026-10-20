@@ -62,6 +62,7 @@ export const layer = (db: Database) =>
         Effect.gen(function* () {
           const seq = Number(insert.run(event.at, encodeEvent(event)).lastInsertRowid);
           const sequenced = { seq, event };
+          track(sequenced);
           const commandId = event._tag === "CommandUpdated" ? event.receipt.id : null;
           const level = event._tag === "CommandUpdated" && event.receipt.status === "failed" ? "warn" : "info";
           activity.record({
@@ -80,19 +81,18 @@ export const layer = (db: Database) =>
       const alertRows = db.prepare(
         "SELECT seq, event_json FROM system_events WHERE json_extract(event_json, '$._tag') IN ('AlertRaised', 'AlertCleared') ORDER BY seq",
       );
-      const open = () => {
-        const alerts = new Map<string, { readonly seq: number; readonly alert: Alert }>();
-        for (const row of alertRows.all() as ReadonlyArray<{ seq: number; event_json: string }>) {
-          const event = decodeEvent(row.event_json);
-          if (event._tag === "AlertRaised") alerts.set(event.alert.id, { seq: row.seq, alert: event.alert });
-          if (event._tag === "AlertCleared") alerts.delete(event.alert.id);
-        }
-        return [...alerts.values()];
+      const openAlerts = new Map<string, { readonly seq: number; readonly alert: Alert }>();
+      const track = ({ seq, event }: SequencedEvent) => {
+        if (event._tag === "AlertRaised") openAlerts.set(event.alert.id, { seq, alert: event.alert });
+        if (event._tag === "AlertCleared") openAlerts.delete(event.alert.id);
       };
+      for (const row of alertRows.all() as ReadonlyArray<{ seq: number; event_json: string }>) {
+        track({ seq: row.seq, event: decodeEvent(row.event_json) });
+      }
       const lastSeq = Effect.sync(() => (latest.get() as { seq: number }).seq);
 
       const now = Date.now();
-      for (const { alert } of open()) {
+      for (const { alert } of openAlerts.values()) {
         yield* append({ _tag: "AlertCleared", at: now, alert: { ...alert, clearedAt: now } });
       }
 
@@ -131,9 +131,7 @@ export const layer = (db: Database) =>
         openAlerts: (afterSeq) =>
           Effect.map(lastSeq, (seq) => ({
             lastSeq: seq,
-            alerts: open()
-              .filter((entry) => entry.seq > afterSeq)
-              .map((entry) => entry.alert),
+            alerts: [...openAlerts.values()].filter((entry) => entry.seq > afterSeq).map((entry) => entry.alert),
           })),
         published: Stream.fromPubSub(hub),
       });

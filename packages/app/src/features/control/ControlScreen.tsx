@@ -42,7 +42,7 @@ export function ControlScreen() {
   return (
     <Screen>
       <StatusHeader />
-      {scopes.includes("operate") ? null : <Banner text="This device can only watch. Turn on Control for it in Vitals on the Mac." tone="warn" />}
+      {scopes.includes("operate") ? null : <Banner text="This device cannot control the Mac. Turn on Control for it in Vitals on the Mac." tone="warn" />}
       {pending.map((receipt) => (
         <Countdown key={receipt.id} title={label(receipt.kind)} deadline={receipt.deadlineAt} onCancel={() => void remote.cancel(receipt)} />
       ))}

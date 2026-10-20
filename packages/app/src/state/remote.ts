@@ -26,11 +26,12 @@ export class Remote {
   readonly events: MacEvents;
   readonly toast = new Store<Toast | null>(null);
   readonly credentials: Credentials;
+  private disposed = false;
   private readonly outbox = openOutbox();
   private readonly flushTimer: ReturnType<typeof setInterval>;
   private flushing = false;
 
-  constructor(credentials: Credentials, webSocket: ConnectionOptions["webSocket"], onAlert: (alert: Alert, seq: number) => void) {
+  constructor(credentials: Credentials, webSocket: ConnectionOptions["webSocket"], onAlert: (alert: Alert) => void) {
     this.credentials = credentials;
     this.connection = createConnection({
       baseUrl: credentials.baseUrl,
@@ -45,6 +46,7 @@ export class Remote {
   }
 
   record(level: ActivityLevel, kind: string, data: Record<string, unknown> = {}): void {
+    if (this.disposed) return;
     this.outbox.push({ eventId: makeEventId(newId()), at: Date.now(), level, kind, data });
   }
 
@@ -93,6 +95,7 @@ export class Remote {
   }
 
   dispose(): void {
+    this.disposed = true;
     clearInterval(this.flushTimer);
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     this.live.dispose();

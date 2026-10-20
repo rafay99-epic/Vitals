@@ -45,8 +45,10 @@ export const layer = Layer.effect(
 
     const publish = (next: GatewayStatus) =>
       Effect.gen(function* () {
-        const previous = yield* Ref.getAndSet(current, next);
-        if (JSON.stringify(previous) !== JSON.stringify(next)) yield* bridge.send({ t: "status", status: next });
+        const previous = yield* Ref.get(current);
+        if (JSON.stringify(previous) === JSON.stringify(next)) return;
+        yield* bridge.send({ t: "status", status: next });
+        yield* Ref.set(current, next);
       });
 
     const ensureServe = (runner: Runner) =>

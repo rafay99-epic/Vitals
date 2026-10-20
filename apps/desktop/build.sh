@@ -106,6 +106,10 @@ if [ "${VITALS_SKIP_REMOTE:-0}" != "1" ]; then
     echo "error: bun is required to build the remote gateway (or set VITALS_SKIP_REMOTE=1)" >&2
     exit 1
   fi
+  if [ "${VITALS_BUILD_WEB:-1}" = "1" ] && ! command -v pnpm >/dev/null 2>&1; then
+    echo "error: pnpm is required to export the web client (corepack enable, or set VITALS_BUILD_WEB=0)" >&2
+    exit 1
+  fi
   echo "Compiling remote gateway…"
   (cd "$REPO_ROOT/apps/gateway" && bun run build)
   mkdir -p "$APP/Contents/Helpers"

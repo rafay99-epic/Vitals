@@ -7,6 +7,7 @@ import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as HttpStaticServer from "effect/http/HttpStaticServer";
 
+import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Auth } from "../auth/Auth.ts";
 import { type Channel, GatewayConfig } from "../config.ts";
 import { EventLog } from "../events/EventLog.ts";
@@ -116,8 +117,19 @@ const alerts = HttpRouter.add(
       if (info === null) return failure(401, "credentials", "Session is not valid");
       if (!info.scopes.includes("read")) return failure(403, "scope", "This device needs the read scope");
       const request = yield* HttpServerRequest.HttpServerRequest;
-      const after = Number(new URL(request.url, "http://gateway").searchParams.get("after") ?? "0");
-      return json(yield* events.openAlerts(Number.isSafeInteger(after) && after >= 0 ? after : 0));
+      const raw = Number(new URL(request.url, "http://gateway").searchParams.get("after") ?? "0");
+      const after = Number.isSafeInteger(raw) && raw >= 0 ? raw : 0;
+      const open = yield* events.openAlerts(after);
+      const activity = yield* ActivityLog;
+      activity.record({
+        at: Date.now(),
+        source: "gateway",
+        level: "debug",
+        kind: "alerts.polled",
+        deviceId: info.deviceId,
+        data: { after, lastSeq: open.lastSeq, alerts: open.alerts.length },
+      });
+      return json(open);
     }),
   ),
 );

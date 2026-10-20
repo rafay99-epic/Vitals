@@ -3,8 +3,8 @@ import * as Network from "expo-network";
 import { AppState, Platform } from "react-native";
 
 import { deviceInfo } from "../lib/device.ts";
-import { onCalmAction, prepareNotifications } from "../notifications/alerts";
-import { notifyOnce, rememberAlertSeq, startAlertWatch, stopAlertWatch } from "../notifications/background";
+import { forgetCalmAction, onCalmAction, prepareNotifications } from "../notifications/alerts";
+import { markAlertsSeen, notifyOnce, startAlertWatch, stopAlertWatch } from "../notifications/background";
 import { clearCredentials, loadCredentials, saveCredentials } from "../persistence/credentials";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { Remote } from "../state/remote.ts";
@@ -72,25 +72,40 @@ class SessionManager {
 
   async forget(): Promise<void> {
     const current = this.session.get();
+    if (Platform.OS === "web") {
+      if (!(await clearCredentials())) {
+        if (current.status === "paired") current.remote.show("Could not reach your Mac to unpair. Try again.", "bad");
+        return;
+      }
+      this.close();
+      this.session.set({ status: "unpaired" });
+      return;
+    }
     if (current.status === "paired") current.remote.discardQueued();
     this.close();
     await stopAlertWatch();
-    await clearCredentials();
+    await forgetCalmAction();
+    const revoked = await clearCredentials();
+    this.pairing.set({
+      busy: false,
+      error: revoked ? null : "Unpaired here, but the Mac could not be reached. Revoke this device in Vitals on the Mac.",
+    });
     this.session.set({ status: "unpaired" });
   }
 
   private open(credentials: Credentials): void {
     this.close();
-    const remote = new Remote(credentials, openSocket, (alert, seq) => {
-      void rememberAlertSeq(seq);
-      if (AppState.currentState !== "active") void notifyOnce(alert);
+    const remote = new Remote(credentials, openSocket, (alert) => {
+      if (AppState.currentState === "active") void markAlertsSeen([alert]);
+      else void notifyOnce(alert);
     });
+    let active = true;
     void prepareNotifications().then(async (granted) => {
-      if (granted) remote.record("info", "client.alerts.watch", { background: await startAlertWatch() });
+      if (granted && active) remote.record("info", "client.alerts.watch", { background: await startAlertWatch() });
     });
     const stopSeq = remote.connection.state.subscribe(() => {
       const state = remote.connection.state.get();
-      if (state._tag === "Ready") void rememberAlertSeq(state.hello.lastEventSeq);
+      if (state._tag === "Ready" && AppState.currentState === "active") void markAlertsSeen(state.hello.alerts);
     });
     let queuedCalm: (() => void) | null = null;
     const calmDown = () => void remote.run({ _tag: "CalmDown", alertId: null });
@@ -120,6 +135,7 @@ class SessionManager {
       if (AppState.currentState === "active") remote.connection.wake("network");
     });
     this.teardown = () => {
+      active = false;
       if (suspendTimer !== null) clearTimeout(suspendTimer);
       appState.remove();
       network.remove();

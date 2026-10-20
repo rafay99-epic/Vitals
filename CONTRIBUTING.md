@@ -27,7 +27,7 @@ This is a **bun + turbo monorepo**:
 ## Getting set up
 
 ```sh
-pnpm install   # once, from the repo root
+pnpm install   # once, from the repo root (needs Node 24, pnpm and Bun)
 pnpm dev       # website (vite) + convex dev together
 pnpm build     # everything, via turbo
 pnpm lint

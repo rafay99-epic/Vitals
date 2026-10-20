@@ -52,6 +52,8 @@ export const notifyAlert = async (alert: Alert): Promise<void> => {
   });
 };
 
+export const forgetCalmAction = (): Promise<void> => Notifications.clearLastNotificationResponseAsync();
+
 export const onCalmAction = (handler: () => void): (() => void) => {
   const handle = (response: Notifications.NotificationResponse) => {
     if (response.actionIdentifier !== CALM_ACTION) return;

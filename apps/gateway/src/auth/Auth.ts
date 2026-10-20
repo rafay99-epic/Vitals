@@ -112,10 +112,14 @@ export const layer = (initialOwner: string | null) =>
       const revoked = (session: Session) =>
         Effect.gen(function* () {
           const deviceId = session.device.id;
+          if (versionOf(deviceId) !== session.version) return;
           const existing = invalidations.get(deviceId);
           const waiter = existing ?? (yield* Deferred.make<void>());
           if (existing === undefined) invalidations.set(deviceId, waiter);
-          if (versionOf(deviceId) !== session.version) return;
+          if (versionOf(deviceId) !== session.version) {
+            if (existing === undefined && invalidations.get(deviceId) === waiter) invalidations.delete(deviceId);
+            return;
+          }
           yield* Deferred.await(waiter);
         });
 

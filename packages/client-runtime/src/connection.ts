@@ -251,9 +251,13 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         onFailure: (error): CallResult<A, E> => ({ ok: false, error }),
         onSuccess: (value): CallResult<A, E> => ({ ok: true, value }),
       }),
-    ).then((exit) =>
-      Exit.isSuccess(exit) ? exit.value : { ok: false, error: new NotConnected({ message: "The connection closed before the Mac answered" }) },
-    );
+    ).then((exit) => {
+      if (Exit.isSuccess(exit)) return exit.value;
+      if (Cause.hasInterruptsOnly(exit.cause)) {
+        return { ok: false, error: new NotConnected({ message: "The connection closed before the Mac answered" }) };
+      }
+      throw Cause.squash(exit.cause);
+    });
   };
 
   const watch = <A, E>(

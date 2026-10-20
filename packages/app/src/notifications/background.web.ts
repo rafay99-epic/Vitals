@@ -2,7 +2,7 @@ import type { Alert } from "@vitals/contracts";
 
 import { notifyAlert } from "./alerts";
 
-export const rememberAlertSeq = async (_seq: number): Promise<void> => {};
+export const markAlertsSeen = async (_alerts: ReadonlyArray<Alert>): Promise<void> => {};
 
 export const notifyOnce = (alert: Alert): Promise<void> => notifyAlert(alert);
 
