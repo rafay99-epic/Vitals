@@ -1,0 +1,131 @@
+apps/gateway/test/auth.test.ts
+  s_1d0dcbd2b75ee5::t_e12895a6be7e2d 1-84
+apps/gateway/src/activity/ActivityLog.ts
+  s_1d0dcbd2b75ee5::t_e407b8355d27a7 181-193
+apps/gateway/src/app.ts
+  s_1d0dcbd2b75ee5::t_65b37ac4eba73e 5,45-51,54-55,65
+apps/gateway/src/auth/Auth.ts
+  s_1d0dcbd2b75ee5::t_03a40ba0f1cf54 1,9,13-15,25,27-29,32,47-49,63,92-99,104,112,114,118,122-133,142-149,160,163-164
+apps/gateway/src/commands/CommandService.ts
+  s_1d0dcbd2b75ee5::t_d04cd03cded9b8 12,44-45,50-52,62,65-79,96-111,119,136,138
+apps/gateway/src/events/EventLog.ts
+  s_1d0dcbd2b75ee5::t_bcf11b6f4a0ea8 2,13,45,81,83-93,95,104-113,118,130-137
+apps/gateway/src/http/routes.ts
+  s_1d0dcbd2b75ee5::t_34594423213d0b 2,11-12,18-56,65-66,68,70-72,76-78,82,84-91,95-138
+apps/gateway/src/main.ts
+  s_1d0dcbd2b75ee5::t_1a29a9dbb96e8b 11
+apps/gateway/src/persistence/RemoteStore.ts
+  s_1d0dcbd2b75ee5::t_1b68896e3f181d 60,201-202,204
+apps/gateway/src/tailscale/Serve.ts
+  s_1d0dcbd2b75ee5::t_a8d966b684c939 80,107-111
+apps/gateway/src/ws/handlers.ts
+  s_1d0dcbd2b75ee5::t_909d527361886e 13-19,42,47-48,78
+apps/gateway/src/ws/route.ts
+  s_1d0dcbd2b75ee5::t_d9a6757270b5a2 153
+apps/gateway/test/client-runtime.test.ts
+  s_1d0dcbd2b75ee5::t_d40cca39aca955 78,91-93,96
+apps/gateway/test/gateway.test.ts
+  s_1d0dcbd2b75ee5::t_e9807d244b345c 5,10-11,46-101,195-215,254-264,267
+apps/gateway/test/harness.ts
+  s_1d0dcbd2b75ee5::t_1b1e71ce275269 6,69,119,169,202-213
+apps/mobile/app.config.ts
+  s_1d0dcbd2b75ee5::t_3aeeef7a6964b2 37,41,44
+apps/mobile/eas.json
+  s_1d0dcbd2b75ee5::t_bfaa896bca0464 2-5,10-15,19-24,27-30
+apps/mobile/package.json
+  s_1d0dcbd2b75ee5::t_51aae89862824c 20,31
+apps/web/package.json
+  s_1d0dcbd2b75ee5::t_aeeede99dcdda7 7,24,31-32
+packages/app/package.json
+  s_1d0dcbd2b75ee5::t_f5c20c8dd8dea1 23,32,41-43,58-60,70,79
+packages/app/src/connection/session.ts
+  s_1d0dcbd2b75ee5::t_67792f591434e4 6-7,45-48,74-75,77,84-86,89-104,119-121,127-128
+packages/app/src/features/control/ControlScreen.tsx
+  s_1d0dcbd2b75ee5::t_aeb91c1177cf2b 3,45,107
+packages/app/src/features/guard/GuardScreen.tsx
+  s_1d0dcbd2b75ee5::t_66dbcf5fc71d36 9,25,50-54,57,73,80
+packages/app/src/features/more/MoreScreen.tsx
+  s_1d0dcbd2b75ee5::t_14079a1ccafadb 3,9-11,16-22,31-43,111,113-118,125
+packages/app/src/features/pairing/PairScreen.tsx
+  s_1d0dcbd2b75ee5::t_2855980158ec08 52-67
+packages/app/src/notifications/alerts.ts
+  s_1d0dcbd2b75ee5::t_643355226bc55e 5-6,8,22,35-41,44,51,56-63
+packages/app/src/notifications/alerts.web.ts
+  s_1d0dcbd2b75ee5::t_1aa875e43e5ffa 3-7,10-14
+packages/app/src/notifications/background.ts
+  s_1d0dcbd2b75ee5::t_5caae5401d89c2 1-88
+packages/app/src/notifications/background.web.ts
+  s_1d0dcbd2b75ee5::t_da528689b6fec6 1-11
+packages/app/src/notifications/permission.ts
+  s_1d0dcbd2b75ee5::t_f73a80bc6d7cc8 1
+packages/app/src/persistence/credentials.ts
+  s_1d0dcbd2b75ee5::t_2b928409783710 1,8-11,14,18-20
+packages/app/src/persistence/credentials.web.ts
+  s_1d0dcbd2b75ee5::t_04344ce04a55b2 1,3,5,7-19,22-23,25
+packages/app/src/persistence/credentialsSchema.ts
+  s_1d0dcbd2b75ee5::t_f46f97e911f0e0 6
+packages/app/src/persistence/outbox.ts
+  s_1d0dcbd2b75ee5::t_77361e0f4e7e1a 26-28
+packages/app/src/persistence/outbox.web.ts
+  s_1d0dcbd2b75ee5::t_7ca1c3991bdad5 18-20
+packages/app/src/persistence/outboxShared.ts
+  s_1d0dcbd2b75ee5::t_05025e4dc5e4bc 8
+packages/app/src/state/events.ts
+  s_1d0dcbd2b75ee5::t_0d67639d867256 14,16,33,66
+packages/app/src/state/remote.ts
+  s_1d0dcbd2b75ee5::t_5a1c8a14043d73 33,91-94
+packages/app/src/state/useStore.ts
+  s_1d0dcbd2b75ee5::t_f0e48296c7e4d1 2,6-17
+packages/client-runtime/src/account.ts
+  s_1d0dcbd2b75ee5::t_6988370b8da152 1-70
+packages/client-runtime/src/connection.ts
+  s_1d0dcbd2b75ee5::t_b2a7555296f438 19,38,109,249,254-255
+packages/client-runtime/src/index.ts
+  s_1d0dcbd2b75ee5::t_cb7ec6693ea6cf 1
+packages/client-runtime/test/runtime.test.ts
+  s_1d0dcbd2b75ee5::t_30b4d4f88ac91e 1-75
+packages/contracts/src/auth.ts
+  s_1d0dcbd2b75ee5::t_06c5f55c71ed50 36,42-49
+packages/contracts/src/guard.ts
+  s_1d0dcbd2b75ee5::t_8bc89b94f9af65 24,54-59
+packages/contracts/src/stats.ts
+  s_1d0dcbd2b75ee5::t_34ca48670cc037 167
+packages/contracts/src/system.ts
+  s_1d0dcbd2b75ee5::t_ecb082011f267c 62
+packages/contracts/test/validation.test.ts
+  s_1d0dcbd2b75ee5::t_8e4bd5f4d67829 1-22
+packages/shared/src/format.ts
+  s_1d0dcbd2b75ee5::t_60137172899da6 5,24-26
+packages/shared/src/ringBuffer.ts
+  s_1d0dcbd2b75ee5::t_49d000a57a3fb6 8,25
+packages/shared/test/shared.test.ts
+  s_1d0dcbd2b75ee5::t_dfec92f309f4b4 1-43
+packages/tailscale/src/index.ts
+  s_1d0dcbd2b75ee5::t_984c99d38fb6a2 32-42,55-62,64
+packages/tailscale/test/tailscale.test.ts
+  s_1d0dcbd2b75ee5::t_c9c508e1bcfcc8 3,49-60
+packages/ui/src/charts/ArcGauge.tsx
+  s_1d0dcbd2b75ee5::t_4940fe64ea4a92 25
+packages/ui/src/controls/SlideToConfirm.tsx
+  s_1d0dcbd2b75ee5::t_6987de1dae1f06 41-45
+pnpm-lock.yaml
+  s_1d0dcbd2b75ee5::t_f374d89e5fab5f 208-210,241-243,424-426,451-453,3205-3209,3359-3364,4650-4652,7679-7685,7853-7858,9344-9345
+CLAUDE.md
+  s_1d0dcbd2b75ee5::t_7c5893c7edf1c5 285-286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c056e727ac77e5b716a62558a52a22eb2ac3b8a4",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
