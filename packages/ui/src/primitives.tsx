@@ -25,14 +25,11 @@ const toneBorder: Record<Tone, string> = {
 export function Screen({ children, insetTop = true }: { readonly children: ReactNode; readonly insetTop?: boolean }) {
   const insets = useSafeAreaInsets();
   return (
-    <ScrollView
-      className="flex-1 bg-canvas"
-      contentContainerClassName="px-4 pb-16"
-      contentContainerStyle={{ paddingTop: (insetTop ? insets.top : 0) + 8 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      {children}
-    </ScrollView>
+    <View className="flex-1 bg-canvas" style={{ paddingTop: insetTop ? insets.top : 0 }}>
+      <ScrollView className="flex-1" contentContainerClassName="px-4 pb-16 pt-2" keyboardShouldPersistTaps="handled">
+        {children}
+      </ScrollView>
+    </View>
   );
 }
 
