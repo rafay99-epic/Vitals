@@ -1,0 +1,63 @@
+.github/workflows/nightly.yml
+  s_1d0dcbd2b75ee5::t_00ce5ab140a2ff 55-76,80
+CLAUDE.md
+  s_1d0dcbd2b75ee5::t_d609e3223f7325 286
+CONTRIBUTING.md
+  s_1d0dcbd2b75ee5::t_20797ec0002d02 30
+apps/desktop/build.sh
+  s_1d0dcbd2b75ee5::t_ca34282f3b01ca 109-112
+apps/gateway/src/activity/ActivityLog.ts
+  s_1d0dcbd2b75ee5::t_1d7f8a3f7aba16 188
+apps/gateway/src/auth/Auth.ts
+  s_1d0dcbd2b75ee5::t_d7efecf125f2e6 115,119-122
+apps/gateway/src/events/EventLog.ts
+  s_1d0dcbd2b75ee5::t_0f14e620ff811c 65,84-87,89-91,95,134
+apps/gateway/src/http/routes.ts
+  s_1d0dcbd2b75ee5::t_0666ee49be2218 10,120-132
+apps/gateway/src/tailscale/Serve.ts
+  s_1d0dcbd2b75ee5::t_d540a6ff321908 48-51
+apps/mobile/app.config.ts
+  s_1d0dcbd2b75ee5::t_e5b532fd772cf7 38-49
+apps/mobile/package.json
+  s_1d0dcbd2b75ee5::t_d0b0c3d385bb04 21
+packages/app/src/connection/session.ts
+  s_1d0dcbd2b75ee5::t_e8946b32535a62 6-7,75-83,87-92,98-100,102,104,108,138
+packages/app/src/features/control/ControlScreen.tsx
+  s_1d0dcbd2b75ee5::t_d8cfe61f1c75a9 45
+packages/app/src/notifications/alerts.ts
+  s_1d0dcbd2b75ee5::t_5bae35a6707afa 55-56
+packages/app/src/notifications/alerts.web.ts
+  s_1d0dcbd2b75ee5::t_83dae31ff31dd6 24-25
+packages/app/src/notifications/background.ts
+  s_1d0dcbd2b75ee5::t_465eb08e5f3275 14,16-17,26-35,37-44,47,49,54,56
+packages/app/src/notifications/background.web.ts
+  s_1d0dcbd2b75ee5::t_da57febc19f9d5 5
+packages/app/src/persistence/credentials.ts
+  s_1d0dcbd2b75ee5::t_1caf7c2e1e13aa 17,19,21
+packages/app/src/persistence/credentials.web.ts
+  s_1d0dcbd2b75ee5::t_4abe36dc25a4f7 24
+packages/app/src/state/events.ts
+  s_1d0dcbd2b75ee5::t_e7730c552d4f38 14,16,66
+packages/app/src/state/remote.ts
+  s_1d0dcbd2b75ee5::t_f53d8d3034de8f 29,34,49,98
+packages/client-runtime/src/connection.ts
+  s_1d0dcbd2b75ee5::t_fbd3bd3d191678 254-260
+pnpm-lock.yaml
+  s_1d0dcbd2b75ee5::t_b34708195e0b06 211-213,3213-3217,7694-7700
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce59f754540e789cc61b20c9e2360106a238fb8e",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
