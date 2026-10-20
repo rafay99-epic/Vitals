@@ -1,7 +1,7 @@
 # CLAUDE.md — Vitals
 
 Vitals is a monorepo: a native macOS hardware monitor + app manager (`apps/desktop`,
-Swift/SwiftUI), its marketing site (`apps/website`, React + Vite + Tailwind v4), and a
+Swift/SwiftUI), its marketing site (`apps/marketing`, React + Vite + Tailwind v4, separate from the remote web app in `apps/web`), and a
 shared Convex backend at the repo root (`convex/`). Tooling: bun workspaces + turbo.
 License: **GPL-3.0**.
 
@@ -135,13 +135,16 @@ same designated requirement so the grant persists.
 ## Commands
 
 ```sh
-bun install                  # root, once
-bun run dev                  # website (vite) + convex dev together, via concurrently
+pnpm install                  # root, once
+pnpm dev                  # website (vite) + convex dev together, via concurrently
                              #   (dev:web / dev:convex run them separately)
-bun run build / lint / test  # everything via turbo
-bun run dmg                  # desktop app + DMG (macOS only)
+pnpm build / lint / test  # everything via turbo
+pnpm dmg                  # desktop app + DMG (macOS only)
 # desktop directly (from apps/desktop): swift build, swift test, ./build.sh, ./make-dmg.sh
-# website e2e locally: E2E_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" bunx turbo test:e2e --filter=website
+# remote stack: pnpm oxlint · pnpm knip · pnpm turbo typecheck --filter=@vitals/* · pnpm turbo test --filter=@vitals/gateway
+# web client: pnpm --filter @vitals/web export → apps/web/dist, served by the gateway; build.sh bundles it
+# android APK: pnpm --filter @vitals/mobile android:release (pnpm manages deps; Bun only compiles and tests the gateway)
+# website e2e locally: E2E_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" pnpm turbo test:e2e --filter=marketing
 ```
 
 ## Desktop architecture
@@ -255,6 +258,34 @@ Settings → Desktop Widgets.
   touching any path (`LeftoverScanner.isValidBundleID`).
 - Fan control: clamp to rated RPM range, admin auth, macOS thermal safety stays under.
 
+## Remote (gateway, phone and web clients)
+
+Vitals Remote lets paired phones and browsers on the owner's tailnet watch and control the Mac.
+
+| Path | Role |
+| --- | --- |
+| `apps/desktop/Sources/Vitals/Remote/` | Bridge wire types, gateway process, command router, activity reader |
+| `apps/desktop/Sources/Vitals/Models/RemoteModel.swift` | Gateway lifecycle, routing, Pressure Guard loop, pairing admin |
+| `apps/gateway` | Bun + Effect 4 server, compiled into `Contents/Helpers/vitals-gateway` |
+| `apps/mobile` | Expo SDK 58 native target (Android, iOS) |
+| `apps/web` | Expo SDK 58 web target, exported to `dist` and served by the gateway |
+| `packages/app` | The shared app: screens, state, connection and persistence for both targets |
+| `packages/contracts` | Effect Schema contracts: RPC group, scopes, bridge messages, fixtures |
+| `packages/client-runtime` | Connection supervisor, pairing, stores (shared by every client) |
+| `packages/ui` | Shared React Native components and Skia charts |
+| `packages/shared`, `packages/tailscale` | Formatting, ring buffer, ids; Tailscale CLI wrapper |
+
+Rules:
+- **Swift is the only collector.** The gateway never reads sensors; it asks through the stdio bridge, and remote topics join `currentNeeds` so there is never a second sampler.
+- **Contracts first.** Change `packages/contracts` before either side. Bridge changes update `fixtures/bridge/*.json`, which both `bun test` and `swift test` decode.
+- **Every RPC has a scope** (`RPC_SCOPES` is checked at compile time). Destructive commands need the `destructive` scope, which starts off for every device.
+- **No free-form shell.** Commands are a closed tagged union with fixed Swift implementations. Processes are addressed by pid plus start time, never by name.
+- **Honest readings.** Missing values are `null` on the wire, never 0.
+- **Local only.** The gateway binds 127.0.0.1; `tailscale serve` (port 7443 Stable, 7444 Nightly, 7445 Dev) is the only way in, and the `Tailscale-User-Login` header must match the owner.
+- **Activity log is desktop-only.** `~/.vitals*/remote/activity.db` is written by the gateway and read read-only by Vitals; no RPC exposes it to phones.
+- **Tests never fire real power commands.** Router tests use a fake executor; end-to-end runs only cancel inside the grace window.
+- **TypeScript strictness** follows T3 Code: `tsconfig.base.json` flags, oxlint with the React Compiler rules, knip clean, no `any`, no casts.
+
 ## Website
 
 - Implements a Claude Design handoff pixel-faithfully; breakpoint-dependent styles live
@@ -290,11 +321,11 @@ Settings → Desktop Widgets.
   returns the data straight through; the page shows its shimmer/loading state meanwhile.
   This is intentionally simple (it was over-built with a cache + cron + CI deploy/refresh
   once; that was removed). Don't reintroduce tables/crons unless asked.
-- **The repo root is the Convex project root** — *not* inside `apps/website`, so the desktop
+- **The repo root is the Convex project root** — *not* inside `apps/marketing`, so the desktop
   app can use it later. Functions in `convex/`; the `convex` dependency + `convex:dev` /
   `convex:codegen` / `convex:deploy` scripts in the **root** `package.json`; deployment read
   from the **root** `.env.local` (gitignored). Run all convex commands from the repo root.
-  (`CONVEX_AGENT_MODE=anonymous bunx convex dev` forces an anonymous local deployment.)
+  (`CONVEX_AGENT_MODE=anonymous pnpm convex dev` forces an anonymous local deployment.)
 - `releases.ts`: two public **actions** — `list` (all releases, newest-first; throws on a
   GitHub failure → the page shows its error state) and `latest` (the badge; null on
   failure). No queries, mutations, tables, or schema. The fetch/parse lives in the reusable
@@ -303,7 +334,7 @@ Settings → Desktop Widgets.
   (schemaless).
 - **Rate limit, two layers.** (1) GitHub's unauthenticated API is 60 req/hour **per IP** and
   all visitors share the deployment's one IP — set a `GITHUB_TOKEN` env var
-  (`bunx convex env set GITHUB_TOKEN …`) for 5,000/hour; the actions add the auth header when
+  (`pnpm convex env set GITHUB_TOKEN …`) for 5,000/hour; the actions add the auth header when
   present (read via `process.env`, typed by `convex/env.d.ts` since `env` isn't in this
   Convex version's codegen). (2) The **`@convex-dev/rate-limiter` component** (mounted in
   `convex/convex.config.ts`) caps our own egress: a single shared global `githubFetch` token
@@ -319,17 +350,17 @@ Settings → Desktop Widgets.
   `git diff` drift check so a stale committed `_generated` fails the build) then `convex
   deploy` (which also typechecks, installs the rate-limiter component, and pushes). Needs a
   repo secret **`CONVEX_DEPLOY_KEY`** (production deploy key) — separate from the deployment
-  **env var** `GITHUB_TOKEN` (set on the deployment, not in CI). `bun run convex:deploy` does
+  **env var** `GITHUB_TOKEN` (set on the deployment, not in CI). `pnpm convex:deploy` does
   the deploy by hand. The website on Vercel needs `VITE_CONVEX_URL` = the production Convex
   **Cloud URL** (`.convex.cloud`), inlined at build (redeploy after setting). The workflow
   has **no seed/refresh step** — that's what failed before (a deploy key can't run an
   internal action); the live proxy needs none.
-- The website imports the typed API through the **`@convex` alias** (`apps/website`
+- The website imports the typed API through the **`@convex` alias** (`apps/marketing`
   `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
   '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the
   website's `tsc -b` resolve without a codegen step; turbo's `globalDependencies` lists
-  `convex/_generated/**`. After changing a function, re-run `bun run convex:codegen`.
-- `bun run lint` runs `turbo lint` **and** typechecks `convex/`. The Convex CLI's opt-in "AI
+  `convex/_generated/**`. After changing a function, re-run `pnpm convex:codegen`.
+- `pnpm lint` runs `turbo lint` **and** typechecks `convex/`. The Convex CLI's opt-in "AI
   files" (`AGENTS.md`, `.agents/`, `skills-lock.json`) are gitignored. For any code under
   `convex/`, use the **convex-expert** subagent.
 
@@ -345,7 +376,7 @@ copied.
 - The user's shell aliases `cd` through zoxide — it can fail inside chained commands.
   Run Bash from absolute paths or put a plain `cd /abs/path` first.
 - Local bun enforces `minimum-release-age` (7 days); use
-  `bun install --minimum-release-age=0` only for versions the user already approved.
+  `pnpm install` only for versions the user already approved.
 - This ffmpeg has no libwebp; use `sips` for image conversion.
 - `screencapture` captures whatever is frontmost at the coordinates — activate the
   target window first and re-read its bounds in the same osascript.

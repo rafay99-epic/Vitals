@@ -95,14 +95,14 @@ reviews:
         Desktop widgets are app-owned floating NSPanels (NOT WidgetKit) bound to
         the SHARED VitalsModel/AppSettings — they must not start their own polling.
     # --- Website -----------------------------------------------------------
-    - path: "apps/website/src/**"
+    - path: "apps/marketing/src/**"
       instructions: >-
         Mobile-first responsive: breakpoint-dependent styles live in Tailwind
         classes, never inline styles (inline styles defeat media queries). Repo/
         download/company URLs come only from lib/links.ts. Mock data must be coded
         components in the app's design language and must never invent fake numbers.
         Assert no horizontal overflow at 390/1440px.
-    - path: "apps/website/src/routes/{privacy,terms}.tsx"
+    - path: "apps/marketing/src/routes/{privacy,terms}.tsx"
       instructions: >-
         Legal pages must match reality. The privacy policy must disclose every data
         flow (e.g. Vercel Web Analytics) BEFORE it ships; flag any new tracking/

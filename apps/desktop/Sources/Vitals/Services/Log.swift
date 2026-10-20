@@ -65,7 +65,7 @@ enum LogLevel: Int, CaseIterable, Comparable, Codable, Identifiable {
 /// `log stream` can filter by area.
 enum LogCategory: String, CaseIterable, Identifiable, Codable {
     case app, sensors, smc, fan, sampler, updater, history
-    case cleanup, uninstall, settings, net
+    case cleanup, uninstall, settings, net, remote
 
     var id: String { rawValue }
 
@@ -82,6 +82,7 @@ enum LogCategory: String, CaseIterable, Identifiable, Codable {
         case .uninstall:  return "Uninstall"
         case .settings:   return "Settings"
         case .net:        return "Network"
+        case .remote:     return "Remote"
         }
     }
 }

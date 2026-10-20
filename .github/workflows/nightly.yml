@@ -82,6 +82,19 @@ jobs:
           MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
 
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install workspace dependencies
+
+        working-directory: .
+
+        run: pnpm install --frozen-lockfile
+
       - name: Build Nightly app and installer
         run: |
           export VITALS_CHANNEL=nightly

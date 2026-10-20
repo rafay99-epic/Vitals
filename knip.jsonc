@@ -1,0 +1,39 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "rules": {
+    "types": "off",
+    "nsTypes": "off"
+  },
+  "ignoreBinaries": [
+    "swift",
+    "swiftlint"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "convex/*.ts"
+      ],
+      "project": [
+        "convex/**/*.ts"
+      ]
+    },
+    "apps/gateway": {
+      "entry": [
+        "src/main.ts",
+        "test/**/*.ts"
+      ]
+    },
+    "apps/mobile": {
+      "ignoreDependencies": [
+        "babel-plugin-react-compiler",
+        "expo-updates"
+      ]
+    },
+    "apps/web": {
+      "ignoreDependencies": [
+        "babel-plugin-react-compiler",
+        "expo-updates"
+      ]
+    }
+  }
+}

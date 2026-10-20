@@ -25,25 +25,29 @@ Prefer a direct download? Grab the **[.dmg](https://github.com/rafay99-epic/Vita
 | App | Path | Stack |
 | --- | --- | --- |
 | Desktop app | [`apps/desktop`](apps/desktop) | Swift / SwiftUI (Swift Package Manager) |
-| Website | [`apps/website`](apps/website) | React + Vite + Tailwind |
+| Marketing site | [`apps/marketing`](apps/marketing) | React + Vite + Tailwind |
+| Remote gateway | [`apps/gateway`](apps/gateway) | Bun + Effect, compiled into the Mac app |
+| Phone app | [`apps/mobile`](apps/mobile) | Expo (Android, iOS) + NativeWind |
+| Web app | [`apps/web`](apps/web) | Expo web export, served by the gateway on your tailnet |
+| Shared | [`packages/*`](packages) | contracts, client runtime, app screens, UI, Tailscale |
 
-Tooling: [bun](https://bun.sh) workspaces + [turbo](https://turborepo.com) for task orchestration.
+Tooling: [pnpm](https://pnpm.io) workspaces with a version catalog + [turbo](https://turborepo.com). Bun compiles and tests the gateway.
 
 ## Working in the repo
 
 ```sh
-bun install              # once, at the root
+pnpm install              # once, at the root
 
-bun run build            # build everything
-bun run build:website    # just the site        (turbo build --filter=website)
-bun run build:desktop    # just the app         (turbo build --filter=desktop, macOS only)
-bun run dmg              # app + DMG installer  (turbo dmg --filter=desktop)
-bun run lint             # lint everything
-bun run test             # unit tests for both apps (swift test + bun test)
-bun run test:e2e         # browser checks against the built site
+pnpm build            # build everything
+pnpm build:marketing    # just the site        (turbo build --filter=marketing)
+pnpm build:desktop    # just the app         (turbo build --filter=desktop, macOS only)
+pnpm dmg              # app + DMG installer  (turbo dmg --filter=desktop)
+pnpm lint             # lint everything
+pnpm test             # unit tests for both apps (swift test + bun test)
+pnpm test:e2e         # browser checks against the built site
 ```
 
-The website dev server: `cd apps/website && bun run dev`.
+The website dev server: `cd apps/marketing && pnpm dev`.
 
 For the **desktop app** (macOS, from `apps/desktop`):
 

@@ -5,7 +5,7 @@ import AppKit
 @MainActor
 @Observable
 final class VitalsModel {
-    struct Sensor: Identifiable {
+    struct Sensor: Identifiable, Equatable {
         enum Kind { case cpu, gpu, storage, battery, other }
         let id: String
         let label: String
@@ -96,7 +96,7 @@ final class VitalsModel {
 
     private let settings: AppSettings
     private let sampler = SensorSampler()
-    private let notifications = NotificationManager()
+    private let notifications = NotificationManager.shared
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var isSampling = false
     /// The one in-flight sample. Cancelling a Swift Task does not interrupt a
@@ -113,6 +113,22 @@ final class VitalsModel {
     @ObservationIgnored private var isAsleep = false
     @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var menuBarPanelVisible = false
+    @ObservationIgnored private var remoteTopics: Set<String> = []
+    @ObservationIgnored private var remoteProcessTable = false
+    @ObservationIgnored var onSampled: (([ProcessSampler.Row]) -> Void)?
+
+    func setRemoteNeeds(topics: Set<String>, processTable: Bool) {
+        let cadenceChanged = topics.isEmpty != remoteTopics.isEmpty
+        remoteTopics = topics
+        remoteProcessTable = processTable
+        if cadenceChanged { restartTimerIfAwake() }
+    }
+
+    private var samplingInterval: Double {
+        let base = settings.effectiveRefreshInterval
+        guard !remoteTopics.isEmpty, !settings.isOnBattery, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return base }
+        return min(base, 1)
+    }
 
     /// Call when the main window opens/closes (ContentView appear/disappear).
     func setMainWindowVisible(_ visible: Bool) {
@@ -152,9 +168,11 @@ final class VitalsModel {
             topProcesses: showing(.overview, .memory),
             gpu: showing(.overview, .gpu, .history)
                 || menuBarPanelVisible
-                || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage)),
-            power: showing(.overview, .cpu, .gpu, .battery, .history),
-            networkDetails: showing(.overview, .network)
+                || (settings.showMenuBar && settings.menuBarMetrics.contains(.gpuUsage))
+                || remoteTopics.contains("gpu"),
+            power: showing(.overview, .cpu, .gpu, .battery, .history) || remoteTopics.contains("power"),
+            networkDetails: showing(.overview, .network) || remoteTopics.contains("network"),
+            processTable: remoteProcessTable
         )
     }
     private static let maxChartPoints = 300
@@ -213,7 +231,7 @@ final class VitalsModel {
     func start() {
         guard timer == nil, !isAsleep else { return }
         tick()
-        let interval = settings.effectiveRefreshInterval
+        let interval = samplingInterval
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -300,16 +318,17 @@ final class VitalsModel {
             guard !Task.isCancelled else { return }
             self.apply(snapshot, sampled: needs)
             self.assignIfChanged(&self.sensorsStalled, to: false)
+            self.onSampled?(snapshot.processTable)
         }
     }
 
     private func apply(_ snapshot: SensorSampler.Snapshot, sampled: SensorSampler.Needs) {
         let classified = snapshot.sensors
-        cpuSensors = classified.filter { $0.kind == .cpu }
+        assignIfChanged(&cpuSensors, to: classified.filter { $0.kind == .cpu })
         assignIfChanged(&gpuTemp, to: Self.average(of: classified, kind: .gpu))
         assignIfChanged(&ssdTemp, to: Self.average(of: classified, kind: .storage))
         assignIfChanged(&batteryTemp, to: Self.average(of: classified, kind: .battery))
-        fans = snapshot.fans
+        assignIfChanged(&fans, to: snapshot.fans)
         assignIfChanged(&hasSMC, to: snapshot.hasSMC)
         assignIfChanged(&thermalState, to: ProcessInfo.processInfo.thermalState)
         if let usage = snapshot.cpuUsage {
@@ -319,21 +338,21 @@ final class VitalsModel {
             } else {
                 cpuClusters = nil
             }
-            cpuPerCore = usage.perCore
+            assignIfChanged(&cpuPerCore, to: usage.perCore)
         }
-        memory = snapshot.memory
+        assignIfChanged(&memory, to: snapshot.memory)
         updateMemoryActivity(snapshot.memory)
-        topProcesses = snapshot.topProcesses
-        topMemoryProcesses = snapshot.topMemoryProcesses
-        battery = snapshot.battery
-        diskHealth = snapshot.diskHealth
+        assignIfChanged(&topProcesses, to: snapshot.topProcesses)
+        assignIfChanged(&topMemoryProcesses, to: snapshot.topMemoryProcesses)
+        assignIfChanged(&battery, to: snapshot.battery)
+        assignIfChanged(&diskHealth, to: snapshot.diskHealth)
         updateNetwork(snapshot.network)
         updateDiskIO(snapshot.diskIO)
         // A read taken this tick replaces the value, nil included (a stalled or
         // missing sensor); a skipped read holds the last one for display. History
         // below logs only fresh readings, so a skip is a gap, not a stale value.
-        if sampled.gpu { gpu = snapshot.gpu }
-        if sampled.power { power = snapshot.power }
+        if sampled.gpu { assignIfChanged(&gpu, to: snapshot.gpu) }
+        if sampled.power { assignIfChanged(&power, to: snapshot.power) }
         assignIfChanged(&hasLoaded, to: true)
 
         let freshGPU = sampled.gpu ? snapshot.gpu : nil
@@ -421,7 +440,7 @@ final class VitalsModel {
     private func updateNetwork(_ snapshot: NetworkSnapshot?) {
         guard let snapshot else { return }
         if hasNetworkBaseline {
-            network = snapshot
+            assignIfChanged(&network, to: snapshot)
         } else {
             hasNetworkBaseline = true
         }
@@ -431,7 +450,7 @@ final class VitalsModel {
     private func updateDiskIO(_ snapshot: DiskIOSnapshot?) {
         guard let snapshot else { return }
         if hasDiskIOBaseline {
-            diskIO = snapshot
+            assignIfChanged(&diskIO, to: snapshot)
         } else {
             hasDiskIOBaseline = true
         }

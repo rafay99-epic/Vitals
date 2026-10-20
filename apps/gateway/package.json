@@ -1,0 +1,21 @@
+{
+  "name": "@vitals/gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build --compile --minify --bytecode --target=bun-darwin-arm64 src/main.ts --outfile dist/vitals-gateway && codesign --force --sign - dist/vitals-gateway",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@vitals/contracts": "workspace:*",
+    "@vitals/shared": "workspace:*",
+    "@vitals/tailscale": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@vitals/client-runtime": "workspace:*"
+  }
+}

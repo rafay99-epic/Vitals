@@ -316,11 +316,28 @@ extension View {
 
 // MARK: - Chart hover support
 
-/// Tracks the cursor over a chart's plot area and reports the date under it.
+/// Draws the hover rule and tooltip in the chart's overlay. The hover state
+/// lives in the overlay, so moving the cursor never rebuilds the chart's marks.
 extension View {
-    func chartHover(_ hoverTime: Binding<Date?>) -> some View {
+    func chartHover<Rows: View>(
+        samples: [VitalsModel.Sample],
+        @ViewBuilder tooltip: @escaping (VitalsModel.Sample) -> Rows
+    ) -> some View {
         chartOverlay { proxy in
-            GeometryReader { geometry in
+            ChartHoverLayer(proxy: proxy, samples: samples, tooltip: tooltip)
+        }
+    }
+}
+
+private struct ChartHoverLayer<Rows: View>: View {
+    let proxy: ChartProxy
+    let samples: [VitalsModel.Sample]
+    let tooltip: (VitalsModel.Sample) -> Rows
+    @State private var hoverTime: Date?
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
                 Rectangle()
                     .fill(.clear)
                     .contentShape(Rectangle())
@@ -328,12 +345,25 @@ extension View {
                         switch phase {
                         case .active(let location):
                             guard let plotFrame = proxy.plotFrame else { return }
-                            let x = location.x - geometry[plotFrame].origin.x
-                            hoverTime.wrappedValue = proxy.value(atX: x)
+                            hoverTime = proxy.value(atX: location.x - geometry[plotFrame].origin.x)
                         case .ended:
-                            hoverTime.wrappedValue = nil
+                            hoverTime = nil
                         }
                     }
+                if let plotFrame = proxy.plotFrame,
+                   let sample = samples.nearest(to: hoverTime),
+                   let x = proxy.position(forX: sample.time) {
+                    let frame = geometry[plotFrame]
+                    Rectangle()
+                        .fill(.secondary.opacity(0.5))
+                        .frame(width: 1, height: frame.height)
+                        .position(x: frame.minX + x, y: frame.midY)
+                        .allowsHitTesting(false)
+                    HoverTooltip(time: sample.time) { tooltip(sample) }
+                        .fixedSize()
+                        .position(x: min(max(frame.minX + x, frame.minX + 70), frame.maxX - 70), y: frame.minY + 24)
+                        .allowsHitTesting(false)
+                }
             }
         }
     }

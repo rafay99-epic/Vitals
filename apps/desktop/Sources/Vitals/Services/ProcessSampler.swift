@@ -5,11 +5,22 @@ import PrivateSensors
 /// Per-process CPU usage from `proc_pid_rusage` deltas between samples. Same
 /// scale as Activity Monitor: 100% is one core, so multi-threaded work exceeds it.
 final class ProcessSampler {
-    struct Process: Identifiable {
+    struct Process: Identifiable, Equatable {
         let id: pid_t
         let name: String
         let cpuPercent: Double
         /// `ri_phys_footprint`, Activity Monitor's Memory column.
+        let memory: UInt64
+    }
+
+    struct Row: Equatable, Sendable {
+        let pid: pid_t
+        let ppid: pid_t
+        let uid: uid_t
+        let startTimeMs: Int64
+        let name: String
+        let path: String
+        let cpuPercent: Double
         let memory: UInt64
     }
 
@@ -18,9 +29,20 @@ final class ProcessSampler {
     struct Sampled {
         let byCPU: [Process]
         let byMemory: [Process]
+        let table: [Row]
 
-        static let empty = Sampled(byCPU: [], byMemory: [])
+        static let empty = Sampled(byCPU: [], byMemory: [], table: [])
     }
+
+    private struct Identity {
+        let ppid: pid_t
+        let uid: uid_t
+        let startTimeMs: Int64
+        let name: String
+        let path: String
+    }
+
+    private var identities: [pid_t: Identity] = [:]
 
     private var previousCPUTime: [pid_t: UInt64] = [:]
     private var previousSampleAt: UInt64 = 0
@@ -31,7 +53,7 @@ final class ProcessSampler {
         return Double(info.numer) / Double(info.denom)
     }()
 
-    func sample(top count: Int) -> Sampled {
+    func sample(top count: Int, includeTable: Bool = false) -> Sampled {
         let now = mach_absolute_time()
         let pidCount = proc_listallpids(nil, 0)
         // Cap the kernel-supplied count so a garbage value can't allocate an
@@ -98,7 +120,64 @@ final class ProcessSampler {
             .map { Process(id: $0.key, name: name($0.key),
                            cpuPercent: percentByPid[$0.key] ?? 0, memory: $0.value) }
 
-        return Sampled(byCPU: Array(byCPU), byMemory: Array(byMemory))
+        guard includeTable else {
+            identities.removeAll(keepingCapacity: true)
+            return Sampled(byCPU: Array(byCPU), byMemory: Array(byMemory), table: [])
+        }
+        var table: [Row] = []
+        table.reserveCapacity(currentMemory.count)
+        var nextIdentities: [pid_t: Identity] = [:]
+        for (pid, memory) in currentMemory {
+            guard let identity = identity(of: pid) else { continue }
+            nextIdentities[pid] = identity
+            table.append(Row(
+                pid: pid,
+                ppid: identity.ppid,
+                uid: identity.uid,
+                startTimeMs: identity.startTimeMs,
+                name: identity.name,
+                path: identity.path,
+                cpuPercent: percentByPid[pid] ?? 0,
+                memory: memory
+            ))
+        }
+        identities = nextIdentities
+        return Sampled(byCPU: Array(byCPU), byMemory: Array(byMemory), table: table)
+    }
+
+    private func identity(of pid: pid_t) -> Identity? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        let startTimeMs = Int64(info.pbi_start_tvsec) * 1000 + Int64(info.pbi_start_tvusec) / 1000
+        if let cached = identities[pid], cached.startTimeMs == startTimeMs { return cached }
+        return Identity(
+            ppid: pid_t(info.pbi_ppid),
+            uid: info.pbi_uid,
+            startTimeMs: startTimeMs,
+            name: Self.name(of: pid),
+            path: Self.path(of: pid) ?? ""
+        )
+    }
+
+    static func path(of pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
+    }
+
+    static func startTimeMs(of pid: pid_t) -> Int64? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return Int64(info.pbi_start_tvsec) * 1000 + Int64(info.pbi_start_tvusec) / 1000
+    }
+
+    static func owner(of pid: pid_t) -> uid_t? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return info.pbi_uid
     }
 
     private static func name(of pid: pid_t) -> String {
@@ -112,6 +191,9 @@ final class ProcessSampler {
                 let isVersionLike = executable.allSatisfy { $0.isNumber || $0 == "." }
                 if isVersionLike, let bundle = components.last(where: { $0.hasSuffix(".app") }) {
                     return String(bundle.dropLast(4))
+                }
+                if isVersionLike, let versions = components.lastIndex(of: "versions"), versions > components.startIndex {
+                    return "\(components[versions - 1]) \(executable)"
                 }
                 return String(executable)
             }

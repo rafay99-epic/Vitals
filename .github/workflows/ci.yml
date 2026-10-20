@@ -18,11 +18,15 @@ on:
     branches: [main]
     paths:
       - "apps/desktop/**"
+      - "apps/gateway/**"
+      - "packages/contracts/**"
       - ".github/workflows/ci.yml"
       - ".github/scripts/**"
   pull_request:
     paths:
       - "apps/desktop/**"
+      - "apps/gateway/**"
+      - "packages/contracts/**"
       - ".github/workflows/ci.yml"
       - ".github/scripts/**"
 
@@ -68,6 +72,15 @@ jobs:
     needs: [test, lint]
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
       - name: Build app and installer
         run: |
           ./build.sh
@@ -110,6 +123,19 @@ jobs:
           MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
           MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install workspace dependencies
+
+        working-directory: .
+
+        run: pnpm install --frozen-lockfile
 
       - name: Build app and installer
         run: |

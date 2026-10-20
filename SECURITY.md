@@ -64,7 +64,7 @@ notes when they ask.
   the root fan helper (`FanDaemon`), app uninstall/cleanup, privileged shell
   execution (`PrivilegedShell`), local settings/history, and the in-app updater
   (GitHub release download and install).
-- **Vitals website** (`apps/website`) — pages, client-side code, and build output
+- **Vitals website** (`apps/marketing`) — pages, client-side code, and build output
   served to users.
 - **Convex backend** (`convex/`) — functions and configuration in this
   repository (the live GitHub release proxy).

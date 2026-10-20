@@ -7,7 +7,6 @@ struct PerformanceHistoryCard: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
     @State private var metric: Metric = .temp
-    @State private var hoverTime: Date?
     @Namespace private var indicator
 
     enum Metric: String, CaseIterable, Identifiable {
@@ -106,14 +105,6 @@ struct PerformanceHistoryCard: View {
     private var chart: some View {
         Chart {
             marks
-            if let sample = chartHistory.nearest(to: hoverTime) {
-                RuleMark(x: .value("Time", sample.time))
-                    .foregroundStyle(.secondary.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-                    .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                        HoverTooltip(time: sample.time) { tooltip(sample) }
-                    }
-            }
         }
         // Scope the legend/colors to the selected metric's series only. A global
         // scale would list every series (Memory/Swap) even on the Temp view.
@@ -121,7 +112,7 @@ struct PerformanceHistoryCard: View {
         .chartYScale(domain: yDomain)
         .chartYAxisLabel(axisLabel)
         .chartLegend(multiSeries ? .visible : .hidden)
-        .chartHover($hoverTime)
+        .chartHover(samples: chartHistory) { tooltip($0) }
     }
 
     @ChartContentBuilder

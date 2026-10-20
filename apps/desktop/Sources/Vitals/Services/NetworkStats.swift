@@ -30,7 +30,7 @@ struct WiFiInfo: Equatable, Sendable {
 }
 
 /// One tick's network reading across all counted physical interfaces.
-struct NetworkSnapshot: Sendable {
+struct NetworkSnapshot: Equatable, Sendable {
     var links: [NetworkLink]          // physical interfaces, active ones first
     var totalInPerSec: Double         // sum over counted interfaces
     var totalOutPerSec: Double

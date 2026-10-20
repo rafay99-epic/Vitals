@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var historyModel = HistoryModel()
 
     private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .history]
-    private static let maintain: [NavSection] = [.diskHealth, .cleanup, .applications]
+    private static let maintain: [NavSection] = [.diskHealth, .cleanup, .applications, .remote]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -171,6 +171,8 @@ struct ContentView: View {
                 CleanupView(model: cleanupModel)
             case .applications:
                 AppsView(model: appsModel)
+            case .remote:
+                RemoteView()
             case .settings:
                 SettingsView()
             }

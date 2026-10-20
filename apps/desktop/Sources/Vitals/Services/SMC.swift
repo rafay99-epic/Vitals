@@ -6,7 +6,7 @@ import PrivateSensors
 /// the one write (`setFanAutomatic`) needs root and only runs from the retired
 /// fan helper (`FanHelperRetirement`).
 final class SMC {
-    struct Fan: Identifiable {
+    struct Fan: Identifiable, Equatable {
         let id: Int
         let rpm: Double
         let minRPM: Double

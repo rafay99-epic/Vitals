@@ -1,0 +1,81 @@
+{
+  "name": "@vitals/app",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@vitals/client-runtime": "workspace:*",
+    "@vitals/contracts": "workspace:*",
+    "@vitals/shared": "workspace:*",
+    "@vitals/ui": "workspace:*",
+    "effect": "catalog:"
+  },
+  "peerDependencies": {
+    "@react-navigation/bottom-tabs": "*",
+    "@react-navigation/native": "*",
+    "@react-navigation/native-stack": "*",
+    "@shopify/react-native-skia": "*",
+    "expo-camera": "*",
+    "expo-constants": "*",
+    "expo-device": "*",
+    "expo-haptics": "*",
+    "expo-network": "*",
+    "expo-notifications": "*",
+    "expo-secure-store": "*",
+    "expo-sqlite": "*",
+    "expo-status-bar": "*",
+    "react": "*",
+    "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-reanimated": "*",
+    "react-native-safe-area-context": "*",
+    "react-native-screens": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo-camera": {
+      "optional": true
+    },
+    "expo-haptics": {
+      "optional": true
+    },
+    "expo-notifications": {
+      "optional": true
+    },
+    "expo-secure-store": {
+      "optional": true
+    },
+    "expo-sqlite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@react-navigation/bottom-tabs": "7.21.0",
+    "@react-navigation/native": "7.5.1",
+    "@react-navigation/native-stack": "7.21.0",
+    "@shopify/react-native-skia": "catalog:",
+    "@types/react": "catalog:",
+    "expo": "catalog:",
+    "expo-camera": "~58.0.11",
+    "expo-constants": "~58.0.12",
+    "expo-device": "~58.0.5",
+    "expo-haptics": "~58.0.7",
+    "expo-network": "~58.0.3",
+    "expo-notifications": "~58.1.5",
+    "expo-secure-store": "~58.0.2",
+    "expo-sqlite": "~58.0.13",
+    "expo-status-bar": "~58.0.3",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-css": "catalog:",
+    "react-native-gesture-handler": "catalog:",
+    "react-native-reanimated": "catalog:",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-worklets": "catalog:"
+  }
+}

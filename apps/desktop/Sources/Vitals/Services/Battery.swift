@@ -2,7 +2,7 @@ import Foundation
 import IOKit
 import IOKit.ps
 
-struct BatterySnapshot {
+struct BatterySnapshot: Equatable {
     let percent: Double
     let isCharging: Bool
     let externalPower: Bool
@@ -36,7 +36,7 @@ struct BatterySnapshot {
 }
 
 /// The attached power adapter, from `AppleSmartBattery`'s `AdapterDetails`.
-struct AdapterInfo {
+struct AdapterInfo: Equatable {
     /// Rated wattage (`AdapterDetails["Watts"]`).
     let watts: Int?
     /// Negotiated voltage in volts.

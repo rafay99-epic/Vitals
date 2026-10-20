@@ -5,7 +5,7 @@ import SwiftUI
 enum NavSection: String, CaseIterable, Identifiable {
     case overview
     case cpu, gpu, memory, battery, network, sensors, history
-    case diskHealth, cleanup, applications
+    case diskHealth, cleanup, applications, remote
     case settings
 
     var id: String { rawValue }
@@ -23,6 +23,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .diskHealth:   return "Disk Health"
         case .cleanup:      return "Cleanup"
         case .applications: return "Applications"
+        case .remote:       return "Remote"
         case .settings:     return "Settings"
         }
     }
@@ -40,6 +41,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .diskHealth:   return "internaldrive"
         case .cleanup:      return "sparkles"
         case .applications: return "square.grid.2x2"
+        case .remote:       return "iphone.radiowaves.left.and.right"
         case .settings:     return "gearshape"
         }
     }

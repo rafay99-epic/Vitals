@@ -18,6 +18,7 @@ actor SensorSampler {
         let diskHealth: DiskHealthSnapshot?
         let network: NetworkSnapshot?
         let diskIO: DiskIOSnapshot?
+        let processTable: [ProcessSampler.Row]
     }
 
     private let hid = HIDSensors()
@@ -50,6 +51,7 @@ actor SensorSampler {
         var power = false
         /// Wi-Fi link details and the default route.
         var networkDetails = false
+        var processTable = false
     }
 
     /// The previous tick's needs. Power and process CPU are deltas against the
@@ -65,8 +67,11 @@ actor SensorSampler {
             let battery = Battery.read(officialHealth: batteryHealth)
             if battery != nil { refreshBatteryHealthIfStale() }
             refreshDiskHealthIfStale()
-            var processes = needs.topProcesses ? processSampler.sample(top: 5) : .empty
-            if !previousNeeds.topProcesses { processes = .empty }
+            let sweep = needs.topProcesses || needs.processTable
+            var processes = sweep ? processSampler.sample(top: 5, includeTable: needs.processTable) : .empty
+            if !(previousNeeds.topProcesses || previousNeeds.processTable) {
+                processes = ProcessSampler.Sampled(byCPU: [], byMemory: [], table: processes.table)
+            }
             var powerReading = needs.power ? power.sample() : nil
             if !previousNeeds.power { powerReading = nil }
             return Snapshot(
@@ -85,7 +90,8 @@ actor SensorSampler {
                 // Byte counters are one sysctl, read every tick so the menu bar
                 // and history get a continuous series.
                 network: network.sample(includeDetails: needs.networkDetails),
-                diskIO: disk.sample()
+                diskIO: disk.sample(),
+                processTable: processes.table
             )
         }
     }

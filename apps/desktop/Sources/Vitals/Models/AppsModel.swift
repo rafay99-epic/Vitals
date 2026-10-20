@@ -79,11 +79,11 @@ final class AppsModel {
         var outcome: Outcome
     }
 
-    private(set) var apps: [InstalledApp] = []
+    private(set) var apps: [InstalledApp] = [] { didSet { refilter() } }
     private(set) var isScanning = false
     var selection: Set<URL> = []
-    var searchText = ""
-    var sortOrder: SortOrder = .name
+    var searchText = "" { didSet { if searchText != oldValue { refilter() } } }
+    var sortOrder: SortOrder = .name { didSet { if sortOrder != oldValue { refilter() } } }
     var staged: StagedUninstall?
     private(set) var isPreparingUninstall = false
     /// Non-nil while an uninstall runs; the sheet (bound to `staged`) shows it.
@@ -95,7 +95,9 @@ final class AppsModel {
     private let inventory = AppInventory()
     @ObservationIgnored private var sizeTask: Task<Void, Never>?
 
-    var filteredApps: [InstalledApp] {
+    private(set) var filteredApps: [InstalledApp] = []
+
+    private func refilter() {
         var result = apps
         if !searchText.isEmpty {
             result = result.filter {
@@ -106,7 +108,7 @@ final class AppsModel {
         if sortOrder == .size {
             result = result.sorted { ($0.sizeBytes ?? 0) > ($1.sizeBytes ?? 0) }
         }
-        return result
+        filteredApps = result
     }
 
     var selectedApps: [InstalledApp] {

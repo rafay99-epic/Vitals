@@ -21,15 +21,15 @@ informed by Mole; no code was copied.
 This is a **bun + turbo monorepo**:
 
 - `apps/desktop` — the macOS app (Swift / SwiftUI, SwiftPM).
-- `apps/website` — the marketing site (React + Vite + Tailwind v4, TanStack Router).
+- `apps/marketing` — the marketing site (React + Vite + Tailwind v4, TanStack Router).
 - `convex/` — a deliberately thin Convex backend (live GitHub proxy; no database).
 
 ## Getting set up
 
 ```sh
-bun install                  # once, from the repo root
-bun run dev                  # website (vite) + convex dev together
-bun run build / lint / test  # everything, via turbo
+pnpm install                  # once, from the repo root
+pnpm dev                  # website (vite) + convex dev together
+pnpm build / lint / test  # everything, via turbo
 ```
 
 For the **desktop app** (from `apps/desktop`, requires macOS):

@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The menu bar dropdown: live readings and sparklines, in the main window's
 /// design language.
@@ -60,8 +59,8 @@ struct MenuBarPanel: View {
 
     // MARK: Sparklines
 
-    /// The dropdown's charts are 36 px tall, so 100 points is already more than
-    /// one per pixel, and fewer marks open the panel faster.
+    /// The dropdown's sparklines are 36 px tall, so 100 points is already more
+    /// than one per pixel.
     private var sparkData: [VitalsModel.Sample] {
         model.chartHistory.thinned(to: 100)
     }
@@ -76,105 +75,49 @@ struct MenuBarPanel: View {
             sparkline(
                 title: "Temp",
                 value: model.hottestCPUSensor.map { settings.format($0.celsius, decimals: 0) } ?? "—",
-                color: .orange
-            ) {
-                ForEach(data) { sample in
-                    LineMark(x: .value("t", sample.time), y: .value("v", sample.hottestCPU))
-                        .foregroundStyle(.orange)
-                        .interpolationMethod(.catmullRom)
-                }
-            }
+                color: .orange,
+                values: data.map(\.hottestCPU)
+            )
             sparkline(
                 title: "CPU",
                 value: String(format: "%.0f%%", model.cpuUsage),
-                color: .blue
-            ) {
-                ForEach(data) { sample in
-                    AreaMark(x: .value("t", sample.time), y: .value("v", sample.usage))
-                        .foregroundStyle(.blue.opacity(0.18))
-                        .interpolationMethod(.catmullRom)
-                    LineMark(x: .value("t", sample.time), y: .value("v", sample.usage))
-                        .foregroundStyle(.blue)
-                        .interpolationMethod(.catmullRom)
-                }
-            }
+                color: .blue,
+                values: data.map(\.usage)
+            )
             sparkline(
                 title: "Memory",
                 value: String(format: "%.1fG", gigabytes(model.memory?.used ?? 0)),
-                color: .indigo
-            ) {
-                ForEach(data) { sample in
-                    AreaMark(x: .value("t", sample.time), y: .value("v", gigabytes(sample.memoryUsed)))
-                        .foregroundStyle(.indigo.opacity(0.18))
-                        .interpolationMethod(.catmullRom)
-                    LineMark(x: .value("t", sample.time), y: .value("v", gigabytes(sample.memoryUsed)))
-                        .foregroundStyle(.indigo)
-                        .interpolationMethod(.catmullRom)
-                }
-            }
+                color: .indigo,
+                values: data.map { gigabytes($0.memoryUsed) }
+            )
             if let network = model.network {
                 sparkline(
                     title: "Network",
                     value: "↓ " + NetworkFormat.rate(network.totalInPerSec),
-                    color: .mint
-                ) {
-                    ForEach(data) { sample in
-                        if let down = sample.netInPerSec {
-                            AreaMark(x: .value("t", sample.time), y: .value("v", down))
-                                .foregroundStyle(.mint.opacity(0.18))
-                                .interpolationMethod(.catmullRom)
-                            LineMark(x: .value("t", sample.time), y: .value("v", down))
-                                .foregroundStyle(.mint)
-                                .interpolationMethod(.catmullRom)
-                        }
-                    }
-                }
+                    color: .mint,
+                    values: data.compactMap(\.netInPerSec)
+                )
             }
             if let diskIO = model.diskIO {
                 sparkline(
                     title: "Disk",
                     value: "R " + NetworkFormat.rate(diskIO.readPerSec),
-                    color: .yellow
-                ) {
-                    ForEach(data) { sample in
-                        if let read = sample.diskReadPerSec {
-                            AreaMark(x: .value("t", sample.time), y: .value("v", read))
-                                .foregroundStyle(.yellow.opacity(0.18))
-                                .interpolationMethod(.catmullRom)
-                            LineMark(x: .value("t", sample.time), y: .value("v", read))
-                                .foregroundStyle(.yellow)
-                                .interpolationMethod(.catmullRom)
-                        }
-                    }
-                }
+                    color: .yellow,
+                    values: data.compactMap(\.diskReadPerSec)
+                )
             }
             if let utilization = model.gpu?.utilization {
                 sparkline(
                     title: "GPU",
                     value: String(format: "%.0f%%", utilization),
-                    color: .purple
-                ) {
-                    ForEach(data) { sample in
-                        if let usage = sample.gpuUsage {
-                            AreaMark(x: .value("t", sample.time), y: .value("v", usage))
-                                .foregroundStyle(.purple.opacity(0.18))
-                                .interpolationMethod(.catmullRom)
-                            LineMark(x: .value("t", sample.time), y: .value("v", usage))
-                                .foregroundStyle(.purple)
-                                .interpolationMethod(.catmullRom)
-                        }
-                    }
-                }
+                    color: .purple,
+                    values: data.compactMap(\.gpuUsage)
+                )
             }
         }
     }
 
-    private func sparkline<Content: ChartContent>(
-        title: String,
-        value: String,
-        color: Color,
-        @ChartContentBuilder content: () -> Content
-    ) -> some View {
+    private func sparkline(title: String, value: String, color: Color, values: [Double]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title)
@@ -187,9 +130,7 @@ struct MenuBarPanel: View {
                     .numericTransition()
                     .foregroundStyle(color)
             }
-            Chart(content: content)
-                .chartXAxis(.hidden)
-                .chartYAxis(.hidden)
+            Sparkline(values: values, tint: color)
                 .frame(height: 36)
         }
         .padding(8)

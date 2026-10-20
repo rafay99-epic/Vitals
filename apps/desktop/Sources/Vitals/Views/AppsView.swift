@@ -250,7 +250,12 @@ struct AppsView: View {
                             .opacity(0.35)
                             .padding(.leading, 66)
                     }
-                    AppRow(app: app, isSelected: selectionBinding(for: app))
+                    AppRow(
+                        app: app,
+                        isSelected: app.protectedReason == nil && model.selection.contains(app.id),
+                        toggle: { toggleSelection(app) }
+                    )
+                    .equatable()
                 }
             }
             .background(
@@ -265,18 +270,13 @@ struct AppsView: View {
         }
     }
 
-    private func selectionBinding(for app: InstalledApp) -> Binding<Bool> {
-        Binding(
-            get: { app.protectedReason == nil && model.selection.contains(app.id) },
-            set: { selected in
-                guard app.protectedReason == nil else { return }
-                if selected {
-                    model.selection.insert(app.id)
-                } else {
-                    model.selection.remove(app.id)
-                }
-            }
-        )
+    private func toggleSelection(_ app: InstalledApp) {
+        guard app.protectedReason == nil else { return }
+        if model.selection.contains(app.id) {
+            model.selection.remove(app.id)
+        } else {
+            model.selection.insert(app.id)
+        }
     }
 
     private var allVisibleSelected: Bool {
@@ -333,14 +333,19 @@ struct AppsView: View {
 
 // MARK: - Row
 
-private struct AppRow: View {
+private struct AppRow: View, Equatable {
     let app: InstalledApp
-    @Binding var isSelected: Bool
+    let isSelected: Bool
+    let toggle: () -> Void
     @State private var hovered = false
+
+    static func == (lhs: AppRow, rhs: AppRow) -> Bool {
+        lhs.app == rhs.app && lhs.isSelected == rhs.isSelected
+    }
 
     var body: some View {
         Button {
-            isSelected.toggle()
+            toggle()
         } label: {
             HStack(spacing: 11) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")

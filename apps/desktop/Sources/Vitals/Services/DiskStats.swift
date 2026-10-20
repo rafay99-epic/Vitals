@@ -3,7 +3,7 @@ import IOKit
 
 /// Whole-machine disk throughput for one tick, summed over every block-storage
 /// driver. 0 on the first sample.
-struct DiskIOSnapshot: Sendable {
+struct DiskIOSnapshot: Equatable, Sendable {
     var readPerSec: Double      // bytes/s, summed over drivers
     var writePerSec: Double
 }

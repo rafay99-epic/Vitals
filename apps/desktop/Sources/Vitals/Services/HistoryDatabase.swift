@@ -255,6 +255,58 @@ final class HistoryDatabase: @unchecked Sendable {
 
     /// The most recent fired alerts, newest first. `id DESC` breaks ts ties so the
     /// order is deterministic (insertion order) rather than arbitrary.
+    struct Bucket: Equatable, Sendable {
+        let time: Int64
+        let min: Double
+        let avg: Double
+        let max: Double
+    }
+
+    static let seriesColumns: [String: String] = [
+        "cpu": "cpu_usage",
+        "gpu": "gpu_usage",
+        "cpuTemp": "avg_cpu",
+        "gpuTemp": "gpu_temp",
+        "fanRpm": "fan_rpm",
+        "memoryUsedGb": "memory_gb",
+        "battery": "battery_pct",
+        "socWatts": "soc_watts",
+        "batteryWatts": "battery_watts",
+        "networkIn": "net_in_bps",
+        "networkOut": "net_out_bps",
+        "diskRead": "disk_read_bps",
+        "diskWrite": "disk_write_bps",
+    ]
+
+    func buckets(series: String, from: Int64, to: Int64, points: Int) -> [Bucket]? {
+        guard let column = Self.seriesColumns[series], to > from, points > 0 else { return nil }
+        let width = max(1, (to - from) / Int64(points))
+        return queue.sync {
+            guard let db else { return [] }
+            let sql = """
+            SELECT (ts - ?1) / ?3 AS bucket, min(\(column)), avg(\(column)), max(\(column))
+            FROM samples WHERE ts >= ?1 AND ts < ?2 AND \(column) IS NOT NULL
+            GROUP BY bucket ORDER BY bucket;
+            """
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_int64(stmt, 1, from)
+            sqlite3_bind_int64(stmt, 2, to)
+            sqlite3_bind_int64(stmt, 3, width)
+            var result: [Bucket] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                result.append(Bucket(
+                    time: from + sqlite3_column_int64(stmt, 0) * width,
+                    min: sqlite3_column_double(stmt, 1),
+                    avg: sqlite3_column_double(stmt, 2),
+                    max: sqlite3_column_double(stmt, 3)
+                ))
+            }
+            return result
+        }
+    }
+
     func recentAlerts(limit: Int) -> [AlertEvent] {
         queue.sync {
             guard let db else { return [] }
