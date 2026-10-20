@@ -81,13 +81,12 @@ Apple native design language below.
 - `VITALS_CHANNEL` (read by `build.sh` + `make-dmg.sh`) selects the channel; **default
   `stable`**, so `ci.yml`'s release path is unaffected. The three channels:
   - **`stable`** → `Vitals.app` / `Vitals.dmg`, bundle `…vitals`, data `~/.vitals`,
-    red icon, clean numeric version. Cask `vitals`.
+    green beat icon, clean numeric version. Cask `vitals`.
   - **`nightly`** → `Vitals Nightly.app` / `Vitals-Nightly.dmg`, bundle `…vitals.nightly`,
-    data `~/.vitals-nightly`, amber+`NIGHTLY` icon, version `…-nightly`, baked
+    data `~/.vitals-nightly`, amber beat icon, version `…-nightly`, baked
     `VitalsBuildInfo` (`branch@sha`) + `VitalsBuildNumber` (`VITALS_BUILD`, CI run number).
     Cask `vitals-nightly`.
-  - **`dev`** → `Vitals Dev.app`, bundle `…vitals.dev`, data `~/.vitals-dev`, purple+`DEV`
-    icon, version `…-dev`. **Local only — never publishes a DMG (`make-dmg.sh` errors on
+  - **`dev`** → `Vitals Dev.app`, bundle `…vitals.dev`, data `~/.vitals-dev`, violet beat icon, version `…-dev`. **Local only — never publishes a DMG (`make-dmg.sh` errors on
     `dev`) and its updater is disabled** (`Channel.updatesEnabled == false`).
   All install side by side and run at once — the single-instance guard keys off
   `Bundle.main.bundleIdentifier`.
@@ -106,6 +105,9 @@ Apple native design language below.
   updater (`fetchLatestPrerelease`) tracks the **newest pre-release** and orders by
   `VitalsBuildNumber`. The release DMG must contain `<CFBundleName>.app`
   (`Updater.bundleInImage`).
+- **App icons** are Icon Composer files at `apps/desktop/Resources/Icons/<channel>/AppIcon.icon`; `build.sh`
+  compiles them with `actool` into `Assets.car` (default, dark and tinted) plus `AppIcon.icns`. The phone apps' icons
+  and splash come from `apps/mobile/scripts/brand.swift` (`swift scripts/brand.swift assets` from `apps/mobile`).
 - **`./dev.sh`** builds the current branch as Dev (local, no updater). **`./nightly.sh`**
   builds it as Nightly locally next to Stable (build number 0, so it'll offer to pull the
   published Nightly).
