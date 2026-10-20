@@ -24,6 +24,9 @@
       ]
     },
     "apps/mobile": {
+      "entry": [
+        "fingerprint.config.js"
+      ],
       "ignoreDependencies": [
         "babel-plugin-react-compiler"
       ]
