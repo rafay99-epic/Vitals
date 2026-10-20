@@ -85,8 +85,12 @@ class SessionManager {
   async forget(): Promise<void> {
     const current = this.session.get();
     if (Platform.OS === "web") {
+      if (current.status === "paired") current.remote.connection.suspend();
       if (!(await clearCredentials())) {
-        if (current.status === "paired") current.remote.show("Could not reach your Mac to unpair. Try again.", "bad");
+        if (current.status === "paired") {
+          current.remote.connection.wake("manual");
+          current.remote.show("Could not reach your Mac to unpair. Try again.", "bad");
+        }
         return;
       }
       this.close();
