@@ -1,0 +1,101 @@
+apps/marketing/src/pages/Releases.tsx
+  s_1d0dcbd2b75ee5::t_987ed71ca04b3a 1-5,8,10,12-16,18-21,24-26,29-30,32,34-35,37,39-42,44,51-54,56-70,72-73,77,79-83,88-93,95-119
+  s_1d0dcbd2b75ee5::t_34b1dd5930e690 120-125
+apps/marketing/src/lib/waves.ts
+  s_1d0dcbd2b75ee5::t_928e3c0c95f77c 1-89
+apps/marketing/src/pages/ReleaseNotes.tsx
+  s_1d0dcbd2b75ee5::t_1ac7bffd76f521 1-76
+  s_1d0dcbd2b75ee5::t_2e469b550defb2 77-82
+apps/marketing/src/pages/LegalLayout.tsx
+  s_1d0dcbd2b75ee5::t_72a0ecee744092 1-2,4-8,10-13,15-33,35-44,46-54,60-63,70,74,78,82,87
+apps/marketing/src/index.css
+  s_1d0dcbd2b75ee5::t_ced9cf5c4add91 3-97,104,113-114,119-121,125,132,136,139-140,144-146,149-151,153-165,168-171,174-176,179-182,185-189,192-197,200-203,205-214
+apps/marketing/e2e/check.mjs
+  s_1d0dcbd2b75ee5::t_8d0dedc28e5f17 81,83-84,144-145
+apps/marketing/index.html
+  s_1d0dcbd2b75ee5::t_35af2eb1fa6182 7-9,12,18,21,27,30,33,37
+apps/marketing/public/favicon.svg
+  s_1d0dcbd2b75ee5::t_3af48aa7d38d70 2-3
+apps/marketing/public/fonts/OFL-Geist.txt
+  s_1d0dcbd2b75ee5::t_01d09e05504456 1-93
+apps/marketing/public/fonts/OFL-GeistMono.txt
+  s_1d0dcbd2b75ee5::t_d046803f91c6c5 1-93
+apps/marketing/public/fonts/OFL-InstrumentSerif.txt
+  s_1d0dcbd2b75ee5::t_a10ee37b5818c1 1-93
+apps/marketing/src/App.tsx
+  s_1d0dcbd2b75ee5::t_b09996a161f5fc 1-10,14,16-26
+apps/marketing/src/components/home/Admit.tsx
+  s_1d0dcbd2b75ee5::t_19dda355a67176 1-70
+apps/marketing/src/components/home/Alarms.tsx
+  s_1d0dcbd2b75ee5::t_715948bcceb335 1-66
+apps/marketing/src/components/home/Breathing.tsx
+  s_1d0dcbd2b75ee5::t_c249a328dfbd74 1-72
+apps/marketing/src/components/home/ChartLanes.tsx
+  s_1d0dcbd2b75ee5::t_62963bce682410 1-74
+apps/marketing/src/components/home/Discharge.tsx
+  s_1d0dcbd2b75ee5::t_af85785813d42f 1-84
+apps/marketing/src/components/home/Hero.tsx
+  s_1d0dcbd2b75ee5::t_fc5e0d741087be 1-58
+apps/marketing/src/components/home/Phones.tsx
+  s_1d0dcbd2b75ee5::t_8a67aba1794246 1-164
+apps/marketing/src/components/home/Private.tsx
+  s_1d0dcbd2b75ee5::t_0b721d7e77f7b0 1-45
+apps/marketing/src/components/home/Rounds.tsx
+  s_1d0dcbd2b75ee5::t_b7f140c1798ea6 1-39
+apps/marketing/src/components/home/Sensors.tsx
+  s_1d0dcbd2b75ee5::t_a6b28d54fb70c8 1-48
+apps/marketing/src/components/layout/Footer.tsx
+  s_1d0dcbd2b75ee5::t_d84bfcd833a989 1-51
+apps/marketing/src/components/layout/Nav.tsx
+  s_1d0dcbd2b75ee5::t_d8945442b201e0 1-72
+apps/marketing/src/components/layout/Page.tsx
+  s_1d0dcbd2b75ee5::t_6907029e8503c1 1-13
+apps/marketing/src/components/ui/BeatSwitch.tsx
+  s_1d0dcbd2b75ee5::t_b5634579d28144 1-13
+apps/marketing/src/components/ui/Button.tsx
+  s_1d0dcbd2b75ee5::t_979f19d98b0430 1-11
+apps/marketing/src/components/ui/CommandLine.tsx
+  s_1d0dcbd2b75ee5::t_913716872050f7 1-24
+apps/marketing/src/components/ui/Hold.tsx
+  s_1d0dcbd2b75ee5::t_0d94496bb2b97e 1-50
+apps/marketing/src/components/ui/Mark.tsx
+  s_1d0dcbd2b75ee5::t_4fbd6ae0cdf87c 1-15
+apps/marketing/src/components/ui/Reveal.tsx
+  s_1d0dcbd2b75ee5::t_a80bca7ff44804 1-32
+apps/marketing/src/components/ui/Trace.tsx
+  s_1d0dcbd2b75ee5::t_90c04daecaeb10 1-28
+apps/marketing/src/components/ui/buttonClass.ts
+  s_1d0dcbd2b75ee5::t_0c965f2fee14c2 1-12
+apps/marketing/src/components/ui/text.tsx
+  s_1d0dcbd2b75ee5::t_59386229233196 1-21
+apps/marketing/src/lib/channels.ts
+  s_1d0dcbd2b75ee5::t_c879e689dba445 1-26
+apps/marketing/src/lib/useLiveVitals.test.ts
+  s_1d0dcbd2b75ee5::t_ee30e94e59e533 1-36
+apps/marketing/src/lib/useLiveVitals.ts
+  s_1d0dcbd2b75ee5::t_06681242c9c886 1-2,4-5,7-17,20,22-31,33-42,44-83,87-91
+apps/marketing/src/lib/waves.test.ts
+  s_1d0dcbd2b75ee5::t_10c391f9de7793 1-35
+apps/marketing/src/pages/ErrorScreen.tsx
+  s_1d0dcbd2b75ee5::t_a007aae475fd9f 1-3,5-6,9,12-20,23-24,26-27
+apps/marketing/src/pages/NotFound.tsx
+  s_1d0dcbd2b75ee5::t_5ce698daaceab4 1-3,5-6,9-10,13-20,23-24,26-27
+apps/marketing/src/pages/StatusScreen.tsx
+  s_1d0dcbd2b75ee5::t_dcbe71944adf90 2-3,5-12,14-19,21,23-39,43,45-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0baeb1575771918f318d582c4c903f8d9b20ed19",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
