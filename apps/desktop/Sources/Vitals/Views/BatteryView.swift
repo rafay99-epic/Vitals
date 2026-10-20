@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The Battery section: capacity vs design, cycles, condition, charge trend,
 /// adapter negotiation, and the pack's electrical readings (AppleSmartBattery).
@@ -120,25 +119,14 @@ private struct BatteryHistoryCard: View {
     @Environment(VitalsModel.self) private var model
 
     var body: some View {
-        SectionCard(title: "Charge history", symbol: "chart.xyaxis.line") {
-            Deferred { chart }.frame(height: 150)
+        ChartCard(title: "Charge history", symbol: "chart.xyaxis.line") {
+            MetricChart(
+                samples: model.chartHistory,
+                series: [.init(name: "Charge", color: .green, area: 0.35) { $0.batteryPercent }],
+                yLabel: "%",
+                yDomain: 0...100
+            )
         }
-    }
-
-    private var chart: some View {
-        Chart(model.chartHistory) { sample in
-            if let percent = sample.batteryPercent {
-                AreaMark(x: .value("Time", sample.time), y: .value("Charge", percent))
-                    .foregroundStyle(LinearGradient(colors: [.green.opacity(0.35), .green.opacity(0.02)],
-                                                    startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time), y: .value("Charge", percent))
-                    .foregroundStyle(.green)
-                    .interpolationMethod(.catmullRom)
-            }
-        }
-        .chartYScale(domain: 0...100)
-        .chartYAxisLabel("%")
     }
 }
 
@@ -237,28 +225,17 @@ private struct BatteryPowerDrawCard: View {
     @Environment(VitalsModel.self) private var model
 
     var body: some View {
-        SectionCard(title: "Power draw", symbol: "bolt.fill") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Total system-on-chip package power — the live pull on the battery or adapter.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Deferred { chart }.frame(height: 150)
-            }
+        ChartCard(
+            title: "Power draw",
+            symbol: "bolt.fill",
+            note: "Total system-on-chip package power — the live pull on the battery or adapter."
+        ) {
+            MetricChart(
+                samples: model.chartHistory,
+                series: [.init(name: "Power", color: .orange, area: 0.32) { $0.totalWatts }],
+                yLabel: "W"
+            )
         }
-    }
-
-    private var chart: some View {
-        Chart(model.chartHistory) { sample in
-            if let watts = sample.totalWatts {
-                AreaMark(x: .value("Time", sample.time), y: .value("Watts", watts))
-                    .foregroundStyle(LinearGradient(colors: [.orange.opacity(0.32), .orange.opacity(0.02)],
-                                                    startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time), y: .value("Watts", watts))
-                    .foregroundStyle(.orange)
-                    .interpolationMethod(.catmullRom)
-            }
-        }
-        .chartYAxisLabel("W")
     }
 }
 

@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The Memory section: the `MemoryCard` hero, then usage over time, the full
 /// composition, live VM page traffic, and the top memory consumers.
@@ -27,51 +26,18 @@ private struct MemoryUsageHistoryCard: View {
         let maxSwapGB = model.chartHistory.reduce(0.0) { max($0, gigabytes($1.swapUsed)) }
         let hasSwap = maxSwapGB > 0
         let upperGB = max(gigabytes(model.memoryTotal), maxSwapGB, 1)
-        return SectionCard(title: "Usage history", symbol: "chart.xyaxis.line") {
-            VStack(alignment: .leading, spacing: 10) {
-                Deferred { chart(hasSwap: hasSwap, upperGB: upperGB) }.frame(height: 150)
-                legend(hasSwap: hasSwap)
-            }
+        var series: [ChartSeries<VitalsModel.Sample>] = [
+            .init(name: "Used", color: .blue, area: 0.35) { gigabytes($0.memoryUsed) },
+        ]
+        if hasSwap {
+            series.append(.init(name: "Swap", color: .orange) { gigabytes($0.swapUsed) })
         }
-    }
-
-    private func chart(hasSwap: Bool, upperGB: Double) -> some View {
-        Chart(model.chartHistory) { sample in
-            AreaMark(x: .value("Time", sample.time),
-                     y: .value("Used", gigabytes(sample.memoryUsed)))
-                .foregroundStyle(LinearGradient(colors: [.blue.opacity(0.35), .blue.opacity(0.02)],
-                                                startPoint: .top, endPoint: .bottom))
-                .interpolationMethod(.catmullRom)
-            LineMark(x: .value("Time", sample.time),
-                     y: .value("Used", gigabytes(sample.memoryUsed)))
-                .foregroundStyle(.blue)
-                .interpolationMethod(.catmullRom)
-            if hasSwap {
-                LineMark(x: .value("Time", sample.time),
-                         y: .value("Swap", gigabytes(sample.swapUsed)),
-                         series: .value("Series", "Swap"))
-                    .foregroundStyle(.orange)
-                    .interpolationMethod(.catmullRom)
-            }
-        }
-        .chartYScale(domain: 0...upperGB)
-        .chartYAxisLabel("GB")
-    }
-
-    private func legend(hasSwap: Bool) -> some View {
-        HStack(spacing: 16) {
-            swatch(.blue, "Used")
-            if hasSwap { swatch(.orange, "Swap") }
-            Spacer()
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-
-    private func swatch(_ color: Color, _ label: String) -> some View {
-        HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 9, height: 9)
-            Text(label)
+        return ChartCard(
+            title: "Usage history",
+            symbol: "chart.xyaxis.line",
+            legend: series.map { LegendSwatch(color: $0.color, label: $0.name) }
+        ) {
+            MetricChart(samples: model.chartHistory, series: series, yLabel: "GB", yDomain: 0...upperGB)
         }
     }
 }

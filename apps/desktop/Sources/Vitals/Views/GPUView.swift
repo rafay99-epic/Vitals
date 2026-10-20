@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The GPU section: utilization (renderer/tiler), the unified-memory working
 /// set, and power rails. Apple Silicon exposes no GPU-specific temperature (the
@@ -94,19 +93,12 @@ private struct GPUUtilizationCard: View {
     }
 
     private var history: some View {
-        Chart(model.chartHistory) { sample in
-            if let usage = sample.gpuUsage {
-                AreaMark(x: .value("Time", sample.time), y: .value("%", usage))
-                    .foregroundStyle(LinearGradient(colors: [.purple.opacity(0.35), .purple.opacity(0.02)],
-                                                    startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time), y: .value("%", usage))
-                    .foregroundStyle(.purple)
-                    .interpolationMethod(.catmullRom)
-            }
-        }
-        .chartYScale(domain: 0...100)
-        .chartYAxisLabel("%")
+        MetricChart(
+            samples: model.chartHistory,
+            series: [.init(name: "GPU", color: .purple, area: 0.35) { $0.gpuUsage }],
+            yLabel: "%",
+            yDomain: 0...100
+        )
     }
 }
 
