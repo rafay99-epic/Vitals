@@ -77,7 +77,7 @@ export const layer = Layer.effect(
         return;
       }
       const state = yield* Effect.promise(() => status(run));
-      if (state.ownerLogin !== null && config.ownerLogin === null) auth.setOwnerLogin(state.ownerLogin);
+      if (state.ownerLogin !== null && config.ownerLogin === null) yield* auth.setOwnerLogin(state.ownerLogin);
       const mapped = state.running ? yield* ensureServe(run) : false;
       const ok = state.running && state.dnsName !== null && state.magicDns && mapped;
       const detail = !state.running
@@ -104,8 +104,11 @@ export const layer = Layer.effect(
       );
     }
 
-    yield* refresh.pipe(Effect.repeat(Schedule.spaced(POLL)), Effect.forkScoped);
-    yield* connections.changes.pipe(Effect.andThen(refresh), Effect.forever, Effect.forkScoped);
+    const safeRefresh = refresh.pipe(
+      Effect.catchCause((cause) => Effect.sync(() => log("error", "tailscale.refresh.failed", { cause: String(cause).slice(0, 400) }))),
+    );
+    yield* safeRefresh.pipe(Effect.repeat(Schedule.spaced(POLL)), Effect.forkScoped);
+    yield* connections.changes.pipe(Effect.andThen(safeRefresh), Effect.forever, Effect.forkScoped);
 
     return Serve.of({ status: Ref.get(current) });
   }),

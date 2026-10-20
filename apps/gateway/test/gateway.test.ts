@@ -2,12 +2,13 @@ import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Alert, CommandId } from "@vitals/contracts";
+import { CommandId } from "@vitals/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-import { adminOp, clientLayer, makeClient, ownerHeaders, pairDevice, sample, startGateway, ticketFor } from "./harness.ts";
+import { MAX_FRAME_BYTES } from "../src/app.ts";
+import { adminOp, alertFixture, clientLayer, makeClient, ownerHeaders, pairDevice, sample, startGateway, ticketFor } from "./harness.ts";
 
 const commandId = Schema.decodeUnknownSync(CommandId);
 let gateway: Awaited<ReturnType<typeof startGateway>> | null = null;
@@ -40,6 +41,62 @@ describe("pairing and auth", () => {
     expect(paired.scopes).toEqual(["read", "operate"]);
     const second = await fetch(`${gateway.base}/api/pair`, { method: "POST", headers: ownerHeaders, body });
     expect(second.status).toBe(401);
+  });
+
+  test("web pairing keeps the token in an HttpOnly cookie", async () => {
+    gateway = await startGateway();
+    const created = await adminOp(gateway.app, { _tag: "CreatePairing" });
+    if (created.ok?._tag !== "CreatePairing") throw new Error("no pairing");
+    const paired = await fetch(`${gateway.base}/api/pair`, {
+      method: "POST",
+      headers: ownerHeaders,
+      body: JSON.stringify({ code: created.ok.code, device: { name: "Browser", platform: "web", model: "Mac", appVersion: "1" } }),
+    });
+    expect(paired.status).toBe(200);
+    expect(((await paired.json()) as { token: string | null }).token).toBeNull();
+    const setCookie = paired.headers.get("set-cookie") ?? "";
+    expect(setCookie).toMatch(/^vitals_session_dev=[^;]+;/);
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("Secure");
+    expect(setCookie).toContain("SameSite=Strict");
+    expect(setCookie).toContain("Path=/api");
+    const cookie = { ...ownerHeaders, cookie: setCookie.split(";")[0] ?? "" };
+
+    const session = await fetch(`${gateway.base}/api/session`, { headers: cookie });
+    expect(session.status).toBe(200);
+    expect(((await session.json()) as { scopes: Array<string> }).scopes).toEqual(["read", "operate"]);
+    const crossSite = await fetch(`${gateway.base}/api/ws-ticket`, { method: "POST", headers: { ...cookie, "sec-fetch-site": "cross-site" } });
+    expect(crossSite.status).toBe(403);
+    const ticket = await fetch(`${gateway.base}/api/ws-ticket`, { method: "POST", headers: { ...cookie, "sec-fetch-site": "same-origin" } });
+    expect(ticket.status).toBe(200);
+
+    const unpaired = await fetch(`${gateway.base}/api/unpair`, { method: "POST", headers: cookie });
+    expect(unpaired.status).toBe(200);
+    expect(unpaired.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect((await fetch(`${gateway.base}/api/session`, { headers: cookie })).status).toBe(204);
+    expect((await fetch(`${gateway.base}/api/session`, { headers: ownerHeaders })).status).toBe(204);
+  });
+
+  test("open alerts lists alerts raised after a sequence that are still open", async () => {
+    gateway = await startGateway();
+    const { token } = await pairDevice(gateway);
+    const first = alertFixture("alert-a");
+    const second = alertFixture("alert-b");
+    gateway.app.emit({ t: "event", event: { _tag: "AlertRaised", at: Date.now(), alert: first } });
+    gateway.app.emit({ t: "event", event: { _tag: "AlertRaised", at: Date.now(), alert: second } });
+    gateway.app.emit({ t: "event", event: { _tag: "AlertCleared", at: Date.now(), alert: first } });
+    await Bun.sleep(100);
+    const read = async (after: number) => {
+      const response = await fetch(`${gateway?.base}/api/alerts?after=${after}`, { headers: { ...ownerHeaders, authorization: `Bearer ${token}` } });
+      return (await response.json()) as { lastSeq: number; alerts: Array<{ id: string }> };
+    };
+    const all = await read(0);
+    expect(all.alerts.map((alert) => alert.id)).toEqual(["alert-b"]);
+    expect((await read(all.lastSeq)).alerts).toEqual([]);
+    expect((await fetch(`${gateway.base}/api/alerts`, { headers: ownerHeaders })).status).toBe(401);
+    const hello = await withClient(token, (client) => client["server.hello"]({}));
+    expect(hello.alerts.map((alert) => alert.id)).toEqual([second.id]);
+    expect(hello.lastEventSeq).toBe(all.lastSeq);
   });
 
   test("rejects a foreign tailnet identity", async () => {
@@ -135,6 +192,27 @@ describe("rpc over websocket", () => {
     expect(Date.now() - started).toBeLessThan(2000);
   });
 
+  test("an oversized or garbage frame drops that socket and nothing else", async () => {
+    gateway = await startGateway();
+    const { token } = await pairDevice(gateway);
+    const open = async (payload: string) => {
+      const ticket = await ticketFor(gateway?.base ?? "", token);
+      const socket = new WebSocket(`${gateway?.base.replace("http", "ws")}/ws?v=1&ticket=${ticket}&client=fuzz`, {
+        headers: ownerHeaders,
+      });
+      await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }));
+      const closed = new Promise<number>((resolve) => socket.addEventListener("close", (event) => resolve(event.code), { once: true }));
+      socket.send(payload);
+      return Promise.race([closed, Bun.sleep(2000).then(() => -1)]).finally(() => socket.close());
+    };
+    expect(await open("x".repeat(MAX_FRAME_BYTES + 1))).not.toBe(-1);
+    await open("{not json");
+    await open(JSON.stringify({ _tag: "Request", id: "1", tag: "no.such.method", payload: {}, headers: [] }));
+    expect((await fetch(`${gateway.base}/api/health`)).status).toBe(200);
+    const hello = await withClient(token, (client) => client["server.hello"]({}));
+    expect(hello.protocol).toBe(1);
+  });
+
   test("revoking a device closes its live socket", async () => {
     gateway = await startGateway();
     const { token, deviceId } = await pairDevice(gateway);
@@ -173,18 +251,20 @@ describe("rpc over websocket", () => {
     expect(kinds).toContain("mac.willSleep");
   });
 
+  test("a client that fell far behind replays every missed event in order", async () => {
+    gateway = await startGateway();
+    const { token } = await pairDevice(gateway);
+    for (let at = 1; at <= 300; at += 1) gateway.app.emit({ t: "event", event: { _tag: "DidWake", at: Date.now() + at } });
+    await Bun.sleep(300);
+    const replayed = await withClient(token, (client) => client["system.events"]({ afterSeq: 0 }).pipe(Stream.take(300), Stream.runCollect));
+    const seqs = [...replayed].map((item) => item.seq);
+    expect(seqs.length).toBe(300);
+    expect(seqs.every((seq, index) => index === 0 || seq === (seqs[index - 1] ?? 0) + 1)).toBe(true);
+  });
+
   test("alerts left open by a previous Vitals run are cleared on restart", async () => {
     const first = await startGateway();
-    const alert = Schema.decodeUnknownSync(Alert)({
-      id: "alert-1",
-      rule: "agentOverload",
-      severity: "warning",
-      summary: "6 agents",
-      raisedAt: Date.now(),
-      clearedAt: null,
-      groups: [],
-      plan: { actions: [], summary: "Lower priority" },
-    });
+    const alert = alertFixture("alert-1");
     first.app.emit({ t: "event", event: { _tag: "AlertRaised", at: alert.raisedAt, alert } });
     await Bun.sleep(100);
     await first.stop(true);

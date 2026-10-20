@@ -23,7 +23,6 @@ export const RPC_SCOPES = {
   "guard.update": "operate",
   "clipboard.get": "clipboard",
   "activity.ingest": "read",
-  "push.register": "read",
 } as const satisfies Record<VitalsMethod, ScopeRule>;
 
 export const requiredScope = (method: VitalsMethod, payload: unknown): Scope => {

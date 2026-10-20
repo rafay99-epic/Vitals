@@ -23,5 +23,8 @@ export const openOutbox = (): Outbox => {
     remove: (ids: ReadonlyArray<string>) => {
       for (const id of ids) db.runSync("DELETE FROM outbox WHERE event_id = ?", [id]);
     },
+    clear: () => {
+      db.runSync("DELETE FROM outbox");
+    },
   };
 };

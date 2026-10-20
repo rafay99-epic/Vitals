@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  Alert,
   type CommandReceipt,
   type FromApp,
   type LiveSample,
@@ -65,6 +66,7 @@ export class FakeApp {
   readonly received: Array<ToApp> = [];
   readonly holdCommands = new Set<string>();
   invalidReplies = false;
+  silentQueries = false;
   private readonly queue = Effect.runSync(Queue.unbounded<string>());
 
   readonly lines: Stream.Stream<string> = Stream.fromQueue(this.queue);
@@ -114,6 +116,7 @@ export class FakeApp {
         });
         break;
       case "query":
+        if (this.silentQueries) break;
         if (message.q._tag === "Apps" && this.invalidReplies) {
           const running = [{ pid: -1, bundleId: null, name: "Launching", active: false, hidden: false }];
           const ok = { _tag: "Apps", result: { running, emulators: [] } };
@@ -160,17 +163,10 @@ export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-
     ownerLogin: OWNER,
   };
   const app = new FakeApp();
-  const pushes: Array<ReadonlyArray<Record<string, unknown>>> = [];
   const transport = Layer.succeed(BridgeTransportService, { lines: app.lines, write: app.write, onClose: () => {} });
   const dispose = Effect.runFork(
     Layer.launch(
-      makeApp(config, {
-        transport,
-        push: async (messages) => {
-          pushes.push(messages);
-          return { ok: true, status: 200 };
-        },
-      }),
+      makeApp(config, { transport }),
     ),
   );
   const base = `http://127.0.0.1:${port}`;
@@ -183,7 +179,6 @@ export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-
     app,
     base,
     dataDir,
-    pushes,
     stop: async (keepData = false) => {
       await Effect.runPromise(Fiber.interrupt(dispose));
       if (!keepData) rmSync(dataDir, { recursive: true, force: true });
@@ -203,6 +198,18 @@ export const adminOp = async (app: FakeApp, op: Extract<FromApp, { t: "admin" }>
   }
   throw new Error("admin op timed out");
 };
+
+export const alertFixture = (id: string) =>
+  Schema.decodeUnknownSync(Alert)({
+    id,
+    rule: "agentOverload",
+    severity: "warning",
+    summary: "6 agents",
+    raisedAt: Date.now(),
+    clearedAt: null,
+    groups: [],
+    plan: { actions: [], summary: "Lower priority" },
+  });
 
 export const pairDevice = async (gateway: Awaited<ReturnType<typeof startGateway>>) => {
   const created = await adminOp(gateway.app, { _tag: "CreatePairing" });

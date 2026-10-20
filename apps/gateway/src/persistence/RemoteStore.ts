@@ -57,6 +57,7 @@ interface CommandRow {
 export interface SessionMatch {
   readonly sessionId: string;
   readonly device: Omit<Device, "connected">;
+  readonly expiresAt: number;
 }
 
 const isPlatform = (value: string): value is Device["platform"] =>
@@ -104,8 +105,6 @@ export class RemoteStore {
     | "revokeDevice"
     | "revokeSessions"
     | "setScopes"
-    | "upsertPush"
-    | "listPush"
     | "insertCommand"
     | "getCommand"
     | "updateCommand"
@@ -137,13 +136,6 @@ export class RemoteStore {
       revokeDevice: prepare("UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL"),
       revokeSessions: prepare("UPDATE sessions SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL"),
       setScopes: prepare("UPDATE devices SET scopes = ? WHERE id = ?"),
-      upsertPush: prepare(
-        `INSERT INTO push_tokens (device_id, provider, token, updated_at) VALUES (?, 'expo', ?, ?)
-         ON CONFLICT (device_id) DO UPDATE SET token = excluded.token, updated_at = excluded.updated_at`,
-      ),
-      listPush: prepare(
-        "SELECT p.device_id, p.token FROM push_tokens p JOIN devices d ON d.id = p.device_id WHERE d.revoked_at IS NULL",
-      ),
       insertCommand: prepare(
         "INSERT INTO commands (id, device_id, kind, args_json, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
       ),
@@ -206,9 +198,10 @@ export class RemoteStore {
       | (DeviceRow & { readonly session_id: string; readonly expires_at: number })
       | null;
     if (row === null || row.expires_at < now) return null;
-    this.statements.touchSession.run(now, now + SESSION_TTL_MS, row.session_id);
+    const expiresAt = now + SESSION_TTL_MS;
+    this.statements.touchSession.run(now, expiresAt, row.session_id);
     this.statements.touchDevice.run(now, row.id);
-    return { sessionId: row.session_id, device: toDevice(row) };
+    return { sessionId: row.session_id, device: toDevice(row), expiresAt };
   }
 
   devices(): ReadonlyArray<Omit<Device, "connected">> {
@@ -230,17 +223,6 @@ export class RemoteStore {
   setScopes(id: string, scopes: ReadonlyArray<Scope>): boolean {
     const unique = [...new Set<Scope>(["read", ...scopes])];
     return this.statements.setScopes.run(JSON.stringify(unique), id).changes === 1;
-  }
-
-  registerPush(deviceId: string, token: string, now: number): void {
-    this.statements.upsertPush.run(deviceId, token, now);
-  }
-
-  pushTokens(): ReadonlyArray<{ readonly deviceId: string; readonly token: string }> {
-    return (this.statements.listPush.all() as ReadonlyArray<{ device_id: string; token: string }>).map((row) => ({
-      deviceId: row.device_id,
-      token: row.token,
-    }));
   }
 
   insertCommand(id: string, deviceId: string, kind: string, args: unknown, now: number): CommandReceipt | null {

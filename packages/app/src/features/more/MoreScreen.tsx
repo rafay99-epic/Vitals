@@ -1,14 +1,24 @@
 import { useFocusEffect } from "@react-navigation/native";
 import type { AppsSnapshot, RunningApp } from "@vitals/contracts";
-import { formatClock } from "@vitals/shared";
+import { formatDateTime } from "@vitals/shared";
 import { Row, Screen, Section, TextButton, useActionMenu } from "@vitals/ui";
 import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 
 import { sessions } from "../../connection/session.ts";
+import { notificationPermission, requestNotifications } from "../../notifications/alerts";
+import { startAlertWatch } from "../../notifications/background";
+import type { PermissionState } from "../../notifications/permission.ts";
 import { useRemote } from "../../connection/useRemote.ts";
 import { useScopes } from "../../state/useScopes.ts";
 import { useStore } from "../../state/useStore.ts";
+
+const PERMISSION_LABELS: Record<PermissionState, string> = {
+  granted: "On",
+  denied: "Off in system settings",
+  prompt: "Tap to allow",
+  unsupported: "Not supported here",
+};
 
 export function MoreScreen() {
   const remote = useRemote();
@@ -18,6 +28,19 @@ export function MoreScreen() {
   const scopes = useScopes();
   const destructive = scopes.includes("destructive");
   const [menuElement, openMenu] = useActionMenu();
+  const [permission, setPermission] = useState<PermissionState | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      void notificationPermission().then(setPermission);
+    }, []),
+  );
+
+  const allowNotifications = () =>
+    void requestNotifications().then(async (granted) => {
+      if (granted) await startAlertWatch();
+      setPermission(await notificationPermission());
+    });
 
   const refresh = useCallback(() => {
     void remote.connection.call((client) => client["apps.list"]({})).then((result) => {
@@ -85,16 +108,21 @@ export function MoreScreen() {
         </View>
       </Section>
 
-      <Section title="This phone">
+      <Section title="This device">
         <Row label="Permissions" value={scopes.join(", ")} />
-        <Row label="Paired" value={formatClock(remote.credentials.pairedAt)} />
+        <Row
+          label="Alerts"
+          value={permission === null ? "--" : PERMISSION_LABELS[permission]}
+          {...(permission === "prompt" ? { onPress: allowNotifications } : {})}
+        />
+        <Row label="Paired" value={formatDateTime(remote.credentials.pairedAt)} />
         <View className="mt-3">
           <TextButton
             label="Unpair"
             tone="bad"
             onPress={() =>
               openMenu({
-                title: "Unpair this phone?",
+                title: "Unpair this device?",
                 detail: "You will need a new code from the Mac.",
                 actions: [{ label: "Unpair", tone: "bad", onPress: () => void sessions.forget() }],
               })

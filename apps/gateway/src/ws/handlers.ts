@@ -7,9 +7,15 @@ import { Bridge } from "../bridge/Bridge.ts";
 import { CommandService } from "../commands/CommandService.ts";
 import { EventLog } from "../events/EventLog.ts";
 import { Hubs } from "../live/Hubs.ts";
-import { Store } from "../persistence/Store.ts";
 
 const unexpected = (tag: string) => new Unavailable({ message: `Unexpected ${tag} reply from Vitals` });
+
+const MAX_CLIENT_DATA_BYTES = 2_048;
+
+const boundedData = (data: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> => {
+  const bytes = JSON.stringify(data).length;
+  return bytes <= MAX_CLIENT_DATA_BYTES ? data : { truncated: true, bytes };
+};
 
 export const handlersLayer = (session: Session, connectionId: string) =>
   VitalsRpc.toLayer(
@@ -18,7 +24,6 @@ export const handlersLayer = (session: Session, connectionId: string) =>
       const hubs = yield* Hubs;
       const events = yield* EventLog;
       const commands = yield* CommandService;
-      const store = yield* Store;
       const activity = yield* ActivityLog;
       const caller = { id: session.device.id, name: session.device.name };
 
@@ -34,11 +39,13 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "server.hello": () =>
           Effect.gen(function* () {
             const identity = yield* bridge.identity.pipe(Effect.orElseSucceed(() => null));
+            const open = yield* events.openAlerts(0);
             return {
               protocol: PROTOCOL_VERSION,
               mac: identity?.mac ?? null,
               keepAwake: identity?.keepAwake ?? null,
-              lastEventSeq: yield* events.lastSeq,
+              lastEventSeq: open.lastSeq,
+              alerts: open.alerts,
               serverTime: Date.now(),
               scopes: session.device.scopes,
             };
@@ -68,23 +75,10 @@ export const handlersLayer = (session: Session, connectionId: string) =>
                 kind: event.kind,
                 deviceId: session.device.id,
                 connectionId,
-                data: event.data,
+                data: boundedData(event.data),
               });
             }
             return { accepted: batch.length };
-          }),
-        "push.register": ({ token }) =>
-          Effect.sync(() => {
-            store.registerPush(session.device.id, token, Date.now());
-            activity.record({
-              at: Date.now(),
-              source: "gateway",
-              level: "info",
-              kind: "push.registered",
-              deviceId: session.device.id,
-              data: {},
-            });
-            return {};
           }),
       });
     }),

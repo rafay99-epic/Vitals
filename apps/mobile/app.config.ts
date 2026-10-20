@@ -34,11 +34,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     ["expo-camera", { cameraPermission: "Scan the pairing code shown in Vitals on your Mac." }],
     ["expo-notifications", { color: "#ffffff" }],
+    "expo-background-task",
     "expo-secure-store",
     "expo-sqlite",
   ],
+  owner: "prometheus99",
   extra: {
     variant,
-    eas: process.env["EAS_PROJECT_ID"] === undefined ? {} : { projectId: process.env["EAS_PROJECT_ID"] },
+    eas: { projectId: "4db0c236-4405-41ad-ad17-dabb1942aa86" },
   },
 });

@@ -134,8 +134,6 @@ export const layer = Layer.effect(
       Effect.forkScoped,
     );
 
-    yield* send({ t: "hello", v: 1 });
-
     const query = (q: Query) =>
       Effect.gen(function* () {
         const waiter = yield* Deferred.make<QueryResult, Unavailable>();

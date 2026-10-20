@@ -38,8 +38,11 @@ export function SlideToConfirm({
       className={`h-[52px] justify-center border border-line ${disabled ? "opacity-40" : ""}`}
       accessibilityRole="adjustable"
       accessibilityLabel={`Slide to ${label}`}
-      accessibilityActions={[{ name: "activate" }]}
-      onAccessibilityAction={() => onConfirm()}
+      accessibilityState={{ disabled }}
+      accessibilityActions={disabled ? [] : [{ name: "activate" }]}
+      onAccessibilityAction={() => {
+        if (!disabled) onConfirm();
+      }}
     >
       <Animated.View className="absolute inset-y-0 left-0 bg-bad/20" style={trail} />
       <Text className="text-center text-[15px] text-dim">{`Slide to ${label}`}</Text>

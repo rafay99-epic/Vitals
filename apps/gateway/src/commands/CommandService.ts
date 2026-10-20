@@ -9,6 +9,7 @@ import {
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
@@ -40,16 +41,15 @@ export const layer = Layer.effect(
     const events = yield* EventLog;
     const activity = yield* ActivityLog;
     const hub = yield* PubSub.unbounded<CommandReceipt>();
-    const waiters = new Map<string, Deferred.Deferred<CommandReceipt>>();
+    const waiters = new Map<string, Array<Deferred.Deferred<CommandReceipt>>>();
+    const serviceScope = yield* Effect.scope;
 
     const settle = (receipt: CommandReceipt) =>
       Effect.gen(function* () {
         store.updateCommand(receipt);
-        const waiter = waiters.get(receipt.id);
-        if (waiter !== undefined) {
-          waiters.delete(receipt.id);
-          yield* Deferred.succeed(waiter, receipt);
-        }
+        const waiting = waiters.get(receipt.id) ?? [];
+        waiters.delete(receipt.id);
+        for (const waiter of waiting) yield* Deferred.succeed(waiter, receipt);
         yield* PubSub.publish(hub, receipt);
         yield* events.append({ _tag: "CommandUpdated", at: Date.now(), receipt });
       });
@@ -59,27 +59,24 @@ export const layer = Layer.effect(
       Effect.forkScoped,
     );
 
-    const awaitReceipt = (id: string, onTimeout: () => CommandReceipt) =>
+    const awaitReceipt = <E>(id: string, onTimeout: Effect.Effect<CommandReceipt, E>) =>
       Effect.gen(function* () {
         const waiter = yield* Deferred.make<CommandReceipt>();
-        waiters.set(id, waiter);
-        return waiter;
-      }).pipe(
-        Effect.flatMap((waiter) =>
-          Deferred.await(waiter).pipe(
-            Effect.timeoutOrElse({
-              duration: RECEIPT_TIMEOUT,
-              orElse: () =>
-                Effect.gen(function* () {
-                  waiters.delete(id);
-                  const failed = onTimeout();
-                  yield* settle(failed);
-                  return failed;
-                }),
-            }),
-          ),
-        ),
-      );
+        waiters.set(id, [...(waiters.get(id) ?? []), waiter]);
+        const settled = Deferred.await(waiter).pipe(
+          Effect.timeoutOrElse({
+            duration: RECEIPT_TIMEOUT,
+            orElse: () =>
+              Effect.suspend(() => {
+                const rest = (waiters.get(id) ?? []).filter((item) => item !== waiter);
+                if (rest.length === 0) waiters.delete(id);
+                else waiters.set(id, rest);
+                return onTimeout;
+              }),
+          }),
+        );
+        return yield* Effect.forkIn(settled, serviceScope);
+      });
 
     const run = (caller: Caller, input: CommandRunInput) =>
       Effect.gen(function* () {
@@ -96,16 +93,22 @@ export const layer = Layer.effect(
           commandId: input.commandId,
           data: { kind: input.command._tag },
         });
-        const pending = awaitReceipt(input.commandId, () => ({
-          id: input.commandId,
-          kind: input.command._tag,
-          deviceId: caller.id,
-          status: "failed",
-          createdAt: now,
-          deadlineAt: null,
-          finishedAt: Date.now(),
-          error: "Vitals did not acknowledge the command",
-        }));
+        const pending = yield* awaitReceipt(
+          input.commandId,
+          Effect.suspend(() => {
+            const failed: CommandReceipt = {
+              id: input.commandId,
+              kind: input.command._tag,
+              deviceId: caller.id,
+              status: "failed",
+              createdAt: now,
+              deadlineAt: null,
+              finishedAt: Date.now(),
+              error: "Vitals did not acknowledge the command",
+            };
+            return Effect.as(settle(failed), failed);
+          }),
+        );
         yield* bridge.send({
           t: "cmd",
           id: input.commandId,
@@ -113,7 +116,7 @@ export const layer = Layer.effect(
           deviceName: caller.name,
           command: input.command,
         });
-        return yield* pending;
+        return yield* Fiber.join(pending);
       });
 
     const cancel = (caller: Caller, id: CommandReceipt["id"]) =>
@@ -130,9 +133,9 @@ export const layer = Layer.effect(
           commandId: id,
           data: {},
         });
-        const pending = awaitReceipt(id, () => current);
+        const pending = yield* awaitReceipt(id, Effect.fail(new CommandRejected({ message: "Vitals did not confirm the cancel" })));
         yield* bridge.send({ t: "cancel", id });
-        return yield* pending;
+        return yield* Fiber.join(pending);
       });
 
     const log = Stream.unwrap(

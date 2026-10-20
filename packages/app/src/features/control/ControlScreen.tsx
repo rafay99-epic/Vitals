@@ -1,6 +1,6 @@
 import type { Command, CommandReceipt } from "@vitals/contracts";
 import { formatClock } from "@vitals/shared";
-import { Countdown, HoldButton, Row, Screen, Section, Segmented, SlideToConfirm, TextButton } from "@vitals/ui";
+import { Banner, Countdown, HoldButton, Row, Screen, Section, Segmented, SlideToConfirm, TextButton } from "@vitals/ui";
 import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
 
@@ -42,6 +42,7 @@ export function ControlScreen() {
   return (
     <Screen>
       <StatusHeader />
+      {scopes.includes("operate") ? null : <Banner text="This device can only watch. Turn on Control for it in Vitals on the Mac." tone="warn" />}
       {pending.map((receipt) => (
         <Countdown key={receipt.id} title={label(receipt.kind)} deadline={receipt.deadlineAt} onCancel={() => void remote.cancel(receipt)} />
       ))}
@@ -103,7 +104,7 @@ export function ControlScreen() {
               <SlideToConfirm label="log out" onConfirm={() => run({ _tag: "LogOut", graceSeconds: 10 })} />
             </>
           ) : (
-            <Text className="text-xs text-mute">Restart, shut down and log out need the destructive permission. Turn it on for this phone in Vitals on the Mac.</Text>
+            <Text className="text-xs text-mute">Restart, shut down and log out need the destructive permission. Turn it on for this device in Vitals on the Mac.</Text>
           )}
         </View>
       </Section>

@@ -15,5 +15,8 @@ export const openOutbox = (): Outbox => {
       const drop = new Set(ids);
       events = events.filter((event) => !drop.has(event.eventId));
     },
+    clear: () => {
+      events = [];
+    },
   };
 };

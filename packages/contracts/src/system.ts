@@ -59,6 +59,7 @@ export const Hello = Schema.Struct({
   mac: Schema.NullOr(MacInfo),
   keepAwake: Schema.NullOr(KeepAwakeState),
   lastEventSeq: NonNegativeInt,
+  alerts: Schema.Array(Alert),
   serverTime: EpochMs,
   scopes: Schema.Array(Scope),
 });

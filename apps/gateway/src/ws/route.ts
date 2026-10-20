@@ -150,7 +150,7 @@ export const wsRoute = HttpRouter.add(
       () =>
         Effect.raceFirst(
           handler,
-          auth.revoked(deviceId).pipe(Effect.as(HttpServerResponse.empty())),
+          auth.revoked(session).pipe(Effect.as(HttpServerResponse.empty())),
         ),
       (_, exit) =>
         Effect.gen(function* () {

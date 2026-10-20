@@ -30,7 +30,7 @@ export class Remote {
   private readonly flushTimer: ReturnType<typeof setInterval>;
   private flushing = false;
 
-  constructor(credentials: Credentials, webSocket: ConnectionOptions["webSocket"], onAlert: (alert: Alert) => void) {
+  constructor(credentials: Credentials, webSocket: ConnectionOptions["webSocket"], onAlert: (alert: Alert, seq: number) => void) {
     this.credentials = credentials;
     this.connection = createConnection({
       baseUrl: credentials.baseUrl,
@@ -86,6 +86,10 @@ export class Remote {
     const result = await this.connection.call((client) => client["activity.ingest"]({ events: batch }));
     if (result.ok) this.outbox.remove(batch.map((event) => event.eventId));
     this.flushing = false;
+  }
+
+  discardQueued(): void {
+    this.outbox.clear();
   }
 
   dispose(): void {

@@ -75,7 +75,7 @@ describe("client runtime against the gateway", () => {
     if (created.ok?._tag !== "CreatePairing") throw new Error("no pairing");
     const paired = await pair(
       { baseUrl: gateway.base, code: created.ok.code },
-      { name: "Test phone", platform: "web", model: "Browser", appVersion: "1.0.0" },
+      { name: "Test phone", platform: "android", model: "Pixel", appVersion: "1.0.0" },
       withOwner,
     );
     if (!paired.ok) throw new Error(paired.message);
@@ -88,8 +88,12 @@ describe("client runtime against the gateway", () => {
       random: () => 0,
     });
     await until(() => connection.state.get()._tag === "Ready");
+    gateway.app.silentQueries = true;
+    const inFlight = connection.call((client) => client["apps.list"]({}));
+    await Bun.sleep(100);
     await adminOp(gateway.app, { _tag: "RevokeDevice", deviceId: paired.response.deviceId });
     await until(() => connection.state.get()._tag === "Revoked", 8000);
+    expect((await inFlight).ok).toBe(false);
     connection.dispose();
   });
 });

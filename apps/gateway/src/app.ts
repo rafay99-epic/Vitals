@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as HttpRouter from "effect/http/HttpRouter";
 
@@ -12,7 +13,6 @@ import * as Bridge from "./bridge/Bridge.ts";
 import * as CommandService from "./commands/CommandService.ts";
 import { GatewayConfig, type GatewayConfigShape } from "./config.ts";
 import * as EventLog from "./events/EventLog.ts";
-import * as AlertDispatcher from "./guard/AlertDispatcher.ts";
 import { apiRoutes, staticRoutes } from "./http/routes.ts";
 import * as Hubs from "./live/Hubs.ts";
 import { ACTIVITY_MIGRATIONS, REMOTE_MIGRATIONS } from "./persistence/migrations.ts";
@@ -24,7 +24,6 @@ import { wsRoute } from "./ws/route.ts";
 
 export interface AppDependencies {
   readonly transport: Layer.Layer<Bridge.BridgeTransportService>;
-  readonly push: AlertDispatcher.PushSender;
 }
 
 const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
@@ -43,8 +42,16 @@ const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
   const authed = Auth.layer(config.ownerLogin).pipe(Layer.provideMerge(bridged));
   const evented = EventLog.layer(activityDb).pipe(Layer.provideMerge(authed));
   const services = Layer.mergeAll(Hubs.layer, CommandService.layer, Serve.layer).pipe(Layer.provideMerge(evented));
-  return Layer.mergeAll(Admin.layer, AlertDispatcher.layer(deps.push)).pipe(Layer.provideMerge(services));
+  const ready = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const bridge = yield* Bridge.Bridge;
+      yield* bridge.send({ t: "hello", v: 1 });
+    }),
+  );
+  return Layer.mergeAll(Admin.layer, ready).pipe(Layer.provideMerge(services));
 };
+
+export const MAX_FRAME_BYTES = 1024 * 1024;
 
 const routes = (config: GatewayConfigShape) => Layer.mergeAll(apiRoutes, wsRoute, staticRoutes(config.webDir));
 
@@ -55,7 +62,7 @@ export const makeApp = (config: GatewayConfigShape, deps: AppDependencies) =>
         port: config.port,
         hostname: "127.0.0.1",
         gracefulShutdownTimeout: "2 seconds",
-        websocket: { idleTimeout: 30, perMessageDeflate: false },
+        websocket: { idleTimeout: 30, perMessageDeflate: false, maxPayloadLength: MAX_FRAME_BYTES },
       }),
     ),
     Layer.provide(makeServices(config, deps)),

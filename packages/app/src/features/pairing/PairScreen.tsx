@@ -49,18 +49,22 @@ export function PairScreen() {
         </Section>
       )}
       <Section title="Or enter it">
-        <Text className="mb-1 text-xs text-mute">Mac address</Text>
-        <TextInput
-          value={baseUrl}
-          onChangeText={setBaseUrl}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          placeholder="https://your-mac.tailnet.ts.net:7445"
-          placeholderTextColor="#6b6b6b"
-          className="min-h-11 border border-line px-3 font-mono text-[15px] text-ink"
-        />
-        <Text className="mb-1 mt-4 text-xs text-mute">Pairing code</Text>
+        {Platform.OS === "web" ? null : (
+          <>
+            <Text className="mb-1 text-xs text-mute">Mac address</Text>
+            <TextInput
+              value={baseUrl}
+              onChangeText={setBaseUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="https://your-mac.tailnet.ts.net:7445"
+              placeholderTextColor="#6b6b6b"
+              className="mb-4 min-h-11 border border-line px-3 font-mono text-[15px] text-ink"
+            />
+          </>
+        )}
+        <Text className="mb-1 text-xs text-mute">Pairing code</Text>
         <TextInput
           value={code}
           onChangeText={(value) => setCode(normalizeCode(value))}

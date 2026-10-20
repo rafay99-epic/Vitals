@@ -3,7 +3,8 @@ import * as Network from "expo-network";
 import { AppState, Platform } from "react-native";
 
 import { deviceInfo } from "../lib/device.ts";
-import { notifyAlert, onCalmAction, prepareNotifications, pushToken } from "../notifications/alerts";
+import { onCalmAction, prepareNotifications } from "../notifications/alerts";
+import { notifyOnce, rememberAlertSeq, startAlertWatch, stopAlertWatch } from "../notifications/background";
 import { clearCredentials, loadCredentials, saveCredentials } from "../persistence/credentials";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { Remote } from "../state/remote.ts";
@@ -41,7 +42,10 @@ class SessionManager {
       const credentials = await loadCredentials();
       if (credentials === null) this.session.set({ status: "unpaired" });
       else this.open(credentials);
-    })();
+    })().catch((error: unknown) => {
+      this.pairing.set({ busy: false, error: error instanceof Error ? error.message : "Could not read this device's pairing. Pair again." });
+      this.session.set({ status: "unpaired" });
+    });
   }
 
   async pairWith(link: PairingLink): Promise<boolean> {
@@ -67,22 +71,38 @@ class SessionManager {
   }
 
   async forget(): Promise<void> {
+    const current = this.session.get();
+    if (current.status === "paired") current.remote.discardQueued();
     this.close();
+    await stopAlertWatch();
     await clearCredentials();
     this.session.set({ status: "unpaired" });
   }
 
   private open(credentials: Credentials): void {
     this.close();
-    const remote = new Remote(credentials, openSocket, (alert) => {
-      if (AppState.currentState !== "active") void notifyAlert(alert);
+    const remote = new Remote(credentials, openSocket, (alert, seq) => {
+      void rememberAlertSeq(seq);
+      if (AppState.currentState !== "active") void notifyOnce(alert);
     });
     void prepareNotifications().then(async (granted) => {
-      if (!granted) return;
-      const token = await pushToken();
-      if (token !== null) await remote.connection.call((client) => client["push.register"]({ token }));
+      if (granted) remote.record("info", "client.alerts.watch", { background: await startAlertWatch() });
     });
-    const stopCalm = onCalmAction(() => void remote.run({ _tag: "CalmDown", alertId: null }));
+    const stopSeq = remote.connection.state.subscribe(() => {
+      const state = remote.connection.state.get();
+      if (state._tag === "Ready") void rememberAlertSeq(state.hello.lastEventSeq);
+    });
+    let queuedCalm: (() => void) | null = null;
+    const calmDown = () => void remote.run({ _tag: "CalmDown", alertId: null });
+    const stopCalm = onCalmAction(() => {
+      if (remote.connection.state.get()._tag === "Ready") return calmDown();
+      queuedCalm ??= remote.connection.state.subscribe(() => {
+        if (remote.connection.state.get()._tag !== "Ready") return;
+        queuedCalm?.();
+        queuedCalm = null;
+        calmDown();
+      });
+    });
     let suspendTimer: ReturnType<typeof setTimeout> | null = null;
     const appState = AppState.addEventListener("change", (next) => {
       if (next === "active") {
@@ -96,12 +116,16 @@ class SessionManager {
         suspendTimer = setTimeout(() => remote.connection.suspend(), SUSPEND_AFTER_MS);
       }
     });
-    const network = Network.addNetworkStateListener(() => remote.connection.wake("network"));
+    const network = Network.addNetworkStateListener(() => {
+      if (AppState.currentState === "active") remote.connection.wake("network");
+    });
     this.teardown = () => {
       if (suspendTimer !== null) clearTimeout(suspendTimer);
       appState.remove();
       network.remove();
       stopCalm();
+      queuedCalm?.();
+      stopSeq();
       remote.dispose();
     };
     this.session.set({ status: "paired", remote });

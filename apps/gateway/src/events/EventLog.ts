@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { type Alert, type SequencedEvent, type SystemEvent, SystemEvent as SystemEventSchema } from "@vitals/contracts";
+import { type Alert, type OpenAlerts, type SequencedEvent, type SystemEvent, SystemEvent as SystemEventSchema } from "@vitals/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -10,7 +10,7 @@ import * as Stream from "effect/Stream";
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Bridge } from "../bridge/Bridge.ts";
 
-const REPLAY_LIMIT = 128;
+const REPLAY_PAGE = 256;
 
 const encodeEvent = Schema.encodeSync(Schema.fromJsonString(SystemEventSchema));
 const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(SystemEventSchema));
@@ -42,6 +42,7 @@ export class EventLog extends Context.Service<
     readonly append: (event: SystemEvent) => Effect.Effect<SequencedEvent>;
     readonly subscribe: (afterSeq: number | null) => Stream.Stream<SequencedEvent>;
     readonly lastSeq: Effect.Effect<number>;
+    readonly openAlerts: (afterSeq: number) => Effect.Effect<OpenAlerts>;
     readonly published: Stream.Stream<SequencedEvent>;
   }
 >()("@vitals/gateway/EventLog") {}
@@ -77,16 +78,21 @@ export const layer = (db: Database) =>
         });
 
       const alertRows = db.prepare(
-        "SELECT event_json FROM system_events WHERE json_extract(event_json, '$._tag') IN ('AlertRaised', 'AlertCleared') ORDER BY seq DESC LIMIT 500",
+        "SELECT seq, event_json FROM system_events WHERE json_extract(event_json, '$._tag') IN ('AlertRaised', 'AlertCleared') ORDER BY seq",
       );
-      const open = new Map<string, Alert>();
-      for (const row of (alertRows.all() as ReadonlyArray<{ event_json: string }>).toReversed()) {
-        const event = decodeEvent(row.event_json);
-        if (event._tag === "AlertRaised") open.set(event.alert.id, event.alert);
-        if (event._tag === "AlertCleared") open.delete(event.alert.id);
-      }
+      const open = () => {
+        const alerts = new Map<string, { readonly seq: number; readonly alert: Alert }>();
+        for (const row of alertRows.all() as ReadonlyArray<{ seq: number; event_json: string }>) {
+          const event = decodeEvent(row.event_json);
+          if (event._tag === "AlertRaised") alerts.set(event.alert.id, { seq: row.seq, alert: event.alert });
+          if (event._tag === "AlertCleared") alerts.delete(event.alert.id);
+        }
+        return [...alerts.values()];
+      };
+      const lastSeq = Effect.sync(() => (latest.get() as { seq: number }).seq);
+
       const now = Date.now();
-      for (const alert of open.values()) {
+      for (const { alert } of open()) {
         yield* append({ _tag: "AlertCleared", at: now, alert: { ...alert, clearedAt: now } });
       }
 
@@ -95,17 +101,21 @@ export const layer = (db: Database) =>
         Effect.forkScoped,
       );
 
+      const replayAfter = (afterSeq: number): Array<SequencedEvent> => {
+        const rows: Array<SequencedEvent> = [];
+        for (let cursor = afterSeq; ; ) {
+          const page = after.all(cursor, REPLAY_PAGE) as ReadonlyArray<{ seq: number; event_json: string }>;
+          for (const row of page) rows.push({ seq: row.seq, event: decodeEvent(row.event_json) });
+          if (page.length < REPLAY_PAGE) return rows;
+          cursor = rows.at(-1)?.seq ?? cursor;
+        }
+      };
+
       const subscribe = (afterSeq: number | null) =>
         Stream.unwrap(
           Effect.gen(function* () {
             const subscription = yield* PubSub.subscribe(hub);
-            const replay =
-              afterSeq === null
-                ? []
-                : (after.all(afterSeq, REPLAY_LIMIT) as ReadonlyArray<{ seq: number; event_json: string }>).map((row) => ({
-                    seq: row.seq,
-                    event: decodeEvent(row.event_json),
-                  }));
+            const replay = afterSeq === null ? [] : replayAfter(afterSeq);
             const floor = replay.at(-1)?.seq ?? afterSeq ?? -1;
             return Stream.concat(
               Stream.fromIterable(replay),
@@ -117,7 +127,14 @@ export const layer = (db: Database) =>
       return EventLog.of({
         append,
         subscribe,
-        lastSeq: Effect.sync(() => (latest.get() as { seq: number }).seq),
+        lastSeq,
+        openAlerts: (afterSeq) =>
+          Effect.map(lastSeq, (seq) => ({
+            lastSeq: seq,
+            alerts: open()
+              .filter((entry) => entry.seq > afterSeq)
+              .map((entry) => entry.alert),
+          })),
         published: Stream.fromPubSub(hub),
       });
     }),

@@ -1,11 +1,16 @@
 import type { Alert } from "@vitals/contracts";
 
-export const prepareNotifications = async (): Promise<boolean> => {
-  if (!("Notification" in globalThis)) return false;
-  if (Notification.permission === "granted") return true;
-  if (Notification.permission === "denied") return false;
-  return (await Notification.requestPermission()) === "granted";
+import type { PermissionState } from "./permission.ts";
+
+export const notificationPermission = async (): Promise<PermissionState> => {
+  if (!("Notification" in globalThis)) return "unsupported";
+  return Notification.permission === "default" ? "prompt" : Notification.permission;
 };
+
+export const prepareNotifications = async (): Promise<boolean> => (await notificationPermission()) === "granted";
+
+export const requestNotifications = async (): Promise<boolean> =>
+  "Notification" in globalThis && (await Notification.requestPermission()) === "granted";
 
 export const notifyAlert = async (alert: Alert): Promise<void> => {
   if (!("Notification" in globalThis) || Notification.permission !== "granted") return;
@@ -17,5 +22,3 @@ export const notifyAlert = async (alert: Alert): Promise<void> => {
 };
 
 export const onCalmAction = (_handler: () => void): (() => void) => () => {};
-
-export const pushToken = async (): Promise<string | null> => null;

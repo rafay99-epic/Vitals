@@ -5,6 +5,7 @@ export interface Outbox {
   readonly push: (event: ClientEvent) => void;
   readonly take: (limit: number) => ReadonlyArray<ClientEvent>;
   readonly remove: (ids: ReadonlyArray<string>) => void;
+  readonly clear: () => void;
 }
 
 const decode = Schema.decodeUnknownOption(Schema.fromJsonString(ClientEvent));

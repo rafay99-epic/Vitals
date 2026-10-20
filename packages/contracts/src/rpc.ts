@@ -92,12 +92,6 @@ export const ActivityIngest = Rpc.make("activity.ingest", {
   error: AuthError,
 });
 
-export const PushRegister = Rpc.make("push.register", {
-  payload: Schema.Struct({ token: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(512)) }),
-  success: Empty,
-  error: AuthError,
-});
-
 export class ScopeAuthorization extends RpcMiddleware.Service<ScopeAuthorization>()(
   "@vitals/contracts/ScopeAuthorization",
   { error: AuthError },
@@ -117,7 +111,6 @@ export const VitalsRpc = RpcGroup.make(
   GuardUpdate,
   ClipboardGet,
   ActivityIngest,
-  PushRegister,
 ).middleware(ScopeAuthorization);
 
 export type VitalsRpcs = RpcGroup.Rpcs<typeof VitalsRpc>;

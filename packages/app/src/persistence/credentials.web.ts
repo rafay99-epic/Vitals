@@ -1,13 +1,26 @@
-import { type Credentials, decodeCredentials } from "./credentialsSchema.ts";
+import { fetchSession, unpair } from "@vitals/client-runtime";
 
-const KEY = "vitals.remote.credentials";
+import type { Credentials } from "./credentialsSchema.ts";
 
-export const loadCredentials = async (): Promise<Credentials | null> => decodeCredentials(globalThis.localStorage.getItem(KEY));
+const RETRY_MS = [1_000, 2_000, 5_000, 10_000, 30_000] as const;
 
-export const saveCredentials = async (credentials: Credentials): Promise<void> => {
-  globalThis.localStorage.setItem(KEY, JSON.stringify(credentials));
+const origin = (): string => globalThis.location.origin;
+
+export const loadCredentials = async (): Promise<Credentials | null> => {
+  for (const delay of [0, ...RETRY_MS]) {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    const lookup = await fetchSession(origin(), null);
+    if (lookup._tag === "Unpaired") return null;
+    if (lookup._tag === "Paired") {
+      const { deviceId, scopes, pairedAt } = lookup.session;
+      return { baseUrl: origin(), token: null, deviceId, scopes, pairedAt };
+    }
+  }
+  throw new Error("Could not reach your Mac. Check Tailscale and reload.");
 };
 
+export const saveCredentials = async (_credentials: Credentials): Promise<void> => {};
+
 export const clearCredentials = async (): Promise<void> => {
-  globalThis.localStorage.removeItem(KEY);
+  await unpair(origin(), null);
 };

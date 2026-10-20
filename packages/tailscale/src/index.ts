@@ -29,13 +29,17 @@ export const findBinary = async (exists: (path: string) => Promise<boolean>): Pr
 export const bunRunner =
   (binary: string): Runner =>
   async (args, timeoutMs) => {
-    const child = Bun.spawn([binary, ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore", timeout: timeoutMs });
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.exited,
-    ]);
-    return { code, stdout, stderr };
+    try {
+      const child = Bun.spawn([binary, ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore", timeout: timeoutMs });
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      return { code, stdout, stderr };
+    } catch (error) {
+      return { code: -1, stdout: "", stderr: String(error) };
+    }
   };
 
 interface RawStatus {
@@ -48,8 +52,16 @@ interface RawStatus {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
+const parseJson = (json: string): unknown => {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
 export const parseStatus = (json: string): TailscaleStatus => {
-  const parsed: unknown = JSON.parse(json);
+  const parsed = parseJson(json);
   if (!isRecord(parsed)) return { running: false, dnsName: null, ownerLogin: null, magicDns: false };
   const raw: RawStatus = parsed;
   const dnsName = raw.Self?.DNSName?.replace(/\.$/, "") ?? null;
@@ -71,14 +83,6 @@ export const status = async (run: Runner): Promise<TailscaleStatus> => {
 
 export const serveOn = async (run: Runner, httpsPort: number, localPort: number): Promise<CommandResult> =>
   run(["serve", "--bg", `--https=${httpsPort}`, `http://127.0.0.1:${localPort}`], 15_000);
-
-const parseJson = (json: string): unknown => {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-};
 
 export const parseServeTarget = (json: string, httpsPort: number): string | null => {
   const parsed = parseJson(json);

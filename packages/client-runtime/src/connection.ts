@@ -16,6 +16,7 @@ import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as Socket from "effect/socket/Socket";
 
+import { authHeaders } from "./account.ts";
 import { BACKOFF_RESET_AFTER_MS, retryDelayMs } from "./backoff.ts";
 import { type ReadableStore, Store } from "./store.ts";
 
@@ -34,7 +35,7 @@ export type WakeReason = "foreground" | "network" | "manual";
 
 export interface ConnectionOptions {
   readonly baseUrl: string;
-  readonly token: string;
+  readonly token: string | null;
   readonly clientVersion: string;
   readonly webSocket: Socket.WebSocketConstructor["Service"];
   readonly fetch?: typeof globalThis.fetch;
@@ -105,7 +106,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     try: () =>
       fetchImpl(`${base}/api/ws-ticket`, {
         method: "POST",
-        headers: { authorization: `Bearer ${options.token}` },
+        headers: authHeaders(options.token),
         signal: AbortSignal.timeout(10_000),
       }),
     catch: () => new AttemptFailed({ reason: "unreachable", message: "Mac is unreachable" }),
@@ -245,11 +246,13 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       (current): Effect.Effect<A, E | NotConnected> =>
         current === null ? Effect.fail(new NotConnected({ message: "Not connected to your Mac" })) : run(current.client),
     );
-    return Effect.runPromise(
+    return Effect.runPromiseExit(
       Effect.match(program, {
         onFailure: (error): CallResult<A, E> => ({ ok: false, error }),
         onSuccess: (value): CallResult<A, E> => ({ ok: true, value }),
       }),
+    ).then((exit) =>
+      Exit.isSuccess(exit) ? exit.value : { ok: false, error: new NotConnected({ message: "The connection closed before the Mac answered" }) },
     );
   };
 

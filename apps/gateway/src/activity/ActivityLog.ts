@@ -178,10 +178,19 @@ class ActivityWriter {
       now - RETENTION.connections,
     );
     page("DELETE FROM system_events WHERE seq IN (SELECT seq FROM system_events WHERE at < ? LIMIT ?)", now - RETENTION.events);
-    while (this.sizeBytes() > MAX_BYTES) {
-      const removed = this.db.run("DELETE FROM frames WHERE seq IN (SELECT seq FROM frames ORDER BY seq LIMIT ?)", [PRUNE_PAGE]).changes;
-      if (removed === 0) break;
-      this.db.run("PRAGMA incremental_vacuum(256)");
+    page(
+      "DELETE FROM rollups_minute WHERE rowid IN (SELECT rowid FROM rollups_minute WHERE minute < ? LIMIT ?)",
+      now - RETENTION.events,
+    );
+    const oldestFirst = [
+      "DELETE FROM frames WHERE seq IN (SELECT seq FROM frames ORDER BY seq LIMIT ?)",
+      "DELETE FROM events WHERE seq IN (SELECT seq FROM events ORDER BY seq LIMIT ?)",
+      "DELETE FROM rollups_minute WHERE rowid IN (SELECT rowid FROM rollups_minute ORDER BY minute LIMIT ?)",
+    ];
+    for (const sql of oldestFirst) {
+      while (this.sizeBytes() > MAX_BYTES && this.db.run(sql, [PRUNE_PAGE]).changes > 0) {
+        this.db.run("PRAGMA incremental_vacuum(256)");
+      }
     }
     this.db.run("PRAGMA incremental_vacuum(256)");
   }

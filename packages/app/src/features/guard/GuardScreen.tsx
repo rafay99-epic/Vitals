@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { Switch, Text, View } from "react-native";
 
 import { useRemote } from "../../connection/useRemote.ts";
+import { useScopes } from "../../state/useScopes.ts";
 import { useStore } from "../../state/useStore.ts";
 
 const RULE_TITLES: Record<GuardRule["kind"], string> = {
@@ -21,6 +22,7 @@ export function GuardScreen() {
   const remote = useRemote();
   const alerts = useStore(remote.events.alerts);
   const [state, setState] = useState<GuardState | null>(null);
+  const canOperate = useScopes().includes("operate");
 
   useFocusEffect(useCallback(() => remote.connection.watch((client) => client["guard.watch"]({}), setState), [remote]));
 
@@ -45,10 +47,14 @@ export function GuardScreen() {
       <Section title="Calm down">
         <View className="flex-row gap-2">
           <View className="flex-1">
-            <TextButton label="Calm down now" onPress={() => void remote.run({ _tag: "CalmDown", alertId: active[0]?.id ?? null })} />
+            <TextButton
+              label="Calm down now"
+              disabled={!canOperate}
+              onPress={() => void remote.run({ _tag: "CalmDown", alertId: active[0]?.id ?? null })}
+            />
           </View>
           <View className="flex-1">
-            <TextButton label="Undo" disabled={state?.calmApplied !== true} onPress={() => void remote.run({ _tag: "UndoCalm" })} />
+            <TextButton label="Undo" disabled={!canOperate || state?.calmApplied !== true} onPress={() => void remote.run({ _tag: "UndoCalm" })} />
           </View>
         </View>
         <Text className="mt-2 text-xs text-mute">Pauses idle emulators and lowers agent priority. Nothing is killed. Undo restores everything.</Text>
@@ -64,14 +70,14 @@ export function GuardScreen() {
         <Section title="Rules">
           <View className="flex-row items-center justify-between border-b border-line py-2.5">
             <Text className="text-[15px] text-ink">Pressure Guard</Text>
-            <Switch value={state.settings.enabled} onValueChange={(enabled) => update({ ...state.settings, enabled })} />
+            <Switch value={state.settings.enabled} disabled={!canOperate} onValueChange={(enabled) => update({ ...state.settings, enabled })} />
           </View>
           {state.settings.rules.map((rule) => (
             <View key={rule.kind} className="flex-row items-center justify-between border-b border-line py-2.5">
               <Text className="flex-1 pr-3 text-[15px] text-ink">{RULE_TITLES[rule.kind]}</Text>
               <Switch
                 value={rule.enabled}
-                disabled={!state.settings.enabled}
+                disabled={!canOperate || !state.settings.enabled}
                 onValueChange={(enabled) =>
                   update({ ...state.settings, rules: state.settings.rules.map((item) => (item.kind === rule.kind ? { ...item, enabled } : item)) })
                 }

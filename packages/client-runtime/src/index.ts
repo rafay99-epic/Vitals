@@ -1,3 +1,4 @@
+export * from "./account.ts";
 export * from "./backoff.ts";
 export * from "./connection.ts";
 export * from "./pairing.ts";

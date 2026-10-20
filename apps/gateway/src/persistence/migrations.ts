@@ -33,12 +33,6 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
         consumed_at INTEGER,
         device_id TEXT REFERENCES devices(id) ON DELETE SET NULL
       );
-      CREATE TABLE push_tokens (
-        device_id TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
-        provider TEXT NOT NULL,
-        token TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
       CREATE TABLE commands (
         id TEXT PRIMARY KEY,
         device_id TEXT NOT NULL,

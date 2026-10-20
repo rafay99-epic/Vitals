@@ -21,7 +21,7 @@ export type Severity = typeof Severity.Type;
 export const GuardRule = Schema.Struct({
   kind: GuardRuleKind,
   enabled: Schema.Boolean,
-  threshold: Schema.Number,
+  threshold: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   holdSeconds: NonNegativeInt,
 });
 export type GuardRule = typeof GuardRule.Type;
@@ -50,6 +50,12 @@ export const Alert = Schema.Struct({
   plan: CalmPlan,
 });
 export type Alert = typeof Alert.Type;
+
+export const OpenAlerts = Schema.Struct({
+  lastSeq: NonNegativeInt,
+  alerts: Schema.Array(Alert),
+});
+export type OpenAlerts = typeof OpenAlerts.Type;
 
 export const GuardState = Schema.Struct({
   settings: GuardSettings,

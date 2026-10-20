@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 
 export const Credentials = Schema.Struct({
   baseUrl: Schema.String,
-  token: Schema.String,
+  token: Schema.NullOr(Schema.String),
   deviceId: DeviceId,
   scopes: Schema.Array(Scope),
   pairedAt: Schema.Number,

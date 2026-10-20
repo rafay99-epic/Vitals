@@ -1,15 +1,21 @@
+import { unpair } from "@vitals/client-runtime";
 import * as SecureStore from "expo-secure-store";
 
 import { type Credentials, decodeCredentials } from "./credentialsSchema.ts";
 
 const KEY = "vitals.remote.credentials";
 
-export const loadCredentials = async (): Promise<Credentials | null> => decodeCredentials(await SecureStore.getItemAsync(KEY));
+export const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
+
+export const loadCredentials = async (): Promise<Credentials | null> =>
+  decodeCredentials(await SecureStore.getItemAsync(KEY, KEYCHAIN_OPTIONS));
 
 export const saveCredentials = async (credentials: Credentials): Promise<void> => {
-  await SecureStore.setItemAsync(KEY, JSON.stringify(credentials));
+  await SecureStore.setItemAsync(KEY, JSON.stringify(credentials), KEYCHAIN_OPTIONS);
 };
 
 export const clearCredentials = async (): Promise<void> => {
-  await SecureStore.deleteItemAsync(KEY);
+  const credentials = await loadCredentials();
+  if (credentials !== null) await unpair(credentials.baseUrl, credentials.token);
+  await SecureStore.deleteItemAsync(KEY, KEYCHAIN_OPTIONS);
 };

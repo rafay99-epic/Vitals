@@ -1,9 +1,11 @@
 import type { Alert } from "@vitals/contracts";
-import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
+import type { PermissionState } from "./permission.ts";
+
 const CATEGORY = "pressure";
+const CHANNEL = "pressure";
 const CALM_ACTION = "calm";
 
 Notifications.setNotificationHandler({
@@ -17,7 +19,7 @@ Notifications.setNotificationHandler({
 
 export const prepareNotifications = async (): Promise<boolean> => {
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("pressure", {
+    await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: "Mac pressure",
       importance: Notifications.AndroidImportance.HIGH,
     });
@@ -30,31 +32,34 @@ export const prepareNotifications = async (): Promise<boolean> => {
   return (await Notifications.requestPermissionsAsync()).granted;
 };
 
+export const notificationPermission = async (): Promise<PermissionState> => {
+  const current = await Notifications.getPermissionsAsync();
+  return current.granted ? "granted" : current.canAskAgain ? "prompt" : "denied";
+};
+
+export const requestNotifications = async (): Promise<boolean> => (await Notifications.requestPermissionsAsync()).granted;
+
 export const notifyAlert = async (alert: Alert): Promise<void> => {
   await Notifications.scheduleNotificationAsync({
+    identifier: alert.id,
     content: {
       title: alert.severity === "critical" ? "Mac under heavy pressure" : "Mac under pressure",
       body: `${alert.summary}. ${alert.plan.summary}.`,
       categoryIdentifier: CATEGORY,
       data: { alertId: alert.id },
     },
-    trigger: Platform.OS === "android" ? { channelId: "pressure" } : null,
+    trigger: Platform.OS === "android" ? { channelId: CHANNEL } : null,
   });
 };
 
 export const onCalmAction = (handler: () => void): (() => void) => {
-  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    if (response.actionIdentifier === CALM_ACTION) handler();
-  });
+  const handle = (response: Notifications.NotificationResponse) => {
+    if (response.actionIdentifier !== CALM_ACTION) return;
+    void Notifications.clearLastNotificationResponseAsync();
+    handler();
+  };
+  const launchedBy = Notifications.getLastNotificationResponse();
+  if (launchedBy !== null) handle(launchedBy);
+  const subscription = Notifications.addNotificationResponseReceivedListener(handle);
   return () => subscription.remove();
-};
-
-export const pushToken = async (): Promise<string | null> => {
-  const projectId: unknown = Constants.expoConfig?.extra?.["eas"]?.projectId;
-  if (typeof projectId !== "string") return null;
-  try {
-    return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-  } catch {
-    return null;
-  }
 };

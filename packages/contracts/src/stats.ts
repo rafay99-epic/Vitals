@@ -164,7 +164,7 @@ export const HistoryRangeInput = Schema.Struct({
   from: EpochMs,
   to: EpochMs,
   points: NonNegativeInt.check(Schema.isBetween({ minimum: 10, maximum: 300 })),
-});
+}).check(Schema.makeFilter((input) => input.from < input.to || "from must be before to"));
 export type HistoryRangeInput = typeof HistoryRangeInput.Type;
 
 export const HistoryBucket = Schema.Struct({

@@ -1,10 +1,4 @@
-import {
-  type Device,
-  type PairRequest,
-  type PairResponse,
-  type Scope,
-  DEFAULT_PAIRED_SCOPES,
-} from "@vitals/contracts";
+import { type PairRequest, type PairResponse, type Scope, type SessionInfo, DEFAULT_PAIRED_SCOPES } from "@vitals/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -12,14 +6,13 @@ import * as Layer from "effect/Layer";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Store } from "../persistence/Store.ts";
-import { randomToken } from "../persistence/RemoteStore.ts";
+import { randomToken, type SessionMatch } from "../persistence/RemoteStore.ts";
 
 const TICKET_TTL_MS = 60_000;
 
-export interface Session {
-  readonly sessionId: string;
-  readonly device: Omit<Device, "connected">;
-}
+export type Session = SessionMatch & { readonly version: string };
+
+export type Paired = Omit<PairResponse, "token"> & { readonly token: string };
 
 export type AuthFailure =
   | { readonly reason: "identity"; readonly message: string }
@@ -29,12 +22,14 @@ export class Auth extends Context.Service<
   Auth,
   {
     readonly ownerLogin: () => string | null;
-    readonly setOwnerLogin: (login: string | null) => void;
+    readonly setOwnerLogin: (login: string | null) => Effect.Effect<void>;
     readonly checkIdentity: (login: string | null) => AuthFailure | null;
-    readonly pair: (request: PairRequest, login: string | null) => PairResponse | AuthFailure;
+    readonly pair: (request: PairRequest, login: string | null) => Paired | AuthFailure;
+    readonly session: (token: string) => SessionInfo | null;
+    readonly unpair: (token: string) => Effect.Effect<boolean>;
     readonly issueTicket: (bearer: string) => { readonly ticket: string; readonly expiresAt: number } | AuthFailure;
     readonly redeemTicket: (ticket: string) => Session | null;
-    readonly revoked: (deviceId: string) => Effect.Effect<void>;
+    readonly revoked: (session: Session) => Effect.Effect<void>;
     readonly revoke: (deviceId: string) => Effect.Effect<boolean>;
     readonly setScopes: (deviceId: string, scopes: ReadonlyArray<Scope>) => Effect.Effect<boolean>;
   }
@@ -49,6 +44,9 @@ export const layer = (initialOwner: string | null) =>
       let owner = initialOwner;
       const tickets = new Map<string, { readonly sessionToken: string; readonly expiresAt: number }>();
       const invalidations = new Map<string, Deferred.Deferred<void>>();
+      const versions = new Map<string, number>();
+      let epoch = 0;
+      const versionOf = (deviceId: string) => `${epoch}:${versions.get(deviceId) ?? 0}`;
 
       const log = (level: "info" | "warn", kind: string, data: Record<string, unknown>, deviceId: string | null = null) =>
         activity.record({ at: Date.now(), source: "gateway", level, kind, deviceId, data });
@@ -62,7 +60,7 @@ export const layer = (initialOwner: string | null) =>
         return null;
       };
 
-      const pair = (request: PairRequest, login: string | null): PairResponse | AuthFailure => {
+      const pair = (request: PairRequest, login: string | null): Paired | AuthFailure => {
         const identity = checkIdentity(login);
         if (identity !== null) return identity;
         const result = store.redeemPairing(request.code, request.device, DEFAULT_PAIRED_SCOPES, Date.now());
@@ -91,11 +89,19 @@ export const layer = (initialOwner: string | null) =>
         const entry = tickets.get(ticket);
         tickets.delete(ticket);
         if (entry === undefined || entry.expiresAt < Date.now()) return null;
-        return store.findSession(entry.sessionToken, Date.now());
+        const match = store.findSession(entry.sessionToken, Date.now());
+        return match === null ? null : { ...match, version: versionOf(match.device.id) };
+      };
+
+      const session = (token: string): SessionInfo | null => {
+        const match = store.findSession(token, Date.now());
+        if (match === null) return null;
+        return { deviceId: match.device.id, scopes: match.device.scopes, pairedAt: match.device.createdAt, expiresAt: match.expiresAt };
       };
 
       const signal = (deviceId: string) =>
         Effect.gen(function* () {
+          versions.set(deviceId, (versions.get(deviceId) ?? 0) + 1);
           const existing = invalidations.get(deviceId);
           if (existing !== undefined) {
             invalidations.delete(deviceId);
@@ -103,12 +109,26 @@ export const layer = (initialOwner: string | null) =>
           }
         });
 
-      const revoked = (deviceId: string) =>
+      const revoked = (session: Session) =>
         Effect.gen(function* () {
+          const deviceId = session.device.id;
           const existing = invalidations.get(deviceId);
           const waiter = existing ?? (yield* Deferred.make<void>());
           if (existing === undefined) invalidations.set(deviceId, waiter);
+          if (versionOf(deviceId) !== session.version) return;
           yield* Deferred.await(waiter);
+        });
+
+      const setOwnerLogin = (login: string | null) =>
+        Effect.gen(function* () {
+          const changed = owner !== null && login !== owner;
+          owner = login;
+          if (!changed) return;
+          epoch += 1;
+          log("warn", "auth.owner.changed", { login });
+          const waiting = [...invalidations.values()];
+          invalidations.clear();
+          for (const waiter of waiting) yield* Deferred.succeed(waiter, undefined);
         });
 
       const revoke = (deviceId: string) =>
@@ -117,6 +137,14 @@ export const layer = (initialOwner: string | null) =>
           if (changed) log("info", "session.revoked", {}, deviceId);
           yield* signal(deviceId);
           return changed;
+        });
+
+      const unpair = (token: string) =>
+        Effect.gen(function* () {
+          const match = store.findSession(token, Date.now());
+          if (match === null) return false;
+          log("info", "device.unpaired", {}, match.device.id);
+          return yield* revoke(match.device.id);
         });
 
       const setScopes = (deviceId: string, scopes: ReadonlyArray<Scope>) =>
@@ -129,11 +157,11 @@ export const layer = (initialOwner: string | null) =>
 
       return Auth.of({
         ownerLogin: () => owner,
-        setOwnerLogin: (login) => {
-          owner = login;
-        },
+        setOwnerLogin,
         checkIdentity,
         pair,
+        session,
+        unpair,
         issueTicket,
         redeemTicket,
         revoked,

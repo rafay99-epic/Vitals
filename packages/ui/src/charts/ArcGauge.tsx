@@ -22,7 +22,7 @@ export function ArcGauge({
   const fill = Skia.PathBuilder.Make().addArc(oval, 135, Math.max(270 * clamped, 0.01)).build();
   const tint = clamped >= 0.85 ? colors.bad : clamped >= 0.6 ? colors.warn : colors.accent;
   return (
-    <View style={{ width: size, height: size }} accessibilityLabel={`${label} ${value}`}>
+    <View style={{ width: size, height: size }} accessible accessibilityLabel={`${label} ${value}`}>
       <Canvas style={{ width: size, height: size }}>
         <Path path={track} style="stroke" strokeWidth={stroke} strokeCap="round" color={colors.line} />
         <Path path={fill} style="stroke" strokeWidth={stroke} strokeCap="round" color={tint} />

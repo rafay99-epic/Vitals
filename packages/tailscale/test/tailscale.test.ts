@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { httpsUrl, parseServeTarget, parseStatus, serveOn, status, type Runner } from "../src/index.ts";
+import { bunRunner, httpsUrl, parseServeTarget, parseStatus, serveOn, status, type Runner } from "../src/index.ts";
 
 const sample = JSON.stringify({
   BackendState: "Running",
@@ -45,5 +45,17 @@ describe("tailscale", () => {
     expect(parseServeTarget(serve, 7445)).toBe("http://127.0.0.1:47802");
     expect(parseServeTarget(serve, 7444)).toBeNull();
     expect(parseServeTarget("", 7445)).toBeNull();
+  });
+
+  test("a missing CLI or junk output degrades instead of throwing", async () => {
+    const missing = await bunRunner("/nonexistent/tailscale")(["status"], 1_000);
+    expect(missing.code).not.toBe(0);
+    expect(parseStatus("not json").running).toBe(false);
+    expect(await status(async () => ({ code: 0, stdout: "{", stderr: "" }))).toEqual({
+      running: false,
+      dnsName: null,
+      ownerLogin: null,
+      magicDns: false,
+    });
   });
 });

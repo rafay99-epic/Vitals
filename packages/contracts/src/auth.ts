@@ -33,11 +33,19 @@ export type PairRequest = typeof PairRequest.Type;
 
 export const PairResponse = Schema.Struct({
   deviceId: DeviceId,
-  token: Schema.String,
+  token: Schema.NullOr(Schema.String),
   scopes: Schema.Array(Scope),
   expiresAt: EpochMs,
 });
 export type PairResponse = typeof PairResponse.Type;
+
+export const SessionInfo = Schema.Struct({
+  deviceId: DeviceId,
+  scopes: Schema.Array(Scope),
+  pairedAt: EpochMs,
+  expiresAt: EpochMs,
+});
+export type SessionInfo = typeof SessionInfo.Type;
 
 export const Device = Schema.Struct({
   id: DeviceId,
