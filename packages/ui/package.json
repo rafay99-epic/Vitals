@@ -19,13 +19,18 @@
   "devDependencies": {
     "@shopify/react-native-skia": "catalog:",
     "@types/react": "catalog:",
+    "expo": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-css": "catalog:",
     "react-native-gesture-handler": "catalog:",
     "react-native-reanimated": "catalog:",
-    "react-native-worklets": "catalog:",
-    "expo": "catalog:",
-    "react-native-safe-area-context": "~5.10.1"
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-worklets": "catalog:"
+  },
+  "dependencies": {
+    "@expo-google-fonts/geist": "0.4.2",
+    "@expo-google-fonts/geist-mono": "0.4.3",
+    "@expo-google-fonts/instrument-serif": "0.4.1"
   }
 }

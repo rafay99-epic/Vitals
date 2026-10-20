@@ -2,18 +2,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css";
 @import "nativewind/theme";
+@import "../../packages/ui/src/theme.css";
 
 @source "../../packages/app/src";
 @source "../../packages/ui/src";
-
-@theme {
-  --color-canvas: #000000;
-  --color-ink: #ffffff;
-  --color-dim: #a1a1a1;
-  --color-mute: #6b6b6b;
-  --color-line: #1c1c1c;
-  --color-ok: #5ee38a;
-  --color-warn: #ffcc4d;
-  --color-bad: #ff6b6b;
-  --color-accent: #7cc4ff;
-}

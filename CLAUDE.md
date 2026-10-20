@@ -26,6 +26,14 @@ License: **GPL-3.0**.
    release parsing is `convex/lib/github.ts` (backend action + website fallback). Reuse
    first; if the existing component doesn't fit, generalize it rather than fork it.
 
+## UI consistency (Remote clients and the website)
+
+Any UI work in `packages/ui`, `packages/app`, `apps/mobile`, `apps/web` or `apps/marketing` must follow
+**[`UI-CONSISTENCY.md`](./UI-CONSISTENCY.md)**: the Bedside tokens, the shared components in `@vitals/ui`,
+the screen inventory, platform rules, motion, accessibility and the review checklist. Compose existing
+components; if one is missing, add it to the kit and to that file in the same change. The desktop app keeps the
+Apple native design language below.
+
 ## Workflow rules (user's explicit requirements — do not violate)
 
 - **`nightly` is the integration branch; `main` is the default + protected Stable branch.** Every
@@ -143,7 +151,8 @@ pnpm dmg                  # desktop app + DMG (macOS only)
 # desktop directly (from apps/desktop): swift build, swift test, ./build.sh, ./make-dmg.sh
 # remote stack: pnpm oxlint · pnpm knip · pnpm turbo typecheck --filter=@vitals/* · pnpm turbo test --filter=@vitals/gateway
 # web client: pnpm --filter @vitals/web export → apps/web/dist, served by the gateway; build.sh bundles it
-# android APK: pnpm --filter @vitals/mobile android:release (pnpm manages deps; Bun only compiles and tests the gateway)
+# android APK: pnpm --filter @vitals/mobile android:dev | android:prod (pnpm manages deps; Bun only compiles and tests the gateway)
+# OTA update: pnpm --filter @vitals/mobile update:dev | update:prod (publishes the JS bundle to that channel)
 # website e2e locally: E2E_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" pnpm turbo test:e2e --filter=marketing
 ```
 
@@ -283,8 +292,9 @@ Rules:
 - **Honest readings.** Missing values are `null` on the wire, never 0.
 - **Local only.** The gateway binds 127.0.0.1; `tailscale serve` (port 7443 Stable, 7444 Nightly, 7445 Dev) is the only way in, and the `Tailscale-User-Login` header must match the owner.
 - **Sessions.** Native clients keep their token in the OS keychain (`expo-secure-store`). Browsers never see a token: `/api/pair` sets an `HttpOnly; Secure; SameSite=Strict` cookie named per channel (`vitals_session_<channel>`, path `/api`), `/api/session` reports it, `/api/unpair` revokes the device and expires it. No `localStorage`, `sessionStorage` or IndexedDB on web.
-- **Pairing links.** Browsers pair from `https://<mac>:<port>/pair#code=<code>`. Native apps also accept `<scheme>://pair?link=<url-encoded pairing link>` (`vitals`, `vitals-preview`, `vitals-dev`), and pairing again revokes the device's previous session on the Mac.
-- **Alerts have no third-party push.** While connected, clients get `AlertRaised` events over the socket and raise a local notification. Native clients also run an `expo-background-task` job (about every 15 minutes) that reads the open alerts from `/api/alerts` and notifies each alert id once while it stays open (seen ids live in the keychain and are pruned to the open set on every poll; alerts shown while the app is active count as seen). There is no Firebase or Expo push service. The EAS project is `@prometheus99/vitals-remote` and is used for builds only.
+- **Pairing links.** Browsers pair from `https://<mac>:<port>/pair#code=<code>`. Native apps also accept `<scheme>://pair?link=<url-encoded pairing link>` (`vitals` for prod, `vitals-dev` for dev), and pairing again revokes the device's previous session on the Mac.
+- **Alerts have no third-party push.** While connected, clients get `AlertRaised` events over the socket and raise a local notification. Native clients also run an `expo-background-task` job (about every 15 minutes) that reads the open alerts from `/api/alerts` and notifies each alert id once while it stays open (seen ids live in the keychain and are pruned to the open set on every poll; alerts shown while the app is active count as seen). There is no Firebase or Expo push service. The EAS project is `@prometheus99/vitals-remote`; it hosts builds and OTA updates only, never push.
+- **Two native variants, mandatory OTA.** `APP_VARIANT=prod` builds "Vitals" (`com.syntaxlabtechnology.vitals.remote`, channel `production`); anything else builds "Vitals Dev" (`.dev`, channel `dev`) with the Diagnostics screen in Record. `expo-updates` uses the fingerprint runtime policy, so an update only reaches binaries with matching native code; native changes need a new build. `UpdateGate` checks on launch and every foreground and blocks the app until a found update is applied; there is no skip. Offline launches run the current bundle and check again later. Switching variants locally needs `expo prebuild --clean` because the package name changes.
 - **Activity log is desktop-only.** `~/.vitals*/remote/activity.db` is written by the gateway and read read-only by Vitals; no RPC exposes it to phones.
 - **Tests never fire real power commands.** Router tests use a fake executor; end-to-end runs only cancel inside the grace window.
 - **TypeScript strictness** follows T3 Code: `tsconfig.base.json` flags, oxlint with the React Compiler rules, knip clean, no `any`, no casts.

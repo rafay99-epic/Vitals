@@ -1,16 +1,21 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+
+import { Tag } from "../typography.tsx";
+import type { Option } from "./Chips.tsx";
 
 export function Segmented<T extends string>({
   options,
   value,
   onChange,
+  inset = true,
 }: {
-  readonly options: ReadonlyArray<{ readonly value: T; readonly label: string }>;
+  readonly options: ReadonlyArray<Option<T>>;
   readonly value: T;
   readonly onChange: (value: T) => void;
+  readonly inset?: boolean | undefined;
 }) {
   return (
-    <View className="flex-row border border-line" accessibilityRole="tablist">
+    <View className={`flex-row gap-5 border-b border-line ${inset ? "px-[22px]" : ""}`} accessibilityRole="tablist">
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -19,9 +24,9 @@ export function Segmented<T extends string>({
             onPress={() => onChange(option.value)}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
-            className={`min-h-9 flex-1 items-center justify-center ${selected ? "bg-ink" : ""}`}
+            className={`-mb-px min-h-11 justify-center border-b-[1.5px] ${selected ? "border-ink" : "border-transparent"}`}
           >
-            <Text className={`font-mono text-xs ${selected ? "text-canvas" : "text-dim"}`}>{option.label}</Text>
+            <Tag tone={selected ? "ink" : "dim"}>{option.label}</Tag>
           </Pressable>
         );
       })}
