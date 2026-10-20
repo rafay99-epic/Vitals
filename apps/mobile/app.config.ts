@@ -6,9 +6,9 @@ const variant: Variant = process.env["APP_VARIANT"] === "prod" ? "prod" : "dev";
 
 const PROJECT_ID = "4db0c236-4405-41ad-ad17-dabb1942aa86";
 
-const VARIANTS: Record<Variant, { readonly name: string; readonly suffix: string; readonly scheme: string; readonly channel: string }> = {
-  dev: { name: "Vitals Dev", suffix: ".dev", scheme: "vitals-dev", channel: "dev" },
-  prod: { name: "Vitals", suffix: "", scheme: "vitals", channel: "production" },
+const VARIANTS: Record<Variant, { readonly name: string; readonly suffix: string; readonly scheme: string; readonly channel: string; readonly art: string }> = {
+  dev: { name: "Vitals Dev", suffix: ".dev", scheme: "vitals-dev", channel: "dev", art: "-dev" },
+  prod: { name: "Vitals", suffix: "", scheme: "vitals", channel: "production", art: "" },
 };
 
 const current = VARIANTS[variant];
@@ -31,7 +31,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "vitals-remote",
   scheme: current.scheme,
   version: "1.0.0",
-  icon: "./assets/icon.png",
+  icon: `./assets/icon${current.art}.png`,
   orientation: "portrait",
   userInterfaceStyle: "dark",
   backgroundColor: "#000000",
@@ -48,6 +48,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: `com.syntaxlabtechnology.vitals.remote${current.suffix}`,
     supportsTablet: false,
+    icon: {
+      light: `./assets/icon${current.art}.png`,
+      dark: `./assets/icon-dark${current.art}.png`,
+      tinted: `./assets/icon-tinted${current.art}.png`,
+    },
     infoPlist: {
       NSCameraUsageDescription: "Scan the pairing code shown in Vitals on your Mac.",
       NSLocalNetworkUsageDescription: "Connect to your Mac over your tailnet.",
@@ -56,6 +61,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: `com.syntaxlabtechnology.vitals.remote${current.suffix}`,
     permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE"],
+    adaptiveIcon: {
+      foregroundImage: `./assets/adaptive-foreground${current.art}.png`,
+      monochromeImage: "./assets/adaptive-monochrome.png",
+      backgroundColor: "#000000",
+    },
   },
   plugins: [
     [
@@ -63,6 +73,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         ios: { fonts: Object.values(FONTS) },
         android: { fonts: Object.entries(FONTS).map(([fontFamily, path]) => ({ fontFamily, fontDefinitions: [{ path, weight: 400 }] })) },
+      },
+    ],
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/splash.png",
+        imageWidth: 96,
+        resizeMode: "contain",
+        backgroundColor: "#000000",
+        dark: { image: "./assets/splash.png", backgroundColor: "#000000" },
       },
     ],
     ["expo-camera", { cameraPermission: "Scan the pairing code shown in Vitals on your Mac." }],
