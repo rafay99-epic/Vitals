@@ -184,7 +184,10 @@ private struct DeviceRow: View {
     private func scopeToggle(_ scope: String, title: String) -> some View {
         Toggle(title, isOn: Binding(
             get: { device.scopes.contains(scope) },
-            set: { enabled in Task { await remote.setScope(scope, enabled: enabled, for: device) } }
+            set: { enabled in
+                let current = remote.devices.first { $0.id == device.id } ?? device
+                Task { await remote.setScope(scope, enabled: enabled, for: current) }
+            }
         ))
         .toggleStyle(.checkbox)
     }

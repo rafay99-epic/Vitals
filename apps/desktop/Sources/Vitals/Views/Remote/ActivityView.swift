@@ -83,7 +83,7 @@ private struct ActivityDetail: View {
                             model.following = model.following == connection ? nil : connection
                         }
                     }
-                    if model.following != nil {
+                    if let connection = event.connectionId, model.following == connection {
                         Divider()
                         ForEach(model.frames) { frame in
                             HStack {

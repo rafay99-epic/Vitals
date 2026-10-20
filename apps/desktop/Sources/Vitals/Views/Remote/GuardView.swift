@@ -7,7 +7,7 @@ struct GuardView: View {
     var body: some View {
         MetricScroll {
             SectionCard(title: "Right now", symbol: "gauge.with.dots.needle.67percent") {
-                if let state = remote.guardState {
+                if settings.guardSettings.enabled, let state = remote.guardState {
                     HStack(spacing: 24) {
                         stat("Memory pressure", state.pressure.capitalized)
                         stat("Thermal", state.thermal.capitalized)
@@ -36,7 +36,7 @@ struct GuardView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            if let active = remote.guardState?.active, !active.isEmpty {
+            if settings.guardSettings.enabled, let active = remote.guardState?.active, !active.isEmpty {
                 SectionCard(title: "Active alerts", symbol: "exclamationmark.triangle") {
                     ForEach(active) { alert in
                         VStack(alignment: .leading, spacing: 2) {
