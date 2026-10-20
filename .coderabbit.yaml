@@ -102,7 +102,7 @@ reviews:
         download/company URLs come only from lib/links.ts. Mock data must be coded
         components in the app's design language and must never invent fake numbers.
         Assert no horizontal overflow at 390/1440px.
-    - path: "apps/marketing/src/routes/{privacy,terms}.tsx"
+    - path: "apps/marketing/src/pages/{Privacy,Terms}.tsx"
       instructions: >-
         Legal pages must match reality. The privacy policy must disclose every data
         flow (e.g. Vercel Web Analytics) BEFORE it ships; flag any new tracking/

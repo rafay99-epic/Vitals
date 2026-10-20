@@ -134,12 +134,13 @@ export default function Privacy() {
           </Item>
           <Item>
             <Strong>What the phone app stores:</Strong> the Mac address and a session token in the phone's secure storage, plus a
-            short queue of its own connection events that it uploads to your Mac.
+            short queue of its own connection events that it uploads to your Mac. A paired browser keeps only a session cookie
+            that page scripts cannot read, and nothing in browser storage.
           </Item>
           <Item>
-            <Strong>Push notifications:</Strong> if you set up push for Pressure Guard alerts, the alert id and severity are sent
-            through Expo's push service and Google Firebase (or Apple's push service on iPhone) to reach your phone. Process
-            names, paths and readings are never included; the phone loads details over your tailnet when you open it.
+            <Strong>Alerts:</Strong> Pressure Guard alerts reach your phone over your tailnet only. While the app is open they
+            arrive live; in the background the phone checks your Mac about every 15 minutes and shows a local notification. No
+            push service is involved: not Expo, not Google Firebase, not Apple's push service.
           </Item>
         </List>
         <P>Turning Remote off stops the gateway and removes the tailnet entry. Revoking a device on the Mac signs it out at once.</P>

@@ -9,16 +9,16 @@ function MenuBarStrip({ style }: { style: 'Icons' | 'Text' }) {
   const items =
     style === 'Icons'
       ? [
-          { icon: <ThermoIcon size={12} color="#FF9F4A" strokeWidth={2} />, value: '57°' },
-          { icon: <ChipIcon size={12} color="#2AB0FF" strokeWidth={2} />, value: '23%' },
-          { icon: <MemoryIcon size={12} color="#34D85F" strokeWidth={2} />, value: '12.8G' },
-          { icon: <FanIcon size={12} color="#00D8F0" strokeWidth={1.8} />, value: '6516' },
+          { id: 'temp', icon: <ThermoIcon size={12} color="#FF9F4A" strokeWidth={2} />, value: '57°' },
+          { id: 'cpu', icon: <ChipIcon size={12} color="#2AB0FF" strokeWidth={2} />, value: '23%' },
+          { id: 'ram', icon: <MemoryIcon size={12} color="#34D85F" strokeWidth={2} />, value: '12.8G' },
+          { id: 'fan', icon: <FanIcon size={12} color="#00D8F0" strokeWidth={1.8} />, value: '6516' },
         ]
       : [
-          { label: 'Temp', value: '57°' },
-          { label: 'CPU', value: '23%' },
-          { label: 'RAM', value: '12.8G' },
-          { label: 'Fan', value: '6516' },
+          { id: 'temp', label: 'Temp', value: '57°' },
+          { id: 'cpu', label: 'CPU', value: '23%' },
+          { id: 'ram', label: 'RAM', value: '12.8G' },
+          { id: 'fan', label: 'Fan', value: '6516' },
         ]
   return (
     <div
@@ -33,8 +33,8 @@ function MenuBarStrip({ style }: { style: 'Icons' | 'Text' }) {
         border: '1px solid rgba(255,255,255,0.12)',
       }}
     >
-      {items.map((it, i) => (
-        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontFamily: mono, color: '#f5f5f7' }}>
+      {items.map((it) => (
+        <span key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontFamily: mono, color: '#f5f5f7' }}>
           {'icon' in it ? it.icon : <span style={{ color: 'rgba(235,235,245,0.55)' }}>{it.label}</span>}
           {it.value}
         </span>

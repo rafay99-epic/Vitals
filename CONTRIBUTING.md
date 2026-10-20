@@ -27,9 +27,11 @@ This is a **bun + turbo monorepo**:
 ## Getting set up
 
 ```sh
-pnpm install                  # once, from the repo root
-pnpm dev                  # website (vite) + convex dev together
-pnpm build / lint / test  # everything, via turbo
+pnpm install   # once, from the repo root
+pnpm dev       # website (vite) + convex dev together
+pnpm build     # everything, via turbo
+pnpm lint
+pnpm test
 ```
 
 For the **desktop app** (from `apps/desktop`, requires macOS):

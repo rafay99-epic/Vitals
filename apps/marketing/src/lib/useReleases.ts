@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAction } from 'convex/react'
 import { api } from '@convex/_generated/api'
 import { fetchReleases, RELEASES_PER_PAGE, type ReleaseSummary } from '@convex/lib/github'
@@ -19,10 +19,10 @@ export interface ReleasesResult {
 
 /// Shared load state machine. `load(page)` resolves to a page of releases, or
 /// `null` on failure (→ error state for the first page). It must be referentially
-/// stable so the effect re-runs only on retry. A page that comes back full
+/// stable so the first page loads once on mount. A page that comes back full
 /// (`RELEASES_PER_PAGE` rows) means there's probably more.
 function useReleaseLoader(load: (page: number) => Promise<ReleaseSummary[] | null>): ReleasesResult {
-  const [nonce, setNonce] = useState(0)
+  const generation = useRef(0)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -31,14 +31,14 @@ function useReleaseLoader(load: (page: number) => Promise<ReleaseSummary[] | nul
     releases: [],
   })
 
-  // First page on mount / retry. The reset-to-loading happens in `retry` (an
-  // event handler), not here — calling setState synchronously in an effect body
-  // triggers cascading renders.
-  useEffect(() => {
-    let alive = true
+  // First page on mount / retry. Each request takes a generation number, so a
+  // slow response from a superseded request (or after unmount) is ignored.
+  const fetchFirstPage = useCallback(() => {
+    generation.current += 1
+    const current = generation.current
     load(1)
       .then((list) => {
-        if (!alive) return
+        if (generation.current !== current) return
         if (list === null) {
           setState({ status: 'error', releases: [] })
           return
@@ -47,12 +47,16 @@ function useReleaseLoader(load: (page: number) => Promise<ReleaseSummary[] | nul
         setHasMore(list.length >= RELEASES_PER_PAGE)
       })
       .catch(() => {
-        if (alive) setState({ status: 'error', releases: [] })
+        if (generation.current === current) setState({ status: 'error', releases: [] })
       })
+  }, [load])
+
+  useEffect(() => {
+    fetchFirstPage()
     return () => {
-      alive = false
+      generation.current += 1
     }
-  }, [nonce, load])
+  }, [fetchFirstPage])
 
   const loadMore = useCallback(() => {
     if (loadingMore) return
@@ -75,14 +79,14 @@ function useReleaseLoader(load: (page: number) => Promise<ReleaseSummary[] | nul
       })
   }, [page, loadingMore, load])
 
-  // Reset to loading here (an event handler — setState is fine) and bump the
-  // nonce to re-run the first-page effect.
+  // Reset to loading here (an event handler, so setState is fine) and fetch
+  // the first page again.
   const retry = useCallback(() => {
     setState({ status: 'loading', releases: [] })
     setPage(1)
     setHasMore(false)
-    setNonce((n) => n + 1)
-  }, [])
+    fetchFirstPage()
+  }, [fetchFirstPage])
 
   return { ...state, hasMore, loadingMore, loadMore, retry }
 }

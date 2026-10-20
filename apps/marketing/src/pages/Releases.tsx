@@ -258,34 +258,34 @@ function ReleaseNotes({ body }: { body: string }) {
     }
   }
 
-  text.split('\n').forEach((raw, idx) => {
+  for (const [lineNo, raw] of text.split('\n').entries()) {
     const line = raw.trim()
     if (!line) {
       flush()
-      return
+      continue
     }
     if (/^#{1,6}\s/.test(line)) {
       flush()
       blocks.push(
-        <div key={`h-${idx}`} style={{ fontSize: 13, fontWeight: 700, color: '#f5f5f7', margin: blocks.length ? '12px 0 4px' : '0 0 4px', letterSpacing: '0.01em' }}>
-          {renderInline(line.replace(/^#{1,6}\s/, ''), `h${idx}`)}
+        <div key={`h-${lineNo}`} style={{ fontSize: 13, fontWeight: 700, color: '#f5f5f7', margin: blocks.length ? '12px 0 4px' : '0 0 4px', letterSpacing: '0.01em' }}>
+          {renderInline(line.replace(/^#{1,6}\s/, ''), `h${lineNo}`)}
         </div>,
       )
     } else if (/^[*-]\s/.test(line)) {
       bullets.push(
-        <li key={`li-${idx}`} style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(235,235,245,0.66)' }}>
-          {renderInline(line.replace(/^[*-]\s/, ''), `li${idx}`)}
+        <li key={`li-${lineNo}`} style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(235,235,245,0.66)' }}>
+          {renderInline(line.replace(/^[*-]\s/, ''), `li${lineNo}`)}
         </li>,
       )
     } else {
       flush()
       blocks.push(
-        <p key={`p-${idx}`} style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(235,235,245,0.66)', margin: '0 0 8px' }}>
-          {renderInline(line, `p${idx}`)}
+        <p key={`p-${lineNo}`} style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(235,235,245,0.66)', margin: '0 0 8px' }}>
+          {renderInline(line, `p${lineNo}`)}
         </p>,
       )
     }
-  })
+  }
   flush()
 
   return <div>{blocks}</div>
