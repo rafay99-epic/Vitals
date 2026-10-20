@@ -1,0 +1,45 @@
+CLAUDE.md
+  s_1d0dcbd2b75ee5::t_37e12ceb707add 286-287
+apps/desktop/Sources/Vitals/Models/AppsModel.swift
+  s_1d0dcbd2b75ee5::t_8da86afbd35ddf 283,285,302
+apps/gateway/src/http/routes.ts
+  s_1d0dcbd2b75ee5::t_fe64721d67d544 73-74
+apps/gateway/test/gateway.test.ts
+  s_1d0dcbd2b75ee5::t_93919731c1d4eb 73-85,88
+apps/mobile/app.config.ts
+  s_1d0dcbd2b75ee5::t_1cc413050e7b1c 45-46
+packages/app/src/App.tsx
+  s_022d341eae1f33::t_14126e5e8c920b 7,90
+packages/app/src/connection/session.ts
+  s_1d0dcbd2b75ee5::t_6088fc2e710231 1,3,27-31,38-44,50,52,77,79,136,170-176
+packages/app/src/notifications/background.ts
+  s_1d0dcbd2b75ee5::t_d5a8d6608d8b24 14,32,41-43,55
+packages/client-runtime/src/pairing.ts
+  s_1d0dcbd2b75ee5::t_fdee74e7ac5255 30-36
+packages/client-runtime/test/runtime.test.ts
+  s_1d0dcbd2b75ee5::t_c154476184c1b9 6,46-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e5e7e9b752370d83689da5d883ecca751faae1b6",
+  "prompts": {},
+  "sessions": {
+    "s_022d341eae1f33": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46673afe-0002-474c-84da-83f4fa2403ea",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    },
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
