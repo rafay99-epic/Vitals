@@ -58,7 +58,7 @@ struct MemoryCard: View {
             Segment(label: "App", bytes: memory.app, color: .blue),
             Segment(label: "Wired", bytes: memory.wired, color: .orange),
             Segment(label: "Compressed", bytes: memory.compressed, color: .purple),
-            Segment(label: "Cached", bytes: memory.cached, color: .green.opacity(0.7)),
+            Segment(label: "Cached", bytes: memory.cached, color: .green.opacity(0.7))
         ]
     }
 
@@ -133,7 +133,7 @@ private struct MemoryUsageHistoryCard: View {
         let hasSwap = maxSwapGB > 0
         let upperGB = max(gigabytes(model.memoryTotal), maxSwapGB, 1)
         var series: [ChartSeries<VitalsModel.Sample>] = [
-            .init(name: "Used", color: .blue, area: 0.35) { gigabytes($0.memoryUsed) },
+            .init(name: "Used", color: .blue, area: 0.35) { gigabytes($0.memoryUsed) }
         ]
         if hasSwap {
             series.append(.init(name: "Swap", color: .orange) { gigabytes($0.swapUsed) })
@@ -171,7 +171,7 @@ private struct MemoryCompositionCard: View {
             row("lock.fill", "Wired", memory.wired, of: memory.total),
             row("rectangle.compress.vertical", "Compressed", memory.compressed, of: memory.total),
             row("tray.full.fill", "Cached files", memory.cached, of: memory.total),
-            row("circle.dashed", "Free", memory.free, of: memory.total),
+            row("circle.dashed", "Free", memory.free, of: memory.total)
         ]
         rows.append(MetricRow(symbol: "arrow.left.arrow.right", label: "Swap used", value: swapSummary(memory)))
         return rows
@@ -217,7 +217,7 @@ private struct MemoryActivityCard: View {
             row("arrow.down.to.line", "Swap-ins", activity.swapInsPerSec),
             row("arrow.up.to.line", "Swap-outs", activity.swapOutsPerSec),
             row("arrow.down.right.and.arrow.up.left", "Compressions", activity.compressionsPerSec),
-            row("arrow.up.left.and.arrow.down.right", "Decompressions", activity.decompressionsPerSec),
+            row("arrow.up.left.and.arrow.down.right", "Decompressions", activity.decompressionsPerSec)
         ]
     }
 

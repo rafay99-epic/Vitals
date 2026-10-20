@@ -119,7 +119,7 @@ struct PerformanceHistoryCard: View {
         case .temp:
             return [
                 .init(name: "Hottest core", color: .red.opacity(0.7)) { settings.display($0.hottestCPU) },
-                .init(name: "CPU average", color: .orange, lineWidth: 2) { settings.display($0.averageCPU) },
+                .init(name: "CPU average", color: .orange, lineWidth: 2) { settings.display($0.averageCPU) }
             ]
         case .cpu:
             return [.init(name: "CPU", color: .blue, area: 0.35) { $0.usage }]
@@ -128,14 +128,14 @@ struct PerformanceHistoryCard: View {
         case .memory:
             return [
                 .init(name: "Memory", color: .indigo) { gigabytes($0.memoryUsed) },
-                .init(name: "Swap", color: .orange) { gigabytes($0.swapUsed) },
+                .init(name: "Swap", color: .orange) { gigabytes($0.swapUsed) }
             ]
         case .power:
             return [.init(name: "Power", color: .yellow, area: 0.35) { $0.totalWatts }]
         case .network:
             return [
                 .init(name: "Download", color: .mint) { $0.netInPerSec.map { $0 / 1_000_000 } },
-                .init(name: "Upload", color: .orange) { $0.netOutPerSec.map { $0 / 1_000_000 } },
+                .init(name: "Upload", color: .orange) { $0.netOutPerSec.map { $0 / 1_000_000 } }
             ]
         }
     }

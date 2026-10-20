@@ -180,7 +180,14 @@ final class ProcessSampler {
         return info.pbi_uid
     }
 
-    private static func name(of pid: pid_t) -> String {
+    static func parent(of pid: pid_t) -> pid_t? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return pid_t(info.pbi_ppid)
+    }
+
+    static func name(of pid: pid_t) -> String {
         // Prefer the executable name over proc_name's truncated 16-char p_comm.
         var pathBuffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
         if proc_pidpath(pid, &pathBuffer, UInt32(pathBuffer.count)) > 0 {

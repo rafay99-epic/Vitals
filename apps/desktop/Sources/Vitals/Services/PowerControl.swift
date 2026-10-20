@@ -21,13 +21,21 @@ final class PowerControl {
     private var processWatch: DispatchSourceProcess?
 
     func startKeepAwake(until: Date?, display: Bool, whileProcess: ProcessRef?) -> String? {
-        stopKeepAwake(notify: false)
         if let whileProcess, ProcessSampler.startTimeMs(of: whileProcess.pid) != whileProcess.startTimeMs {
             return "That process already exited"
         }
         guard let system = assertion("PreventUserIdleSystemSleep") else { return "macOS refused the keep-awake assertion" }
+        var screen: IOPMAssertionID = 0
+        if display {
+            guard let displayID = assertion("PreventUserIdleDisplaySleep") else {
+                IOPMAssertionRelease(system)
+                return "macOS refused the display keep-awake assertion"
+            }
+            screen = displayID
+        }
+        stopKeepAwake(notify: false)
         systemAssertion = system
-        if display, let displayID = assertion("PreventUserIdleDisplaySleep") { displayAssertion = displayID }
+        displayAssertion = screen
         keepAwake = KeepAwake(active: true, display: display, until: until, whileProcess: whileProcess)
         if let until {
             let timer = Timer(fire: until, interval: 0, repeats: false) { [weak self] _ in
@@ -122,7 +130,7 @@ enum SystemPower {
             unsafeBitCast(symbol, to: LockFunction.self)()
             return nil
         }
-        return displaySleep()
+        return "Locking is not available on this version of macOS"
     }
 
     static func run(_ executable: String, _ arguments: [String]) -> String? {

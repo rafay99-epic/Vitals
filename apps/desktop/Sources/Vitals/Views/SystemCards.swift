@@ -145,7 +145,7 @@ struct PowerCard: View {
             if let power = model.power {
                 PowerRails(power: power)
             } else {
-                Text("Power readings appear in a moment — or aren't available on this Mac.")
+                Text("Power readings appear in a moment, or aren't available on this Mac.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)

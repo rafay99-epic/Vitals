@@ -102,7 +102,7 @@ private struct NetworkHistoryCard: View {
 
     private static let series: [ChartSeries<VitalsModel.Sample>] = [
         .init(name: "Download", color: .mint, area: 0.35) { $0.netInPerSec.map { $0 / 1_000_000 } },
-        .init(name: "Upload", color: .orange) { $0.netOutPerSec.map { $0 / 1_000_000 } },
+        .init(name: "Upload", color: .orange) { $0.netOutPerSec.map { $0 / 1_000_000 } }
     ]
 }
 

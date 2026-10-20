@@ -120,9 +120,8 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     /// A banner-body tap does the category's primary action; "Later" just dismisses.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
+        didReceive response: UNNotificationResponse
+    ) async {
         let category = response.notification.request.content.categoryIdentifier
         let action = response.actionIdentifier
         let resolved: UpdateAction?
@@ -142,9 +141,6 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         default:
             resolved = nil  // "Later", dismiss, or an unrelated category
         }
-        if let resolved {
-            Task { @MainActor in self.onUpdateAction?(resolved) }
-        }
         let identifier = response.notification.request.identifier
         let remote: RemoteAction?
         switch action {
@@ -152,9 +148,9 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         case Action.calmDown: remote = .calmDown
         default: remote = nil
         }
-        if let remote {
-            Task { @MainActor in self.onRemoteAction?(remote) }
+        await MainActor.run {
+            if let resolved { self.onUpdateAction?(resolved) }
+            if let remote { self.onRemoteAction?(remote) }
         }
-        completionHandler()
     }
 }

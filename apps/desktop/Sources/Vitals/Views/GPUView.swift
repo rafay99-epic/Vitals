@@ -188,7 +188,7 @@ private struct GPUPowerCard: View {
             if let power = model.power {
                 PowerRails(power: power)
             } else {
-                CardPlaceholder("Power readings unavailable on this Mac.")
+                CardPlaceholder("Power readings appear in a moment, or aren't available on this Mac.")
             }
         }
     }

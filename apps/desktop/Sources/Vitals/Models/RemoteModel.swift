@@ -24,7 +24,13 @@ final class RemoteModel {
     private(set) var pairing: Pairing?
     private(set) var keepAwake = PowerControl.KeepAwake()
     private(set) var guardState: WireGuardState?
-    private(set) var pendingCommands: [String: (deviceName: String, kind: String, deadline: Date)] = [:]
+    struct PendingCommand: Equatable {
+        let deviceName: String
+        let kind: String
+        let deadline: Date
+    }
+
+    private(set) var pendingCommands: [String: PendingCommand] = [:]
     private(set) var adminError: String?
 
     var isEnabled: Bool { settings.remoteEnabled }
@@ -36,6 +42,7 @@ final class RemoteModel {
     @ObservationIgnored private var gateway: GatewayProcess?
     @ObservationIgnored private var restartTask: Task<Void, Never>?
     @ObservationIgnored private var restartAttempt = 0
+    @ObservationIgnored private var gatewayGeneration = 0
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var needs = NeedsMessage.none
     @ObservationIgnored private var sampleSeq = 0
@@ -71,7 +78,7 @@ final class RemoteModel {
             },
             NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.shutdown() }
-            },
+            }
         ]
         if settings.remoteEnabled { startGateway() }
     }
@@ -128,6 +135,8 @@ final class RemoteModel {
         environment["VITALS_CHANNEL"] = Channel.current.rawValue
         environment["VITALS_REMOTE_DATA_DIR"] = Self.dataDirectory.path
         if let web = Self.webDirectory { environment["VITALS_REMOTE_WEB_DIR"] = web.path }
+        gatewayGeneration += 1
+        let generation = gatewayGeneration
         let process = GatewayProcess(
             executable: executable,
             environment: environment,
@@ -138,7 +147,7 @@ final class RemoteModel {
                 Log.notice(.remote, "gateway sent an unreadable line: \(line)")
             },
             onExit: { [weak self] code in
-                Task { @MainActor in self?.gatewayExited(code) }
+                Task { @MainActor in self?.gatewayExited(code, generation: generation) }
             }
         )
         do {
@@ -154,6 +163,7 @@ final class RemoteModel {
     }
 
     private func stopGateway() {
+        gatewayGeneration += 1
         restartTask?.cancel()
         restartTask = nil
         gateway?.stop()
@@ -167,7 +177,8 @@ final class RemoteModel {
         failAdminWaiters("Remote access is off")
     }
 
-    private func gatewayExited(_ code: Int32) {
+    private func gatewayExited(_ code: Int32, generation: Int) {
+        guard generation == gatewayGeneration else { return }
         gateway = nil
         needs = .none
         updateVitalsNeeds()
@@ -202,7 +213,9 @@ final class RemoteModel {
         switch message {
         case .hello:
             state = .running
+            lastGuardSent = nil
             send(.hello(mac: macInfo(), keepAwake: wireKeepAwake(keepAwake)))
+            for alert in guardEngine.active { send(.event(.alertRaised(at: alert.raisedAt, alert: alert))) }
             Task { await refreshDevices() }
         case let .need(next):
             needs = next
@@ -218,7 +231,7 @@ final class RemoteModel {
             if let result { waiter.resume(returning: result) } else { waiter.resume(throwing: AdminFailure(message: error ?? "Failed")) }
         case let .status(next):
             status = next
-            if devices.contains(where: \.connected) != (next.clients > 0) { Task { await refreshDevices() } }
+            Task { await refreshDevices() }
         }
     }
 
@@ -271,9 +284,12 @@ final class RemoteModel {
     }
 
     func setScope(_ scope: String, enabled: Bool, for device: RemoteDevice) async {
-        var scopes = Set(device.scopes)
+        guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
+        var scopes = Set(devices[index].scopes)
         if enabled { scopes.insert(scope) } else { scopes.remove(scope) }
-        _ = try? await admin(.setScopes(deviceId: device.id, scopes: Array(scopes).sorted()))
+        let next = Array(scopes).sorted()
+        devices[index].scopes = next
+        _ = try? await admin(.setScopes(deviceId: device.id, scopes: next))
         await refreshDevices()
     }
 
@@ -325,9 +341,11 @@ final class RemoteModel {
     }
 
     private func processesSnapshot(limit: Int, at date: Date) -> WireProcesses {
-        let rows = latestTable
-            .sorted { $0.cpuPercent > $1.cpuPercent }
-            .prefix(limit)
+        let byCpu = latestTable.sorted { $0.cpuPercent > $1.cpuPercent }.prefix(limit)
+        let byMemory = latestTable.sorted { $0.memory > $1.memory }.prefix(limit)
+        var seen = Set<pid_t>()
+        let rows = (byCpu + byMemory)
+            .filter { seen.insert($0.pid).inserted }
             .map { row -> WireProcessRow in
                 let ref = ProcessRef(pid: row.pid, startTimeMs: row.startTimeMs)
                 return WireProcessRow(
@@ -397,7 +415,7 @@ final class RemoteModel {
         }
         router.onGraceStarted = { [weak self] request, deadline in
             guard let self else { return }
-            self.pendingCommands[request.id] = (request.deviceName, request.command.tag, deadline)
+            self.pendingCommands[request.id] = PendingCommand(deviceName: request.deviceName, kind: request.command.tag, deadline: deadline)
             NotificationManager.shared.send(
                 title: "\(Self.label(request.command)) in \(request.command.graceSeconds) s",
                 body: "Requested from \(request.deviceName). Cancel to keep working.",
@@ -453,7 +471,9 @@ final class RemoteModel {
     private func apply(_ actions: [ProcessAction]) -> String? {
         var failures: [String] = []
         for action in actions {
-            if let failure = ProcessControl.apply(action, isProtected: { self.latestClassified.group(of: $0) == .protected }) {
+            if let failure = ProcessControl.apply(action, isProtected: { pid in
+                self.latestClassified.groupByPid[pid].map { $0 == .protected } ?? ProcessGroups.isProtectedNow(pid)
+            }) {
                 failures.append("\(action.target.pid): \(failure.message)")
                 continue
             }

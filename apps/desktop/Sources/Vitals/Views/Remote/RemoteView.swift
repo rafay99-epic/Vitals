@@ -56,9 +56,9 @@ private struct RemoteDevicesTab: View {
                 .disabled(remote.state != .running)
             }
         }
-        .sheet(isPresented: $showingPairing, onDismiss: { remote.clearPairing() }) {
+        .sheet(isPresented: $showingPairing, onDismiss: { remote.clearPairing() }, content: {
             PairingSheet(isPresented: $showingPairing)
-        }
+        })
         .task(id: remote.state) { await remote.refreshDevices() }
     }
 }

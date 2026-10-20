@@ -33,7 +33,7 @@ struct PressureGuard {
             GuardRule(kind: Rule.cpuSaturated.rawValue, enabled: true, threshold: 90, holdSeconds: 60),
             GuardRule(kind: Rule.agentOverload.rawValue, enabled: true, threshold: 6, holdSeconds: 20),
             GuardRule(kind: Rule.emulatorStack.rawValue, enabled: true, threshold: 2, holdSeconds: 10),
-            GuardRule(kind: Rule.thermal.rawValue, enabled: true, threshold: 2, holdSeconds: 0),
+            GuardRule(kind: Rule.thermal.rawValue, enabled: true, threshold: 2, holdSeconds: 0)
         ]
     )
 

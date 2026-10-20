@@ -82,4 +82,3 @@ private struct DashboardFooter: View {
         .padding(.horizontal, 4)
     }
 }
-

@@ -196,7 +196,7 @@ struct RemoteDevice: Codable, Equatable, Identifiable, Sendable {
     let platform: String
     let model: String
     let appVersion: String
-    let scopes: [String]
+    var scopes: [String]
     let createdAt: Int64
     @Nullable var lastSeenAt: Int64?
     @Nullable var revokedAt: Int64?

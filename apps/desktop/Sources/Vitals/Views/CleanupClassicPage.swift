@@ -155,7 +155,7 @@ struct CleanupClassicPage: View {
             hints: [
                 .init(symbol: "shippingbox", label: "Caches"),
                 .init(symbol: "doc.text", label: "Logs"),
-                .init(symbol: "lock", label: "System · Deep"),
+                .init(symbol: "lock", label: "System · Deep")
             ]
         ) {
             Button { model.scan(depth: depth) } label: {

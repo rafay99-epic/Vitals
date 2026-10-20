@@ -34,6 +34,7 @@ enum RunningApps {
 
     private static func act(_ ref: AppRef, _ body: (NSRunningApplication) -> Bool) -> String? {
         guard let app = NSRunningApplication(processIdentifier: ref.pid),
+              app.activationPolicy == .regular,
               ref.bundleId == nil || app.bundleIdentifier == ref.bundleId,
               app.processIdentifier != getpid()
         else { return "App is no longer running" }

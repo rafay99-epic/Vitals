@@ -324,10 +324,15 @@ enum JSONValue: Codable, Equatable, Sendable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
-        if c.decodeNil() { self = .null }
-        else if let value = try? c.decode(Bool.self) { self = .bool(value) }
-        else if let value = try? c.decode(Double.self) { self = .number(value) }
-        else { self = .string(try c.decode(String.self)) }
+        if c.decodeNil() {
+            self = .null
+        } else if let value = try? c.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? c.decode(Double.self) {
+            self = .number(value)
+        } else {
+            self = .string(try c.decode(String.self))
+        }
     }
 
     func encode(to encoder: Encoder) throws {

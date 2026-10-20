@@ -23,7 +23,7 @@ enum Emulators {
         let candidates = [
             ProcessInfo.processInfo.environment["ANDROID_HOME"].map { "\($0)/platform-tools/adb" },
             "\(home)/Library/Android/sdk/platform-tools/adb",
-            "/opt/homebrew/bin/adb",
+            "/opt/homebrew/bin/adb"
         ]
         return candidates.compactMap { $0 }.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
@@ -41,13 +41,14 @@ enum Emulators {
         }
     }
 
+    private struct SimctlDevice: Decodable {
+        let udid: String
+        let name: String
+        let state: String
+    }
+
     private struct SimctlList: Decodable {
-        struct Device: Decodable {
-            let udid: String
-            let name: String
-            let state: String
-        }
-        let devices: [String: [Device]]
+        let devices: [String: [SimctlDevice]]
     }
 
     private static func ios() -> [WireEmulator] {
@@ -73,6 +74,6 @@ enum Emulators {
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        return process.terminationStatus == 0 ? String(decoding: data, as: UTF8.self) : nil
+        return process.terminationStatus == 0 ? String(bytes: data, encoding: .utf8) : nil
     }
 }

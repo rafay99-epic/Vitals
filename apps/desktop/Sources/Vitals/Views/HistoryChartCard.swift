@@ -33,7 +33,7 @@ struct HistoryChartCard: View {
         case .temp:
             return [
                 .init(name: "Hottest", color: .red.opacity(0.7)) { settings.display($0.hottestTemp) },
-                .init(name: "Average", color: .orange) { settings.display($0.avgTemp) },
+                .init(name: "Average", color: .orange) { settings.display($0.avgTemp) }
             ]
         case .cpu:
             return [.init(name: "CPU", color: .blue, area: 0.32) { $0.cpuUsage }]
@@ -44,12 +44,12 @@ struct HistoryChartCard: View {
         case .network:
             return [
                 .init(name: "Download", color: .mint) { $0.netInBps.map { $0 / 1_000_000 } },
-                .init(name: "Upload", color: .orange) { $0.netOutBps.map { $0 / 1_000_000 } },
+                .init(name: "Upload", color: .orange) { $0.netOutBps.map { $0 / 1_000_000 } }
             ]
         case .disk:
             return [
                 .init(name: "Read", color: .yellow) { $0.diskReadBps.map { $0 / 1_000_000 } },
-                .init(name: "Write", color: .orange) { $0.diskWriteBps.map { $0 / 1_000_000 } },
+                .init(name: "Write", color: .orange) { $0.diskWriteBps.map { $0 / 1_000_000 } }
             ]
         case .battery:
             return [.init(name: "Battery", color: .green, area: 0.32) { $0.batteryPercent }]

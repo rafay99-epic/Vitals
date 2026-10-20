@@ -79,7 +79,7 @@ final class GatewayProcess: @unchecked Sendable {
             do {
                 onMessage(try decoder.decode(ToApp.self, from: line))
             } catch {
-                onInvalid(String(decoding: line.prefix(160), as: UTF8.self))
+                onInvalid(String(bytes: line.prefix(160), encoding: .utf8) ?? "\(line.count) unreadable bytes")
             }
         }
         if buffer.count > Self.maxLineBytes {

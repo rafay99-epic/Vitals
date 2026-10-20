@@ -3,6 +3,8 @@ import Foundation
 @MainActor
 @Observable
 final class ActivityModel {
+    nonisolated private static let kept = 1000
+
     private(set) var events: [ActivityStore.Event] = []
     private(set) var summary = ActivityStore.Summary()
     private(set) var frames: [ActivityStore.Frame] = []
@@ -38,12 +40,12 @@ final class ActivityModel {
         Task.detached(priority: .utility) {
             let current = store.dataVersion()
             guard current != known else { return }
-            let fresh = store.events(filter: filter, afterSeq: after, limit: 300)
+            let fresh = store.events(filter: filter, afterSeq: after, limit: Self.kept)
             let summary = store.summary(since: Calendar.current.startOfDay(for: Date()))
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.version = current
-                if !fresh.isEmpty { self.events = Array((fresh + self.events).prefix(1000)) }
+                if !fresh.isEmpty { self.events = Array((fresh + self.events).prefix(Self.kept)) }
                 self.summary = summary
                 if self.following != nil { self.loadFrames() }
             }
@@ -73,7 +75,10 @@ final class ActivityModel {
         let store = store
         Task.detached(priority: .utility) {
             let rows = store.frames(connectionId: connection)
-            await MainActor.run { [weak self] in self?.frames = rows }
+            await MainActor.run { [weak self] in
+                guard let self, self.following == connection else { return }
+                self.frames = rows
+            }
         }
     }
 }

@@ -275,7 +275,7 @@ final class HistoryDatabase: @unchecked Sendable {
         "networkIn": "net_in_bps",
         "networkOut": "net_out_bps",
         "diskRead": "disk_read_bps",
-        "diskWrite": "disk_write_bps",
+        "diskWrite": "disk_write_bps"
     ]
 
     func buckets(series: String, from: Int64, to: Int64, points: Int) -> [Bucket]? {

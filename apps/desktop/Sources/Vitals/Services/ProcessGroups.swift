@@ -16,26 +16,33 @@ struct ProcessGroups {
         let groupByPid: [pid_t: ProcessGroup]
         let totals: [Totals]
 
-        func group(of pid: pid_t) -> ProcessGroup { groupByPid[pid] ?? .other }
+        func group(of pid: pid_t) -> ProcessGroup { groupByPid[pid] ?? .protected }
         func totals(for group: ProcessGroup) -> Totals { totals.first { $0.group == group } ?? Totals(group: group, count: 0, cpuPercent: 0, memory: 0) }
     }
 
     static let agentNames: Set<String> = [
-        "claude", "codex", "opencode", "opencode.exe", "cursor-agent", "gemini", "aider", "goose", "amp", "crush", "qwen",
+        "claude", "codex", "opencode", "opencode.exe", "cursor-agent", "gemini", "aider", "goose", "amp", "crush", "qwen"
     ]
     static let agentPathMarkers = ["/claude/versions/", "/.codex/", "/codex/bin/", "/opencode/bin/"]
     static let emulatorNames: Set<String> = [
-        "qemu-system-aarch64", "qemu-system-x86_64", "emulator", "Simulator", "launchd_sim",
+        "qemu-system-aarch64", "qemu-system-x86_64", "emulator", "Simulator", "launchd_sim"
     ]
     static let devServerNames: Set<String> = [
-        "node", "bun", "deno", "java", "xcodebuild", "swift-frontend", "gradle", "ruby", "python3", "python", "esbuild", "watchman",
+        "node", "bun", "deno", "java", "xcodebuild", "swift-frontend", "gradle", "ruby", "python3", "python", "esbuild", "watchman"
     ]
     static let browserPrefixes = ["Google Chrome", "Brave Browser", "Arc", "Firefox", "Safari", "Microsoft Edge", "com.apple.WebKit"]
     static let protectedNames: Set<String> = [
         "kernel_task", "launchd", "WindowServer", "loginwindow", "Finder", "Dock", "SystemUIServer", "ControlCenter",
         "Tailscale", "tailscaled", "IPNExtension", "io.tailscale.ipn.macsys.network-extension", "vitals-gateway",
-        "Vitals", "Vitals Dev", "Vitals Nightly", "coreaudiod", "mds", "mds_stores",
+        "Vitals", "Vitals Dev", "Vitals Nightly", "coreaudiod", "mds", "mds_stores"
     ]
+
+    static func isProtectedNow(_ pid: pid_t, ownUid: uid_t = getuid(), ownPid: pid_t = getpid()) -> Bool {
+        guard let owner = ProcessSampler.owner(of: pid), let parent = ProcessSampler.parent(of: pid), let path = ProcessSampler.path(of: pid) else {
+            return true
+        }
+        return owner != ownUid || pid == ownPid || parent == ownPid || protectedNames.contains(ProcessSampler.name(of: pid)) || path.hasPrefix("/System/")
+    }
 
     static func classify(_ rows: [ProcessSampler.Row], ownUid: uid_t = getuid(), ownPid: pid_t = getpid()) -> Classified {
         let byPid = Dictionary(rows.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })

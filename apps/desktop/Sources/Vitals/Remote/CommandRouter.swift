@@ -30,6 +30,7 @@ final class CommandRouter {
     private var pending: [String: Pending] = [:]
     private var finished: [String: WireReceipt] = [:]
     private var finishedOrder: [String] = []
+    private var running: [String: WireReceipt] = [:]
 
     init(executor: CommandExecutor, clock: @escaping () -> Date = Date.init) {
         self.executor = executor
@@ -39,7 +40,7 @@ final class CommandRouter {
     var pendingIds: [String] { Array(pending.keys) }
 
     func run(_ request: Request) {
-        if let receipt = finished[request.id] ?? pending[request.id]?.receipt {
+        if let receipt = finished[request.id] ?? pending[request.id]?.receipt ?? running[request.id] {
             onReceipt(receipt)
             return
         }
@@ -57,12 +58,13 @@ final class CommandRouter {
             onGraceStarted(request, deadline)
             return
         }
+        running[request.id] = makeReceipt(request, status: .running, created: now)
         Task { await execute(request, created: now) }
     }
 
     func cancel(_ id: String) {
         guard let entry = pending.removeValue(forKey: id) else {
-            if let receipt = finished[id] { onReceipt(receipt) }
+            if let receipt = finished[id] ?? running[id] { onReceipt(receipt) }
             return
         }
         entry.timer.invalidate()
@@ -77,9 +79,11 @@ final class CommandRouter {
         entry.timer.invalidate()
         onGraceEnded(id)
         let created = Date(timeIntervalSince1970: TimeInterval(entry.receipt.createdAt) / 1000)
+        let started = makeReceipt(entry.request, status: .running, created: created)
+        running[id] = started
         switch entry.request.command {
         case .restart, .shutDown, .logOut:
-            onReceipt(makeReceipt(entry.request, status: .running, created: created))
+            onReceipt(started)
             onWillPowerOff()
         default:
             break
@@ -93,6 +97,7 @@ final class CommandRouter {
     }
 
     private func finish(_ receipt: WireReceipt) {
+        running.removeValue(forKey: receipt.id)
         finished[receipt.id] = receipt
         finishedOrder.append(receipt.id)
         if finishedOrder.count > 200 {

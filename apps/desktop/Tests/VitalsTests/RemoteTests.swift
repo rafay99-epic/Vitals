@@ -31,7 +31,7 @@ struct BridgeFixtureTests {
         let line = #"{"t":"cmd","id":"c","deviceId":"d","deviceName":"P","command":{"_tag":"Processes","actions":[{"target":{"pid":42,"startTimeMs":7},"action":"pause"}]}}"#
         let message = try JSONDecoder().decode(ToApp.self, from: Data(line.utf8))
         #expect(message == .command(id: "c", deviceId: "d", deviceName: "P", command: .processes([
-            ProcessAction(target: ProcessRef(pid: 42, startTimeMs: 7), action: .pause),
+            ProcessAction(target: ProcessRef(pid: 42, startTimeMs: 7), action: .pause)
         ])))
     }
 
@@ -96,6 +96,29 @@ struct CommandRouterTests {
         await settle()
         #expect(executor.executed == [.setMuted(true)])
         #expect(receipts.map(\.status) == [.done, .done])
+    }
+
+    @Test func duplicateDeliveryWhileRunningExecutesOnce() async {
+        let executor = RecordingExecutor()
+        let router = CommandRouter(executor: executor)
+        var receipts: [WireReceipt] = []
+        router.onReceipt = { receipts.append($0) }
+        router.run(request("b", .setMuted(false)))
+        router.run(request("b", .setMuted(false)))
+        await settle()
+        #expect(executor.executed == [.setMuted(false)])
+        #expect(receipts.map(\.status) == [.running, .done])
+    }
+
+    @Test func graceCommandIsNotRerunAfterItFires() async {
+        let executor = RecordingExecutor()
+        let router = CommandRouter(executor: executor)
+        router.run(request("r", .sleep(grace: 10)))
+        router.fireNow("r")
+        router.run(request("r", .sleep(grace: 10)))
+        await settle()
+        #expect(executor.executed == [.sleep(grace: 10)])
+        #expect(router.pendingIds.isEmpty)
     }
 
     @Test func graceCommandsWaitAndCanBeCancelled() async {
@@ -192,7 +215,7 @@ struct PressureGuardTests {
             row(pid: 11, ppid: 10, name: "node", cpu: 20),
             row(pid: 20, ppid: 1, name: "qemu-system-aarch64", cpu: 1),
             row(pid: 21, ppid: 1, name: "qemu-system-aarch64", cpu: 60),
-            row(pid: 30, ppid: 1, name: "node", cpu: 5),
+            row(pid: 30, ppid: 1, name: "node", cpu: 5)
         ]
         let classified = ProcessGroups.classify(rows, ownUid: 501, ownPid: 9999)
         let plan = PressureGuard.calmPlan(rows, classified: classified)
@@ -220,7 +243,7 @@ struct ProcessGroupsTests {
             ProcessSampler.Row(pid: 500, ppid: 1, uid: 501, startTimeMs: 1, name: "Google Chrome Helper", path: "/Applications/Google Chrome.app", cpuPercent: 1, memory: 10),
             ProcessSampler.Row(pid: 600, ppid: 1, uid: 501, startTimeMs: 1, name: "T3 Code (Nightly)", path: "/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)", cpuPercent: 1, memory: 10),
             ProcessSampler.Row(pid: 601, ppid: 600, uid: 501, startTimeMs: 1, name: "claude 2.1.303", path: "/Users/me/.local/share/claude/versions/2.1.303", cpuPercent: 1, memory: 10),
-            ProcessSampler.Row(pid: 602, ppid: 601, uid: 501, startTimeMs: 1, name: "node", path: "/opt/node", cpuPercent: 1, memory: 10),
+            ProcessSampler.Row(pid: 602, ppid: 601, uid: 501, startTimeMs: 1, name: "node", path: "/opt/node", cpuPercent: 1, memory: 10)
         ]
         let classified = ProcessGroups.classify(rows, ownUid: 501, ownPid: 9999)
         #expect(classified.group(of: 100) == .agents)
@@ -232,6 +255,7 @@ struct ProcessGroupsTests {
         #expect(classified.group(of: 600) == .other)
         #expect(classified.group(of: 601) == .agents)
         #expect(classified.group(of: 602) == .agents)
+        #expect(classified.group(of: 9_999) == .protected)
         #expect(classified.totals(for: .agents).count == 4)
     }
 }
@@ -272,6 +296,6 @@ struct ProcessControlTests {
         ps.standardOutput = pipe
         try? ps.run()
         ps.waitUntilExit()
-        return String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return (String(bytes: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
