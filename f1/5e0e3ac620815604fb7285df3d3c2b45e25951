@@ -1,0 +1,19 @@
+packages/app/src/features/pairing/QrScanner.tsx
+  s_1d0dcbd2b75ee5::t_000fc108e32bee 12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f15e0e3ac620815604fb7285df3d3c2b45e25951",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "unknown"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
