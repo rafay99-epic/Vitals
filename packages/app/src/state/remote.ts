@@ -1,10 +1,12 @@
 import { type Connection, type ConnectionOptions, type ConnectionState, createConnection, Store } from "@vitals/client-runtime";
 import { type Alert, type ActivityLevel, type Command, type CommandReceipt, CommandId, EventId } from "@vitals/contracts";
 import { newId } from "@vitals/shared";
+import { motion, type ToastTone } from "@vitals/ui";
 import * as Schema from "effect/Schema";
 
 import { openOutbox } from "../persistence/outbox";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
+import { diagnostics, instrumentConnection } from "./diagnostics.ts";
 import { MacEvents } from "./events.ts";
 import { LiveData } from "./live.ts";
 
@@ -16,7 +18,7 @@ export const CLIENT_VERSION = "1.0.0";
 
 export interface Toast {
   readonly message: string;
-  readonly tone: "ok" | "bad" | "warn";
+  readonly tone: ToastTone;
   readonly at: number;
 }
 
@@ -30,17 +32,24 @@ export class Remote {
   private readonly outbox = openOutbox();
   private readonly flushTimer: ReturnType<typeof setInterval>;
   private flushing = false;
+  private readonly stopSampleClock: (() => void) | null;
 
   constructor(credentials: Credentials, webSocket: ConnectionOptions["webSocket"], onAlert: (alert: Alert) => void) {
     this.credentials = credentials;
-    this.connection = createConnection({
-      baseUrl: credentials.baseUrl,
-      token: credentials.token,
-      clientVersion: CLIENT_VERSION,
-      webSocket,
-      onTransition: (from, to) => this.record(to._tag === "Backoff" ? "warn" : "info", "client.conn.state", transitionData(from, to)),
-    });
+    this.connection = instrumentConnection(
+      createConnection({
+        baseUrl: credentials.baseUrl,
+        token: credentials.token,
+        clientVersion: CLIENT_VERSION,
+        webSocket,
+        onTransition: (from, to) => {
+          diagnostics.transition(from, to);
+          this.record(to._tag === "Backoff" ? "warn" : "info", "client.conn.state", transitionData(from, to));
+        },
+      }),
+    );
     this.live = new LiveData(this.connection);
+    this.stopSampleClock = diagnostics.enabled ? this.live.latest.subscribe(() => diagnostics.sample(Date.now())) : null;
     this.events = new MacEvents(this.connection, onAlert);
     this.flushTimer = setInterval(() => void this.flush(), FLUSH_MS);
   }
@@ -77,7 +86,7 @@ export class Remote {
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => {
       if (this.toast.get() === toast) this.toast.set(null);
-    }, 6_000);
+    }, motion.toastHold);
   }
 
   async flush(): Promise<void> {
@@ -96,6 +105,7 @@ export class Remote {
 
   dispose(): void {
     this.disposed = true;
+    this.stopSampleClock?.();
     clearInterval(this.flushTimer);
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     this.live.dispose();

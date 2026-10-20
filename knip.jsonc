@@ -25,14 +25,12 @@
     },
     "apps/mobile": {
       "ignoreDependencies": [
-        "babel-plugin-react-compiler",
-        "expo-updates"
+        "babel-plugin-react-compiler"
       ]
     },
     "apps/web": {
       "ignoreDependencies": [
-        "babel-plugin-react-compiler",
-        "expo-updates"
+        "babel-plugin-react-compiler"
       ]
     }
   }

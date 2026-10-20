@@ -6,7 +6,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test"
   },
   "dependencies": {
     "@vitals/client-runtime": "workspace:*",
@@ -22,7 +23,9 @@
     "@shopify/react-native-skia": "*",
     "expo-background-task": "*",
     "expo-camera": "*",
+    "expo-constants": "*",
     "expo-device": "*",
+    "expo-font": "*",
     "expo-haptics": "*",
     "expo-network": "*",
     "expo-notifications": "*",
@@ -30,6 +33,7 @@
     "expo-sqlite": "*",
     "expo-status-bar": "*",
     "expo-task-manager": "*",
+    "expo-updates": "*",
     "react": "*",
     "react-native": "*",
     "react-native-gesture-handler": "*",
@@ -42,6 +46,9 @@
       "optional": true
     },
     "expo-camera": {
+      "optional": true
+    },
+    "expo-constants": {
       "optional": true
     },
     "expo-haptics": {
@@ -58,6 +65,9 @@
     },
     "expo-task-manager": {
       "optional": true
+    },
+    "expo-updates": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -69,7 +79,9 @@
     "expo": "catalog:",
     "expo-background-task": "~58.0.11",
     "expo-camera": "~58.0.11",
+    "expo-constants": "58.0.12",
     "expo-device": "~58.0.5",
+    "expo-font": "58.0.9",
     "expo-haptics": "~58.0.7",
     "expo-network": "~58.0.3",
     "expo-notifications": "~58.1.5",
@@ -77,6 +89,7 @@
     "expo-sqlite": "~58.0.13",
     "expo-status-bar": "~58.0.3",
     "expo-task-manager": "~58.0.12",
+    "expo-updates": "58.0.15",
     "react": "catalog:",
     "react-native": "catalog:",
     "react-native-css": "catalog:",
