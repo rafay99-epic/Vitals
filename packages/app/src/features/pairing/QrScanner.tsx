@@ -7,8 +7,8 @@ export function QrScanner({ onCode }: { readonly onCode: (value: string) => void
   if (permission === null) return null;
   if (!permission.granted) {
     return (
-      <View className="gap-3 px-[22px]">
-        <Sans tone="ink2">Vitals needs the camera to read the pairing code.</Sans>
+      <View className="flex-1 items-center justify-center gap-4 px-12">
+        <Sans tone="ink2" className="text-center">Vitals needs the camera to read the pairing code.</Sans>
         <Button label="Allow camera" variant="line" onPress={() => void request()} />
       </View>
     );
