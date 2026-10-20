@@ -154,6 +154,7 @@ pnpm dmg                  # desktop app + DMG (macOS only)
 # remote stack: pnpm oxlint · pnpm knip · pnpm turbo typecheck --filter=@vitals/* · pnpm turbo test --filter=@vitals/gateway
 # web client: pnpm --filter @vitals/web export → apps/web/dist, served by the gateway; build.sh bundles it
 # android APK: pnpm --filter @vitals/mobile android:dev | android:prod (pnpm manages deps; Bun only compiles and tests the gateway)
+#   release builds sign with the shared upload key (Lumo's) when ~/.gradle/gradle.properties sets VITALS_UPLOAD_{STORE_FILE,STORE_PASSWORD,KEY_ALIAS,KEY_PASSWORD}; otherwise debug-signed. EAS reads the same key from gitignored apps/mobile/credentials.json
 # OTA update: pnpm --filter @vitals/mobile update:dev | update:prod (publishes the JS bundle to that channel)
 # website e2e locally: E2E_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" pnpm turbo test:e2e --filter=marketing
 ```

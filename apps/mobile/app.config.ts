@@ -1,4 +1,5 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
+import { type ConfigPlugin, withAppBuildGradle } from "expo/config-plugins";
 
 type Variant = "dev" | "prod";
 
@@ -25,7 +26,33 @@ const FONTS: Record<string, string> = {
   "GeistMono-Medium": `${FONT_ROOT}/geist-mono/500Medium/GeistMono_500Medium.ttf`,
 };
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+const UPLOAD_SIGNING = `
+if (findProperty('VITALS_UPLOAD_STORE_FILE')) {
+    android {
+        signingConfigs {
+            upload {
+                storeFile file(findProperty('VITALS_UPLOAD_STORE_FILE'))
+                storePassword findProperty('VITALS_UPLOAD_STORE_PASSWORD')
+                keyAlias findProperty('VITALS_UPLOAD_KEY_ALIAS')
+                keyPassword findProperty('VITALS_UPLOAD_KEY_PASSWORD')
+            }
+        }
+        buildTypes {
+            release {
+                signingConfig signingConfigs.upload
+            }
+        }
+    }
+}
+`;
+
+const withUploadSigning: ConfigPlugin = (config) =>
+  withAppBuildGradle(config, (gradle) => {
+    if (!gradle.modResults.contents.includes("VITALS_UPLOAD_STORE_FILE")) gradle.modResults.contents += UPLOAD_SIGNING;
+    return gradle;
+  });
+
+const app = ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: current.name,
   slug: "vitals-remote",
@@ -111,3 +138,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     eas: { projectId: PROJECT_ID },
   },
 });
+
+export default (context: ConfigContext): ExpoConfig => withUploadSigning(app(context));

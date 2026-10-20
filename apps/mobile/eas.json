@@ -11,7 +11,8 @@
         "APP_VARIANT": "dev"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "credentialsSource": "local"
       }
     },
     "production": {
@@ -19,7 +20,10 @@
       "env": {
         "APP_VARIANT": "prod"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "credentialsSource": "local"
+      }
     }
   }
 }
