@@ -1,0 +1,18 @@
+apps/desktop/Sources/Vitals/Models/RemoteModel.swift
+  h_1e0ba4a9f2a4b4 549-550
+apps/desktop/Sources/Vitals/Services/Battery.swift
+  h_1e0ba4a9f2a4b4 81-83
+apps/desktop/Sources/Vitals/Services/SMC.swift
+  h_1e0ba4a9f2a4b4 55-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0b3d1cf2e1cae73f6fbaee0947ee905fb4ee09a9",
+  "prompts": {},
+  "humans": {
+    "h_1e0ba4a9f2a4b4": {
+      "author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
