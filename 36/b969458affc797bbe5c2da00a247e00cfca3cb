@@ -1,0 +1,31 @@
+.coderabbit.yaml
+  s_1d0dcbd2b75ee5::t_a30e5f6157b3a1 105
+.github/workflows/labeler.yml
+  s_1d0dcbd2b75ee5::t_c3e79d3fb25c8a 6
+CONTRIBUTING.md
+  s_1d0dcbd2b75ee5::t_29ec8d0837b325 30-34
+apps/marketing/src/components/Glance.tsx
+  s_1d0dcbd2b75ee5::t_7a30db1cfa615f 12-15,18-21,36-37
+apps/marketing/src/lib/useReleases.ts
+  s_1d0dcbd2b75ee5::t_0ecf588352481d 1,22,25,34-38,41,50,52-55,57,59,82-83,88-89
+apps/marketing/src/pages/Privacy.tsx
+  s_1d0dcbd2b75ee5::t_d146bfb76abc96 137-138,141-143
+apps/marketing/src/pages/Releases.tsx
+  s_1d0dcbd2b75ee5::t_36b1fef1326dd4 261,265,270-271,276-277,283-284,288
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "36b969458affc797bbe5c2da00a247e00cfca3cb",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
