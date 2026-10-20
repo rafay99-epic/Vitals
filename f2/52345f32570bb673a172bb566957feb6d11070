@@ -1,0 +1,63 @@
+apps/desktop/Sources/Vitals/Views/Kit/Meters.swift
+  s_1d0dcbd2b75ee5::t_4b88d673d1d75a 1-151
+apps/desktop/Sources/Vitals/Views/Kit/EmptyStates.swift
+  s_1d0dcbd2b75ee5::t_dc837fd70113f2 1-120
+apps/desktop/Sources/Vitals/Views/Kit/Tiles.swift
+  s_1d0dcbd2b75ee5::t_c1e259c3308390 1-114
+apps/desktop/Sources/Vitals/Views/Kit/Cards.swift
+  s_1d0dcbd2b75ee5::t_51031fd67a3aaf 1-82
+apps/desktop/Sources/Vitals/Settings/SettingsView.swift
+  s_1d0dcbd2b75ee5::t_76f7aefe77fcc7 279,287,329
+apps/desktop/Sources/Vitals/Views/AppsView.swift
+  s_1d0dcbd2b75ee5::t_f3a6507b0a59b2 129,240,323,332,490,495
+apps/desktop/Sources/Vitals/Views/BatteryView.swift
+  s_1d0dcbd2b75ee5::t_4f3062d72b129d 27,47,72,153-156,187,293
+apps/desktop/Sources/Vitals/Views/CPUView.swift
+  s_1d0dcbd2b75ee5::t_1a282291ce8b7e 10,24,53-58,103
+apps/desktop/Sources/Vitals/Views/CleanupDevViews.swift
+  s_1d0dcbd2b75ee5::t_38b43edae7c11e 67-75,77,221,229,245,319
+apps/desktop/Sources/Vitals/Views/CleanupView.swift
+  s_1d0dcbd2b75ee5::t_87054e7bebe22c 172-180,365,377,381,414
+apps/desktop/Sources/Vitals/Views/Components.swift
+  s_1d0dcbd2b75ee5::t_072f0fb754ae1c 158-169
+apps/desktop/Sources/Vitals/Views/ContentView.swift
+  s_1d0dcbd2b75ee5::t_8f1c5cc73389b8 304
+apps/desktop/Sources/Vitals/Views/DashboardBento.swift
+  s_1d0dcbd2b75ee5::t_47ef77210c3a71 230
+apps/desktop/Sources/Vitals/Views/DiskHealthCards.swift
+  s_1d0dcbd2b75ee5::t_a13af5f6b4832a 24,51,63
+apps/desktop/Sources/Vitals/Views/DiskHealthView.swift
+  s_1d0dcbd2b75ee5::t_eb1de01e2e7552 21
+apps/desktop/Sources/Vitals/Views/GPUView.swift
+  s_1d0dcbd2b75ee5::t_5fc41bd97819f2 24,38-42,130,183,199
+apps/desktop/Sources/Vitals/Views/HistoryView.swift
+  s_1d0dcbd2b75ee5::t_c553075e38f99e 80,435
+apps/desktop/Sources/Vitals/Views/MemoryView.swift
+  s_1d0dcbd2b75ee5::t_02dbdfdc3b0c0a 91,134,165
+apps/desktop/Sources/Vitals/Views/MenuBarPanel.swift
+  s_1d0dcbd2b75ee5::t_0f2dabd0a45e9c 41,134,167
+apps/desktop/Sources/Vitals/Views/NetworkView.swift
+  s_1d0dcbd2b75ee5::t_3b35b5d7fc7929 164,177,219
+apps/desktop/Sources/Vitals/Views/ProblemReportView.swift
+  s_1d0dcbd2b75ee5::t_0e39555d26b8c0 26,80
+apps/desktop/Sources/Vitals/Views/SensorsView.swift
+  s_1d0dcbd2b75ee5::t_073b4700a2bc52 26
+apps/desktop/Sources/Vitals/Views/SystemCards.swift
+  s_1d0dcbd2b75ee5::t_853edd9a7301e2 10,120,169,201,294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f252345f32570bb673a172bb566957feb6d11070",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
