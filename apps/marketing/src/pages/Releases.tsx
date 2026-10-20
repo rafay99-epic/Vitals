@@ -29,15 +29,14 @@ const channelTone = (release: ReleaseSummary, latest: boolean) => {
 const formatDate = (epochMs: number) =>
   epochMs > 0 ? new Date(epochMs).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
 
-function FilterTabs({ value, onChange }: { value: Filter; onChange: (value: Filter) => void }) {
+function Filters({ value, onChange }: { value: Filter; onChange: (value: Filter) => void }) {
   return (
-    <div role="tablist" aria-label="Channel" className="flex gap-5 border-b border-line">
+    <div role="group" aria-label="Channel" className="flex gap-5 border-b border-line">
       {FILTERS.map((filter) => (
         <button
           key={filter.value}
           type="button"
-          role="tab"
-          aria-selected={filter.value === value}
+          aria-pressed={filter.value === value}
           onClick={() => onChange(filter.value)}
           className={`-mb-px min-h-11 cursor-pointer border-b-[1.5px] font-mono-medium text-[11px] uppercase tracking-[0.08em] ${filter.value === value ? 'border-ink text-ink' : 'border-transparent text-dim hover:text-ink'}`}
         >
@@ -98,7 +97,7 @@ export default function Releases() {
           <h1 className="m-0 font-serif text-[64px] leading-[0.92] md:text-[96px]">Chart notes.</h1>
           <Meta>Releases, newest first. Stable updates itself. Nightly is built every night.</Meta>
         </div>
-        <FilterTabs value={filter} onChange={setFilter} />
+        <Filters value={filter} onChange={setFilter} />
       </div>
       {status === 'loading' ? <Status title="Reading the chart." detail="Fetching the release list from GitHub." /> : null}
       {status === 'error' ? (

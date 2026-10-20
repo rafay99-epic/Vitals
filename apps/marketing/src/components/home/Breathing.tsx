@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveVitals } from '../../lib/useLiveVitals'
 import { Reveal } from '../ui/Reveal'
-import { Lede, Meta, SectionTitle, Tag } from '../ui/text'
+import { DemoNote, Lede, Meta, SectionTitle, Tag } from '../ui/text'
 import { Trace } from '../ui/Trace'
 
 const WINDOW = 60
@@ -40,6 +40,7 @@ function Scrubber() {
         <span>drag to read the past</span>
         <span>now</span>
       </div>
+      <DemoNote />
     </div>
   )
 }

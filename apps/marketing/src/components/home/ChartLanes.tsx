@@ -2,7 +2,7 @@ import type { Channel } from '../../lib/channels'
 import { channels } from '../../lib/channels'
 import { useLiveVitals, type Vitals } from '../../lib/useLiveVitals'
 import { Reveal } from '../ui/Reveal'
-import { Em, Lede, Tag, SectionTitle } from '../ui/text'
+import { DemoNote, Em, Lede, SectionTitle } from '../ui/text'
 import { Trace } from '../ui/Trace'
 
 interface Lane {
@@ -66,7 +66,7 @@ export function ChartLanes() {
               </div>
             )
           })}
-          <Tag className="mt-3 block text-dim">Demo readings, not your Mac</Tag>
+          <DemoNote className="mt-3" />
         </div>
       </div>
     </Reveal>

@@ -14,28 +14,29 @@ function MenuSheet({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     dialog.current?.showModal()
   }, [])
+  const close = () => dialog.current?.close()
   return (
     <dialog ref={dialog} onClose={onClose} aria-label="Menu" className="m-0 h-dvh max-h-none w-full max-w-none flex-col bg-bg px-5 py-5 text-ink backdrop:bg-bg open:flex">
       <div className="flex items-center justify-between">
-        <Link to="/" onClick={onClose} className="flex items-center gap-2.5 font-serif text-[26px] text-ink no-underline">
+        <Link to="/" onClick={close} className="flex items-center gap-2.5 font-serif text-[26px] text-ink no-underline">
           <Mark />
           Vitals
         </Link>
-        <button type="button" onClick={onClose} className="min-h-11 cursor-pointer font-mono text-[11px] text-ink2">
+        <button type="button" onClick={close} className="min-h-11 cursor-pointer font-mono text-[11px] text-ink2">
           Close
         </button>
       </div>
       <nav className="mt-10 flex flex-col">
         {LINKS.map((link) => (
-          <a key={link.href} href={link.href} onClick={onClose} className="border-t border-line py-4 font-serif text-[40px] leading-none text-ink no-underline">
+          <a key={link.href} href={link.href} onClick={close} className="border-t border-line py-4 font-serif text-[40px] leading-none text-ink no-underline">
             {link.label}
           </a>
         ))}
-        <Link to="/releases" onClick={onClose} className="border-y border-line py-4 font-serif text-[40px] leading-none text-ink no-underline">
+        <Link to="/releases" onClick={close} className="border-y border-line py-4 font-serif text-[40px] leading-none text-ink no-underline">
           Chart notes
         </Link>
       </nav>
-      <a href="/#download" onClick={onClose} className="mt-auto inline-flex min-h-12 items-center justify-center bg-ink font-sans-medium text-[15px] text-bg no-underline">
+      <a href="/#download" onClick={close} className="mt-auto inline-flex min-h-12 items-center justify-center bg-ink font-sans-medium text-[15px] text-bg no-underline">
         Download
       </a>
     </dialog>

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useLiveVitals } from '../../lib/useLiveVitals'
 import { Reveal } from '../ui/Reveal'
-import { Em, SectionTitle, Tag } from '../ui/text'
+import { DemoNote, Em, SectionTitle, Tag } from '../ui/text'
 
 function Cell({ tag, tone, value, unit, children }: { tag: string; tone: string; value: ReactNode; unit: string; children: ReactNode }) {
   return (
@@ -23,12 +23,13 @@ export function Sensors() {
       <SectionTitle>
         Straight from <Em>the silicon.</Em>
       </SectionTitle>
+      <DemoNote className="mt-4" />
       <div className="mt-12 grid grid-cols-1 gap-px border-y border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
         <Cell tag="Temp · Chip temperature" tone="text-temp" value={`${Math.round(vitals.temp)}°`} unit="C die">
-          Per cluster die readings from the thermal sensors, not a guess from power draw.
+          Vitals reads per cluster die sensors, not a guess from power draw.
         </Cell>
         <Cell tag="Resp · Fan speed" tone="text-resp" value={Math.round(vitals.fans)} unit="rpm">
-          Live RPM from the SMC. When the fan stops, it says so.
+          Vitals reads RPM from the SMC. When the fan stops, it says so.
         </Cell>
         <Cell tag="Oxy · Battery health" tone="text-oxy" value="96" unit="% · 212 cycles">
           Capacity, cycle count, charge state and condition in one place.

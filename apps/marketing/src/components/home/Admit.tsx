@@ -11,6 +11,8 @@ import { Em, Meta, SectionTitle } from '../ui/text'
 const stableLine = (release: LatestRelease | null) =>
   release === null ? 'Stable · updates itself' : ['Stable', release.sizeMB, 'updates itself'].filter(Boolean).join(' · ')
 
+const hasDmg = (release: LatestRelease | null) => release === null || release.sizeMB !== null
+
 const nightlyDate = (publishedAt: string) => {
   const date = new Date(publishedAt)
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -39,7 +41,7 @@ export function Admit() {
           <Meta>{stableLine(release)}</Meta>
           <CommandLine command={BREW_INSTALL} />
           <div className="flex flex-wrap gap-2.5">
-            <ButtonLink href={DOWNLOAD_URL}>Download .dmg</ButtonLink>
+            {hasDmg(release) ? <ButtonLink href={DOWNLOAD_URL}>Download .dmg</ButtonLink> : null}
             <Link to="/releases" className={buttonClass('line')}>
               Chart notes
             </Link>

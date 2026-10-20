@@ -1,5 +1,5 @@
 import { Reveal } from '../ui/Reveal'
-import { Em, Lede, SectionTitle } from '../ui/text'
+import { DemoNote, Em, Lede, SectionTitle } from '../ui/text'
 import { ChartPhone, OrdersPhone, WardPhone } from './Phones'
 
 const STEPS = ['Open Vitals, then Remote, on the Mac.', 'Scan the code with your phone.', 'Hold Rest. The display goes first, then the Mac sleeps.'] as const
@@ -33,6 +33,7 @@ export function Rounds() {
             <WardPhone />
           </div>
         </div>
+        <DemoNote className="text-center xl:col-start-2" />
       </div>
     </Reveal>
   )

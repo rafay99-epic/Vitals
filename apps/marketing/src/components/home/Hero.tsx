@@ -2,7 +2,7 @@ import { BREW_INSTALL, DOWNLOAD_URL } from '../../lib/links'
 import { useLiveVitals } from '../../lib/useLiveVitals'
 import { ButtonLink } from '../ui/Button'
 import { CommandLine } from '../ui/CommandLine'
-import { Em, Meta, Tag } from '../ui/text'
+import { DemoNote, Em, Meta, Tag } from '../ui/text'
 import { Trace } from '../ui/Trace'
 
 function VitalStrip() {
@@ -15,7 +15,8 @@ function VitalStrip() {
     { key: 'oxy', label: 'Oxy · Battery', value: vitals.batt, unit: '%', className: 'text-oxy' },
   ]
   return (
-    <div className="mt-14 grid grid-cols-2 gap-px border-y border-line bg-line md:grid-cols-5" aria-label="Demo readings">
+    <div className="mt-14">
+    <div className="grid grid-cols-2 gap-px border-y border-line bg-line md:grid-cols-5" aria-label="Demo readings">
       {cells.map((cell) => (
         <div key={cell.key} className="grid gap-1.5 bg-bg px-5 pb-5 pt-4 last:col-span-2 md:first:pl-16 md:last:col-span-1">
           <Tag className={cell.className}>{cell.label}</Tag>
@@ -25,6 +26,8 @@ function VitalStrip() {
           </b>
         </div>
       ))}
+    </div>
+    <DemoNote className="mt-3 px-5 md:px-16" />
     </div>
   )
 }

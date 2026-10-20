@@ -8,6 +8,10 @@ export function Meta({ children, className = 'text-dim' }: { children: ReactNode
   return <span className={`font-mono text-meta ${className}`}>{children}</span>
 }
 
+export function DemoNote({ className = '' }: { className?: string }) {
+  return <Tag className={`block text-dim ${className}`}>Demo readings, not your Mac</Tag>
+}
+
 export function Em({ children, className = 'text-pulse' }: { children: ReactNode; className?: string }) {
   return <em className={`font-serif-italic not-italic ${className}`}>{children}</em>
 }

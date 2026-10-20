@@ -28,7 +28,7 @@ export function Private() {
         <End name="Phone" detail="iPhone · Android · Web" />
         <div className="grid gap-2">
           <Trace channel="tele" beats={90} width={800} height={44} className="h-11 w-full" />
-          <span className="text-center font-mono text-[10.5px] text-dim">Tailscale between your own devices · owner identity checked on every request</span>
+          <span className="text-center font-mono text-[10.5px] text-dim">Tailscale between your own devices · pairing and every paired request checked against your tailnet login</span>
         </div>
         <End name="Mac" detail="Vitals gateway" />
       </div>
