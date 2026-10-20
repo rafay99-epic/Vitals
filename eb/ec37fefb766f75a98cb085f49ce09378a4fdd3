@@ -1,0 +1,41 @@
+apps/marketing/src/components/ui/CommandLine.tsx
+  s_1d0dcbd2b75ee5::t_49c46004273e96 1-17,20-21,23-24,26-27,29-30,34-36,39
+apps/marketing/src/components/home/Admit.tsx
+  s_1d0dcbd2b75ee5::t_ce7d106152ca3f 14-15,44
+apps/marketing/src/components/home/Breathing.tsx
+  s_1d0dcbd2b75ee5::t_5d9cd7a7e2bb27 4,43
+apps/marketing/src/components/home/ChartLanes.tsx
+  s_1d0dcbd2b75ee5::t_15d17bc77e611a 5,69
+apps/marketing/src/components/home/Hero.tsx
+  s_1d0dcbd2b75ee5::t_9aa35302b9da96 5,18-19,30-31
+apps/marketing/src/components/home/Private.tsx
+  s_1d0dcbd2b75ee5::t_042dc58ec0d2d6 31
+apps/marketing/src/components/home/Rounds.tsx
+  s_1d0dcbd2b75ee5::t_06767c1221fa30 2,36
+apps/marketing/src/components/home/Sensors.tsx
+  s_1d0dcbd2b75ee5::t_234619d55b2435 4,26,29,32
+apps/marketing/src/components/layout/Nav.tsx
+  s_1d0dcbd2b75ee5::t_097e0e762928d1 17,21,25,31,35,39
+apps/marketing/src/components/ui/buttonClass.ts
+  s_1d0dcbd2b75ee5::t_1e4ae826304929 4-5,7,10
+apps/marketing/src/components/ui/text.tsx
+  s_1d0dcbd2b75ee5::t_c42157191d398c 11-14
+apps/marketing/src/pages/Releases.tsx
+  s_1d0dcbd2b75ee5::t_aa881199233fad 32,34,39,100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ebec37fefb766f75a98cb085f49ce09378a4fdd3",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
