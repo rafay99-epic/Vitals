@@ -1,5 +1,5 @@
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
-import { Button, channels, colors, Mono, Sans, Serif, type Tone } from "@vitals/ui";
+import { Button, channels, colors, Mark, Mono, Sans, Serif, type Tone } from "@vitals/ui";
 import { useUpdates } from "expo-updates";
 import { type ReactNode, useEffect, useState } from "react";
 import { AppState, type LayoutChangeEvent, View } from "react-native";
@@ -124,6 +124,19 @@ function Updating({ phase }: { readonly phase: UpdatePhase }) {
   );
 }
 
+function Quiet() {
+  return (
+    <View className="flex-1 items-center justify-center bg-bg">
+      <Mark width={86} />
+    </View>
+  );
+}
+
+const screenFor = (phase: UpdatePhase, children: ReactNode): ReactNode => {
+  if (phase._tag === "Checking" && phase.blocking) return <Quiet />;
+  return isBlocking(phase) ? <Updating phase={phase} /> : children;
+};
+
 export function UpdateGate({ children }: { readonly children: ReactNode }) {
   const phase = useStore(updatePhase);
   const covered = phase._tag === "Checking" && phase.blocking;
@@ -141,5 +154,5 @@ export function UpdateGate({ children }: { readonly children: ReactNode }) {
     return () => subscription.remove();
   }, []);
 
-  return isBlocking(phase) ? <Updating phase={phase} /> : children;
+  return screenFor(phase, children);
 }
