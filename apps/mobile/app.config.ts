@@ -42,7 +42,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           extraProguardRules: [
             "-keep class * extends androidx.room.RoomDatabase { <init>(); }",
             "-keep class androidx.work.impl.WorkDatabase_Impl { *; }",
-            "-keep class androidx.work.** { *; }",
+            "-keep class * extends androidx.work.InputMerger { <init>(); }",
+            "-keep class * extends androidx.work.ListenableWorker { <init>(android.content.Context, androidx.work.WorkerParameters); }",
           ].join("\n"),
         },
       },

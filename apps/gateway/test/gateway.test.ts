@@ -70,10 +70,22 @@ describe("pairing and auth", () => {
     const ticket = await fetch(`${gateway.base}/api/ws-ticket`, { method: "POST", headers: { ...cookie, "sec-fetch-site": "same-origin" } });
     expect(ticket.status).toBe(200);
 
-    const unpaired = await fetch(`${gateway.base}/api/unpair`, { method: "POST", headers: cookie });
+    const second = await adminOp(gateway.app, { _tag: "CreatePairing" });
+    if (second.ok?._tag !== "CreatePairing") throw new Error("no second pairing");
+    const repaired = await fetch(`${gateway.base}/api/pair`, {
+      method: "POST",
+      headers: cookie,
+      body: JSON.stringify({ code: second.ok.code, device: { name: "Browser", platform: "web", model: "Mac", appVersion: "1" } }),
+    });
+    expect(repaired.status).toBe(200);
+    expect((await fetch(`${gateway.base}/api/session`, { headers: cookie })).status).toBe(204);
+    const fresh = { ...ownerHeaders, cookie: (repaired.headers.get("set-cookie") ?? "").split(";")[0] ?? "" };
+    expect((await fetch(`${gateway.base}/api/session`, { headers: fresh })).status).toBe(200);
+
+    const unpaired = await fetch(`${gateway.base}/api/unpair`, { method: "POST", headers: fresh });
     expect(unpaired.status).toBe(200);
     expect(unpaired.headers.get("set-cookie")).toContain("Max-Age=0");
-    expect((await fetch(`${gateway.base}/api/session`, { headers: cookie })).status).toBe(204);
+    expect((await fetch(`${gateway.base}/api/session`, { headers: fresh })).status).toBe(204);
     expect((await fetch(`${gateway.base}/api/session`, { headers: ownerHeaders })).status).toBe(204);
   });
 

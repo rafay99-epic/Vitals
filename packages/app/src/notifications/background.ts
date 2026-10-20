@@ -11,7 +11,7 @@ import { notifyAlert } from "./alerts";
 const TASK = "vitals.alerts";
 const STATE_KEY = "vitals.remote.alerts";
 const INTERVAL_MINUTES = 15;
-const NOTIFIED_KEPT = 100;
+const NOTIFIED_KEPT = 500;
 
 const Notified = Schema.Array(Schema.String);
 const decodeNotified = Schema.decodeUnknownOption(Schema.fromJsonString(Notified));
@@ -29,10 +29,7 @@ const readNotified = async (): Promise<ReadonlyArray<string>> => {
   return decoded?._tag === "Some" ? decoded.value : [];
 };
 
-const record = (notified: ReadonlyArray<string>, ids: ReadonlyArray<string>) =>
-  SecureStore.setItemAsync(STATE_KEY, JSON.stringify([...notified, ...ids].slice(-NOTIFIED_KEPT)), KEYCHAIN_OPTIONS);
-
-const deliver = (alerts: ReadonlyArray<Alert>, show: boolean) =>
+const deliver = (alerts: ReadonlyArray<Alert>, show: boolean, openNow: ReadonlyArray<Alert> | null = null) =>
   serialized(async () => {
     const notified = await readNotified();
     const delivered: Array<string> = [];
@@ -41,7 +38,9 @@ const deliver = (alerts: ReadonlyArray<Alert>, show: boolean) =>
       if (show) await notifyAlert(alert);
       delivered.push(alert.id);
     }
-    if (delivered.length > 0) await record(notified, delivered);
+    const stillOpen = openNow === null ? notified : notified.filter((id) => openNow.some((alert) => alert.id === id));
+    if (delivered.length === 0 && stillOpen.length === notified.length) return;
+    await SecureStore.setItemAsync(STATE_KEY, JSON.stringify([...stillOpen, ...delivered].slice(-NOTIFIED_KEPT)), KEYCHAIN_OPTIONS);
   });
 
 export const markAlertsSeen = (alerts: ReadonlyArray<Alert>): Promise<void> => deliver(alerts, false);
@@ -53,7 +52,7 @@ const checkAlerts = async (): Promise<void> => {
   if (credentials === null) return;
   const open = await fetchOpenAlerts(credentials.baseUrl, credentials.token, 0);
   if (open === null) throw new Error("Mac unreachable");
-  await deliver(open.alerts, true);
+  await deliver(open.alerts, true, open.alerts);
 };
 
 TaskManager.defineTask(TASK, async () => {

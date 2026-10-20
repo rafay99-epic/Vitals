@@ -27,6 +27,13 @@ export const parsePairingUrl = (raw: string): PairingLink | null => {
   }
 };
 
+export const parsePairingDeepLink = (raw: string): PairingLink | null => {
+  const query = /^[a-z][a-z0-9+.-]*:\/\/pair\/?\?(.+)$/i.exec(raw.trim())?.[1];
+  if (query === undefined || /^https?:/i.test(raw.trim())) return null;
+  const link = new URLSearchParams(query).get("link");
+  return link === null ? null : parsePairingUrl(link);
+};
+
 export type PairOutcome =
   | { readonly ok: true; readonly response: PairResponse }
   | { readonly ok: false; readonly message: string };

@@ -280,8 +280,9 @@ final class AppsModel {
                 }
 
                 uninstallProgress?.phase = .removingFiles(app.name)
+                let remaining = bundleHandledByBrew ? leftovers.filter { FileManager.default.fileExists(atPath: $0.id.path) } : leftovers
                 let outcome = await Task.detached(priority: .userInitiated) {
-                    AppUninstaller.uninstall(app: app, leftovers: leftovers, skipBundle: bundleHandledByBrew || bundleViaAdmin)
+                    AppUninstaller.uninstall(app: app, leftovers: remaining, skipBundle: bundleHandledByBrew || bundleViaAdmin)
                 }.value
                 combined.trashed += outcome.trashed
                 combined.failures += outcome.failures
@@ -298,7 +299,7 @@ final class AppsModel {
                     AppUninstaller.clearDefaults(bundleID: bundleID)
                 }.value
 
-                for leftover in leftovers where leftover.requiresAdmin {
+                for leftover in remaining where leftover.requiresAdmin {
                     systemPaths.append((leftover.id, leftover.sizeBytes))
                 }
 

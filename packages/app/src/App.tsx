@@ -4,6 +4,7 @@ import { DarkTheme, NavigationContainer, type Theme } from "@react-navigation/na
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { colors } from "@vitals/ui";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -84,10 +85,9 @@ function PairedTabs() {
   );
 }
 
-sessions.start();
-
 function Root() {
   const session = useSession();
+  useEffect(() => sessions.start(), []);
   if (session.status === "loading") {
     return (
       <View className="flex-1 items-center justify-center bg-canvas">

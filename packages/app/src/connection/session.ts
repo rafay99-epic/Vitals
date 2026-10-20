@@ -1,6 +1,6 @@
-import { type ConnectionOptions, pair, parsePairingUrl, type PairingLink, Store } from "@vitals/client-runtime";
+import { type ConnectionOptions, pair, parsePairingDeepLink, parsePairingUrl, type PairingLink, Store, unpair } from "@vitals/client-runtime";
 import * as Network from "expo-network";
-import { AppState, Platform } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 
 import { deviceInfo } from "../lib/device.ts";
 import { forgetCalmAction, onCalmAction, prepareNotifications } from "../notifications/alerts";
@@ -24,22 +24,32 @@ export interface PairingState {
 const openSocket: ConnectionOptions["webSocket"] = (url, options) =>
   new WebSocket(url, typeof options === "string" || Array.isArray(options) ? options : undefined);
 
-const webPairingLink = (): PairingLink | null =>
-  Platform.OS === "web" && typeof globalThis.location !== "undefined" ? parsePairingUrl(globalThis.location.href) : null;
+const launchPairingLink = async (): Promise<PairingLink | null> => {
+  if (Platform.OS === "web") return typeof globalThis.location === "undefined" ? null : parsePairingUrl(globalThis.location.href);
+  const initial = await Linking.getInitialURL();
+  return typeof initial === "string" ? parsePairingDeepLink(initial) : null;
+};
 
 class SessionManager {
   readonly session = new Store<Session>({ status: "loading" });
   readonly pairing = new Store<PairingState>({ busy: false, error: null });
   private teardown: (() => void) | null = null;
   private started = false;
+  private readonly usedCodes = new Set<string>();
+
+  handleLink(link: PairingLink | null): Promise<boolean> {
+    if (link === null || this.usedCodes.has(link.code)) return Promise.resolve(false);
+    this.usedCodes.add(link.code);
+    return this.pairWith(link);
+  }
 
   start(): void {
     if (this.started) return;
     this.started = true;
     void (async () => {
-      const link = webPairingLink();
-      if (link !== null && (await this.pairWith(link))) return;
+      if (await this.handleLink(await launchPairingLink())) return;
       const credentials = await loadCredentials();
+      if (this.session.get().status === "paired") return;
       if (credentials === null) this.session.set({ status: "unpaired" });
       else this.open(credentials);
     })().catch((error: unknown) => {
@@ -64,7 +74,9 @@ class SessionManager {
       scopes: outcome.response.scopes,
       pairedAt: Date.now(),
     };
+    const previous = Platform.OS === "web" ? null : await loadCredentials().catch(() => null);
     await saveCredentials(credentials);
+    if (previous !== null && previous.deviceId !== credentials.deviceId) void unpair(previous.baseUrl, previous.token);
     this.pairing.set({ busy: false, error: null });
     this.open(credentials);
     return true;
@@ -121,6 +133,7 @@ class SessionManager {
     let suspendTimer: ReturnType<typeof setTimeout> | null = null;
     const appState = AppState.addEventListener("change", (next) => {
       if (next === "active") {
+        void markAlertsSeen(remote.events.alerts.get());
         if (suspendTimer !== null) clearTimeout(suspendTimer);
         suspendTimer = null;
         remote.record("info", "client.app.fg");
@@ -154,3 +167,10 @@ class SessionManager {
 }
 
 export const sessions = new SessionManager();
+
+if (Platform.OS !== "web") {
+  Linking.addEventListener("url", ({ url }) => void sessions.handleLink(parsePairingDeepLink(url)));
+  AppState.addEventListener("change", (state) => {
+    if (state === "active") void launchPairingLink().then((link) => sessions.handleLink(link));
+  });
+}

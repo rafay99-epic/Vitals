@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { SessionInfo } from "@vitals/contracts";
 import * as Schema from "effect/Schema";
 
-import { fetchOpenAlerts, fetchSession, parsePairingUrl, retryDelayMs, RETRY_MAX_DELAY_MS, unpair } from "../src/index.ts";
+import { fetchOpenAlerts, fetchSession, parsePairingDeepLink, parsePairingUrl, retryDelayMs, RETRY_MAX_DELAY_MS, unpair } from "../src/index.ts";
 
 type Call = { readonly url: string; readonly init: RequestInit | undefined };
 
@@ -42,6 +42,14 @@ describe("pairing links", () => {
     expect(parsePairingUrl("https://mac.ts.net/pair#code=ABCD")).toBeNull();
     expect(parsePairingUrl("ftp://mac.ts.net/pair#code=ABCDEFGHJKLM")).toBeNull();
     expect(parsePairingUrl("not a url")).toBeNull();
+  });
+
+  test("app deep links carry a full pairing link", () => {
+    const link = encodeURIComponent("https://mac.ts.net:7445/pair#code=ABCDEFGHJKLM");
+    expect(parsePairingDeepLink(`vitals-preview://pair?link=${link}`)).toEqual({ baseUrl: "https://mac.ts.net:7445", code: "ABCDEFGHJKLM" });
+    expect(parsePairingDeepLink(`vitals://other?link=${link}`)).toBeNull();
+    expect(parsePairingDeepLink("vitals://pair")).toBeNull();
+    expect(parsePairingDeepLink("https://mac.ts.net:7445/pair#code=ABCDEFGHJKLM")).toBeNull();
   });
 });
 
