@@ -58,8 +58,6 @@ struct LegendSwatch: View {
     }
 }
 
-// MARK: - Key/value grid
-
 struct MetricRow: Identifiable {
     let symbol: String
     let label: String
@@ -93,8 +91,6 @@ struct MetricRowGrid: View {
         }
     }
 }
-
-// MARK: - Power
 
 /// One power rail readout tile, laid out by `PowerRails`.
 struct PowerTile: View {

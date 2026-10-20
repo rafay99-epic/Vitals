@@ -14,6 +14,112 @@ struct MemoryView: View {
     }
 }
 
+struct MemoryCard: View {
+    @Environment(VitalsModel.self) private var model
+
+    private struct Segment: Identifiable {
+        let label: String
+        let bytes: UInt64
+        let color: Color
+        var id: String { label }
+    }
+
+    var body: some View {
+        SectionCard(title: "Memory", symbol: "memorychip") {
+            if let memory = model.memory {
+                VStack(alignment: .leading, spacing: 12) {
+                    header(memory)
+                    breakdownBar(memory)
+                    legend(memory)
+                    Divider()
+                    swapAndPressure(memory)
+                }
+            } else {
+                CardPlaceholder("Memory statistics unavailable.")
+            }
+        }
+    }
+
+    private func header(_ memory: MemorySnapshot) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(String(format: "%.2f GB", gigabytes(memory.used)))
+                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .numericTransition()
+            Text("used of \(String(format: "%.0f GB", gigabytes(memory.total)))")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+            pressureBadge(memory.pressure)
+        }
+    }
+
+    private func segments(_ memory: MemorySnapshot) -> [Segment] {
+        [
+            Segment(label: "App", bytes: memory.app, color: .blue),
+            Segment(label: "Wired", bytes: memory.wired, color: .orange),
+            Segment(label: "Compressed", bytes: memory.compressed, color: .purple),
+            Segment(label: "Cached", bytes: memory.cached, color: .green.opacity(0.7)),
+        ]
+    }
+
+    private func breakdownBar(_ memory: MemorySnapshot) -> some View {
+        GeometryReader { geometry in
+            let total = max(Double(memory.total), 1)
+            HStack(spacing: 1) {
+                ForEach(segments(memory)) { segment in
+                    segment.color
+                        .frame(width: geometry.size.width * Double(segment.bytes) / total)
+                }
+                Color.secondary.opacity(0.15)  // free
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        }
+        .frame(height: 14)
+    }
+
+    private func legend(_ memory: MemorySnapshot) -> some View {
+        let items = segments(memory) + [Segment(label: "Free", bytes: memory.free, color: .secondary.opacity(0.3))]
+        // Fixed columns, never `.adaptive`: adaptive grids reflow mid-animation.
+        let columns = Array(repeating: GridItem(.flexible(), alignment: .leading), count: items.count)
+        return LazyVGrid(columns: columns, spacing: 4) {
+            ForEach(items) { item in
+                HStack(spacing: 6) {
+                    LegendSwatch(color: item.color, label: item.label).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(String(format: "%.2f GB", gigabytes(item.bytes))).monospacedDigit()
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private func swapAndPressure(_ memory: MemorySnapshot) -> some View {
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Swap used").font(.caption).foregroundStyle(.secondary)
+                Text(swapSummary(memory))
+                    .font(.system(.body, design: .rounded, weight: .medium))
+                    .foregroundStyle(memory.swapUsed > 0 ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Memory pressure").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Circle().fill(pressureColor(memory.pressure)).frame(width: 9, height: 9)
+                    Text(memory.pressure.label)
+                        .font(.system(.body, design: .rounded, weight: .medium))
+                }
+            }
+            Spacer()
+        }
+    }
+
+    private func pressureBadge(_ pressure: MemoryPressure) -> some View {
+        Text(pressure.label)
+            .font(.caption.weight(.medium))
+            .capsuleTag(pressureColor(pressure))
+    }
+}
+
 // MARK: - Usage history
 
 private struct MemoryUsageHistoryCard: View {
