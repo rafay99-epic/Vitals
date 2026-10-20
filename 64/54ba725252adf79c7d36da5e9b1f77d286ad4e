@@ -1,0 +1,63 @@
+packages/app/src/features/updates/UpdatesScreen.web.tsx
+  s_1d0dcbd2b75ee5::t_f889440a96f5e7 1-15
+UI-CONSISTENCY.md
+  s_1d0dcbd2b75ee5::t_d2e671a56bf0da 103,123,177
+apps/desktop/README.md
+  s_1d0dcbd2b75ee5::t_10b2a1bce782c8 62,72-74
+apps/mobile/app.config.ts
+  s_1d0dcbd2b75ee5::t_e8cfdb9dacf6bc 93
+apps/mobile/package.json
+  s_1d0dcbd2b75ee5::t_ea34fbd4e9f10a 32
+apps/mobile/scripts/brand.swift
+  s_1d0dcbd2b75ee5::t_bddbd2bfdd0d49 28,44,59,61,63,81,95
+packages/app/package.json
+  s_1d0dcbd2b75ee5::t_21a51f6840caeb 99
+packages/app/src/App.tsx
+  s_1d0dcbd2b75ee5::t_20e2d50d5db939 29,143-145
+packages/app/src/features/alarms/AlarmsScreen.tsx
+  s_1d0dcbd2b75ee5::t_b0b76415508d16 87,95,173
+packages/app/src/features/chart/ChartScreen.tsx
+  s_1d0dcbd2b75ee5::t_3d1cf79eb03975 96,98-99
+packages/app/src/features/chart/History.tsx
+  s_1d0dcbd2b75ee5::t_9f649e96c53aa5 8,43
+packages/app/src/features/onboarding/OnboardingScreen.tsx
+  s_1d0dcbd2b75ee5::t_4791d1d79a85bd 45-52,59
+packages/app/src/features/orders/ClipboardSheet.tsx
+  s_1d0dcbd2b75ee5::t_de68ca098b6870 2,17,20,28,33
+packages/app/src/features/orders/OrdersSections.tsx
+  s_1d0dcbd2b75ee5::t_ec994cbbf7c37b 88
+packages/app/src/features/pairing/AlertsScreen.tsx
+  s_1d0dcbd2b75ee5::t_25d499742737fb 82,84
+packages/app/src/features/pairing/WelcomeFlow.tsx
+  s_1d0dcbd2b75ee5::t_2dfce673e7df27 27-29
+packages/app/src/features/updates/PlayUpdateSheet.tsx
+  s_1d0dcbd2b75ee5::t_339863a3b24a67 2,10,14-17,19,22-27
+packages/app/src/features/updates/UpdatesSection.tsx
+  s_1d0dcbd2b75ee5::t_ff6c80910a724e 27,33
+packages/app/src/features/updates/playUpdate.ts
+  s_1d0dcbd2b75ee5::t_59c478923caa55 23-28,31-35,38,60-63
+packages/app/src/persistence/onboarding.ts
+  s_1d0dcbd2b75ee5::t_b45f00a47f396d 11-12,15
+packages/ui/src/rows/Row.tsx
+  s_1d0dcbd2b75ee5::t_23db9d61bf18ff 14,22,30,58
+pnpm-lock.yaml
+  s_1d0dcbd2b75ee5::t_3f03872e5b8440 236-237,470-471,3355-3356,3359-3360,7891,7894-7895
+pnpm-workspace.yaml
+  s_1d0dcbd2b75ee5::t_ad1f58790640d0 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6454ba725252adf79c7d36da5e9b1f77d286ad4e",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
