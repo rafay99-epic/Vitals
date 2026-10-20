@@ -1,6 +1,7 @@
 import { Pressable, View } from "react-native";
 import Animated, { SlideInUp } from "react-native-reanimated";
 
+import { leave, settle } from "../motion";
 import { motion } from "../theme.ts";
 import { Mono, Sans, Serif } from "../typography.tsx";
 
@@ -20,6 +21,8 @@ export function AlarmBanner({ level, title, detail, action, onAction }: AlarmBan
   return (
     <Animated.View
       entering={SlideInUp.duration(motion.alarmIn)}
+      exiting={leave}
+      layout={settle}
       accessibilityRole="alert"
       accessibilityLiveRegion="assertive"
       className={`flex-row items-center gap-3 py-3 pl-[22px] pr-[18px] ${LEVEL[level]}`}

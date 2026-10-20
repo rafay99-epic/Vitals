@@ -100,6 +100,8 @@ Numerals always use tabular figures. Serif sizes follow Dynamic Type and Android
 | `flatline` | 600 ms | ease in | connection lost |
 | `toast` | 200 ms in, 4 s hold | ease out | receipts and confirmations |
 
+Data motion lives in `packages/ui/src/motion.ts` and is built into the kit, so screens get it for free: **arrive** (`rise`: sections, rows, readout cells and channel rows fade up 8 px, staggered 45 ms by position, the first time they mount), **change** (`swap`: a readout value or the state word cross-fades when it changes), **shift** (`settle`: when an alarm bar or row appears or leaves, everything below slides to its new place; native only, the web build skips it) and **leave** (`leave`: alarm bars and toasts fade out). Never animate between samples beyond these, and never count numbers up from zero.
+
 Reduced motion (`useReducedMotion`): traces redraw in place without the head, state color changes instantly, sheets and bars appear without sliding. Holds keep their duration; it is a safety rule, not decoration.
 
 ### Haptics

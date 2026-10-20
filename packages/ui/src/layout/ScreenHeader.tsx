@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Platform, Pressable, View } from "react-native";
+import Animated from "react-native-reanimated";
 
+import { swap } from "../motion";
 import { Mono, Sans, Serif, type Tone } from "../typography.tsx";
 
 export type LinkTone = "live" | "quiet" | "warn" | "off";
@@ -32,9 +34,11 @@ export function ScreenHeader({ who, link, linkTone, word, wordTone = "ink", meta
         </Mono>
         <Mono tone={status.tone}>{`${status.dot} ${link}`}</Mono>
       </View>
-      <Serif size="state" italic tone={wordTone} accessibilityRole="header" className="mt-1.5">
-        {word}
-      </Serif>
+      <Animated.View key={typeof word === "string" ? word : "word"} entering={swap}>
+        <Serif size="state" italic tone={wordTone} accessibilityRole="header" className="mt-1.5">
+          {word}
+        </Serif>
+      </Animated.View>
       {meta === undefined ? null : (
         <Mono tone={metaTone} className="mt-1">
           {meta}

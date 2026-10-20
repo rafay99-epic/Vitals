@@ -30,7 +30,7 @@ function ChartMeta({ mac }: { readonly mac: MacInfo | null }) {
 
 const RULES = new Map(CHANNEL_ORDER.map((key) => [key, new Set(CHANNELS[key].rules)]));
 
-function LiveChannel({ channel, size, memoryMax, onOpen }: { readonly channel: Channel; readonly size: RowSize; readonly memoryMax: number | null; readonly onOpen: (channel: Channel) => void }) {
+function LiveChannel({ channel, size, memoryMax, order, onOpen }: { readonly channel: Channel; readonly size: RowSize; readonly memoryMax: number | null; readonly order: number; readonly onOpen: (channel: Channel) => void }) {
   const remote = useRemote();
   const def = CHANNELS[channel];
   const signal = useSignal();
@@ -46,6 +46,7 @@ function LiveChannel({ channel, size, memoryMax, onOpen }: { readonly channel: C
       max={channel === "press" ? memoryMax : def.max}
       state={rowState(live, alarmed, signal)}
       size={size}
+      order={order}
       onPress={() => onOpen(channel)}
       accessibilityHint={`Opens the ${label} chart.`}
     />
@@ -91,10 +92,10 @@ export function ChartScreen({ navigation }: Props) {
   const shown = (channel: Channel) => !missing.has(channel);
   const memoryMax = mac?.memoryBytes ?? null;
   const open = (channel: Channel) => navigation.navigate("Channel", { channel });
-  const row = (size: RowSize) => (channel: Channel) => <LiveChannel key={channel} channel={channel} size={size} memoryMax={memoryMax} onOpen={open} />;
+  const row = (size: RowSize) => (channel: Channel, order: number) => <LiveChannel key={channel} channel={channel} size={size} memoryMax={memoryMax} order={order} onOpen={open} />;
   const rows = wide
     ? [...CHART_FULL, ...CHART_COMPACT].filter(shown).map(row("lane"))
-    : [...CHART_FULL.filter(shown).map(row("full")), ...CHART_COMPACT.map(row("compact"))];
+    : [...CHART_FULL.filter(shown).map(row("full")), ...CHART_COMPACT.map((channel, index) => row("compact")(channel, index + CHART_FULL.length))];
   return (
     <Screen top={<ChartBanners />}>
       <TabHeader meta={<ChartMeta mac={mac} />} />

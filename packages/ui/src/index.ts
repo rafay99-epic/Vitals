@@ -19,6 +19,7 @@ export * from "./layout/Screen.tsx";
 export * from "./layout/ScreenHeader.tsx";
 export * from "./layout/Section.tsx";
 export * from "./layout/useWide.ts";
+export * from "./motion";
 export * from "./nav/Glyph";
 export * from "./nav/TabBar.tsx";
 export * from "./rows/EmptyState.tsx";
