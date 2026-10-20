@@ -157,6 +157,7 @@ Tabs, in order: **Chart, Orders, Ward, Alarms, Record**. Each tab is one screen 
 | Ward | `features/ward/WardScreen.tsx` | BY CPU / BY MEMORY, wards (Agents, Emulators, Dev servers, Browsers, Other) with beds; tap a bed for its sheet. Wide: table plus inspector |
 | Alarms | `features/alarms/AlarmsScreen.tsx` | readouts (Pressure, Swap, Thermal), Calm hold + Undo, rule switches and thresholds, wards a calm touches, alarm log for this session |
 | Record | `features/record/RecordScreen.tsx` | Mac, This device, Updates, Permissions, Running apps, Launch, Emulators, Unpair; Diagnostics in the dev build |
+| Onboarding | `features/onboarding/OnboardingScreen.tsx` | first launch on native only: welcome, get Vitals for Mac (brew command, share link), turn on Remote, Tailscale on both, pair. "I already have it" skips to pairing |
 | Pair | `features/pairing/PairScreen.tsx` | scan, enter code (+ Mac address on native), progress steps, Admitted, errors |
 | Alerts explainer | `features/pairing/AlertsScreen.tsx` | shown once after Admitted, before the OS prompt |
 | Link states | `ScreenHeader` + `features/chart/LinkState.tsx` | Connecting, Reconnecting, Paused, No signal, Removed, Out of step |
@@ -166,6 +167,10 @@ Tabs, in order: **Chart, Orders, Ward, Alarms, Record**. Each tab is one screen 
 ### State word
 
 One word per screen header, chosen by priority: alarm summary, **No signal.**, **Fever.** (thermal serious or worse), **Pressure rising.** (memory pressure warning or worse), **Breathing hard.** (fans above 80% of max), **Racing.** (CPU above 75), **Elevated.** (CPU 45 to 75), **Resting.** Transient words: **Admitted.** after pairing, **Calmed.** for 10 s after a calm, **Asleep.** while the Mac sleeps. The logic is `stateWord()` in `packages/app/src/state/vitals.ts`; screens never compute their own.
+
+### Icons and splash
+
+The mark is the single beat in `pulse` on black. iOS ships light (black field), dark (transparent field) and tinted (white beat) icons; Android ships an adaptive foreground on black plus a monochrome layer for themed icons; the Mac uses an Icon Composer file per channel (green Stable, amber Nightly, violet Dev). The dev phone build adds a violet DEV badge. The splash is the beat alone on black on every platform and stays up through the launch update check.
 
 ## 5. Platforms
 

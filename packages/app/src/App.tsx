@@ -14,6 +14,7 @@ import { AlarmsScreen } from "./features/alarms/AlarmsScreen.tsx";
 import { ChannelScreen } from "./features/chart/ChannelScreen.tsx";
 import { ChartScreen } from "./features/chart/ChartScreen.tsx";
 import { DiagnosticsScreen } from "./features/diagnostics/DiagnosticsScreen.tsx";
+import { OnboardingScreen } from "./features/onboarding/OnboardingScreen.tsx";
 import { OrdersScreen } from "./features/orders/OrdersScreen.tsx";
 import { PairScreen } from "./features/pairing/PairScreen.tsx";
 import { WelcomeFlow } from "./features/pairing/WelcomeFlow.tsx";
@@ -23,6 +24,7 @@ import { WardScreen } from "./features/ward/WardScreen.tsx";
 import { useAppFonts } from "./lib/fonts";
 import { hostOf } from "./lib/host.ts";
 import type { ChartStackParams, RecordStackParams, TabParams } from "./navigation/types.ts";
+import { onboarded } from "./persistence/onboarding";
 import { useStore } from "./state/useStore.ts";
 
 const theme: Theme = {
@@ -125,12 +127,18 @@ function PairedTabs() {
   );
 }
 
+function Unpaired() {
+  const ready = useStore(onboarded);
+  if (ready === null) return <View className="flex-1 bg-bg" />;
+  return ready ? <PairScreen /> : <OnboardingScreen />;
+}
+
 function Root() {
   const session = useSession();
   const welcome = useStore(sessions.welcome);
   useEffect(() => sessions.start(), []);
   if (session.status === "loading") return <View className="flex-1 bg-bg" />;
-  if (session.status === "unpaired") return <PairScreen />;
+  if (session.status === "unpaired") return <Unpaired />;
   return welcome ? <WelcomeFlow /> : <PairedTabs />;
 }
 

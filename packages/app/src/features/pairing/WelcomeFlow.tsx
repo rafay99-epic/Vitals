@@ -11,7 +11,7 @@ import { scopeLine } from "../../state/commands.ts";
 import { useScopes } from "../../state/useScopes.ts";
 import { useStore } from "../../state/useStore.ts";
 import { AlertsScreen } from "./AlertsScreen.tsx";
-import { FirstBeat } from "./FirstBeat.tsx";
+import { FirstBeat } from "../../components/FirstBeat.tsx";
 
 const ALERTS: Record<PermissionState, string> = { granted: "on", prompt: "ask next", denied: "off", unsupported: "not here" };
 

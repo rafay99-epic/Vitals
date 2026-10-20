@@ -4,6 +4,7 @@ import { type ReactNode, useEffect } from "react";
 import { AppState, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { hideSplash } from "../../lib/splash.ts";
 import { useStore } from "../../state/useStore.ts";
 import { checkForUpdate, isBlocking, type UpdatePhase, updatePhase, updatesEnabled } from "./updateFlow.ts";
 
@@ -52,6 +53,11 @@ function FailedNote({ reason }: { readonly reason: string }) {
 
 export function UpdateGate({ children }: { readonly children: ReactNode }) {
   const phase = useStore(updatePhase);
+  const covered = phase._tag === "Checking" && phase.blocking;
+
+  useEffect(() => {
+    if (!covered) hideSplash();
+  }, [covered]);
 
   useEffect(() => {
     if (!updatesEnabled) return;
