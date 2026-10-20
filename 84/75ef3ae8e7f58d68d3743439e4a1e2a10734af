@@ -1,0 +1,135 @@
+packages/app/src/features/ward/WardScreen.tsx
+  s_1d0dcbd2b75ee5::t_3b68c79581d18d 1-2,8-10,12-13,15-22,32-33,54-69,71-72,94-101
+  s_1d0dcbd2b75ee5::t_7e53f192dc3f6e 3-6,11,14,23-31,34-53,70,73-93
+packages/ui/src/rows/EmptyState.tsx
+  s_1d0dcbd2b75ee5::t_481b0507b54527 1-17
+packages/ui/src/typography.tsx
+  s_1d0dcbd2b75ee5::t_03c238b07e43ad 1-70
+  s_1d0dcbd2b75ee5::t_df2b8267f4ba1b 73-74
+packages/ui/src/controls/Chips.tsx
+  s_1d0dcbd2b75ee5::t_d070d139ad6b41 1-43
+packages/app/src/features/alarms/AlarmsScreen.tsx
+  s_1d0dcbd2b75ee5::t_e3a800c9a162e5 1-91
+UI-CONSISTENCY.md
+  s_1d0dcbd2b75ee5::t_fe8e0536c268d0 1-214
+  s_1d0dcbd2b75ee5::t_90cf89a5fb2647 215-217
+packages/app/src/features/chart/ChartScreen.tsx
+  s_1d0dcbd2b75ee5::t_c87dfe0324369a 1-68,70,78-79
+packages/ui/src/nav/Glyph.tsx
+  s_1d0dcbd2b75ee5::t_dfe17480c1e388 1-34
+packages/ui/src/layout/Screen.tsx
+  s_1d0dcbd2b75ee5::t_4f8a645896b7b0 1-30
+packages/ui/src/ward/BedRow.tsx
+  s_1d0dcbd2b75ee5::t_8d0e819f7b7a30 1-61
+packages/ui/src/rows/Row.tsx
+  s_1d0dcbd2b75ee5::t_f2f997e7174194 1-55
+packages/app/src/features/record/RecordScreen.tsx
+  s_1d0dcbd2b75ee5::t_4ab464cbe36a7c 1-89
+packages/ui/src/rows/KeyValueGrid.tsx
+  s_1d0dcbd2b75ee5::t_c458a1d0bbf76d 1-33
+packages/ui/src/controls/Field.tsx
+  s_1d0dcbd2b75ee5::t_dbdfdc5a053ea0 1-41
+  s_1d0dcbd2b75ee5::t_3253b12a81a50c 42-51
+packages/ui/src/rows/StackBar.tsx
+  s_1d0dcbd2b75ee5::t_02b83ff11bcb12 1-35
+packages/ui/src/controls/Slider.tsx
+  s_1d0dcbd2b75ee5::t_e0f1a7b9897296 1-93
+packages/ui/src/channel/HistoryChart.tsx
+  s_1d0dcbd2b75ee5::t_61fb612bb5dcb5 1-86
+packages/ui/src/feedback/Toast.tsx
+  s_1d0dcbd2b75ee5::t_576abb7867d556 1-39
+packages/ui/src/nav/TabBar.tsx
+  s_1d0dcbd2b75ee5::t_e169c2e74fb816 1-23,45-48,51,54-57,65-67
+  s_1d0dcbd2b75ee5::t_99740d95d38899 24-44,49-50,52-53,58-64
+  s_1d0dcbd2b75ee5::t_07cc2429de5a04 68
+packages/ui/src/controls/Segmented.tsx
+  s_1d0dcbd2b75ee5::t_7aab4ec5048c3a 1-4,10,12,15,18,27,29
+packages/ui/src/channel/Trace.tsx
+  s_1d0dcbd2b75ee5::t_cf423a84532a44 1-46
+packages/ui/src/controls/CodeInput.tsx
+  s_1d0dcbd2b75ee5::t_efd877e94fb28c 1-59
+  s_1d0dcbd2b75ee5::t_932796bc42e247 60
+packages/ui/src/layout/ScreenHeader.tsx
+  s_1d0dcbd2b75ee5::t_175ec70ae5094e 1-58
+packages/ui/src/layout/Section.tsx
+  s_1d0dcbd2b75ee5::t_537119382ffec8 1-22
+packages/ui/src/layout/useWide.ts
+  s_1d0dcbd2b75ee5::t_55151a80412400 1-5
+packages/ui/src/theme.css
+  s_1d0dcbd2b75ee5::t_a39b55c046cef7 1-52
+packages/ui/src/channel/Spark.tsx
+  s_1d0dcbd2b75ee5::t_e445fa7396ead8 1-29
+packages/ui/src/controls/HoldRow.tsx
+  s_1d0dcbd2b75ee5::t_b7942794ebe066 1-94
+packages/ui/src/feedback/Sheet.tsx
+  s_1d0dcbd2b75ee5::t_8c0d81dd00e41f 1-64
+packages/ui/src/channel/ChannelRow.tsx
+  s_1d0dcbd2b75ee5::t_3614b940daddd7 1-80
+CLAUDE.md
+  s_1d0dcbd2b75ee5::t_6cd33304a31027 29-36
+  s_1d0dcbd2b75ee5::t_ccc519c9f09c20 154-155,295-297
+packages/ui/src/controls/Button.tsx
+  s_1d0dcbd2b75ee5::t_6bf47c365bd097 1-41
+packages/app/src/features/chart/ChannelScreen.tsx
+  s_1d0dcbd2b75ee5::t_975f126c5ee6a6 1-58,60-61
+packages/ui/src/controls/BeatSwitch.tsx
+  s_1d0dcbd2b75ee5::t_d1201e0c467097 1-40
+  s_1d0dcbd2b75ee5::t_97830f61fc7920 41-42
+packages/ui/src/feedback/AlarmBanner.tsx
+  s_1d0dcbd2b75ee5::t_b6b0e2279acb3d 1-46
+packages/ui/src/channel/waves.ts
+  s_1d0dcbd2b75ee5::t_e89158944f70fd 1-135
+  s_1d0dcbd2b75ee5::t_082324dcbbb384 136-165
+packages/ui/src/theme.ts
+  s_1d0dcbd2b75ee5::t_63f872f92ff86c 2-10,12-14,17,19-55
+apps/mobile/global.css
+  s_1d0dcbd2b75ee5::t_170effddcd0b9e 5
+apps/web/global.css
+  s_1d0dcbd2b75ee5::t_640698b3e2504a 5
+apps/web/package.json
+  s_1d0dcbd2b75ee5::t_1c772bc73a54d3 20
+packages/ui/src/channel/Spark.web.tsx
+  s_1d0dcbd2b75ee5::t_0ff36a2e1b0e85 1-14
+packages/ui/src/channel/Trace.web.tsx
+  s_1d0dcbd2b75ee5::t_8029758178d336 4-7,9-13,15-21,23,25-31
+packages/ui/src/channel/svgPen.ts
+  s_1d0dcbd2b75ee5::t_d16ce1d1cb0c9a 1-31
+packages/ui/src/controls/BeatSwitch.web.tsx
+  s_1d0dcbd2b75ee5::t_ea914d436d47c9 1-26
+packages/ui/src/controls/HoldTrace.tsx
+  s_1d0dcbd2b75ee5::t_1025a1def6fad5 1-25
+packages/ui/src/controls/HoldTrace.web.tsx
+  s_1d0dcbd2b75ee5::t_857a48548cb292 1-21
+packages/ui/src/controls/holdBeat.ts
+  s_1d0dcbd2b75ee5::t_45e0e7617cd445 1-8
+packages/ui/src/fonts.ts
+  s_1d0dcbd2b75ee5::t_7582ea98aed663 1-17
+packages/ui/src/index.ts
+  s_1d0dcbd2b75ee5::t_38f3b17f4de041 1-10,12-27,30-31
+packages/ui/src/layout/Columns.tsx
+  s_1d0dcbd2b75ee5::t_cf6aaad531a0eb 1-21
+packages/ui/src/nav/Glyph.web.tsx
+  s_1d0dcbd2b75ee5::t_f5deeca2f46f89 1-2,4,6,8-9,11,14,16-19
+packages/ui/src/nav/glyphPaths.ts
+  s_1d0dcbd2b75ee5::t_e0605fc1b5c733 1-15
+packages/ui/src/series.ts
+  s_1d0dcbd2b75ee5::t_051f85d1dbfbd0 5-9
+pnpm-lock.yaml
+  s_1d0dcbd2b75ee5::t_6e2c91adcdbf22 217-219,226-228,253-255,335-337,445-447,451-453,475-477,539-548,1211-1219,1897-1900,2781-2783,3309-3311,3407-3409,3431-3442,5653-5658,6435-6436,7226-7227,7831-7832,7934-7935,7957-7983
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8475ef3ae8e7f58d68d3743439e4a1e2a10734af",
+  "prompts": {},
+  "sessions": {
+    "s_1d0dcbd2b75ee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1777ab41-63be-45b7-9142-7269af07c573",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
