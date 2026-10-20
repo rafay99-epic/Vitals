@@ -27,6 +27,7 @@ export class Auth extends Context.Service<
     readonly pair: (request: PairRequest, login: string | null) => Paired | AuthFailure;
     readonly session: (token: string) => SessionInfo | null;
     readonly unpair: (token: string) => Effect.Effect<boolean>;
+    readonly replaceWebSession: (previousToken: string, deviceId: string) => Effect.Effect<void>;
     readonly issueTicket: (bearer: string) => { readonly ticket: string; readonly expiresAt: number } | AuthFailure;
     readonly redeemTicket: (ticket: string) => Session | null;
     readonly revoked: (session: Session) => Effect.Effect<void>;
@@ -151,6 +152,17 @@ export const layer = (initialOwner: string | null) =>
           return yield* revoke(match.device.id);
         });
 
+      const replacedBy = new Map<string, string>();
+      const replaceWebSession = (previousToken: string, deviceId: string) =>
+        Effect.gen(function* () {
+          const earlier = replacedBy.get(previousToken);
+          replacedBy.delete(previousToken);
+          replacedBy.set(previousToken, deviceId);
+          if (replacedBy.size > 200) replacedBy.delete(replacedBy.keys().next().value ?? "");
+          yield* unpair(previousToken);
+          if (earlier !== undefined && earlier !== deviceId) yield* revoke(earlier);
+        });
+
       const setScopes = (deviceId: string, scopes: ReadonlyArray<Scope>) =>
         Effect.gen(function* () {
           const changed = store.setScopes(deviceId, scopes);
@@ -166,6 +178,7 @@ export const layer = (initialOwner: string | null) =>
         pair,
         session,
         unpair,
+        replaceWebSession,
         issueTicket,
         redeemTicket,
         revoked,

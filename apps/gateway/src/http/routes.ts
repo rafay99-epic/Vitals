@@ -71,7 +71,7 @@ const pair = HttpRouter.add(
     if ("reason" in result) return failure(result.reason === "identity" ? 403 : 401, result.reason, result.message);
     if (body.value.device.platform !== "web") return json(result);
     const previous = request.cookies[sessionCookie(channel)];
-    if (previous !== undefined && previous !== "") yield* auth.unpair(previous);
+    if (previous !== undefined && previous !== "") yield* auth.replaceWebSession(previous, result.deviceId);
     return withSessionCookie(json({ ...result, token: null }), channel, result.token, result.expiresAt);
   }),
 );

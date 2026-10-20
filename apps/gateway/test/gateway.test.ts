@@ -89,6 +89,29 @@ describe("pairing and auth", () => {
     expect((await fetch(`${gateway.base}/api/session`, { headers: ownerHeaders })).status).toBe(204);
   });
 
+  test("parallel re-pairs from one browser leave exactly one session valid", async () => {
+    const started = await startGateway();
+    gateway = started;
+    const pairWeb = async (headers: Record<string, string>) => {
+      const created = await adminOp(started.app, { _tag: "CreatePairing" });
+      if (created.ok?._tag !== "CreatePairing") throw new Error("no pairing");
+      return fetch(`${started.base}/api/pair`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ code: created.ok.code, device: { name: "Browser", platform: "web", model: "Mac", appVersion: "1" } }),
+      });
+    };
+    const cookieOf = (response: Response) => ({ ...ownerHeaders, cookie: (response.headers.get("set-cookie") ?? "").split(";")[0] ?? "" });
+    const original = cookieOf(await pairWeb(ownerHeaders));
+    const [first, second] = await Promise.all([pairWeb(original), pairWeb(original)]);
+    if (first === undefined || second === undefined) throw new Error("missing response");
+    const statuses = await Promise.all(
+      [original, cookieOf(first), cookieOf(second)].map(async (headers) => (await fetch(`${started.base}/api/session`, { headers })).status),
+    );
+    expect(statuses[0]).toBe(204);
+    expect(statuses.slice(1).filter((status) => status === 200).length).toBe(1);
+  });
+
   test("open alerts lists alerts raised after a sequence that are still open", async () => {
     gateway = await startGateway();
     const { token } = await pairDevice(gateway);

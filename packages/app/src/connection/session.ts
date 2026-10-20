@@ -37,10 +37,12 @@ class SessionManager {
   private started = false;
   private readonly usedCodes = new Set<string>();
 
-  handleLink(link: PairingLink | null): Promise<boolean> {
-    if (link === null || this.usedCodes.has(link.code)) return Promise.resolve(false);
+  async handleLink(link: PairingLink | null): Promise<boolean> {
+    if (link === null || this.usedCodes.has(link.code)) return false;
     this.usedCodes.add(link.code);
-    return this.pairWith(link);
+    const paired = await this.pairWith(link);
+    if (!paired) this.usedCodes.delete(link.code);
+    return paired;
   }
 
   start(): void {
@@ -60,6 +62,16 @@ class SessionManager {
 
   async pairWith(link: PairingLink): Promise<boolean> {
     this.pairing.set({ busy: true, error: null });
+    try {
+      return await this.completePairing(link);
+    } catch {
+      this.pairing.set({ busy: false, error: "Pairing could not be saved on this device. Try again." });
+      if (this.session.get().status === "loading") this.session.set({ status: "unpaired" });
+      return false;
+    }
+  }
+
+  private async completePairing(link: PairingLink): Promise<boolean> {
     const outcome = await pair(link, deviceInfo());
     if (!outcome.ok) {
       this.pairing.set({ busy: false, error: outcome.message });
@@ -75,7 +87,12 @@ class SessionManager {
       pairedAt: Date.now(),
     };
     const previous = Platform.OS === "web" ? null : await loadCredentials().catch(() => null);
-    await saveCredentials(credentials);
+    try {
+      await saveCredentials(credentials);
+    } catch (error) {
+      void unpair(credentials.baseUrl, credentials.token);
+      throw error;
+    }
     if (previous !== null && previous.deviceId !== credentials.deviceId) void unpair(previous.baseUrl, previous.token);
     this.pairing.set({ busy: false, error: null });
     this.open(credentials);
