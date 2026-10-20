@@ -52,6 +52,9 @@ final class SMC {
 
     // MARK: - Fans
 
+    /// Fan count straight from the SMC, readable before the first sample.
+    var fanCount: Int { read("FNum").map { max(0, Int($0)) } ?? 0 }
+
     func fans() -> [Fan] {
         guard let count = read("FNum").map({ Int($0) }), count > 0 else { return [] }
         return (0..<min(count, 10)).compactMap { i in

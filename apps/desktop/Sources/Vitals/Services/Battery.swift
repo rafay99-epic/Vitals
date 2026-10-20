@@ -78,6 +78,9 @@ enum Battery {
     /// Looked up once and kept for the process lifetime (0 on a desktop).
     private static let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
 
+    /// True on any Mac with a battery, without waiting for the first sample.
+    static var isPresent: Bool { service != 0 }
+
     /// `officialHealth` is macOS's "Maximum Capacity" (see `BatteryHealth`),
     /// preferred so the app matches System Settings. The raw full-charge/design
     /// ratio is the fallback until it's read.

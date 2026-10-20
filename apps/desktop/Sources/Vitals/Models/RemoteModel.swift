@@ -546,8 +546,8 @@ final class RemoteModel {
             os: HardwareInfo.osVersion,
             coreCount: HardwareInfo.coreCount,
             memoryBytes: Double(ProcessInfo.processInfo.physicalMemory),
-            hasBattery: vitals.battery != nil,
-            hasFans: !vitals.fans.isEmpty,
+            hasBattery: vitals.battery != nil || Battery.isPresent,
+            hasFans: !vitals.fans.isEmpty || (SMC()?.fanCount ?? 0) > 0,
             vitalsVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev",
             channel: Channel.current.rawValue
         )
