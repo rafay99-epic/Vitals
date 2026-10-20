@@ -5,7 +5,7 @@ export type StayAwake = "1h" | "4h" | "morning" | "forever";
 export const STAY_OPTIONS: ReadonlyArray<{ readonly value: StayAwake; readonly label: string }> = [
   { value: "1h", label: "1 h" },
   { value: "4h", label: "4 h" },
-  { value: "morning", label: "Until 8 am" },
+  { value: "morning", label: "Until 8 am here" },
   { value: "forever", label: "Forever" },
 ];
 

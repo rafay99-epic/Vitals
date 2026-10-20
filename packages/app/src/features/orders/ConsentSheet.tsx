@@ -19,8 +19,11 @@ export const DISCHARGE: Record<Discharge, { readonly label: string; readonly que
 
 const APPS_SHOWN = 6;
 
-const appsLine = (apps: ReadonlyArray<RunningApp> | null): string => {
+type OpenApps = ReadonlyArray<RunningApp> | "unknown" | null;
+
+const appsLine = (apps: OpenApps): string => {
   if (apps === null) return "Checking open apps.";
+  if (apps === "unknown") return "Could not read the open apps. Unsaved work may be lost.";
   if (apps.length === 0) return "No apps are open.";
   const names = apps.slice(0, APPS_SHOWN).map((app) => app.name).join(", ");
   return apps.length > APPS_SHOWN ? `Open: ${names} and ${String(apps.length - APPS_SHOWN)} more. Each may ask to save.` : `Open: ${names}. Each may ask to save.`;
@@ -28,14 +31,14 @@ const appsLine = (apps: ReadonlyArray<RunningApp> | null): string => {
 
 export function ConsentSheet({ order, onClose }: { readonly order: Discharge | null; readonly onClose: () => void }) {
   const remote = useRemote();
-  const [loaded, setLoaded] = useState<{ readonly order: Discharge; readonly apps: ReadonlyArray<RunningApp> } | null>(null);
+  const [loaded, setLoaded] = useState<{ readonly order: Discharge; readonly apps: ReadonlyArray<RunningApp> | "unknown" } | null>(null);
   const apps = loaded !== null && loaded.order === order ? loaded.apps : null;
 
   useEffect(() => {
     if (order === null) return;
     let live = true;
     void remote.connection.call((client) => client["apps.list"]({})).then((result) => {
-      if (live) setLoaded({ order, apps: result.ok ? result.value.running : [] });
+      if (live) setLoaded({ order, apps: result.ok ? result.value.running : "unknown" });
     });
     return () => {
       live = false;

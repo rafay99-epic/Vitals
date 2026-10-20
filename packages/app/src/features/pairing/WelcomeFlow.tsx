@@ -49,7 +49,7 @@ export function WelcomeFlow() {
         <Row plain label="Session" value={Platform.OS === "web" ? "in a secure cookie" : "in the keychain"} />
       </Section>
       <View className="px-[22px] pt-8">
-        <Button label="Open the Chart" block onPress={next} />
+        <Button label="Open the Chart" block disabled={permission === null} onPress={next} />
       </View>
     </Screen>
   );

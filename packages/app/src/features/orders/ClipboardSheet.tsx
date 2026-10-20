@@ -5,18 +5,30 @@ import { View } from "react-native";
 import { useRemote } from "../../connection/useRemote.ts";
 import { haptics } from "../../lib/haptics";
 
-export function ClipboardSheet({ visible, canRead, onClose }: { readonly visible: boolean; readonly canRead: boolean; readonly onClose: () => void }) {
+const ACCEPTED: ReadonlySet<string> = new Set(["done", "running"]);
+
+const MAX_TEXT = 100_000;
+
+export function ClipboardSheet({ visible, canRead, canWrite, onClose }: { readonly visible: boolean; readonly canRead: boolean; readonly canWrite: boolean; readonly onClose: () => void }) {
   const remote = useRemote();
   const [text, setText] = useState("");
   const [macText, setMacText] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const close = () => {
+    setMacText(null);
+    onClose();
+  };
 
   const copy = () => {
     haptics.success();
+    setSending(true);
     void remote.run({ _tag: "ClipboardSet", text }).then((receipt) => {
-      if (receipt === null) return;
+      setSending(false);
+      if (!ACCEPTED.has(receipt?.status ?? "failed")) return;
       remote.show("Copied to the Mac clipboard.");
       setText("");
-      onClose();
+      close();
     });
   };
 
@@ -27,10 +39,10 @@ export function ClipboardSheet({ visible, canRead, onClose }: { readonly visible
     });
 
   return (
-    <Sheet visible={visible} title="Clipboard" detail="plain text · up to 100 KB" onClose={onClose}>
-      <Field label="Text for the Mac clipboard" value={text} onChangeText={setText} multiline placeholder="Paste or type" hint={`${String(text.length)} characters`} />
+    <Sheet visible={visible} title="Clipboard" detail="plain text · up to 100 KB" onClose={close}>
+      <Field label="Text for the Mac clipboard" value={text} onChangeText={setText} multiline maxLength={MAX_TEXT} editable={canWrite} placeholder="Paste or type" hint={`${String(text.length)} characters`} />
       <View className="gap-2.5 px-[22px] pb-4">
-        <Button label="Copy to Mac" block disabled={text.length === 0} onPress={copy} />
+        <Button label="Copy to Mac" block disabled={!canWrite || sending || text.length === 0} onPress={copy} accessibilityHint={canWrite ? undefined : "Control is off for this device on the Mac."} />
         <Button label="Read Mac clipboard" variant="line" block disabled={!canRead} onPress={read} accessibilityHint={canRead ? undefined : "Clipboard reading is off for this device on the Mac."} />
         {macText === null ? null : (
           <Mono tone="ink" selectable className="mt-1 leading-5">

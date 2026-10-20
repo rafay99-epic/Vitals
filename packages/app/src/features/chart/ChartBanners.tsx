@@ -1,10 +1,13 @@
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
 import type { ConnectionState } from "@vitals/client-runtime";
-import { AlarmBanner } from "@vitals/ui";
+import { AlarmBanner, Row } from "@vitals/ui";
 import { View } from "react-native";
 
 import { AlertBanner } from "../../components/AlertBanner.tsx";
 import { isPending, PendingOrder, secondsLeft } from "../../components/PendingOrder.tsx";
 import { useRemote } from "../../connection/useRemote.ts";
+import type { TabParams } from "../../navigation/types.ts";
 import { useNow } from "../../state/useVitals.ts";
 import { useStore } from "../../state/useStore.ts";
 
@@ -22,6 +25,13 @@ function BackoffBar({ state }: { readonly state: Extract<ConnectionState, { read
   );
 }
 
+const SHOWN = 2;
+
+function MoreAlarms({ count }: { readonly count: number }) {
+  const navigation = useNavigation<BottomTabNavigationProp<TabParams>>();
+  return <Row plain label={`${String(count)} more open in Alarms`} onPress={() => navigation.navigate("Alarms")} />;
+}
+
 export function ChartBanners() {
   const remote = useRemote();
   const alerts = useStore(remote.events.alerts);
@@ -30,10 +40,11 @@ export function ChartBanners() {
   return (
     <View>
       {state._tag === "Backoff" ? <BackoffBar state={state} /> : null}
-      {alerts.map((alert) => (
+      {alerts.slice(0, SHOWN).map((alert) => (
         <AlertBanner key={alert.id} alert={alert} />
       ))}
-      {pending.map((receipt) => (
+      {alerts.length > SHOWN ? <MoreAlarms count={alerts.length - SHOWN} /> : null}
+      {pending.slice(0, SHOWN).map((receipt) => (
         <PendingOrder key={receipt.id} receipt={receipt} />
       ))}
     </View>

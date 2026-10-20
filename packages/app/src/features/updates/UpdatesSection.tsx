@@ -20,6 +20,8 @@ const lastCheck = (phase: UpdatePhase): string => {
       return `current · ${formatDateTime(phase.at)}`;
     case "Offline":
       return `unreachable · ${formatDateTime(phase.at)}`;
+    case "Failed":
+      return `install failed · ${formatDateTime(phase.at)}`;
   }
 };
 

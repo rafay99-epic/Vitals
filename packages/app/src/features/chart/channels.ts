@@ -3,14 +3,11 @@ import { formatCelsius, formatPercent, formatRate, formatRpm, formatWatts } from
 import { type Channel, type ChannelState, channels } from "@vitals/ui";
 
 import type { SeriesKey } from "../../state/live.ts";
-import { bytes, fixed, type Reading } from "../../state/vitals.ts";
+import { bytes, fanLoad, fixed, type Reading } from "../../state/vitals.ts";
 
 export const LIVE_TOPICS: ReadonlyArray<Topic> = ["cpu", "gpu", "thermal", "fans", "memory", "battery", "power", "network"];
 
 const GB = 1024 ** 3;
-
-const fanLoad = (sample: LiveSample | null): number =>
-  (sample?.fans ?? []).reduce((load, fan) => Math.max(load, fan.maxRpm > fan.minRpm ? (fan.rpm - fan.minRpm) / (fan.maxRpm - fan.minRpm) : 0), 0);
 
 const socWatts = (sample: LiveSample | null): number | null =>
   sample?.power === undefined || sample.power === null ? null : sample.power.cpuWatts + sample.power.gpuWatts + sample.power.aneWatts;
@@ -153,7 +150,7 @@ export const CHANNELS: Record<Channel, ChannelDef> = {
 export const CHART_FULL: ReadonlyArray<Channel> = ["pulse", "press", "temp", "resp", "oxy"];
 export const CHART_COMPACT: ReadonlyArray<Channel> = ["eeg", "drip", "tele"];
 
-export const isChannel = (value: string): value is Channel => value in channels;
+export const isChannel = (value: string): value is Channel => Object.hasOwn(channels, value);
 
 export const titleOf = (channel: Channel): string => {
   const tag = channels[channel].tag;

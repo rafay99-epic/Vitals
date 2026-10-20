@@ -39,16 +39,24 @@ function SampleAlert() {
 
 export function AlertsScreen({ onDone }: { readonly onDone: () => void }) {
   const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const allow = () => {
     setAsking(true);
+    setError(null);
     void requestNotifications()
       .then(async (granted) => {
-        if (!granted) return;
-        haptics.success();
-        await startAlertWatch();
+        if (granted) {
+          haptics.success();
+          await startAlertWatch();
+        }
+        onDone();
       })
-      .finally(onDone);
+      .catch((cause: unknown) => {
+        haptics.error();
+        setAsking(false);
+        setError(cause instanceof Error ? cause.message : "Alerts could not be turned on.");
+      });
   };
 
   return (
@@ -71,6 +79,7 @@ export function AlertsScreen({ onDone }: { readonly onDone: () => void }) {
         ))}
       </View>
       <View className="gap-3 px-[22px] pt-8">
+        {error === null ? null : <Mono tone="alarmHigh">{`${error} Try again, or turn them on later in Record.`}</Mono>}
         <Button label={asking ? "Asking" : "Allow alerts"} block disabled={asking} onPress={allow} />
         <Button label="Not now" variant="text" onPress={onDone} />
       </View>

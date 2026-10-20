@@ -9,11 +9,11 @@ const held = (seconds: number): string => {
 const PRESSURE_LEVEL = ["normal", "warning", "critical"] as const;
 const THERMAL_LEVEL = ["nominal", "fair", "serious", "critical"] as const;
 
-const level = (names: ReadonlyArray<string>, threshold: number): string => names[Math.round(threshold)] ?? String(threshold);
+const level = (names: ReadonlyArray<string>, threshold: number): string => names[Math.max(0, Math.ceil(threshold))] ?? String(threshold);
 
 export const RULES: Record<GuardRuleKind, { readonly title: string; readonly detail: (rule: GuardRule) => string }> = {
   memoryPressure: { title: "Memory pressure", detail: (rule) => `${level(PRESSURE_LEVEL, rule.threshold)} ${held(rule.holdSeconds)}` },
-  swapGrowth: { title: "Swap growing", detail: (rule) => `above ${String(rule.threshold)} GB and still growing` },
+  swapGrowth: { title: "Swap growing", detail: (rule) => `above ${String(rule.threshold)} GB and still growing ${held(rule.holdSeconds)}` },
   cpuSaturated: { title: "CPU saturated", detail: (rule) => `above ${String(rule.threshold)}% ${held(rule.holdSeconds)}` },
   agentOverload: { title: "Agent crowd", detail: (rule) => `${String(rule.threshold)} or more agents ${held(rule.holdSeconds)}` },
   emulatorStack: { title: "Emulators fighting", detail: (rule) => `${String(rule.threshold)} or more emulators under pressure ${held(rule.holdSeconds)}` },

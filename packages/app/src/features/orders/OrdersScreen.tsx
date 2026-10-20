@@ -45,14 +45,14 @@ export function OrdersScreen() {
             <NowSection {...sections} />
             <StayAwakeSection {...sections} />
             <SoundSection {...sections} />
-            <HandOverSection {...sections} onClipboard={() => setSheet("clipboard")} onOpen={() => setSheet("open")} />
+            <HandOverSection {...sections} canRead={scopes.includes("clipboard")} onClipboard={() => setSheet("clipboard")} onOpen={() => setSheet("open")} />
             <ScenesSection {...sections} />
-            <DischargeSection allowed={scopes.includes("destructive")} locked={locked} onPick={setDischarge} />
+            <DischargeSection allowed={scopes.includes("destructive")} onPick={setDischarge} />
           </>
         }
         side={<OrdersLog />}
       />
-      <ClipboardSheet visible={sheet === "clipboard"} canRead={scopes.includes("clipboard")} onClose={() => setSheet(null)} />
+      <ClipboardSheet visible={sheet === "clipboard"} canRead={scopes.includes("clipboard")} canWrite={!locked} onClose={() => setSheet(null)} />
       <OpenSheet visible={sheet === "open"} onClose={() => setSheet(null)} />
       <ConsentSheet order={discharge} onClose={() => setDischarge(null)} />
     </Screen>

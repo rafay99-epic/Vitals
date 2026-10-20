@@ -130,8 +130,9 @@ export function RecordScreen({ navigation }: Props) {
         </View>
       </Section>
 
-      <Section title="Emulators" trailing={`${String(emulators.length)} running`}>
-        {emulators.length === 0 ? <EmptyState title="None running." /> : null}
+      <Section title="Emulators" trailing={apps === null ? undefined : `${String(emulators.length)} running`}>
+        {apps === null ? <AppsPending error={appsError} /> : null}
+        {apps !== null && emulators.length === 0 ? <EmptyState title="None running." /> : null}
         {emulators.map((emulator) => (
           <Row key={`${emulator.kind}-${emulator.id}`} label={emulator.name} detail={`${emulator.kind} · ${emulator.id}`} value={destructive ? "Stop" : undefined} onPress={destructive ? () => setFocus({ kind: "emulator", emulator }) : undefined} />
         ))}

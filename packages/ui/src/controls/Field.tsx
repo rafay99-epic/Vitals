@@ -26,6 +26,7 @@ export function Field({ label, hint, error = null, mono = false, multiline = fal
       <TextInput
         {...input}
         multiline={multiline}
+        maxFontSizeMultiplier={mono || multiline ? 1.5 : 1.3}
         accessibilityLabel={label}
         placeholderTextColor={colors.mute}
         selectionColor={colors.ink}

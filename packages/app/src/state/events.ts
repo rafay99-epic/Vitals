@@ -59,10 +59,12 @@ export class MacEvents {
     if (this.calmTimer !== null) clearTimeout(this.calmTimer);
   }
 
-  private markCalmed(): void {
+  private markCalmed(finishedAt: number): void {
+    const left = CALMED_FOR_MS - (Date.now() - finishedAt);
+    if (left <= 0) return;
     if (this.calmTimer !== null) clearTimeout(this.calmTimer);
     this.calmed.set(true);
-    this.calmTimer = setTimeout(() => this.calmed.set(false), CALMED_FOR_MS);
+    this.calmTimer = setTimeout(() => this.calmed.set(false), left);
   }
 
   private logRaised(alert: Alert): void {
@@ -78,7 +80,7 @@ export class MacEvents {
   }
 
   receipt(receipt: CommandReceipt): void {
-    if (receipt.kind === "CalmDown" && receipt.status === "done") this.markCalmed();
+    if (receipt.kind === "CalmDown" && receipt.status === "done") this.markCalmed(receipt.finishedAt ?? receipt.createdAt);
     this.receipts.update((current) => [receipt, ...current.filter((item) => item.id !== receipt.id)].slice(0, RECEIPTS_KEPT));
   }
 

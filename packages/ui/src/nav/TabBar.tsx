@@ -25,7 +25,6 @@ const ANDROID = Platform.OS === "android";
 
 function TabButton({ item, on, rail, onSelect }: { readonly item: TabItem; readonly on: boolean; readonly rail: boolean; readonly onSelect: (key: string) => void }) {
   const idle = rail ? colors.dim : colors.mute;
-  const idleTone = rail ? "dim" : "mute";
   return (
     <Pressable
       onPress={() => onSelect(item.key)}
@@ -38,7 +37,7 @@ function TabButton({ item, on, rail, onSelect }: { readonly item: TabItem; reado
         <Glyph name={item.glyph} color={on ? channels.pulse.color : idle} />
         {item.badge === true ? <View className="absolute -right-1 -top-0.5 h-1.5 w-1.5 bg-alarm-high" /> : null}
       </View>
-      <Mono tone={on ? "ink" : idleTone} className={rail ? "text-xs" : "text-[10px]"}>
+      <Mono tone={on ? "ink" : "dim"} className={rail ? "text-xs" : "text-[10px]"}>
         {item.label}
       </Mono>
     </Pressable>

@@ -50,8 +50,9 @@ export function StayAwakeSection({ locked, run }: SectionProps) {
 
   const choose = (value: StayAwake) => {
     haptics.select();
-    setChosen(value);
-    void run({ _tag: "KeepAwake", until: stayUntil[value](Date.now()), display: false, whileProcess: null });
+    void run({ _tag: "KeepAwake", until: stayUntil[value](Date.now()), display: false, whileProcess: null }).then((receipt) => {
+      if (landed(receipt)) setChosen(value);
+    });
   };
 
   return (
@@ -101,10 +102,10 @@ export function SoundSection({ locked, run }: SectionProps) {
   );
 }
 
-export function HandOverSection({ locked, run, onClipboard, onOpen }: SectionProps & { readonly onClipboard: () => void; readonly onOpen: () => void }) {
+export function HandOverSection({ locked, canRead, run, onClipboard, onOpen }: SectionProps & { readonly canRead: boolean; readonly onClipboard: () => void; readonly onOpen: () => void }) {
   return (
     <Section title="Hand over">
-      <Row label="Clipboard" detail="copy to the Mac or read it" locked={locked} onPress={onClipboard} />
+      <Row label="Clipboard" detail="copy to the Mac or read it" locked={locked && !canRead} onPress={onClipboard} />
       <Row label="Open on Mac" detail="a link, in the default browser" locked={locked} onPress={onOpen} />
       <Row label="Locate" detail="plays a sound on the Mac" locked={locked} onPress={() => void run({ _tag: "Locate" })} />
     </Section>
@@ -139,7 +140,7 @@ export function ScenesSection({ locked, run }: SectionProps) {
 
 const DISCHARGE_ORDER: ReadonlyArray<Discharge> = ["Restart", "LogOut", "ShutDown"];
 
-export function DischargeSection({ allowed, locked, onPick }: { readonly allowed: boolean; readonly locked: boolean; readonly onPick: (order: Discharge) => void }) {
+export function DischargeSection({ allowed, onPick }: { readonly allowed: boolean; readonly onPick: (order: Discharge) => void }) {
   if (!allowed) {
     return (
       <Section title="Discharge" trailing="needs consent">
@@ -150,7 +151,7 @@ export function DischargeSection({ allowed, locked, onPick }: { readonly allowed
   return (
     <Section title="Discharge" trailing="needs consent">
       {DISCHARGE_ORDER.map((order) => (
-        <Row key={order} label={DISCHARGE[order].label} tone="press" locked={locked} onPress={() => onPick(order)} />
+        <Row key={order} label={DISCHARGE[order].label} tone="press" onPress={() => onPick(order)} />
       ))}
     </Section>
   );

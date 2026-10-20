@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { sessions } from "./connection/session.ts";
 import { useRemote, useSession } from "./connection/useRemote.ts";
@@ -84,8 +84,11 @@ function BedsideTabBar({ state, navigation, wide }: BottomTabBarProps & { readon
   const items = state.routes.flatMap((route) => (isTab(route.name) ? [{ key: route.name, ...TABS[route.name], badge: route.name === "Alarms" && alarmed }] : []));
   const active = state.routes[state.index]?.name ?? "ChartTab";
   const select = (name: string) => {
-    if (name === active) return;
-    navigation.navigate(name);
+    const route = state.routes.find((candidate) => candidate.name === name);
+    if (route === undefined) return;
+    const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+    if (name === active || event.defaultPrevented) return;
+    navigation.navigate(route.name, route.params);
   };
   return <TabBar items={items} active={active} onSelect={select} rail={wide} footer={<Mono>{hostOf(remote.credentials.baseUrl)}</Mono>} />;
 }
@@ -93,9 +96,14 @@ function BedsideTabBar({ state, navigation, wide }: BottomTabBarProps & { readon
 const phoneTabBar = (props: BottomTabBarProps) => <BedsideTabBar {...props} wide={false} />;
 const wideTabBar = (props: BottomTabBarProps) => <BedsideTabBar {...props} wide />;
 
-function ToastHost() {
+const TAB_BAR_TOP = 58;
+const TOAST_GAP = 12;
+
+function ToastHost({ wide }: { readonly wide: boolean }) {
   const toast = useStore(useRemote().toast);
-  return toast === null ? null : <Toast key={toast.at} message={toast.message} tone={toast.tone} />;
+  const insets = useSafeAreaInsets();
+  const bottom = wide ? TOAST_GAP : TAB_BAR_TOP + Math.max(insets.bottom, 10) + TOAST_GAP;
+  return toast === null ? null : <Toast key={toast.at} message={toast.message} tone={toast.tone} bottom={bottom} />;
 }
 
 function PairedTabs() {
@@ -112,7 +120,7 @@ function PairedTabs() {
         <Tabs.Screen name="Alarms" component={AlarmsScreen} />
         <Tabs.Screen name="RecordTab" component={RecordNavigator} options={{ title: "Record" }} />
       </Tabs.Navigator>
-      <ToastHost />
+      <ToastHost wide={wide} />
     </View>
   );
 }

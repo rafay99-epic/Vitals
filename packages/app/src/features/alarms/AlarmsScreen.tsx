@@ -2,7 +2,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { Alert, GuardRule, GuardSettings, GuardState } from "@vitals/contracts";
 import { formatBytes, formatClock } from "@vitals/shared";
 import { BeatSwitch, Columns, EmptyState, HoldRow, KeyValueGrid, Row, Screen, Section, type Tone, useWide } from "@vitals/ui";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { AlertBanner } from "../../components/AlertBanner.tsx";
 import { TabHeader } from "../../components/TabHeader.tsx";
@@ -69,12 +69,14 @@ function Calm({ guard, alerts, locked }: { readonly guard: GuardState | null; re
   );
 }
 
-function Rules({ guard, locked, onChange }: { readonly guard: GuardState | null; readonly locked: boolean; readonly onChange: (settings: GuardSettings) => void }) {
+type Edit = (settings: GuardSettings) => GuardSettings;
+
+function Rules({ guard, locked, onChange }: { readonly guard: GuardState | null; readonly locked: boolean; readonly onChange: (edit: Edit) => void }) {
   if (guard === null) return <EmptyState title="Reading the rules." detail="Pressure Guard answers once the Mac is connected." />;
   const settings = guard.settings;
   const toggle = (rule: GuardRule, enabled: boolean) => {
     haptics.light();
-    onChange({ ...settings, rules: settings.rules.map((item) => (item.kind === rule.kind ? { ...item, enabled } : item)) });
+    onChange((latest) => ({ ...latest, rules: latest.rules.map((item) => (item.kind === rule.kind ? { ...item, enabled } : item)) }));
   };
   return (
     <Section title="Rules" trailing="fire after the hold">
@@ -82,7 +84,7 @@ function Rules({ guard, locked, onChange }: { readonly guard: GuardState | null;
         label="Pressure Guard"
         detail={settings.enabled ? "watching this Mac" : "off: no alarms, no calming"}
         locked={locked}
-        trailing={<BeatSwitch value={settings.enabled} disabled={locked} accessibilityLabel="Pressure Guard" onChange={(enabled) => onChange({ ...settings, enabled })} />}
+        trailing={<BeatSwitch value={settings.enabled} disabled={locked} accessibilityLabel="Pressure Guard" onChange={(enabled) => onChange((latest) => ({ ...latest, enabled }))} />}
       />
       {settings.rules.map((rule) => (
         <Row
@@ -104,11 +106,13 @@ function Rules({ guard, locked, onChange }: { readonly guard: GuardState | null;
   );
 }
 
+const CALMED_WARDS = new Set(["agents", "emulators"]);
+
 function Wards({ guard }: { readonly guard: GuardState | null }) {
-  const groups = (guard?.groups ?? []).filter((group) => group.count > 0 && group.group !== "protected");
+  const groups = (guard?.groups ?? []).filter((group) => group.count > 0 && CALMED_WARDS.has(group.group));
   return (
-    <Section title="Wards a calm touches">
-      {groups.length === 0 ? <EmptyState title="Quiet wards." detail="No agents, emulators or dev servers are running." /> : null}
+    <Section title="Wards a calm touches" trailing="agents slowed · idle emulators paused">
+      {groups.length === 0 ? <EmptyState title="Quiet wards." detail="No agents or emulators are running." /> : null}
       {groups.map((group) => (
         <Row key={group.group} label={WARD_NAMES[group.group]} value={`${String(group.count)} · ${group.cpuPercent.toFixed(0)}% · ${formatBytes(group.memoryBytes)}`} />
       ))}
@@ -139,16 +143,35 @@ export function AlarmsScreen() {
   const remote = useRemote();
   const wide = useWide();
   const alerts = useStore(remote.events.alerts);
-  const [guard, setGuard] = useState<GuardState | null>(null);
+  const [watched, setWatched] = useState<GuardState | null>(null);
+  const ready = useStore(remote.connection.state)._tag === "Ready";
+  const guard = ready ? watched : null;
   const locked = !useScopes().includes("operate");
+  const confirmed = useRef<GuardSettings | null>(null);
+  const queue = useRef<Promise<void>>(Promise.resolve());
 
-  useFocusEffect(useCallback(() => remote.connection.watch((client) => client["guard.watch"]({}), setGuard), [remote]));
+  const receive = useCallback((next: GuardState) => {
+    confirmed.current = next.settings;
+    setWatched(next);
+  }, []);
 
-  const update = (settings: GuardSettings) =>
-    void remote.connection.call((client) => client["guard.update"](settings)).then((result) => {
-      if (result.ok) setGuard((current) => (current === null ? current : { ...current, settings: result.value }));
-      else remote.show(result.error.message, "bad");
-    });
+  useFocusEffect(useCallback(() => remote.connection.watch((client) => client["guard.watch"]({}), receive), [remote, receive]));
+
+  const send = async (edit: Edit) => {
+    const base = confirmed.current;
+    if (base === null) return;
+    const result = await remote.connection.call((client) => client["guard.update"](edit(base)));
+    if (!result.ok) {
+      remote.show(result.error.message, "bad");
+      return;
+    }
+    confirmed.current = result.value;
+    setWatched((current) => (current === null ? current : { ...current, settings: result.value }));
+  };
+
+  const update = (edit: Edit) => {
+    queue.current = queue.current.then(() => send(edit));
+  };
 
   const open = guard?.active ?? alerts;
 

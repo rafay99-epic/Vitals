@@ -30,8 +30,8 @@ const ALARM_WORD: Record<GuardRuleKind, string> = {
 
 const FAN_HARD = 0.8;
 
-const fanLoad = (sample: LiveSample): number =>
-  (sample.fans ?? []).reduce((load, fan) => Math.max(load, fan.maxRpm > fan.minRpm ? (fan.rpm - fan.minRpm) / (fan.maxRpm - fan.minRpm) : 0), 0);
+export const fanLoad = (sample: LiveSample | null): number =>
+  (sample?.fans ?? []).reduce((load, fan) => Math.max(load, fan.maxRpm > fan.minRpm ? (fan.rpm - fan.minRpm) / (fan.maxRpm - fan.minRpm) : 0), 0);
 
 const HOT = new Set(["serious", "critical"]);
 const TIGHT = new Set(["warning", "critical"]);

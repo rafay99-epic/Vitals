@@ -26,6 +26,10 @@ export interface HistoryChartProps {
 
 const GRID = [0.25, 0.5, 0.75];
 
+const MARKER = 12;
+
+const markerSpan = (top: number): readonly [number, number] => (top >= MARKER + 4 ? [top - 4, top - 4 - MARKER] : [top + 4, top + 4 + MARKER]);
+
 const geometry = (buckets: ReadonlyArray<Bucket>, from: number, to: number, width: number, height: number, floor: number, top: number) => {
   const x = (t: number) => ((t - from) / Math.max(to - from, 1)) * width;
   const y = (value: number) => height - ((Math.min(Math.max(value, floor), top) - floor) / Math.max(top - floor, 1e-6)) * height;
@@ -46,7 +50,10 @@ const geometry = (buckets: ReadonlyArray<Bucket>, from: number, to: number, widt
   band.close();
   const peak = buckets.reduce<Bucket | null>((best, bucket) => (best === null || bucket.max > best.max ? bucket : best), null);
   const marker = Skia.PathBuilder.Make();
-  if (peak !== null) marker.moveTo(x(peak.t), y(peak.max) - 4).lineTo(x(peak.t), Math.max(0, y(peak.max) - 16));
+  if (peak !== null) {
+    const [from, to] = markerSpan(y(peak.max));
+    marker.moveTo(x(peak.t), from).lineTo(x(peak.t), to);
+  }
   return { band: band.build(), line: line.build(), grid: grid.build(), marker: marker.build(), peak, peakX: peak === null ? 0 : x(peak.t) };
 };
 

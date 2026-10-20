@@ -27,7 +27,7 @@ export function BedRow({ bed, name, meta, channel, trend, value, unit, paused = 
       accessibilityState={{ selected }}
       className={`min-h-[58px] flex-row items-center gap-2 border-t border-line py-2 pl-[22px] pr-[22px] active:bg-raise ${selected ? "border-l-2 border-l-ink bg-raise" : ""}`}
     >
-      <Mono tone="mute" className="w-[22px] text-[10px]">
+      <Mono tone="dim" className="w-[22px] text-[10px]">
         {String(bed).padStart(2, "0")}
       </Mono>
       <View className="flex-1 gap-0.5">

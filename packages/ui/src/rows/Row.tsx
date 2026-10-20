@@ -17,12 +17,14 @@ export interface RowProps {
 }
 
 export function Row({ label, detail, value, valueTone = "ink", trailing, tone = "ink", plain = false, locked = false, onPress, accessibilityLabel }: RowProps) {
-  const pressable = onPress !== undefined && !locked;
+  const action = onPress !== undefined;
+  const pressable = action && !locked;
   return (
     <Pressable
       onPress={onPress}
       disabled={!pressable}
-      accessibilityRole={pressable ? "button" : "text"}
+      accessible={action || trailing === undefined}
+      accessibilityRole={action ? "button" : "text"}
       accessibilityLabel={accessibilityLabel ?? [label, value, detail].filter((part) => part !== undefined).join(", ")}
       accessibilityState={{ disabled: locked }}
       className={`min-h-14 flex-row items-center gap-3.5 border-t border-line px-[22px] py-2.5 active:bg-raise ${locked ? "opacity-45" : ""}`}

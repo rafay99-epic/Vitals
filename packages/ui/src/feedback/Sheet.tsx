@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Modal, Platform, Pressable, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import Animated, { FadeIn, SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,6 +20,7 @@ export interface SheetProps {
 export function Sheet({ visible, title, detail, onClose, children }: SheetProps) {
   const insets = useSafeAreaInsets();
   const wide = useWide();
+  const { height } = useWindowDimensions();
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Animated.View entering={FadeIn.duration(motion.sheet)} className={`flex-1 bg-bg/70 ${wide ? "items-center justify-center" : "justify-end"}`}>
@@ -28,7 +29,7 @@ export function Sheet({ visible, title, detail, onClose, children }: SheetProps)
           entering={SlideInDown.duration(motion.sheet)}
           accessibilityViewIsModal
           className={`border-line2 bg-sheet pt-2.5 ${wide ? "w-[440px] rounded-xl border" : PHONE_EDGE}`}
-          style={{ paddingBottom: wide ? 12 : Math.max(insets.bottom, 12) + 22 }}
+          style={{ paddingBottom: wide ? 12 : Math.max(insets.bottom, 12) + 22, maxHeight: height - insets.top - 24 }}
         >
           {wide ? null : <View className="mb-3 h-1 w-[38px] self-center rounded-sm bg-line3" />}
           <View className="gap-1 px-[22px] pb-3.5">
@@ -37,7 +38,9 @@ export function Sheet({ visible, title, detail, onClose, children }: SheetProps)
             </Serif>
             {detail === undefined ? null : <Mono>{detail}</Mono>}
           </View>
-          {children}
+          <ScrollView className="shrink" keyboardShouldPersistTaps="handled" bounces={false}>
+            {children}
+          </ScrollView>
           <Pressable onPress={onClose} accessibilityRole="button" className="min-h-14 justify-center border-t border-line px-[22px] active:bg-raise">
             <Sans tone="dim">Cancel</Sans>
           </Pressable>

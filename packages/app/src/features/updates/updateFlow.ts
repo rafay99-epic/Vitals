@@ -11,9 +11,12 @@ export type UpdatePhase =
   | { readonly _tag: "Downloading"; readonly publishedAt: number | null }
   | { readonly _tag: "Restarting"; readonly publishedAt: number | null }
   | { readonly _tag: "Current"; readonly at: number }
-  | { readonly _tag: "Offline"; readonly at: number; readonly reason: string };
+  | { readonly _tag: "Offline"; readonly at: number; readonly reason: string }
+  | { readonly _tag: "Failed"; readonly at: number; readonly reason: string };
 
 class UpdateFailed extends Data.TaggedError("UpdateFailed")<{ readonly step: string; readonly message: string }> {}
+
+class InstallFailed extends Data.TaggedError("InstallFailed")<{ readonly message: string }> {}
 
 export const updatesEnabled = !__DEV__ && Updates.isEnabled;
 
@@ -56,8 +59,16 @@ const check = (blocking: boolean) =>
       Effect.timeout(blocking ? "4 seconds" : "8 seconds"),
       Effect.retry({ schedule: Schedule.exponential("500 millis"), times: blocking ? 0 : 1 }),
     );
-    if (result.isAvailable || result.isRollBackToEmbedded) yield* download(publishedAt(result.manifest));
+    if (!result.isAvailable && !result.isRollBackToEmbedded) return;
+    yield* download(publishedAt(result.manifest)).pipe(
+      Effect.mapError((error) => new InstallFailed({ message: error._tag === "UpdateFailed" ? `${error.step}: ${error.message}` : "Timed out" })),
+    );
   });
+
+const failurePhase = (error: UpdateFailed | InstallFailed | { readonly _tag: string }): UpdatePhase => {
+  if (error instanceof InstallFailed) return { _tag: "Failed", at: Date.now(), reason: error.message };
+  return { _tag: "Offline", at: Date.now(), reason: error instanceof UpdateFailed ? `${error.step}: ${error.message}` : "Timed out" };
+};
 
 let running: Promise<void> | null = null;
 
@@ -67,7 +78,7 @@ export const checkForUpdate = (blocking: boolean): Promise<void> => {
     check(blocking).pipe(
       Effect.match({
         onSuccess: () => updatePhase.set({ _tag: "Current", at: Date.now() }),
-        onFailure: (error) => updatePhase.set({ _tag: "Offline", at: Date.now(), reason: error._tag === "UpdateFailed" ? `${error.step}: ${error.message}` : "Timed out" }),
+        onFailure: (error) => updatePhase.set(failurePhase(error)),
       }),
     ),
   ).finally(() => {
@@ -77,4 +88,4 @@ export const checkForUpdate = (blocking: boolean): Promise<void> => {
 };
 
 export const isBlocking = (phase: UpdatePhase): boolean =>
-  (phase._tag === "Checking" && phase.blocking) || phase._tag === "Downloading" || phase._tag === "Restarting";
+  (phase._tag === "Checking" && phase.blocking) || phase._tag === "Downloading" || phase._tag === "Restarting" || phase._tag === "Failed";

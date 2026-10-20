@@ -10,7 +10,7 @@ const SHOWN = 20;
 export function OrdersLog() {
   const receipts = useStore(useRemote().events.receipts);
   return (
-    <Section title="Log" trailing="this session">
+    <Section title="Log" trailing="recent">
       {receipts.length === 0 ? <EmptyState title="No commands yet." detail="Orders you send show here with the Mac's answer." /> : null}
       {receipts.slice(0, SHOWN).map((receipt) => (
         <Row

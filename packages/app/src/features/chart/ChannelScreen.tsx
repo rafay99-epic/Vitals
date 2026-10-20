@@ -32,7 +32,7 @@ function ChannelBody({ channel }: { readonly channel: Channel }) {
         </Serif>
         <Mono className="mt-1">{`${spec.label} · ${def.context}`}</Mono>
       </View>
-      <View className="px-[22px] pb-2" accessible accessibilityLabel={spec.label}>
+      <View className="px-[22px] pb-2">
         <Serif size="xl2" tone={signal ? channel : "mute"}>
           <LiveText select={def.reading} />
         </Serif>

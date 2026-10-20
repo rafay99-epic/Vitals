@@ -3,8 +3,9 @@ import { Mono, Tag } from "@vitals/ui";
 import { View } from "react-native";
 
 import { useRemote } from "../../connection/useRemote.ts";
-import { useStore } from "../../state/useStore.ts";
 import { orderLabel } from "../../state/commands.ts";
+import type { AlarmEntry } from "../../state/events.ts";
+import { useStore } from "../../state/useStore.ts";
 
 const KEPT = 6;
 
@@ -15,12 +16,17 @@ interface Entry {
   readonly alarm: boolean;
 }
 
+const alarmEntries = (entry: AlarmEntry): ReadonlyArray<Entry> => [
+  { id: `${entry.id}-raised`, at: entry.raisedAt, text: `alarm · ${entry.summary}`, alarm: true },
+  ...(entry.clearedAt === null ? [] : [{ id: `${entry.id}-cleared`, at: entry.clearedAt, text: `cleared · ${entry.summary}`, alarm: false }]),
+];
+
 export function EventStrip() {
   const remote = useRemote();
   const receipts = useStore(remote.events.receipts);
-  const alerts = useStore(remote.events.alerts);
+  const log = useStore(remote.events.log);
   const entries: Array<Entry> = [
-    ...alerts.map((alert) => ({ id: alert.id, at: alert.raisedAt, text: `alarm · ${alert.summary}`, alarm: true })),
+    ...log.flatMap(alarmEntries),
     ...receipts.map((receipt) => ({ id: receipt.id, at: receipt.finishedAt ?? receipt.createdAt, text: `${orderLabel(receipt.kind).toLowerCase()} · ${receipt.status}`, alarm: false })),
   ];
   const recent = entries.sort((a, b) => b.at - a.at).slice(0, KEPT);

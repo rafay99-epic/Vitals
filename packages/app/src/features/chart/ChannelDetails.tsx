@@ -143,6 +143,11 @@ const batteryState = (charging: boolean, externalPower: boolean): string => {
   return externalPower ? "On power" : "On battery";
 };
 
+const batteryFlow = (watts: number | null | undefined): KeyValue => {
+  if (watts === null || watts === undefined) return reading("Draw", watts);
+  return reading(watts > 0 ? "Charging" : "Draw", Math.abs(watts), 1, "W");
+};
+
 const timeLeft = (minutes: number | null): string => (minutes === null ? "--" : `${String(Math.floor(minutes / 60))} h ${String(minutes % 60)} m`);
 
 function OxyDetail() {
@@ -156,7 +161,7 @@ function OxyDetail() {
         reading("Cycles", battery?.cycleCount),
         reading("Health", battery?.healthPercent, 0, "%"),
         { key: "Condition", value: battery?.condition ?? "--", tone: battery === undefined || battery.condition === "Normal" ? "ink" : "temp" },
-        reading("Draw", battery?.watts, 1, "W"),
+        batteryFlow(battery?.watts),
         { key: "Time left", value: battery === undefined ? "--" : timeLeft(battery.timeRemainingMinutes) },
         reading("Temperature", battery?.temperatureC, 0, "°C"),
       ]}

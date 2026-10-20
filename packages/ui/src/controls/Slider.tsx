@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type LayoutChangeEvent, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -20,22 +20,37 @@ const clamp = (value: number): number => {
   return Math.min(1, Math.max(0, value));
 };
 
+const snap = (value: number): number => {
+  "worklet";
+  return Math.round(value / STEP) * STEP;
+};
+
 export function Slider({ value, onCommit, format, accessibilityLabel, disabled = false }: SliderProps) {
   const [width, setWidth] = useState(0);
-  const [shown, setShown] = useState(value);
-  const position = useSharedValue(value);
+  const [shown, setShown] = useState(() => snap(clamp(value)));
+  const [synced, setSynced] = useState(value);
+  const position = useSharedValue(snap(clamp(value)));
   const track = useSharedValue(0);
+
+  if (synced !== value) {
+    setSynced(value);
+    setShown(snap(clamp(value)));
+  }
+
+  useEffect(() => {
+    position.set(snap(clamp(value)));
+  }, [value, position]);
 
   const move = (x: number) => {
     "worklet";
-    const next = clamp(x / Math.max(track.get(), 1));
+    const next = snap(clamp(x / Math.max(track.get(), 1)));
     position.set(next);
-    runOnJS(setShown)(Math.round(next / STEP) * STEP);
+    runOnJS(setShown)(next);
   };
 
   const finish = () => {
     "worklet";
-    runOnJS(onCommit)(Math.round(position.get() / STEP) * STEP);
+    runOnJS(onCommit)(position.get());
   };
 
   const pan = Gesture.Pan()
@@ -54,7 +69,8 @@ export function Slider({ value, onCommit, format, accessibilityLabel, disabled =
   const fill = useAnimatedStyle(() => ({ width: position.get() * track.get() }));
 
   const nudge = (delta: number) => {
-    const next = clamp(position.get() + delta);
+    if (disabled) return;
+    const next = snap(clamp(position.get() + delta));
     position.set(next);
     setShown(next);
     onCommit(next);
@@ -72,6 +88,7 @@ export function Slider({ value, onCommit, format, accessibilityLabel, disabled =
           accessible
           accessibilityRole="adjustable"
           accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ disabled }}
           accessibilityValue={{ min: 0, max: 100, now: Math.round(shown * 100), text: format(shown) }}
           accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
           onAccessibilityAction={(event) => nudge(event.nativeEvent.actionName === "increment" ? 0.1 : -0.1)}

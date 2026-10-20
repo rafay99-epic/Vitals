@@ -13,16 +13,18 @@ export interface ToastProps {
   readonly tone: ToastTone;
   readonly action?: string | undefined;
   readonly onAction?: (() => void) | undefined;
+  readonly bottom?: number | undefined;
 }
 
-export function Toast({ message, tone, action, onAction }: ToastProps) {
+export function Toast({ message, tone, action, onAction, bottom = 16 }: ToastProps) {
   return (
     <Animated.View
       entering={FadeInDown.duration(motion.toastIn)}
       exiting={FadeOut.duration(motion.toastIn)}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
-      className={`absolute bottom-4 left-3.5 right-3.5 z-10 flex-row items-center justify-between gap-3 px-4 py-3.5 ${BOX[tone]}`}
+      style={{ bottom }}
+      className={`absolute left-3.5 right-3.5 z-10 flex-row items-center justify-between gap-3 px-4 py-3.5 ${BOX[tone]}`}
     >
       <Sans size="small" weight="medium" tone="black" className="flex-1">
         {message}

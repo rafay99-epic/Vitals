@@ -7,8 +7,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "typecheck": "tsc -p tsconfig.json",
-    "android:dev": "APP_VARIANT=dev expo run:android --variant release",
-    "android:prod": "APP_VARIANT=prod expo run:android --variant release",
+    "android:dev": "APP_VARIANT=dev expo prebuild --clean --platform android && APP_VARIANT=dev expo run:android --variant release",
+    "android:prod": "APP_VARIANT=prod expo prebuild --clean --platform android && APP_VARIANT=prod expo run:android --variant release",
     "update:dev": "APP_VARIANT=dev npx -y eas-cli@latest update --channel dev --environment development --platform all --message \"$(git log -1 --pretty=%s)\"",
     "update:prod": "APP_VARIANT=prod npx -y eas-cli@latest update --channel production --environment production --platform all --message \"$(git log -1 --pretty=%s)\""
   },

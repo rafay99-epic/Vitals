@@ -108,7 +108,7 @@ All through `packages/app/src/lib/haptics.ts` (web build is a no-op). Tab or chi
 
 ## 3. Components
 
-All shared components live in `packages/ui/src` and are exported from `@vitals/ui`. A screen composes these; it never restyles them with ad hoc classes. If a screen needs something the kit lacks, add it to the kit (and to this table), never inline a one-off.
+Visual components that know nothing about the Mac connection live in `packages/ui/src` and are exported from `@vitals/ui`. Components that read the session or live stores (`LiveText`, `TabHeader`, `AlertBanner`, `PendingOrder`) live in `packages/app/src/components`. A screen composes these; it never restyles them with ad hoc classes. If a screen needs something neither layer has, add it to the right layer (and to this table), never inline a one-off.
 
 | Component | File | Use it for | States and rules |
 | --- | --- | --- | --- |
@@ -128,6 +128,7 @@ All shared components live in `packages/ui/src` and are exported from `@vitals/u
 | `Spark` | `channel/Spark.tsx` | per process and per core traces | 1.3 px line, no fill |
 | `LiveText` | `packages/app/src/components/LiveText.tsx` | any live number | a leaf subscriber with a module level selector, so only that text re-renders |
 | `TabHeader` | `packages/app/src/components/TabHeader.tsx` | top of each tab | binds `ScreenHeader` to the Mac name, link label and state word |
+| `AlertBanner`, `PendingOrder` | `packages/app/src/components/` | open alarms and orders in their grace window | hide Calm down and Cancel when the device lacks the operate scope |
 | `HoldRow` | `controls/HoldRow.tsx` | every order that changes the Mac | `idle`, `holding` (trace draws across), `done`, `danger`, `locked`; `consent` duration for session enders |
 | `Button` | `controls/Button.tsx` | sheet and form actions | `primary` (white), `line`, `text`, `danger`; sizes `md`, `sm` |
 | `Chips` | `controls/Chips.tsx` | small exclusive choices (1 h, 4 h, Forever) | selected chip takes `pulse` |

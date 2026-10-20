@@ -26,6 +26,7 @@ const LABELS: Record<Range, (from: number) => ReadonlyArray<string>> = {
 };
 
 const LOADING: Status = { _tag: "loading" };
+const OFFLINE: Status = { _tag: "offline" };
 
 interface Loaded {
   readonly buckets: ReadonlyArray<HistoryBucket>;
@@ -33,7 +34,7 @@ interface Loaded {
   readonly to: number;
 }
 
-type Status = { readonly _tag: "loading" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly data: Loaded };
+type Status = { readonly _tag: "loading" } | { readonly _tag: "offline" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly data: Loaded };
 
 export function History({ channel }: { readonly channel: Channel }) {
   const remote = useRemote();
@@ -56,7 +57,8 @@ export function History({ channel }: { readonly channel: Channel }) {
     };
   }, [remote, ready, range, def.history]);
 
-  const status: Status = result !== null && result.range === range ? result.status : LOADING;
+  const current = result !== null && result.range === range ? result.status : LOADING;
+  const status = ready ? current : OFFLINE;
 
   return (
     <View className="pt-4">
@@ -69,6 +71,7 @@ export function History({ channel }: { readonly channel: Channel }) {
 function HistoryBody({ channel, status, range }: { readonly channel: Channel; readonly status: Status; readonly range: Range }) {
   const def = CHANNELS[channel];
   if (status._tag === "loading") return <Mono className="px-[22px] py-10">Loading history</Mono>;
+  if (status._tag === "offline") return <EmptyState title="No signal." detail="History comes back with the Mac." />;
   if (status._tag === "failed") return <EmptyState title="History unavailable." detail={status.message} />;
   if (status.data.buckets.length === 0) return <EmptyState title="Nothing logged yet." detail="Vitals on the Mac records history while it runs." />;
   return (

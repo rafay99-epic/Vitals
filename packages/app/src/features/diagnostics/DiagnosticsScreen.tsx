@@ -125,8 +125,8 @@ function Diagnostics({ onBack }: { readonly onBack: () => void }) {
         {diagnostics.faults.length === 0 ? (
           <EmptyState title="No faults." detail="Uncaught errors land here with the time they happened." />
         ) : (
-          diagnostics.faults.map((fault) => (
-            <Row key={`${String(fault.at)}-${fault.message}`} label={fault.message} plain value={formatClock(fault.at)} detail={fault.fatal ? "fatal" : "caught by the global handler"} />
+          diagnostics.faults.map((fault, index) => (
+            <Row key={`${String(fault.at)}-${String(index)}`} label={fault.message} plain value={formatClock(fault.at)} detail={fault.fatal ? "fatal" : "caught by the global handler"} />
           ))
         )}
       </Section>

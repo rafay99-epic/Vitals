@@ -46,9 +46,11 @@ export function HoldRow({ label, hint, kind = "hold", danger = false, locked = f
     onCommit();
   };
 
+  const busy = locked || sent;
+
   const begin = () => {
+    if (busy) return;
     onStart?.();
-    setSent(false);
     progress.set(
       withTiming(1, { duration, easing: Easing.linear }, (finished) => {
         if (finished === true) runOnJS(commit)();
@@ -68,14 +70,14 @@ export function HoldRow({ label, hint, kind = "hold", danger = false, locked = f
     <Pressable
       onPressIn={begin}
       onPressOut={release}
-      disabled={locked}
+      disabled={busy}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint ?? `Double tap and hold for ${seconds} seconds.`}
-      accessibilityState={{ disabled: locked }}
+      accessibilityState={{ disabled: busy }}
       accessibilityActions={[{ name: "activate", label }]}
       onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "activate") commit();
+        if (event.nativeEvent.actionName === "activate" && !busy) commit();
       }}
       onLayout={(event: LayoutChangeEvent) => setSize({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}
       className={`flex-row items-center justify-between border-y border-line2 px-[22px] ${compact ? "min-h-16" : "min-h-[92px]"} ${locked ? "opacity-40" : ""}`}

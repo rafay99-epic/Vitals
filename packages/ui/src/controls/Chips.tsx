@@ -29,8 +29,8 @@ export function Chips<T extends string>({
             disabled={disabled}
             hitSlop={8}
             accessibilityRole="radio"
-            accessibilityState={{ selected, disabled }}
-            className="min-h-11 justify-center"
+            accessibilityState={{ checked: selected, disabled }}
+            className={`min-h-11 justify-center ${disabled ? "opacity-40" : ""}`}
           >
             <Serif size="s" tone={selected ? "pulse" : "dim"}>
               {option.label}
