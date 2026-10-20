@@ -100,7 +100,7 @@ Numerals always use tabular figures. Serif sizes follow Dynamic Type and Android
 | `flatline` | 600 ms | ease in | connection lost |
 | `toast` | 200 ms in, 4 s hold | ease out | receipts and confirmations |
 
-Data motion lives in `packages/ui/src/motion.ts` and is built into the kit, so screens get it for free: **arrive** (`rise`: sections, rows, readout cells and channel rows fade up 8 px, staggered 45 ms by position, the first time they mount), **change** (`swap`: a readout value or the state word cross-fades when it changes), **shift** (`settle`: when an alarm bar or row appears or leaves, everything below slides to its new place; native only, the web build skips it) and **leave** (`leave`: alarm bars and toasts fade out). Never animate between samples beyond these, and never count numbers up from zero.
+Data motion lives in `packages/ui/src/motion.ts` and is built into the kit, so screens get it for free: **arrive** (`rise`: sections, readout cells and channel rows fade up 8 px the first time they mount; readout cells and channel rows stagger 45 ms by position, sections arrive together; plain rows fade in with `swap`), **change** (`swap`: when a readout value or the state word changes, the new one fades in over the old), **shift** (`settle`: when an alarm bar or row appears or leaves, everything below slides to its new place; native only, the web build skips it) and **leave** (`leave`: alarm bars and toasts fade out). Never animate between samples beyond these, and never count numbers up from zero.
 
 Reduced motion (`useReducedMotion`): traces redraw in place without the head, state color changes instantly, sheets and bars appear without sliding. Holds keep their duration; it is a safety rule, not decoration.
 
@@ -120,7 +120,7 @@ Visual components that know nothing about the Mac connection live in `packages/u
 | `ScreenHeader` | `layout/ScreenHeader.tsx` | top of every tab | who line (Mac name + link status), state word, one meta line |
 | `BackHeader` | `layout/ScreenHeader.tsx` | pushed screens | parent name with a chevron; Android hides the label |
 | `SectionHeader` | `layout/Section.tsx` | groups inside a screen | mono caps title, optional trailing meta. No subtitle line |
-| `Row` | `rows/Row.tsx` | settings, info, orders without a hold | serif label, optional mono detail, value or trailing node, chevron when pressable |
+| `Row` | `rows/Row.tsx` | settings, info, orders without a hold | serif label, optional mono detail, value, decorative `trailing` or an interactive `control` (keeps its own role), chevron when pressable |
 | `KeyValueGrid` | `rows/KeyValueGrid.tsx` | detail numbers | two columns, hairline grid |
 | `StackBar` | `rows/StackBar.tsx` | composition (memory, storage) | flat segments with a text legend |
 | `EmptyState` | `rows/EmptyState.tsx` | nothing to show yet | flat line, one serif sentence, one meta line |
@@ -174,7 +174,7 @@ One word per screen header, chosen by priority: alarm summary, **No signal.**, *
 
 ### Icons and splash
 
-The mark is the single beat in `pulse` on black. iOS ships light (black field), dark (transparent field) and tinted (white beat) icons; Android ships an adaptive foreground on black plus a monochrome layer for themed icons; the Mac uses an Icon Composer file per channel (green Stable, amber Nightly, violet Dev). The dev phone build adds a violet DEV badge. The splash is the beat alone on black on every platform and stays up through the launch update check.
+The mark is the single beat in `pulse` on black. iOS ships light (black field), dark (transparent field) and tinted (white beat) icons; Android ships an adaptive foreground on black plus a monochrome layer for themed icons; the Mac uses an Icon Composer file per channel (green Stable, amber Nightly, violet Dev). The dev phone build adds a violet DEV badge. On the native phone builds the splash is the beat alone on black and stays up through the launch update check; web and the Mac have no splash.
 
 ## 5. Platforms
 

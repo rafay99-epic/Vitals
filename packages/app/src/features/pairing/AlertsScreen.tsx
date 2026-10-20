@@ -79,9 +79,9 @@ export function AlertsScreen({ onDone }: { readonly onDone: () => void }) {
         ))}
       </View>
       <View className="gap-3 px-[22px] pt-8">
-        {error === null ? null : <Mono tone="alarmHigh">{`${error} Try again, or turn them on later in Record.`}</Mono>}
+        {error === null ? null : <Mono tone="alarmHigh" accessibilityLiveRegion="assertive">{`${error} Try again, or turn them on later in Record.`}</Mono>}
         <Button label={asking ? "Asking" : "Allow alerts"} block disabled={asking} onPress={allow} />
-        <Button label="Not now" variant="text" onPress={onDone} />
+        <Button label="Not now" variant="text" disabled={asking} onPress={onDone} />
       </View>
     </Screen>
   );

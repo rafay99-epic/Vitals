@@ -5,6 +5,7 @@ import { View } from "react-native";
 
 import { useRemote } from "../../connection/useRemote.ts";
 import { useStore } from "../../state/useStore.ts";
+import { hasSignal } from "../../state/vitals.ts";
 import { CHANNELS } from "./channels.ts";
 
 type Range = "1h" | "24h" | "7d";
@@ -39,7 +40,7 @@ type Status = { readonly _tag: "loading" } | { readonly _tag: "offline" } | { re
 export function History({ channel }: { readonly channel: Channel }) {
   const remote = useRemote();
   const def = CHANNELS[channel];
-  const ready = useStore(remote.connection.state)._tag === "Ready";
+  const ready = hasSignal(useStore(remote.connection.state));
   const [range, setRange] = useState<Range>("1h");
   const [result, setResult] = useState<{ readonly range: Range; readonly status: Status } | null>(null);
 

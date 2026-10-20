@@ -25,6 +25,7 @@ struct Asset {
     let ink: NSColor
     let beatWidth: CGFloat
     let badge: Bool
+    var mono = false
 }
 
 func beat(width: CGFloat, center: CGPoint) -> NSBezierPath {
@@ -40,7 +41,7 @@ func beat(width: CGFloat, center: CGPoint) -> NSBezierPath {
     return path
 }
 
-func drawBadge(in canvas: CGFloat) {
+func drawBadge(in canvas: CGFloat, mono: Bool) {
     let label = NSAttributedString(string: "DEV", attributes: [
         .font: NSFont.monospacedSystemFont(ofSize: canvas * 0.075, weight: .semibold),
         .foregroundColor: NSColor.black,
@@ -55,9 +56,11 @@ func drawBadge(in canvas: CGFloat) {
         width: textSize.width + padX * 2,
         height: textSize.height + padY * 2
     )
-    devBadge.setFill()
+    (mono ? NSColor.white : devBadge).setFill()
     NSBezierPath(rect: box).fill()
+    if mono { NSGraphicsContext.current?.cgContext.setBlendMode(.destinationOut) }
     label.draw(at: NSPoint(x: box.minX + padX, y: box.minY + padY))
+    NSGraphicsContext.current?.cgContext.setBlendMode(.normal)
 }
 
 func render(_ asset: Asset) throws {
@@ -75,7 +78,7 @@ func render(_ asset: Asset) throws {
     }
     asset.ink.setStroke()
     beat(width: canvas * asset.beatWidth, center: CGPoint(x: canvas / 2, y: canvas / 2 + (asset.badge ? canvas * 0.05 : 0))).stroke()
-    if asset.badge { drawBadge(in: canvas) }
+    if asset.badge { drawBadge(in: canvas, mono: asset.mono) }
     NSGraphicsContext.restoreGraphicsState()
     guard let png = rep.representation(using: .png, properties: [:]) else { throw NSError(domain: "brand", code: 2) }
     try png.write(to: output.appendingPathComponent("\(asset.name).png"))
@@ -89,9 +92,9 @@ let assets: [Asset] = [false, true].flatMap { dev -> [Asset] in
         Asset(name: "icon-dark\(suffix)", background: nil, ink: pulse, beatWidth: 0.62, badge: dev),
         Asset(name: "icon-tinted\(suffix)", background: nil, ink: white, beatWidth: 0.62, badge: dev),
         Asset(name: "adaptive-foreground\(suffix)", background: nil, ink: pulse, beatWidth: 0.42, badge: dev),
+        Asset(name: "adaptive-monochrome\(suffix)", background: nil, ink: white, beatWidth: 0.42, badge: dev, mono: true),
     ]
 } + [
-    Asset(name: "adaptive-monochrome", background: nil, ink: white, beatWidth: 0.42, badge: false),
     Asset(name: "splash", background: nil, ink: pulse, beatWidth: 0.9, badge: false),
 ]
 

@@ -59,7 +59,7 @@ Preferences persist across launches via `UserDefaults`.
 
 ## Install
 
-Requirements: an Apple Silicon Mac on macOS 15 or newer, with full Xcode 16+
+Requirements: an Apple Silicon Mac on macOS 15 or newer, with full Xcode 26+
 installed and selected as the active developer directory (for SwiftUI's macro
 toolchain). Command Line Tools alone are not sufficient.
 
@@ -69,8 +69,9 @@ cd Vitals
 ./build.sh
 ```
 
-The script compiles with SwiftPM, assembles `build/Vitals.app`, renders the
-icon, and ad-hoc signs the bundle.
+The script compiles with SwiftPM, assembles `build/Vitals.app`, compiles the
+channel's Icon Composer file (`Resources/Icons/<channel>/AppIcon.icon`) with
+`actool`, and ad-hoc signs the bundle.
 
 ### Option A — DMG installer (recommended)
 
@@ -122,8 +123,6 @@ jobs only — see the repo CLAUDE.md "Code signing" section. The **same** cert /
 ```sh
 ./build.sh
 ```
-
-Delete `Resources/AppIcon.icns` first if you want the icon re-rendered.
 
 ## Sanity-check the sensors without the GUI
 

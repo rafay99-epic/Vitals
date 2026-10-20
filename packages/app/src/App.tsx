@@ -26,7 +26,7 @@ import { WardScreen } from "./features/ward/WardScreen.tsx";
 import { useAppFonts } from "./lib/fonts";
 import { hostOf } from "./lib/host.ts";
 import type { ChartStackParams, RecordStackParams, TabParams } from "./navigation/types.ts";
-import { onboarded } from "./persistence/onboarding";
+import { finishOnboarding, onboarded } from "./persistence/onboarding";
 import { useStore } from "./state/useStore.ts";
 
 const theme: Theme = {
@@ -140,6 +140,9 @@ function Root() {
   const session = useSession();
   const welcome = useStore(sessions.welcome);
   useEffect(() => sessions.start(), []);
+  useEffect(() => {
+    if (session.status === "paired") finishOnboarding();
+  }, [session.status]);
   if (session.status === "loading") return <View className="flex-1 bg-bg" />;
   if (session.status === "unpaired") return <Unpaired />;
   return welcome ? <WelcomeFlow /> : <PairedTabs />;

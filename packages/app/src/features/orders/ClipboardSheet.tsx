@@ -1,5 +1,5 @@
 import { Button, Field, Mono, Sheet } from "@vitals/ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { useRemote } from "../../connection/useRemote.ts";
@@ -14,8 +14,10 @@ export function ClipboardSheet({ visible, canRead, canWrite, onClose }: { readon
   const [text, setText] = useState("");
   const [macText, setMacText] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const request = useRef(0);
 
   const close = () => {
+    request.current += 1;
     setMacText(null);
     onClose();
   };
@@ -23,10 +25,12 @@ export function ClipboardSheet({ visible, canRead, canWrite, onClose }: { readon
   const copy = () => {
     haptics.success();
     setSending(true);
+    const id = request.current;
     void remote.run({ _tag: "ClipboardSet", text }).then((receipt) => {
       setSending(false);
       if (!ACCEPTED.has(receipt?.status ?? "failed")) return;
       remote.show("Copied to the Mac clipboard.");
+      if (id !== request.current) return;
       setText("");
       close();
     });

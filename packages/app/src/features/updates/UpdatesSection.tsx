@@ -24,13 +24,13 @@ export function UpdatesSection() {
   const navigation = useNavigation<NativeStackNavigationProp<RecordStackParams>>();
   const phase = useStore(updatePhase);
   const store = useStore(playState);
-  const storeNews = store._tag === "Available";
+  const storeNews = store._tag === "Available" || store._tag === "Downloading";
   return (
     <Section title="Updates">
       <Row
         label="Updates"
         detail={`${INFO.channel} channel · ${INFO.running}`}
-        value={storeNews ? "Google Play update" : SUMMARY[phase._tag]}
+        value={storeNews ? `Google Play ${store._tag === "Downloading" ? "downloading" : "update"}` : SUMMARY[phase._tag]}
         valueTone={storeNews || phase._tag === "Offline" ? "alarmMedium" : "ink"}
         onPress={() => navigation.navigate("Updates")}
       />

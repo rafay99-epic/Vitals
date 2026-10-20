@@ -93,9 +93,10 @@ export function ChartScreen({ navigation }: Props) {
   const memoryMax = mac?.memoryBytes ?? null;
   const open = (channel: Channel) => navigation.navigate("Channel", { channel });
   const row = (size: RowSize) => (channel: Channel, order: number) => <LiveChannel key={channel} channel={channel} size={size} memoryMax={memoryMax} order={order} onOpen={open} />;
+  const full = CHART_FULL.filter(shown);
   const rows = wide
-    ? [...CHART_FULL, ...CHART_COMPACT].filter(shown).map(row("lane"))
-    : [...CHART_FULL.filter(shown).map(row("full")), ...CHART_COMPACT.map((channel, index) => row("compact")(channel, index + CHART_FULL.length))];
+    ? [...full, ...CHART_COMPACT.filter(shown)].map(row("lane"))
+    : [...full.map(row("full")), ...CHART_COMPACT.map((channel, index) => row("compact")(channel, index + full.length))];
   return (
     <Screen top={<ChartBanners />}>
       <TabHeader meta={<ChartMeta mac={mac} />} />

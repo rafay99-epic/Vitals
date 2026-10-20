@@ -84,7 +84,7 @@ function Rules({ guard, locked, onChange }: { readonly guard: GuardState | null;
         label="Pressure Guard"
         detail={settings.enabled ? "watching this Mac" : "off: no alarms, no calming"}
         locked={locked}
-        trailing={<BeatSwitch value={settings.enabled} disabled={locked} accessibilityLabel="Pressure Guard" onChange={(enabled) => onChange((latest) => ({ ...latest, enabled }))} />}
+        control={<BeatSwitch value={settings.enabled} disabled={locked} accessibilityLabel="Pressure Guard" onChange={(enabled) => onChange((latest) => ({ ...latest, enabled }))} />}
       />
       {settings.rules.map((rule) => (
         <Row
@@ -92,7 +92,7 @@ function Rules({ guard, locked, onChange }: { readonly guard: GuardState | null;
           label={RULES[rule.kind].title}
           detail={RULES[rule.kind].detail(rule)}
           locked={locked || !settings.enabled}
-          trailing={
+          control={
             <BeatSwitch
               value={rule.enabled}
               disabled={locked || !settings.enabled}
@@ -170,7 +170,7 @@ export function AlarmsScreen() {
   };
 
   const update = (edit: Edit) => {
-    queue.current = queue.current.then(() => send(edit));
+    queue.current = queue.current.then(() => send(edit)).catch(() => remote.show("Pressure Guard did not update. Try again.", "bad"));
   };
 
   const open = guard?.active ?? alerts;

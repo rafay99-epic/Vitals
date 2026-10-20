@@ -42,19 +42,21 @@ function CopyRow({ text, action, onPress }: { readonly text: string; readonly ac
 }
 
 function GetTheMac() {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    void Clipboard.setStringAsync(BREW_INSTALL).then(() => {
-      haptics.success();
-      setCopied(true);
-    });
+  const [copy, setCopy] = useState<"copy" | "copied" | "copy failed">("copy");
+  const copyInstall = () => {
+    void Clipboard.setStringAsync(BREW_INSTALL)
+      .catch(() => false)
+      .then((done) => {
+        (done ? haptics.success : haptics.error)();
+        setCopy(done ? "copied" : "copy failed");
+      });
   };
   const share = () => {
     void Share.share({ message: `Vitals for Mac: ${SITE_URL}` }).catch(() => undefined);
   };
   return (
     <View className="gap-3 px-[22px] pt-6">
-      <CopyRow text={BREW_INSTALL} action={copied ? "copied" : "copy"} onPress={copy} />
+      <CopyRow text={BREW_INSTALL} action={copy} onPress={copyInstall} />
       <CopyRow text={SITE_URL.replace("https://", "")} action="share" onPress={share} />
       <Mono>Send the link to your Mac with AirDrop or a message, then open it there.</Mono>
     </View>

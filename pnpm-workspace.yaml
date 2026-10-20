@@ -62,6 +62,7 @@ minimumReleaseAgeExclude:
   - expo@58.0.16
   - knip@6.42.1
   - oxlint@1.89.0
+  - expo-in-app-updates@0.13.0
 
 overrides:
   lightningcss: 1.30.1

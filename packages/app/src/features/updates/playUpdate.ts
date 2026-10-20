@@ -20,16 +20,22 @@ export const playState = new Store<PlayState>(playSupported ? { _tag: "Unchecked
 
 export const playPrompt = new Store<string | null>(null);
 
-const stateFrom = (result: Awaited<ReturnType<typeof InAppUpdates.checkForUpdate>>): PlayState => {
-  if (result.updateInProgress === true) return { _tag: "Downloading", version: result.storeVersion };
-  return result.updateAvailable ? { _tag: "Available", version: result.storeVersion } : { _tag: "Current" };
+const NOT_FROM_PLAY = /\(-10\)|not owned/i;
+
+const stateFrom = (result: InAppUpdates.UpdateInfo): PlayState => {
+  const version = result.storeVersion ?? "new";
+  if (result.updateInProgress === true) return { _tag: "Downloading", version };
+  return result.updateAvailable ? { _tag: "Available", version } : { _tag: "Current" };
 };
+
+const failureFrom = (error: unknown): PlayState => ({
+  _tag: "Unavailable",
+  reason: error instanceof Error && NOT_FROM_PLAY.test(error.message) ? "not installed from Google Play" : "could not reach Google Play",
+});
 
 export const checkPlay = async (): Promise<PlayState> => {
   if (!playSupported) return playState.get();
-  const next = await InAppUpdates.checkForUpdate()
-    .then(stateFrom)
-    .catch((): PlayState => ({ _tag: "Unavailable", reason: "not installed from Google Play" }));
+  const next = await InAppUpdates.checkForUpdate().then(stateFrom).catch(failureFrom);
   playState.set(next);
   return next;
 };
@@ -50,8 +56,9 @@ export const dismissPlay = (): void => {
 export const startPlayUpdate = async (): Promise<boolean> => {
   const current = playState.get();
   if (current._tag !== "Available") return false;
-  playPrompt.set(null);
   const started = await InAppUpdates.startUpdate(false).catch(() => false);
-  if (started) playState.set({ _tag: "Downloading", version: current.version });
-  return started;
+  if (!started) return false;
+  playPrompt.set(null);
+  playState.set({ _tag: "Downloading", version: current.version });
+  return true;
 };

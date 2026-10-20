@@ -11,6 +11,7 @@ export interface RowProps {
   readonly value?: string | undefined;
   readonly valueTone?: Tone | undefined;
   readonly trailing?: ReactNode;
+  readonly control?: ReactNode;
   readonly tone?: Tone | undefined;
   readonly plain?: boolean | undefined;
   readonly locked?: boolean | undefined;
@@ -18,7 +19,7 @@ export interface RowProps {
   readonly accessibilityLabel?: string | undefined;
 }
 
-export function Row({ label, detail, value, valueTone = "ink", trailing, tone = "ink", plain = false, locked = false, onPress, accessibilityLabel }: RowProps) {
+export function Row({ label, detail, value, valueTone = "ink", trailing, control, tone = "ink", plain = false, locked = false, onPress, accessibilityLabel }: RowProps) {
   const action = onPress !== undefined;
   const pressable = action && !locked;
   return (
@@ -26,7 +27,7 @@ export function Row({ label, detail, value, valueTone = "ink", trailing, tone = 
       <Pressable
         onPress={onPress}
         disabled={!pressable}
-        accessible={action || trailing === undefined}
+        accessible={action || control === undefined}
         accessibilityRole={action ? "button" : "text"}
         accessibilityLabel={accessibilityLabel ?? [label, value, detail].filter((part) => part !== undefined).join(", ")}
         accessibilityState={{ disabled: locked }}
@@ -54,6 +55,7 @@ export function Row({ label, detail, value, valueTone = "ink", trailing, tone = 
           </Mono>
         )}
         {trailing}
+        {control}
         {pressable ? <View className="h-[7px] w-[7px] rotate-45 border-r-[1.5px] border-t-[1.5px] border-mute" /> : null}
       </Pressable>
     </Animated.View>

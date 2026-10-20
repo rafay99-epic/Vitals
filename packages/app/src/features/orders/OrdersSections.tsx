@@ -85,7 +85,7 @@ export function SoundSection({ locked, run }: SectionProps) {
       <Row
         label="Mute"
         locked={locked}
-        trailing={
+        control={
           <BeatSwitch
             value={muted}
             disabled={locked}

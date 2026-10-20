@@ -90,7 +90,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE"],
     adaptiveIcon: {
       foregroundImage: `./assets/adaptive-foreground${current.art}.png`,
-      monochromeImage: "./assets/adaptive-monochrome.png",
+      monochromeImage: `./assets/adaptive-monochrome${current.art}.png`,
       backgroundColor: "#000000",
     },
   },

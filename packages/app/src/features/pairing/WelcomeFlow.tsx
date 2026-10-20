@@ -24,7 +24,9 @@ export function WelcomeFlow() {
   const finish = () => sessions.finishWelcome();
 
   useEffect(() => {
-    void notificationPermission().then(setPermission);
+    void notificationPermission()
+      .catch((): PermissionState => "unsupported")
+      .then(setPermission);
   }, []);
 
   if (step === "alerts") return <AlertsScreen onDone={finish} />;
