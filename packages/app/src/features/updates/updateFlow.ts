@@ -3,6 +3,7 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
 import * as Network from "expo-network";
+import { colors } from "@vitals/ui";
 import * as Updates from "expo-updates";
 
 export type UpdatePhase =
@@ -37,7 +38,11 @@ const reachable = step("network", Network.getNetworkStateAsync).pipe(
 const restart = (published: number | null) =>
   Effect.gen(function* () {
     updatePhase.set({ _tag: "Restarting", publishedAt: published });
-    yield* step("restart", () => Updates.reloadAsync());
+    yield* step("restart", () =>
+      Updates.reloadAsync({
+        reloadScreenOptions: { backgroundColor: colors.bg, fade: true, spinner: { enabled: false } },
+      }),
+    );
   });
 
 const download = (published: number | null) =>

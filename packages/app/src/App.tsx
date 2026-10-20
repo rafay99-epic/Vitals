@@ -19,7 +19,9 @@ import { OrdersScreen } from "./features/orders/OrdersScreen.tsx";
 import { PairScreen } from "./features/pairing/PairScreen.tsx";
 import { WelcomeFlow } from "./features/pairing/WelcomeFlow.tsx";
 import { RecordScreen } from "./features/record/RecordScreen.tsx";
+import { PlayUpdateSheet } from "./features/updates/PlayUpdateSheet";
 import { UpdateGate } from "./features/updates/UpdateGate";
+import { UpdatesScreen } from "./features/updates/UpdatesScreen";
 import { WardScreen } from "./features/ward/WardScreen.tsx";
 import { useAppFonts } from "./lib/fonts";
 import { hostOf } from "./lib/host.ts";
@@ -41,7 +43,7 @@ const linking: LinkingOptions<TabParams> = {
       Orders: "orders",
       Ward: "ward",
       Alarms: "alarms",
-      RecordTab: { path: "record", screens: { Record: "", Diagnostics: "diagnostics" } },
+      RecordTab: { path: "record", screens: { Record: "", Updates: "updates", Diagnostics: "diagnostics" } },
     },
   },
 };
@@ -75,6 +77,7 @@ function RecordNavigator() {
   return (
     <RecordStack.Navigator screenOptions={stackOptions}>
       <RecordStack.Screen name="Record" component={RecordScreen} />
+      <RecordStack.Screen name="Updates" component={UpdatesScreen} />
       <RecordStack.Screen name="Diagnostics" component={DiagnosticsScreen} />
     </RecordStack.Navigator>
   );
@@ -152,6 +155,7 @@ export function App() {
           <UpdateGate>
             <NavigationContainer theme={theme} linking={linking}>
               <Root />
+              <PlayUpdateSheet />
             </NavigationContainer>
           </UpdateGate>
         ) : (

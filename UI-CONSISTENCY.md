@@ -163,7 +163,9 @@ Tabs, in order: **Chart, Orders, Ward, Alarms, Record**. Each tab is one screen 
 | Pair | `features/pairing/PairScreen.tsx` | scan, enter code (+ Mac address on native), progress steps, Admitted, errors |
 | Alerts explainer | `features/pairing/AlertsScreen.tsx` | shown once after Admitted, before the OS prompt |
 | Link states | `ScreenHeader` + `features/chart/LinkState.tsx` | Connecting, Reconnecting, Paused, No signal, Removed, Out of step |
-| Update gate | `features/updates/UpdateGate.tsx` | blocks the app while a mandatory update downloads and applies |
+| Update gate | `features/updates/UpdateGate.tsx` | blocks the app while a mandatory update downloads: the beat draws across with the real download progress, a hero percent, Check · Download · Restart; the reload screen is black so there is never a white flash |
+| Updates | `features/updates/UpdatesScreen.tsx` | from Record: build, channel, running update, runtime, publish time, Google Play store version, Check for updates, Update from Google Play when the store has a newer binary |
+| Store update sheet | `features/updates/PlayUpdateSheet.tsx` | Android only: once per new Google Play version on launch, "A new Vitals is out." with Update now (Play flexible download, then the app restarts into it) |
 | Diagnostics | `features/diagnostics/DiagnosticsScreen.tsx` | dev build only: link timeline, RPC latency, frame rate, renders, memory, update info, log export |
 
 ### State word
