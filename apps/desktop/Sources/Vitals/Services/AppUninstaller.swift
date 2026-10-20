@@ -10,7 +10,9 @@ enum AppUninstaller {
         var trashed: [URL] = []
         var failures: [(url: URL, reason: String)] = []
         var freedBytes: UInt64 = 0
+        var trashedBytes: UInt64 = 0
         var systemRemoved = 0
+        var systemRemaining = 0
         var usedAdmin = false
         /// The user dismissed the admin prompt, so system-domain files (and any
         /// root-owned bundle) were left in place. The summary must say so.
@@ -97,15 +99,16 @@ enum AppUninstaller {
         process.waitUntilExit()
     }
 
-    /// Runs `brew uninstall --cask --zap <token>` as the user. `--zap` also
-    /// removes the files the cask's `zap` stanza declares. The token is
+    /// Runs `brew uninstall --cask [--zap] <token>` as the user. `--zap` also
+    /// removes the files the cask's `zap` stanza declares, so callers pass
+    /// `zap: false` when the user chose to keep any leftover. The token is
     /// validated to brew's lowercase-alnum-hyphen shape.
-    static func homebrewUninstall(cask: String) -> Bool {
+    static func homebrewUninstall(cask: String, zap: Bool) -> Bool {
         guard let brew = LeftoverScanner.brewExecutable(),
               cask.range(of: "^[a-z0-9][a-z0-9-]*$", options: .regularExpression) != nil else { return false }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: brew)
-        process.arguments = ["uninstall", "--cask", "--zap", cask]
+        process.arguments = ["uninstall", "--cask"] + (zap ? ["--zap"] : []) + [cask]
         // Discard output: an unread Pipe fills at ~64 KB and hangs the child.
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice

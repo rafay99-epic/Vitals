@@ -91,7 +91,9 @@ struct UninstallSummaryView: View {
     let outcome: AppUninstaller.Outcome
     let onDone: () -> Void
 
-    private var clean: Bool { outcome.failures.isEmpty && outcome.errorMessage == nil && !outcome.adminCancelled }
+    private var clean: Bool {
+        outcome.failures.isEmpty && outcome.errorMessage == nil && !outcome.adminCancelled && outcome.systemRemaining == 0
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -101,9 +103,12 @@ struct UninstallSummaryView: View {
                 .foregroundStyle(clean ? Color.green : .orange)
 
             VStack(alignment: .leading, spacing: 6) {
-                summaryRow("Moved to Trash", "\(outcome.trashed.count) items · \(formatBytes(outcome.freedBytes))")
+                summaryRow("Moved to Trash", "\(outcome.trashed.count) items · \(formatBytes(outcome.trashedBytes))")
                 if outcome.systemRemoved > 0 {
                     summaryRow("Removed permanently", "\(outcome.systemRemoved) system files")
+                }
+                if outcome.systemRemaining > 0 {
+                    summaryRow("Left in place", "\(outcome.systemRemaining) system files could not be removed", warn: true)
                 }
                 if outcome.caskUninstalled > 0 {
                     summaryRow("Homebrew", "\(outcome.caskUninstalled) uninstalled")

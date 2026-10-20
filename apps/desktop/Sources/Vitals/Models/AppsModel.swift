@@ -266,8 +266,9 @@ final class AppsModel {
                 var bundleHandledByBrew = false
                 if let cask = staged.casks[app.id] {
                     uninstallProgress?.phase = .homebrew(app.name)
+                    let zap = (staged.leftovers[app.id] ?? []).allSatisfy { !keep.contains($0.id) }
                     let removed = await Task.detached(priority: .userInitiated) {
-                        AppUninstaller.homebrewUninstall(cask: cask)
+                        AppUninstaller.homebrewUninstall(cask: cask, zap: zap)
                     }.value
                     if removed { bundleHandledByBrew = true; combined.caskUninstalled += 1 }
                 }
@@ -285,6 +286,7 @@ final class AppsModel {
                 combined.trashed += outcome.trashed
                 combined.failures += outcome.failures
                 combined.freedBytes += outcome.freedBytes
+                combined.trashedBytes += outcome.freedBytes
 
                 // Trash blocked by App Management falls back to admin.
                 for bundle in outcome.failedBundles {
@@ -324,6 +326,7 @@ final class AppsModel {
                     let removed = uniqueSystemPaths.filter { !fm.fileExists(atPath: $0.url.path) }
                     combined.usedAdmin = true
                     combined.systemRemoved = removed.count
+                    combined.systemRemaining = uniqueSystemPaths.count - removed.count
                     combined.freedBytes += removed.reduce(0) { $0 + $1.bytes }
                 } catch let error as PrivilegedShell.AdminError {
                     if error.cancelled {

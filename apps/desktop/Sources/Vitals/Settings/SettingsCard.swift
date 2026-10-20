@@ -40,7 +40,7 @@ struct SwitchRow: View {
                 }
             }
             Spacer()
-            Toggle("", isOn: $isOn)
+            Toggle(label, isOn: $isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)

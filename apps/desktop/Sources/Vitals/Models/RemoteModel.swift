@@ -170,6 +170,7 @@ final class RemoteModel {
         gateway = nil
         state = .off
         status = nil
+        guardState = nil
         devices = []
         pairing = nil
         needs = .none
@@ -180,6 +181,7 @@ final class RemoteModel {
     private func gatewayExited(_ code: Int32, generation: Int) {
         guard generation == gatewayGeneration else { return }
         gateway = nil
+        guardState = nil
         needs = .none
         updateVitalsNeeds()
         failAdminWaiters("The gateway stopped")

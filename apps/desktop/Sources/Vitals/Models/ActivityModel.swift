@@ -8,6 +8,7 @@ final class ActivityModel {
     private(set) var events: [ActivityStore.Event] = []
     private(set) var summary = ActivityStore.Summary()
     private(set) var frames: [ActivityStore.Frame] = []
+    @ObservationIgnored private var frameLoad = 0
     var filter = ActivityStore.Filter() { didSet { if filter != oldValue { reload() } } }
     var following: String? { didSet { loadFrames() } }
 
@@ -73,10 +74,12 @@ final class ActivityModel {
             return
         }
         let store = store
+        frameLoad += 1
+        let load = frameLoad
         Task.detached(priority: .utility) {
             let rows = store.frames(connectionId: connection)
             await MainActor.run { [weak self] in
-                guard let self, self.following == connection else { return }
+                guard let self, self.frameLoad == load else { return }
                 self.frames = rows
             }
         }

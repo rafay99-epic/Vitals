@@ -69,7 +69,7 @@ struct UninstallConfirmationSheet: View {
                 Spacer()
                 Button("Cancel") { model.staged = nil }
                     .keyboardShortcut(.cancelAction)
-                Button(hasSystem ? "Uninstall" : "Move to Trash") { model.executeStagedUninstall() }
+                Button(hasSystem || !staged.casks.isEmpty ? "Uninstall" : "Move to Trash") { model.executeStagedUninstall() }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
             }
@@ -78,9 +78,12 @@ struct UninstallConfirmationSheet: View {
     }
 
     private var introText: String {
-        var text = "The app and the checked items below are removed — user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
+        var text = "The app and the checked items below are removed. User files go to the Trash, so you can recover them. Uncheck anything you want to keep."
         if hasSystem {
-            text += " Items marked 🔒 — system files and pkg-installed apps — are removed permanently and need your administrator password."
+            text += " Items marked 🔒, system files and pkg-installed apps, are removed permanently and need your administrator password."
+        }
+        if !staged.casks.isEmpty {
+            text += " Apps marked Homebrew are uninstalled by Homebrew, which removes them permanently."
         }
         return text
     }
@@ -142,7 +145,7 @@ struct UninstallConfirmationSheet: View {
 
     private func leftoverRow(_ leftover: Leftover) -> some View {
         HStack(spacing: 8) {
-            Toggle("", isOn: Binding(
+            Toggle("Remove \(leftover.id.lastPathComponent)", isOn: Binding(
                 get: { !(model.staged?.excluded.contains(leftover.id) ?? false) },
                 set: { include in
                     if include {

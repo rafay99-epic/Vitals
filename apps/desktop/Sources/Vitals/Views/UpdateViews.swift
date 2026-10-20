@@ -43,6 +43,7 @@ struct HeaderUpdateButton: View {
             withAnimation(.easeOut(duration: 0.12)) { hovered = hovering }
         }
         .help(help)
+        .accessibilityLabel(help)
     }
 
     private var spinner: some View {

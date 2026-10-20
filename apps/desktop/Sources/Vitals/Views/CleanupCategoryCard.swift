@@ -97,7 +97,7 @@ struct CategoryCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(hasNothing)
+        .disabled(hasNothing && !isSelected)
         .opacity(hasNothing ? 0.55 : 1)
         .animation(.easeOut(duration: 0.15), value: isSelected)
     }

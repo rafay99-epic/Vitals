@@ -220,6 +220,10 @@ struct NotificationsCard: View {
             }
         }
         .task { await refreshNotificationStatus() }
+        .onChange(of: hasAnyAlert) { Task { await refreshNotificationStatus() } }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refreshNotificationStatus() }
+        }
     }
 
     private var hasAnyAlert: Bool {

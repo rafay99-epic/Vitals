@@ -95,9 +95,12 @@ struct SoftwareUpdatesCard: View {
 
 struct LoggingCard: View {
     @Environment(AppSettings.self) private var settings
+    @State private var refresh = 0
+    @State private var exportStatus: String?
 
     var body: some View {
         @Bindable var settings = settings
+        let _ = refresh
         SettingsCard(title: "Logging", symbol: "doc.text", tint: .indigo) {
             SwitchRow(label: "Log readings to disk", isOn: $settings.loggingEnabled)
             settingsRow("History database") {
@@ -110,9 +113,20 @@ struct LoggingCard: View {
                 .controlSize(.small)
                 .disabled(!logFileExists)
             }
-            Text("One reading every 10 seconds while Vitals runs, stored in a SQLite database (\(logSizeText)) at \(folderDisplayPath)/history. Export writes a timestamped CSV to \(folderDisplayPath)/exports — open it in Numbers or Excel.")
+            if let exportStatus {
+                Text(exportStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("One reading every 10 seconds while Vitals runs, stored in a SQLite database (\(logSizeText)) at \(folderDisplayPath)/history. Export writes a timestamped CSV to \(folderDisplayPath)/exports. Open it in Numbers or Excel.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                refresh &+= 1
+            }
         }
     }
 
@@ -138,9 +152,16 @@ struct LoggingCard: View {
 
     /// Same `HistoryExport` path as the History section, so the format matches.
     private func exportCSV() {
-        Task.detached {
-            guard let destination = HistoryExport.csv() else { return }
-            await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([destination]) }
+        exportStatus = "Exporting…"
+        Task {
+            let destination = await Task.detached(priority: .userInitiated) { HistoryExport.csv() }.value
+            refresh &+= 1
+            guard let destination else {
+                exportStatus = "Nothing to export yet, or the export failed."
+                return
+            }
+            exportStatus = "Exported \(destination.lastPathComponent)"
+            NSWorkspace.shared.activateFileViewerSelecting([destination])
         }
     }
 }

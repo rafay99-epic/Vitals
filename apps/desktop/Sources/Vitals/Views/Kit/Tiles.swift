@@ -24,6 +24,7 @@ struct SelectionMark: View {
         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
             .font(.system(size: size))
             .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+            .accessibilityLabel(selected ? "Selected" : "Not selected")
     }
 }
 
@@ -73,7 +74,7 @@ struct PageHero<Controls: View>: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(value)
                     .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .contentTransition(.numericText())
+                    .numericTransition()
                 Text(subtitle)
                     .font(.callout)
                     .foregroundStyle(.secondary)

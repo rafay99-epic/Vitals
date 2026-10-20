@@ -16,9 +16,9 @@ struct CleanupClassicPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     hero
-                    if !model.hasRun {
+                    if !model.hasRun || (!model.isScanning && !model.scanComplete && model.totalBytes == 0) {
                         idlePrompt
-                    } else if !model.isScanning && model.totalBytes == 0 {
+                    } else if model.scanComplete && model.totalBytes == 0 {
                         allClean
                     } else {
                         grid
@@ -93,7 +93,7 @@ struct CleanupClassicPage: View {
     }
 
     private var confirmationMessage: String {
-        var lines = "Selected caches and logs are deleted — apps rebuild them automatically."
+        var lines = "The selected items are removed. Documents, settings and files outside these categories are left untouched."
         if model.selected.contains(.trash) {
             lines += " Emptying the Trash is permanent."
         }
@@ -132,16 +132,16 @@ struct CleanupClassicPage: View {
     private var heroValue: String {
         if model.totalBytes > 0 { return formatBytes(model.totalBytes) }
         if model.isScanning { return "Scanning…" }
-        return model.hasRun ? "All clean" : "—"
+        return model.scanComplete ? "All clean" : "—"
     }
 
     private var heroSubtitle: String {
         if model.isScanning { return "measuring \(depth == .deep ? "user and system" : "user") junk" }
         let populated = model.categories.filter { $0.sizeBytes > 0 }.count
         if model.totalBytes > 0 {
-            return "reclaimable across \(populated) categories — all of it regenerable"
+            return "reclaimable across \(populated) categories"
         }
-        return model.hasRun ? "nothing worth reclaiming right now" : "scan to see what's reclaimable"
+        return model.scanComplete ? "nothing worth reclaiming right now" : "scan to see what's reclaimable"
     }
 
     // MARK: Idle prompt
@@ -151,7 +151,7 @@ struct CleanupClassicPage: View {
             symbol: "sparkles",
             tint: .orange,
             title: "Free up space safely",
-            message: "Vitals finds regenerable junk — developer and browser caches, app caches, logs, device firmware, and the Trash. Browser history, cookies and logins are never touched. Quick stays in your home folder; Deep adds age-gated system files (one admin prompt) and, only if you choose, iOS backups — those need a second confirmation. Auto-scan is in Settings.",
+            message: "Vitals finds regenerable junk — developer and browser caches, app caches, logs, device firmware, and the Trash. Browser history, cookies and logins are never touched. Quick stays in your home folder; Deep adds age-gated system files (with your administrator password) and, only if you choose, iOS backups, which need a second confirmation. Auto-scan is in Settings.",
             hints: [
                 .init(symbol: "shippingbox", label: "Caches"),
                 .init(symbol: "doc.text", label: "Logs"),
@@ -239,7 +239,7 @@ struct CleanupClassicPage: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(model.selected.isEmpty || model.isCleaning || model.selectedBytes == 0)
+            .disabled(model.selected.isEmpty || model.isCleaning || model.isScanning || model.selectedBytes == 0)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

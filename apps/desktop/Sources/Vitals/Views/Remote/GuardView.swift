@@ -11,7 +11,7 @@ struct GuardView: View {
                     HStack(spacing: 24) {
                         stat("Memory pressure", state.pressure.capitalized)
                         stat("Thermal", state.thermal.capitalized)
-                        stat("Swap", ByteCountFormatter.string(fromByteCount: Int64(state.swapUsedBytes), countStyle: .memory))
+                        stat("Swap", memoryText(state.swapUsedBytes))
                         Spacer()
                     }
                     Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
@@ -20,7 +20,7 @@ struct GuardView: View {
                                 Text(group.group.prefix(1).uppercased() + group.group.dropFirst())
                                 Text("\(group.count)").monospacedDigit()
                                 Text(String(format: "%.0f%% CPU", group.cpuPercent)).monospacedDigit().foregroundStyle(.secondary)
-                                Text(ByteCountFormatter.string(fromByteCount: Int64(group.memoryBytes), countStyle: .memory))
+                                Text(memoryText(group.memoryBytes))
                                     .monospacedDigit()
                                     .foregroundStyle(.secondary)
                             }
@@ -90,4 +90,14 @@ struct GuardView: View {
         }
         remote.applyGuardSettings(GuardSettings(enabled: enabled ?? current.enabled, cooldownSeconds: current.cooldownSeconds, rules: rules))
     }
+}
+
+@MainActor private let memoryFormatter: ByteCountFormatter = {
+    let formatter = ByteCountFormatter()
+    formatter.countStyle = .memory
+    return formatter
+}()
+
+@MainActor private func memoryText(_ bytes: Double) -> String {
+    memoryFormatter.string(fromByteCount: Int64(max(0, bytes)))
 }
