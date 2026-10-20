@@ -14,6 +14,7 @@ on:
       - "tsconfig.base.json"
       - ".oxlintrc.json"
       - "knip.jsonc"
+      - "turbo.json"
       - ".github/workflows/remote.yml"
   pull_request:
     paths:
@@ -27,6 +28,7 @@ on:
       - "tsconfig.base.json"
       - ".oxlintrc.json"
       - "knip.jsonc"
+      - "turbo.json"
       - ".github/workflows/remote.yml"
 
 concurrency:
@@ -53,6 +55,6 @@ jobs:
       - name: Typecheck
         run: pnpm turbo typecheck --filter=@vitals/*
       - name: Test
-        run: pnpm turbo test --filter=@vitals/contracts --filter=@vitals/tailscale --filter=@vitals/gateway
+        run: pnpm turbo test --filter=@vitals/*
       - name: Web export
         run: pnpm --filter @vitals/web export

@@ -98,7 +98,8 @@ fi
 echo "Version $VERSION  ($APP_NAME · $BUNDLE_ID)"
 
 # Remote access: the TypeScript gateway (compiled Bun binary) and the web client
-# it serves (apps/web). Set VITALS_SKIP_REMOTE=1 to build without them.
+# it serves (apps/web). Set VITALS_SKIP_REMOTE=1 to build without them, or
+# VITALS_BUILD_WEB=0 to reuse an existing apps/web/dist.
 REPO_ROOT="$(cd ../.. && pwd)"
 if [ "${VITALS_SKIP_REMOTE:-0}" != "1" ]; then
   if ! command -v bun >/dev/null 2>&1; then
@@ -109,7 +110,7 @@ if [ "${VITALS_SKIP_REMOTE:-0}" != "1" ]; then
   (cd "$REPO_ROOT/apps/gateway" && bun run build)
   mkdir -p "$APP/Contents/Helpers"
   cp "$REPO_ROOT/apps/gateway/dist/vitals-gateway" "$APP/Contents/Helpers/vitals-gateway"
-  if [ "${VITALS_BUILD_WEB:-0}" = "1" ]; then
+  if [ "${VITALS_BUILD_WEB:-1}" = "1" ]; then
     echo "Exporting web client…"
     (cd "$REPO_ROOT" && pnpm --filter @vitals/web export)
   fi
@@ -117,7 +118,7 @@ if [ "${VITALS_SKIP_REMOTE:-0}" != "1" ]; then
     rm -rf "$APP/Contents/Resources/web"
     cp -R "$REPO_ROOT/apps/web/dist" "$APP/Contents/Resources/web"
   else
-    echo "note: no web export found; phones still work, browsers get no UI (VITALS_BUILD_WEB=1 to build it)"
+    echo "note: no web export found; phones still work, browsers get no UI"
   fi
 fi
 

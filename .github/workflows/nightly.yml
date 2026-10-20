@@ -13,6 +13,12 @@ on:
     branches: [nightly]
     paths:
       - "apps/desktop/**"
+      - "apps/gateway/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/nightly.yml"
       - ".github/scripts/**"
   workflow_dispatch:
