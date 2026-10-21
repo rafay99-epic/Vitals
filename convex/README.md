@@ -5,7 +5,7 @@ to the GitHub Releases API**. The frontend calls a Convex action, the action fet
 GitHub server-side and returns the data, and the page shows its shimmer/loading state
 while it's in flight. No database, no caching, no cron — deliberately simple.
 
-It lives at the **repo root** (not inside `apps/website`) so any app — the website
+It lives at the **repo root** (not inside `apps/marketing`) so any app — the website
 today, the desktop app later — can use it. The repo root is the Convex project root:
 functions in `convex/`, the `convex` dependency + scripts in the root `package.json`,
 deployment in the root `.env.local` (gitignored).

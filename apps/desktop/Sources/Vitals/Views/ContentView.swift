@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var historyModel = HistoryModel()
 
     private static let monitor: [NavSection] = [.cpu, .gpu, .memory, .battery, .network, .sensors, .history]
-    private static let maintain: [NavSection] = [.diskHealth, .cleanup, .applications]
+    private static let maintain: [NavSection] = [.diskHealth, .cleanup, .applications, .remote]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -171,6 +171,8 @@ struct ContentView: View {
                 CleanupView(model: cleanupModel)
             case .applications:
                 AppsView(model: appsModel)
+            case .remote:
+                RemoteView()
             case .settings:
                 SettingsView()
             }
@@ -218,198 +220,5 @@ private struct WindowOcclusionReader: NSViewRepresentable {
                 self?.onChange(window.occlusionState.contains(.visible))
             }
         }
-    }
-}
-
-/// The sidebar header's update button: a download icon when an update is
-/// available or downloaded (one click installs), a spinner while downloading or
-/// installing, nothing when up to date.
-private struct HeaderUpdateButton: View {
-    @Environment(Updater.self) private var updater
-    @State private var hovered = false
-
-    var body: some View {
-        switch updater.status {
-        case .available(let release):
-            Button {
-                Task { await updater.downloadAndInstall() }
-            } label: {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 15, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.blue)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.blue.opacity(hovered ? 0.22 : 0.14)))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.12)) { hovered = hovering }
-            }
-            .help("Install \(Channel.current.displayName) \(release.displayVersion)")
-        case .readyToInstall(let release):
-            Button {
-                Task { await updater.installPending() }
-            } label: {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 15, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.green)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.green.opacity(hovered ? 0.22 : 0.14)))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.12)) { hovered = hovering }
-            }
-            .help("Install \(Channel.current.displayName) \(release.displayVersion) — downloaded and ready")
-        case .downloading:
-            spinner.help("Downloading update…")
-        case .installing:
-            spinner.help("Installing — Vitals will relaunch in a moment")
-        default:
-            EmptyView()
-        }
-    }
-
-    private var spinner: some View {
-        ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 26, height: 26)
-    }
-}
-
-/// The Overview: health hero, per-subsystem tiles (each drills into its Monitor
-/// section), the multi-metric chart, power and fans, and top processes.
-struct DashboardView: View {
-    @Environment(VitalsModel.self) private var model
-    @Environment(AppSettings.self) private var settings
-    let drill: (NavSection) -> Void
-
-    var body: some View {
-        ScrollView {
-            Group {
-                if !model.hasLoaded {
-                    LoadingStateView(
-                        title: "Reading sensors",
-                        message: "Vitals is taking its first measurement of this Mac's temperatures, fans, and memory."
-                    )
-                } else if model.sensorsUnavailable {
-                    EmptyStateView(
-                        symbol: "sensor.tag.radiowaves.forward.fill",
-                        tint: .orange,
-                        title: "No sensor data",
-                        message: "Vitals couldn't read this Mac's temperature, fan, or memory sensors. This usually means a virtual machine or restricted hardware access — readings will appear here once they're available."
-                    ) {
-                        EmptyView()
-                    }
-                } else {
-                    cards
-                }
-            }
-            .padding(20)
-        }
-    }
-
-    /// Lazy so the first frame and each resize frame only lay out on-screen cards.
-    private var cards: some View {
-        LazyVStack(alignment: .leading, spacing: 16) {
-            UpdateBanner()
-            DashboardHealthHero(drill: drill)
-            DashboardTileGrid(drill: drill)
-            PerformanceHistoryCard()
-            HStack(alignment: .top, spacing: 16) {
-                PowerCard()
-                FanCard()
-            }
-            DashboardProcessesCard()
-            footer
-        }
-    }
-
-    private var footer: some View {
-        HStack(spacing: 6) {
-            Text(HardwareInfo.chipName)
-            Text("·")
-            Text(HardwareInfo.osVersion)
-            Text("·")
-            Text("Up \(HardwareInfo.uptimeText)")
-            if let ssd = model.ssdTemp {
-                Text("·")
-                Text("SSD \(settings.format(ssd, decimals: 0))")
-            }
-            if let battery = model.batteryTemp {
-                Text("·")
-                Text("Battery \(settings.format(battery, decimals: 0))")
-            }
-            Spacer()
-            if settings.isOnBattery {
-                Text("on battery")
-                Text("·")
-            }
-            if model.sensorsStalled {
-                Label("Sensors not responding, readings paused", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-            } else {
-                Text("Updates every \(settings.effectiveRefreshInterval, format: .number) s")
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 4)
-    }
-}
-
-/// Shown at the top of the dashboard while an update is available or installing.
-struct UpdateBanner: View {
-    @Environment(Updater.self) private var updater
-
-    var body: some View {
-        switch updater.status {
-        case .available(let release):
-            banner {
-                Label("Vitals \(release.displayVersion) is available", systemImage: "arrow.down.circle.fill")
-                    .foregroundStyle(.blue)
-                Text("You're on \(Updater.currentVersion)")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Install Update") {
-                    Task { await updater.downloadAndInstall() }
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        case .readyToInstall(let release):
-            banner {
-                Label("Vitals \(release.displayVersion) is ready to install", systemImage: "arrow.down.circle.fill")
-                    .foregroundStyle(.green)
-                Text("Downloaded in the background")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Install & Relaunch") {
-                    Task { await updater.installPending() }
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        case .downloading:
-            banner {
-                Label("Downloading update…", systemImage: "arrow.down.circle")
-                Spacer()
-                ProgressView().controlSize(.small)
-            }
-        case .installing:
-            banner {
-                Label("Installing — Vitals will relaunch in a moment", systemImage: "gearshape.arrow.triangle.2.circlepath")
-                Spacer()
-                ProgressView().controlSize(.small)
-            }
-        default:
-            EmptyView()
-        }
-    }
-
-    private func banner<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 10, content: content)
-            .font(.callout)
-            .padding(12)
-            .cardBackground()
     }
 }

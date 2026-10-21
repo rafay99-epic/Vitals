@@ -8,6 +8,7 @@ struct VitalsApp: App {
     private let model: VitalsModel
     private let updater: Updater
     private let navigator: Navigator
+    private let remote: RemoteModel
     private let menuBar: MenuBarController
 
     init() {
@@ -27,6 +28,7 @@ struct VitalsApp: App {
         self.model = model
         self.updater = updater
         self.navigator = navigator
+        remote = RemoteModel(vitals: model, settings: settings)
         menuBar = MenuBarController(model: model, settings: settings, navigator: navigator)
         Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.rawValue))")
         Task.detached(priority: .utility) {
@@ -44,6 +46,7 @@ struct VitalsApp: App {
                 .environment(settings)
                 .environment(updater)
                 .environment(navigator)
+                .environment(remote)
         }
         .defaultSize(width: 1100, height: 760)
         // No system title bar: the sidebar carries branding and window dragging.

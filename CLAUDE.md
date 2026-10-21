@@ -1,7 +1,7 @@
 # CLAUDE.md — Vitals
 
 Vitals is a monorepo: a native macOS hardware monitor + app manager (`apps/desktop`,
-Swift/SwiftUI), its marketing site (`apps/website`, React + Vite + Tailwind v4), and a
+Swift/SwiftUI), its marketing site (`apps/marketing`, React + Vite + Tailwind v4, separate from the remote web app in `apps/web`), and a
 shared Convex backend at the repo root (`convex/`). Tooling: bun workspaces + turbo.
 License: **GPL-3.0**.
 
@@ -25,6 +25,14 @@ License: **GPL-3.0**.
    CPU tab); the per-core temp grid is `CoreTempGrid` (Dashboard + CPU tab); GitHub
    release parsing is `convex/lib/github.ts` (backend action + website fallback). Reuse
    first; if the existing component doesn't fit, generalize it rather than fork it.
+
+## UI consistency (Remote clients and the website)
+
+Any UI work in `packages/ui`, `packages/app`, `apps/mobile`, `apps/web` or `apps/marketing` must follow
+**[`UI-CONSISTENCY.md`](./UI-CONSISTENCY.md)**: the Bedside tokens, the shared components in `@vitals/ui`,
+the screen inventory, platform rules, motion, accessibility and the review checklist. Compose existing
+components; if one is missing, add it to the kit and to that file in the same change. The desktop app keeps the
+Apple native design language below.
 
 ## Workflow rules (user's explicit requirements — do not violate)
 
@@ -73,13 +81,12 @@ License: **GPL-3.0**.
 - `VITALS_CHANNEL` (read by `build.sh` + `make-dmg.sh`) selects the channel; **default
   `stable`**, so `ci.yml`'s release path is unaffected. The three channels:
   - **`stable`** → `Vitals.app` / `Vitals.dmg`, bundle `…vitals`, data `~/.vitals`,
-    red icon, clean numeric version. Cask `vitals`.
+    green beat icon, clean numeric version. Cask `vitals`.
   - **`nightly`** → `Vitals Nightly.app` / `Vitals-Nightly.dmg`, bundle `…vitals.nightly`,
-    data `~/.vitals-nightly`, amber+`NIGHTLY` icon, version `…-nightly`, baked
+    data `~/.vitals-nightly`, amber beat icon, version `…-nightly`, baked
     `VitalsBuildInfo` (`branch@sha`) + `VitalsBuildNumber` (`VITALS_BUILD`, CI run number).
     Cask `vitals-nightly`.
-  - **`dev`** → `Vitals Dev.app`, bundle `…vitals.dev`, data `~/.vitals-dev`, purple+`DEV`
-    icon, version `…-dev`. **Local only — never publishes a DMG (`make-dmg.sh` errors on
+  - **`dev`** → `Vitals Dev.app`, bundle `…vitals.dev`, data `~/.vitals-dev`, violet beat icon, version `…-dev`. **Local only — never publishes a DMG (`make-dmg.sh` errors on
     `dev`) and its updater is disabled** (`Channel.updatesEnabled == false`).
   All install side by side and run at once — the single-instance guard keys off
   `Bundle.main.bundleIdentifier`.
@@ -98,6 +105,9 @@ License: **GPL-3.0**.
   updater (`fetchLatestPrerelease`) tracks the **newest pre-release** and orders by
   `VitalsBuildNumber`. The release DMG must contain `<CFBundleName>.app`
   (`Updater.bundleInImage`).
+- **App icons** are Icon Composer files at `apps/desktop/Resources/Icons/<channel>/AppIcon.icon`; `build.sh`
+  compiles them with `actool` into `Assets.car` (default, dark and tinted) plus `AppIcon.icns`. The phone apps' icons
+  and splash come from `apps/mobile/scripts/brand.swift` (`swift scripts/brand.swift assets` from `apps/mobile`).
 - **`./dev.sh`** builds the current branch as Dev (local, no updater). **`./nightly.sh`**
   builds it as Nightly locally next to Stable (build number 0, so it'll offer to pull the
   published Nightly).
@@ -135,14 +145,28 @@ same designated requirement so the grant persists.
 ## Commands
 
 ```sh
-bun install                  # root, once
-bun run dev                  # website (vite) + convex dev together, via concurrently
+pnpm install                  # root, once
+pnpm dev                  # website (vite) + convex dev together, via concurrently
                              #   (dev:web / dev:convex run them separately)
-bun run build / lint / test  # everything via turbo
-bun run dmg                  # desktop app + DMG (macOS only)
+pnpm build / lint / test  # everything via turbo
+pnpm dmg                  # desktop app + DMG (macOS only)
 # desktop directly (from apps/desktop): swift build, swift test, ./build.sh, ./make-dmg.sh
-# website e2e locally: E2E_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" bunx turbo test:e2e --filter=website
+# remote stack: pnpm oxlint · pnpm knip · pnpm turbo typecheck --filter=@vitals/* · pnpm turbo test --filter=@vitals/gateway
+# web client: pnpm --filter @vitals/web export → apps/web/dist, served by the gateway; build.sh bundles it
+# android APK: pnpm --filter @vitals/mobile android:dev | android:prod (pnpm manages deps; Bun only compiles and tests the gateway)
+#   release builds sign with the shared upload key (Lumo's) when ~/.gradle/gradle.properties sets VITALS_UPLOAD_{STORE_FILE,STORE_PASSWORD,KEY_ALIAS,KEY_PASSWORD}; otherwise debug-signed. EAS reads the same key from gitignored apps/mobile/credentials.json
+# phone native libs: packages/tailnet/scripts/build-native.sh (Go + gomobile + NDK) builds the embedded Tailscale AAR/xcframework; run it before any native build (outputs are gitignored, so EAS cloud builds need it added first)
+# OTA update: pnpm --filter @vitals/mobile update:dev | update:prod (publishes the JS bundle to that channel)
+# website e2e locally: E2E_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" pnpm turbo test:e2e --filter=marketing
 ```
+
+## Remote routes (phone ↔ Mac)
+
+- Two routes to one device record. **Wi-Fi**: the gateway listens on `0.0.0.0` (`LAN_PORTS`: 47810 stable, 47811 nightly, 47812 dev), serves only `/.well-known/vitals` (public advert with the Mac's X25519 key) and `/lan`, a Noise IK channel (`@vitals/noise`, checked against the cacophony vectors). The proxy maps the phone's static key to its device and pipes decrypted frames into the loopback `/ws`, so auth, scopes, revocation and activity logging are shared. **Tailscale**: unchanged Serve HTTPS + owner identity + token.
+- The Swift app advertises `_vitals._tcp` over Bonjour (TXT `k` key, `n` name, `c` channel, `v`). New Wi-Fi pairings need a click on the Mac (A3 notification, 4-digit code from the handshake hash, 2 min expiry). QR pairing sends the phone's Wi-Fi key; older pairings bind it with `device.lanKey`.
+- `client-runtime` probes routes in parallel (Wi-Fi first, 1.2 s), moves a live session from Tailscale to Wi-Fi make-before-break (60 s check, network change, Bonjour sighting), holds a failed route off for 5 min, and reports route + latency in `Ready`. Wi-Fi is skipped off local networks and until the phone's key is enrolled.
+- macOS 15 must allow both the firewall prompt for `vitals-gateway` and Local Network for the app; the gateway self-tests its Wi-Fi address and reports `lan.reachable`, and Remote shows "waiting for macOS" until it passes. Shell tools run from a terminal are themselves subject to Local Network privacy, so `curl` to the Mac's own LAN IP is not a valid test.
+- Built-in Tailscale (`@vitals/tailnet`, tsnet via gomobile) makes the phone its own tailnet node and tunnels `127.0.0.1:<port>` to the Mac's Wi-Fi listener over the tailnet, so the same Noise route works away from home without the Tailscale app.
 
 ## Desktop architecture
 
@@ -255,6 +279,38 @@ Settings → Desktop Widgets.
   touching any path (`LeftoverScanner.isValidBundleID`).
 - Fan control: clamp to rated RPM range, admin auth, macOS thermal safety stays under.
 
+## Remote (gateway, phone and web clients)
+
+Vitals Remote lets paired phones and browsers on the owner's tailnet watch and control the Mac.
+
+| Path | Role |
+| --- | --- |
+| `apps/desktop/Sources/Vitals/Remote/` | Bridge wire types, gateway process, command router, activity reader |
+| `apps/desktop/Sources/Vitals/Models/RemoteModel.swift` | Gateway lifecycle, routing, Pressure Guard loop, pairing admin |
+| `apps/gateway` | Bun + Effect 4 server, compiled into `Contents/Helpers/vitals-gateway` |
+| `apps/mobile` | Expo SDK 58 native target (Android, iOS) |
+| `apps/web` | Expo SDK 58 web target, exported to `dist` and served by the gateway |
+| `packages/app` | The shared app: screens, state, connection and persistence for both targets |
+| `packages/contracts` | Effect Schema contracts: RPC group, scopes, bridge messages, fixtures |
+| `packages/client-runtime` | Connection supervisor, pairing, stores (shared by every client) |
+| `packages/ui` | Shared React Native components and Skia charts |
+| `packages/shared`, `packages/tailscale` | Formatting, ring buffer, ids; Tailscale CLI wrapper |
+
+Rules:
+- **Swift is the only collector.** The gateway never reads sensors; it asks through the stdio bridge, and remote topics join `currentNeeds` so there is never a second sampler.
+- **Contracts first.** Change `packages/contracts` before either side. Bridge changes update `fixtures/bridge/*.json`, which both `bun test` and `swift test` decode.
+- **Every RPC has a scope** (`RPC_SCOPES` is checked at compile time). Destructive commands need the `destructive` scope, which starts off for every device.
+- **No free-form shell.** Commands are a closed tagged union with fixed Swift implementations. Processes are addressed by pid plus start time, never by name.
+- **Honest readings.** Missing values are `null` on the wire, never 0.
+- **Local only.** The gateway binds 127.0.0.1; `tailscale serve` (port 7443 Stable, 7444 Nightly, 7445 Dev) is the only way in, and the `Tailscale-User-Login` header must match the owner.
+- **Sessions.** Native clients keep their token in the OS keychain (`expo-secure-store`). Browsers never see a token: `/api/pair` sets an `HttpOnly; Secure; SameSite=Strict` cookie named per channel (`vitals_session_<channel>`, path `/api`), `/api/session` reports it, `/api/unpair` revokes the device and expires it. No `localStorage`, `sessionStorage` or IndexedDB on web.
+- **Pairing links.** Browsers pair from `https://<mac>:<port>/pair#code=<code>`. Native apps also accept `<scheme>://pair?link=<url-encoded pairing link>` (`vitals` for prod, `vitals-dev` for dev), and pairing again revokes the device's previous session on the Mac.
+- **Alerts have no third-party push.** While connected, clients get `AlertRaised` events over the socket and raise a local notification. Native clients also run an `expo-background-task` job (about every 15 minutes) that reads the open alerts from `/api/alerts` and notifies each alert id once while it stays open (seen ids live in the keychain and are pruned to the open set on every poll; alerts shown while the app is active count as seen). There is no Firebase or Expo push service. The EAS project is `@prometheus99/vitals-remote`; it hosts builds and OTA updates only, never push.
+- **Two native variants, mandatory OTA.** `APP_VARIANT=prod` builds "Vitals" (`com.syntaxlabtechnology.vitals.remote`, channel `production`); anything else builds "Vitals Dev" (`.dev`, channel `dev`) with the Diagnostics screen in Record. `expo-updates` uses the fingerprint runtime policy, so an update only reaches binaries with matching native code; native changes need a new build. `UpdateGate` checks on launch and every foreground and blocks the app until a found update is applied; there is no skip. Offline launches run the current bundle and check again later. Switching variants locally needs `expo prebuild --clean` because the package name changes.
+- **Activity log is desktop-only.** `~/.vitals*/remote/activity.db` is written by the gateway and read read-only by Vitals; no RPC exposes it to phones.
+- **Tests never fire real power commands.** Router tests use a fake executor; end-to-end runs only cancel inside the grace window.
+- **TypeScript strictness** follows T3 Code: `tsconfig.base.json` flags, oxlint with the React Compiler rules, knip clean, no `any`, no casts.
+
 ## Website
 
 - Implements a Claude Design handoff pixel-faithfully; breakpoint-dependent styles live
@@ -290,11 +346,11 @@ Settings → Desktop Widgets.
   returns the data straight through; the page shows its shimmer/loading state meanwhile.
   This is intentionally simple (it was over-built with a cache + cron + CI deploy/refresh
   once; that was removed). Don't reintroduce tables/crons unless asked.
-- **The repo root is the Convex project root** — *not* inside `apps/website`, so the desktop
+- **The repo root is the Convex project root** — *not* inside `apps/marketing`, so the desktop
   app can use it later. Functions in `convex/`; the `convex` dependency + `convex:dev` /
   `convex:codegen` / `convex:deploy` scripts in the **root** `package.json`; deployment read
   from the **root** `.env.local` (gitignored). Run all convex commands from the repo root.
-  (`CONVEX_AGENT_MODE=anonymous bunx convex dev` forces an anonymous local deployment.)
+  (`CONVEX_AGENT_MODE=anonymous pnpm convex dev` forces an anonymous local deployment.)
 - `releases.ts`: two public **actions** — `list` (all releases, newest-first; throws on a
   GitHub failure → the page shows its error state) and `latest` (the badge; null on
   failure). No queries, mutations, tables, or schema. The fetch/parse lives in the reusable
@@ -303,7 +359,7 @@ Settings → Desktop Widgets.
   (schemaless).
 - **Rate limit, two layers.** (1) GitHub's unauthenticated API is 60 req/hour **per IP** and
   all visitors share the deployment's one IP — set a `GITHUB_TOKEN` env var
-  (`bunx convex env set GITHUB_TOKEN …`) for 5,000/hour; the actions add the auth header when
+  (`pnpm convex env set GITHUB_TOKEN …`) for 5,000/hour; the actions add the auth header when
   present (read via `process.env`, typed by `convex/env.d.ts` since `env` isn't in this
   Convex version's codegen). (2) The **`@convex-dev/rate-limiter` component** (mounted in
   `convex/convex.config.ts`) caps our own egress: a single shared global `githubFetch` token
@@ -319,17 +375,17 @@ Settings → Desktop Widgets.
   `git diff` drift check so a stale committed `_generated` fails the build) then `convex
   deploy` (which also typechecks, installs the rate-limiter component, and pushes). Needs a
   repo secret **`CONVEX_DEPLOY_KEY`** (production deploy key) — separate from the deployment
-  **env var** `GITHUB_TOKEN` (set on the deployment, not in CI). `bun run convex:deploy` does
+  **env var** `GITHUB_TOKEN` (set on the deployment, not in CI). `pnpm convex:deploy` does
   the deploy by hand. The website on Vercel needs `VITE_CONVEX_URL` = the production Convex
   **Cloud URL** (`.convex.cloud`), inlined at build (redeploy after setting). The workflow
   has **no seed/refresh step** — that's what failed before (a deploy key can't run an
   internal action); the live proxy needs none.
-- The website imports the typed API through the **`@convex` alias** (`apps/website`
+- The website imports the typed API through the **`@convex` alias** (`apps/marketing`
   `vite.config.ts` + `tsconfig.app.json` → `../../convex`): `import { api } from
   '@convex/_generated/api'`. `convex/_generated/` is **committed** so that import and the
   website's `tsc -b` resolve without a codegen step; turbo's `globalDependencies` lists
-  `convex/_generated/**`. After changing a function, re-run `bun run convex:codegen`.
-- `bun run lint` runs `turbo lint` **and** typechecks `convex/`. The Convex CLI's opt-in "AI
+  `convex/_generated/**`. After changing a function, re-run `pnpm convex:codegen`.
+- `pnpm lint` runs `turbo lint` **and** typechecks `convex/`. The Convex CLI's opt-in "AI
   files" (`AGENTS.md`, `.agents/`, `skills-lock.json`) are gitignored. For any code under
   `convex/`, use the **convex-expert** subagent.
 
@@ -345,7 +401,7 @@ copied.
 - The user's shell aliases `cd` through zoxide — it can fail inside chained commands.
   Run Bash from absolute paths or put a plain `cd /abs/path` first.
 - Local bun enforces `minimum-release-age` (7 days); use
-  `bun install --minimum-release-age=0` only for versions the user already approved.
+  `pnpm install` only for versions the user already approved.
 - This ffmpeg has no libwebp; use `sips` for image conversion.
 - `screencapture` captures whatever is frontmost at the coordinates — activate the
   target window first and re-read its bounds in the same osascript.

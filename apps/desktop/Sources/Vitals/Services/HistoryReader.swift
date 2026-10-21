@@ -165,3 +165,26 @@ extension Array {
         return (0..<maxCount).map { self[Int((Double($0) * stride).rounded())] }
     }
 }
+
+extension Array where Element == VitalsModel.Sample {
+    /// Keeps the last sample in each fixed-width time bucket, buckets aligned to the
+    /// clock. A point drawn once keeps its place while the window slides, so only the
+    /// newest bucket changes per tick instead of every mark shifting.
+    func bucketed(to maxCount: Int, span: TimeInterval) -> [Element] {
+        guard count > maxCount, maxCount > 1, span > 0 else { return self }
+        let width = span / Double(maxCount)
+        var kept: [Element] = []
+        kept.reserveCapacity(maxCount + 1)
+        var lastBucket: Int?
+        for sample in self {
+            let bucket = Int((sample.time.timeIntervalSince1970 / width).rounded(.down))
+            if bucket == lastBucket, !kept.isEmpty {
+                kept[kept.count - 1] = sample
+            } else {
+                kept.append(sample)
+                lastBucket = bucket
+            }
+        }
+        return kept
+    }
+}

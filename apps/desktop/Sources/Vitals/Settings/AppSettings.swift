@@ -97,6 +97,10 @@ final class AppSettings {
     var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
     var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
+    var remoteEnabled: Bool { didSet { defaults.set(remoteEnabled, forKey: "remoteEnabled") } }
+    var guardSettings: GuardSettings {
+        didSet { defaults.set(try? JSONEncoder().encode(guardSettings), forKey: "guardSettings") }
+    }
     var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     /// Diagnostic log floor (see `Log`), separate from `loggingEnabled`, which is
     /// the readings history.
@@ -196,6 +200,9 @@ final class AppSettings {
         theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
+        remoteEnabled = defaults.bool(forKey: "remoteEnabled")
+        guardSettings = defaults.data(forKey: "guardSettings")
+            .flatMap { try? JSONDecoder().decode(GuardSettings.self, from: $0) } ?? PressureGuard.defaultSettings
 
         // SMAppService.status is an XPC round-trip; loaded async to keep it off the launch path.
         launchAtLogin = false

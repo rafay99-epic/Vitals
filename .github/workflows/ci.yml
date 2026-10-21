@@ -5,7 +5,7 @@ name: CI
 # release builds + publishes only after both pass; on PRs the DMG builds +
 # uploads as an artifact instead. The release-config compile happens inside those
 # build steps (build.sh), so there's no separate build job recompiling the same
-# thing on its own runner. The website has its own workflow (website.yml); each
+# thing on its own runner. The website has its own workflow (marketing.yml); each
 # app triggers only on its own paths.
 #
 # Why one workflow and not a separate Release workflow: two independent workflows
@@ -18,11 +18,23 @@ on:
     branches: [main]
     paths:
       - "apps/desktop/**"
+      - "apps/gateway/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/ci.yml"
       - ".github/scripts/**"
   pull_request:
     paths:
       - "apps/desktop/**"
+      - "apps/gateway/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/ci.yml"
       - ".github/scripts/**"
 
@@ -68,6 +80,15 @@ jobs:
     needs: [test, lint]
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
       - name: Build app and installer
         run: |
           ./build.sh
@@ -110,6 +131,17 @@ jobs:
           MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
           MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
 
       - name: Build app and installer
         run: |

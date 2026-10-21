@@ -3,7 +3,7 @@ name: Labeler
 # Auto-applies area:* labels to PRs based on the paths they touch. The label
 # rules live in .github/labeler.yml and mirror the path filters in the other
 # CI workflows, so the label tells you at a glance which pipelines a PR is
-# exercising (area:desktop → ci.yml/nightly.yml, area:website → website.yml,
+# exercising (area:desktop → ci.yml/nightly.yml, area:website → marketing.yml,
 # area:backend → convex.yml, area:ci → all of the above, area:docs → none).
 #
 # Uses `pull_request_target` so the action has `pull-requests: write` even on

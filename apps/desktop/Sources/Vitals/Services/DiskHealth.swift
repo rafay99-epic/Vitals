@@ -3,7 +3,7 @@ import IOKit
 import PrivateSensors
 
 /// The internal SSD's NVMe SMART log.
-struct DiskHealthSnapshot {
+struct DiskHealthSnapshot: Equatable {
     let model: String?
     let capacityBytes: Int64?
     /// NVMe "percentage used": 0 = fresh, 100 = rated endurance consumed. Can exceed 100.

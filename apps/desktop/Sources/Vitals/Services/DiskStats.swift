@@ -3,7 +3,7 @@ import IOKit
 
 /// Whole-machine disk throughput for one tick, summed over every block-storage
 /// driver. 0 on the first sample.
-struct DiskIOSnapshot: Sendable {
+struct DiskIOSnapshot: Equatable, Sendable {
     var readPerSec: Double      // bytes/s, summed over drivers
     var writePerSec: Double
 }
@@ -17,8 +17,22 @@ final class DiskStats {
     private var previousCounters: [UInt64: (read: UInt64, written: UInt64)] = [:]
     private var previousTimestamp: UInt64?  // CLOCK_UPTIME_RAW nanoseconds
 
+    /// Matching every driver each tick walks the IORegistry, so the list is kept
+    /// and re-matched every minute, or as soon as a listed driver stops
+    /// answering, to pick up attached and ejected drives.
+    private var drivers: [(id: UInt64, service: io_object_t)] = []
+    private var listedAt = Date.distantPast
+    private static let relistInterval: TimeInterval = 60
+
+    deinit { drivers.forEach { IOObjectRelease($0.service) } }
+
     func sample() -> DiskIOSnapshot {
-        let counters = Self.readDriverCounters()
+        if drivers.isEmpty || Date().timeIntervalSince(listedAt) >= Self.relistInterval { relist() }
+        var counters = readCounters()
+        if counters.count < drivers.count {
+            relist()
+            counters = readCounters()
+        }
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         // 0 on the first call, which makes every rate 0.
         let elapsed: TimeInterval = previousTimestamp.map { Double(now - $0) / 1_000_000_000 } ?? 0
@@ -46,34 +60,44 @@ final class DiskStats {
     private static let bytesReadKey = "Bytes (Read)"
     private static let bytesWrittenKey = "Bytes (Write)"
 
-    /// Drivers without readable statistics are skipped.
-    private static func readDriverCounters() -> [(id: UInt64, read: UInt64, written: UInt64)] {
+    private func relist() {
+        drivers.forEach { IOObjectRelease($0.service) }
+        drivers = []
+        listedAt = Date()
         var iterator = io_iterator_t()
         guard IOServiceGetMatchingServices(
             kIOMainPortDefault,
             IOServiceMatching("IOBlockStorageDriver"),
             &iterator
-        ) == KERN_SUCCESS else { return [] }
+        ) == KERN_SUCCESS else { return }
         defer { IOObjectRelease(iterator) }
-
-        var counters: [(id: UInt64, read: UInt64, written: UInt64)] = []
-        while true {
-            let service = IOIteratorNext(iterator)
-            guard service != 0 else { break }
-            defer { IOObjectRelease(service) }
-
+        while case let service = IOIteratorNext(iterator), service != 0 {
             var entryID: UInt64 = 0
             guard IORegistryEntryGetRegistryEntryID(service, &entryID) == KERN_SUCCESS,
-                  let statistics = IORegistryEntryCreateCFProperty(
-                      service, statisticsKey as CFString, kCFAllocatorDefault, 0
-                  )?.takeRetainedValue() as? [String: Any]
-            else { continue }
-
-            let read = (statistics[bytesReadKey] as? NSNumber)?.uint64Value
-            let written = (statistics[bytesWrittenKey] as? NSNumber)?.uint64Value
-            guard let read, let written else { continue }
-            counters.append((id: entryID, read: read, written: written))
+                  Self.counters(of: service) != nil
+            else {
+                IOObjectRelease(service)
+                continue
+            }
+            drivers.append((id: entryID, service: service))
         }
-        return counters
+    }
+
+    /// Only drivers with readable statistics are listed, so a shorter result
+    /// means a drive went away.
+    private func readCounters() -> [(id: UInt64, read: UInt64, written: UInt64)] {
+        drivers.compactMap { driver in
+            Self.counters(of: driver.service).map { (id: driver.id, read: $0.read, written: $0.written) }
+        }
+    }
+
+    private static func counters(of service: io_object_t) -> (read: UInt64, written: UInt64)? {
+        guard let statistics = IORegistryEntryCreateCFProperty(
+            service, statisticsKey as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as? [String: Any],
+            let read = (statistics[bytesReadKey] as? NSNumber)?.uint64Value,
+            let written = (statistics[bytesWrittenKey] as? NSNumber)?.uint64Value
+        else { return nil }
+        return (read, written)
     }
 }

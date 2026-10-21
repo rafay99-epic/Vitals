@@ -19,13 +19,15 @@ on:
     paths:
       - "convex/**"
       - "package.json"
-      - "bun.lock"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/convex.yml"
   pull_request:
     paths:
       - "convex/**"
       - "package.json"
-      - "bun.lock"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/convex.yml"
 
 jobs:
@@ -34,28 +36,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
       - name: Install
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Typecheck convex/
-        run: bunx tsc -p convex/tsconfig.json --noEmit
+        run: pnpm tsc -p convex/tsconfig.json --noEmit
 
   website:
     name: Website (lint, test, build, e2e)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
       - name: Install
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Lint, test, build
-        run: bunx turbo lint test build --filter=website
+        run: pnpm turbo lint test build --filter=marketing
       - name: End-to-end checks (system Chrome)
-        run: bunx turbo test:e2e --filter=website
+        run: pnpm turbo test:e2e --filter=marketing
 
   deploy:
     name: Codegen + deploy
@@ -65,19 +77,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
       - name: Install
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Codegen (and verify the committed output is current)
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: |
-          bunx convex codegen
+          pnpm convex codegen
           git diff --exit-code convex/_generated \
-            || { echo "::error::convex/_generated is stale — run 'bun run convex:codegen' and commit it"; exit 1; }
+            || { echo "::error::convex/_generated is stale — run 'pnpm convex:codegen' and commit it"; exit 1; }
       - name: Deploy
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: bunx convex deploy --yes
+        run: pnpm convex deploy --yes

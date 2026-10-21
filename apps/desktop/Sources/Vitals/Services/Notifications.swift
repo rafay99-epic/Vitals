@@ -14,12 +14,32 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     enum Category {
         static let updateAvailable = "vitals.update.available"
         static let updateReady = "vitals.update.ready"
+        static let remoteGrace = "vitals.remote.grace"
+        static let remotePressure = "vitals.remote.pressure"
+        static let remotePair = "vitals.remote.pair"
     }
     enum Action {
         static let download = "vitals.update.download"
         static let install = "vitals.update.install"
         static let later = "vitals.update.later"
+        static let cancelCommand = "vitals.remote.cancel"
+        static let calmDown = "vitals.remote.calm"
+        static let allowPair = "vitals.remote.pair.allow"
+        static let denyPair = "vitals.remote.pair.deny"
     }
+
+    enum RemoteAction: Equatable {
+        case cancelCommand(String)
+        case calmDown
+        case resolvePair(id: String, allow: Bool)
+    }
+
+    /// Pair prompts post under this prefix so an Allow/Deny tap can recover the prompt id.
+    nonisolated static func pairNotificationId(_ promptId: String) -> String { "vitals.remote.pair.\(promptId)" }
+
+    static let shared = NotificationManager()
+
+    var onRemoteAction: ((RemoteAction) -> Void)?
 
     enum UpdateAction { case download, install }
 
@@ -28,7 +48,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     private var requestedAuthorization = false
 
-    override init() {
+    private override init() {
         super.init()
         guard Self.supported else { return }
         // Register at launch, before authorization and regardless of the
@@ -55,7 +75,14 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             identifier: Category.updateReady, actions: [install, later],
             intentIdentifiers: [], options: []
         )
-        center.setNotificationCategories([available, ready])
+        let cancel = UNNotificationAction(identifier: Action.cancelCommand, title: "Cancel", options: [.destructive])
+        let calm = UNNotificationAction(identifier: Action.calmDown, title: "Calm down", options: [])
+        let grace = UNNotificationCategory(identifier: Category.remoteGrace, actions: [cancel], intentIdentifiers: [], options: [])
+        let pressure = UNNotificationCategory(identifier: Category.remotePressure, actions: [calm], intentIdentifiers: [], options: [])
+        let allowPair = UNNotificationAction(identifier: Action.allowPair, title: "Allow", options: [])
+        let denyPair = UNNotificationAction(identifier: Action.denyPair, title: "Deny", options: [.destructive])
+        let pair = UNNotificationCategory(identifier: Category.remotePair, actions: [allowPair, denyPair], intentIdentifiers: [], options: [])
+        center.setNotificationCategories([available, ready, grace, pressure, pair])
     }
 
     func requestAuthorizationIfNeeded() {
@@ -71,6 +98,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// `categoryId` (one of `Category`) attaches the update action buttons.
+    func remove(id: String) {
+        guard Self.supported else { return }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [id])
+    }
+
     func send(title: String, body: String, id: String, categoryId: String? = nil) {
         guard Self.supported else { return }
         let content = UNMutableNotificationContent()
@@ -98,9 +130,8 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     /// A banner-body tap does the category's primary action; "Later" just dismisses.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
+        didReceive response: UNNotificationResponse
+    ) async {
         let category = response.notification.request.content.categoryIdentifier
         let action = response.actionIdentifier
         let resolved: UpdateAction?
@@ -120,9 +151,24 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         default:
             resolved = nil  // "Later", dismiss, or an unrelated category
         }
-        if let resolved {
-            Task { @MainActor in self.onUpdateAction?(resolved) }
+        let identifier = response.notification.request.identifier
+        let remote = Self.remoteAction(action, identifier: identifier)
+        await MainActor.run {
+            if let resolved { self.onUpdateAction?(resolved) }
+            if let remote { self.onRemoteAction?(remote) }
         }
-        completionHandler()
+    }
+
+    /// Maps a tapped action on a remote notification back to what the remote model should do.
+    nonisolated static func remoteAction(_ action: String, identifier: String) -> RemoteAction? {
+        switch action {
+        case Action.cancelCommand: return .cancelCommand(identifier)
+        case Action.calmDown: return .calmDown
+        case Action.allowPair, Action.denyPair:
+            let prefix = pairNotificationId("")
+            guard identifier.hasPrefix(prefix) else { return nil }
+            return .resolvePair(id: String(identifier.dropFirst(prefix.count)), allow: action == Action.allowPair)
+        default: return nil
+        }
     }
 }

@@ -1,0 +1,86 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "eslint",
+    "oxc",
+    "react",
+    "unicorn",
+    "typescript"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "build",
+    ".expo",
+    "apps/mobile/android/**",
+    "apps/mobile/ios/**",
+    "apps/marketing/src/routeTree.gen.ts",
+    "convex/_generated/**",
+    "**/*.d.ts"
+  ],
+  "rules": {
+    "unicorn/no-array-sort": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "oxc/no-map-spread": "off",
+    "react-in-jsx-scope": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "eslint/no-shadow": "off",
+    "eslint/no-await-in-loop": "off",
+    "eslint/no-underscore-dangle": "off",
+    "typescript/consistent-return": "off",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/ban-ts-comment": "error",
+    "eslint/no-console": [
+      "error",
+      {
+        "allow": [
+          "warn",
+          "error"
+        ]
+      }
+    ],
+    "eslint/no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "effect/unstable",
+            "message": "Effect 4 ships stable modules; import from effect/<module>."
+          }
+        ]
+      }
+    ],
+    "react/style-prop-object": "off",
+    "react/capitalized-calls": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/test/**"
+      ],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "eslint/no-console": "off"
+      }
+    },
+    {
+      "files": [
+        "apps/marketing/**",
+        "convex/**",
+        "**/scripts/**",
+        "**/e2e/**"
+      ],
+      "rules": {
+        "eslint/no-console": "off"
+      }
+    }
+  ]
+}

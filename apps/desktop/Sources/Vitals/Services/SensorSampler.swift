@@ -18,6 +18,7 @@ actor SensorSampler {
         let diskHealth: DiskHealthSnapshot?
         let network: NetworkSnapshot?
         let diskIO: DiskIOSnapshot?
+        let processTable: [ProcessSampler.Row]
     }
 
     private let hid = HIDSensors()
@@ -36,6 +37,12 @@ actor SensorSampler {
     private var batteryHealthCheckedAt = Date.distantPast
     private static let batteryHealthInterval: TimeInterval = 12 * 3600
 
+    // Read every tick while something shows it, otherwise every 10 s (the
+    // history cadence). The last reading stands in between.
+    private var battery: BatterySnapshot?
+    private var batteryReadAt = Date.distantPast
+    private static let idleBatteryInterval: TimeInterval = 10
+
     // SMART changes over hours: refreshed every 5 minutes.
     private var diskHealth: DiskHealthSnapshot?
     private var diskHealthCheckedAt = Date.distantPast
@@ -50,6 +57,11 @@ actor SensorSampler {
         var power = false
         /// Wi-Fi link details and the default route.
         var networkDetails = false
+        var processTable = false
+        /// A surface shows battery state; otherwise it refreshes every 10 s.
+        var battery = false
+        /// SSD and battery temperatures, shown but never logged.
+        var peripheralTemps = false
     }
 
     /// The previous tick's needs. Power and process CPU are deltas against the
@@ -62,15 +74,17 @@ actor SensorSampler {
         // CoreWLAN and IOKit return autoreleased objects; drain them per sample
         // so they don't pile up on the actor's thread.
         return autoreleasepool {
-            let battery = Battery.read(officialHealth: batteryHealth)
-            if battery != nil { refreshBatteryHealthIfStale() }
+            let battery = readBattery(live: needs.battery)
             refreshDiskHealthIfStale()
-            var processes = needs.topProcesses ? processSampler.sample(top: 5) : .empty
-            if !previousNeeds.topProcesses { processes = .empty }
+            let sweep = needs.topProcesses || needs.processTable
+            var processes = sweep ? processSampler.sample(top: 5, includeTable: needs.processTable) : .empty
+            if !(previousNeeds.topProcesses || previousNeeds.processTable) {
+                processes = ProcessSampler.Sampled(byCPU: [], byMemory: [], table: processes.table)
+            }
             var powerReading = needs.power ? power.sample() : nil
             if !previousNeeds.power { powerReading = nil }
             return Snapshot(
-                sensors: VitalsModel.classify(hid.readAll())
+                sensors: VitalsModel.classify(hid.read(needs.peripheralTemps ? [.cpu, .gpu, .storage, .battery] : [.cpu, .gpu]))
                     .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending },
                 fans: smc?.fans() ?? [],
                 hasSMC: smc != nil,
@@ -85,9 +99,19 @@ actor SensorSampler {
                 // Byte counters are one sysctl, read every tick so the menu bar
                 // and history get a continuous series.
                 network: network.sample(includeDetails: needs.networkDetails),
-                diskIO: disk.sample()
+                diskIO: disk.sample(),
+                processTable: processes.table
             )
         }
+    }
+
+    private func readBattery(live: Bool) -> BatterySnapshot? {
+        let now = Date()
+        guard live || now.timeIntervalSince(batteryReadAt) >= Self.idleBatteryInterval else { return battery }
+        batteryReadAt = now
+        battery = Battery.read(officialHealth: batteryHealth)
+        if battery != nil { refreshBatteryHealthIfStale() }
+        return battery
     }
 
     /// Reads off the actor when stale. The time is stamped up front so a slow

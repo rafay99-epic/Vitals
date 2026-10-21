@@ -32,7 +32,7 @@ private func runProbe() {
     print("== Vitals probe ==")
     print(HardwareInfo.chipName, "·", HardwareInfo.osVersion)
 
-    let readings = HIDSensors().readAll()
+    let readings = HIDSensors(keepUnused: true).read([.cpu, .gpu, .storage, .battery, .other])
     print("\n\(readings.count) temperature sensors:")
     for reading in readings.sorted(by: { $0.name < $1.name }) {
         print(String(format: "  %-36s %6.2f °C", (reading.name as NSString).utf8String!, reading.celsius))

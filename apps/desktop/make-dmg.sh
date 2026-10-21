@@ -86,7 +86,13 @@ then
 fi
 
 sync
-hdiutil detach "$DEVICE" >/dev/null
+# Finder or Spotlight can hold the volume for a few seconds after the layout
+# step ("Resource busy"), so retry before forcing it.
+for attempt in 1 2 3 4 5; do
+  hdiutil detach "$DEVICE" >/dev/null 2>&1 && break
+  [ "$attempt" = 5 ] && hdiutil detach "$DEVICE" -force >/dev/null
+  sleep 2
+done
 trap - EXIT
 
 echo "Compressing…"

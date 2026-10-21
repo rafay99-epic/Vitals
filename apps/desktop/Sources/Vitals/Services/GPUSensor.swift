@@ -3,7 +3,7 @@ import IOKit
 import Metal
 
 /// One read of the GPU. A field that can't be read is nil.
-struct GPUSnapshot {
+struct GPUSnapshot: Equatable {
     /// Marketing name from Metal, e.g. "Apple M1 Pro".
     let name: String?
     /// Busy percentage, 0...100.

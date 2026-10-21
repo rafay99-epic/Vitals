@@ -1,109 +1,4 @@
 import SwiftUI
-import AppKit
-
-/// One shared formatter: the class-method form allocates per call, and size
-/// labels render across hundreds of rows.
-@MainActor private let byteFormatter: ByteCountFormatter = {
-    let formatter = ByteCountFormatter()
-    formatter.countStyle = .file
-    return formatter
-}()
-
-@MainActor func formatBytes(_ bytes: UInt64) -> String {
-    byteFormatter.string(fromByteCount: Int64(bytes))
-}
-
-/// Process-wide icon cache. `NSWorkspace.icon(forFile:)` hits disk and decodes
-/// the image, so misses load off-main via `Task.detached`.
-enum AppIconCache {
-    /// The largest size any row draws an icon at is 28 pt; bake a 32 pt @2x
-    /// (64 px) bitmap so it stays crisp everywhere while costing a fixed ~16 KB.
-    private static let logicalSize = NSSize(width: 32, height: 32)
-    private static let backingScale = 2
-
-    private static let cache: NSCache<NSURL, NSImage> = {
-        let cache = NSCache<NSURL, NSImage>()
-        // Flattening is what bounds memory: ~16 KB per icon, one per installed
-        // app. `countLimit` is a soft backstop (NSCache may briefly exceed it),
-        // not a hard cap; unbounded, it only evicted under memory pressure.
-        cache.countLimit = 512
-        return cache
-    }()
-
-    /// Instant cache check, nil on miss. `NSCache` is thread-safe.
-    static func cached(for url: URL) -> NSImage? {
-        cache.object(forKey: url as NSURL)
-    }
-
-    /// Synchronous icon load; call off-main. `NSWorkspace` and `NSCache` are both
-    /// thread-safe, so no actor hop is needed. Caches the flattened icon.
-    nonisolated static func loadIcon(for url: URL) -> NSImage {
-        let icon = flatten(NSWorkspace.shared.icon(forFile: url.path))
-        cache.setObject(icon, forKey: url as NSURL)
-        return icon
-    }
-
-    /// `NSWorkspace.icon(forFile:)` returns a multi-representation image whose
-    /// ICNS reps run up to 512×512 / 1024×1024 — setting `.size` only changes
-    /// the *draw* size, so those full-res bitmaps stay resident (~100 KB–1 MB
-    /// each). Redraw once into a single small bitmap and cache that instead, so
-    /// a few hundred cached icons cost megabytes, not hundreds of them.
-    nonisolated static func flatten(_ source: NSImage) -> NSImage {
-        let pixelsWide = Int(logicalSize.width) * backingScale
-        let pixelsHigh = Int(logicalSize.height) * backingScale
-        guard let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: pixelsWide, pixelsHigh: pixelsHigh,
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-        ) else {
-            // Bitmap allocation failed — fall back to the sized original rather
-            // than nothing. Rare, and still correct, just not shrunk.
-            source.size = logicalSize
-            return source
-        }
-        rep.size = logicalSize
-        NSGraphicsContext.saveGraphicsState()
-        if let context = NSGraphicsContext(bitmapImageRep: rep) {
-            NSGraphicsContext.current = context
-            context.imageInterpolation = .high
-            source.draw(in: NSRect(origin: .zero, size: logicalSize))
-        }
-        NSGraphicsContext.restoreGraphicsState()
-        let icon = NSImage(size: logicalSize)
-        icon.addRepresentation(rep)
-        return icon
-    }
-}
-
-/// An app icon that loads off-main on a cache miss, with a neutral placeholder
-/// meanwhile.
-struct AppIconView: View {
-    let url: URL
-    let size: CGFloat
-    @State private var image: NSImage?
-
-    var body: some View {
-        ZStack {
-            if let image {
-                Image(nsImage: image).resizable()
-            } else {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(.quaternary.opacity(0.4))
-            }
-        }
-        .frame(width: size, height: size)
-        .task(id: url) {
-            if let cached = AppIconCache.cached(for: url) {
-                image = cached
-            } else {
-                image = await Task.detached(priority: .userInitiated) {
-                    AppIconCache.loadIcon(for: url)
-                }.value
-            }
-        }
-    }
-}
 
 /// The Applications section: every uninstallable app, multi-selectable, with a
 /// leftover-aware uninstall.
@@ -138,16 +33,7 @@ struct AppsView: View {
     // MARK: Hero
 
     private var hero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(model.apps.count) applications")
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .contentTransition(.numericText())
-                Text(heroSubtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        PageHero(value: "\(model.apps.count) applications", subtitle: heroSubtitle) {
             searchField
             Picker("", selection: $model.sortOrder) {
                 ForEach(AppsModel.SortOrder.allCases) { order in
@@ -250,33 +136,26 @@ struct AppsView: View {
                             .opacity(0.35)
                             .padding(.leading, 66)
                     }
-                    AppRow(app: app, isSelected: selectionBinding(for: app))
+                    AppRow(
+                        app: app,
+                        isSelected: app.protectedReason == nil && model.selection.contains(app.id),
+                        toggle: { toggleSelection(app) }
+                    )
+                    .equatable()
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.quaternary.opacity(0.3))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(.separator.opacity(0.5), lineWidth: 1)
-            )
+            .insetCard()
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
-    private func selectionBinding(for app: InstalledApp) -> Binding<Bool> {
-        Binding(
-            get: { app.protectedReason == nil && model.selection.contains(app.id) },
-            set: { selected in
-                guard app.protectedReason == nil else { return }
-                if selected {
-                    model.selection.insert(app.id)
-                } else {
-                    model.selection.remove(app.id)
-                }
-            }
-        )
+    private func toggleSelection(_ app: InstalledApp) {
+        guard app.protectedReason == nil else { return }
+        if model.selection.contains(app.id) {
+            model.selection.remove(app.id)
+        } else {
+            model.selection.insert(app.id)
+        }
     }
 
     private var allVisibleSelected: Bool {
@@ -333,19 +212,22 @@ struct AppsView: View {
 
 // MARK: - Row
 
-private struct AppRow: View {
+private struct AppRow: View, Equatable {
     let app: InstalledApp
-    @Binding var isSelected: Bool
+    let isSelected: Bool
+    let toggle: () -> Void
     @State private var hovered = false
+
+    static func == (lhs: AppRow, rhs: AppRow) -> Bool {
+        lhs.app == rhs.app && lhs.isSelected == rhs.isSelected
+    }
 
     var body: some View {
         Button {
-            isSelected.toggle()
+            toggle()
         } label: {
             HStack(spacing: 11) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 15))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                SelectionMark(selected: isSelected, size: 15)
                 AppIconView(url: app.id, size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
@@ -354,10 +236,7 @@ private struct AppRow: View {
                         if app.isRunning {
                             Text("Running")
                                 .font(.caption2.weight(.medium))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(.green.opacity(0.16)))
-                                .foregroundStyle(.green)
+                                .capsuleTag(.green, fill: 0.16, horizontal: 5, vertical: 1)
                         }
                         if app.requiresAdmin && app.protectedReason == nil {
                             Image(systemName: "lock")
@@ -407,342 +286,5 @@ private struct AppRow: View {
                     ? AnyShapeStyle(Color.accentColor.opacity(0.10))
                     : hovered ? AnyShapeStyle(.quaternary.opacity(0.4)) : AnyShapeStyle(.clear)
             )
-    }
-}
-
-// MARK: - Confirmation sheet
-
-/// Shows exactly what will be removed, and whether it goes to the Trash or is
-/// deleted permanently, before anything happens.
-private struct UninstallConfirmationSheet: View {
-    @Bindable var model: AppsModel
-    let staged: AppsModel.StagedUninstall
-
-    private var hasSystem: Bool {
-        model.staged?.needsAdmin ?? staged.needsAdmin
-    }
-
-    var body: some View {
-        Group {
-            if let progress = model.uninstallProgress {
-                UninstallProgressView(progress: progress)
-            } else if let outcome = model.lastOutcome {
-                UninstallSummaryView(outcome: outcome) { model.finishUninstall() }
-            } else {
-                confirmation
-            }
-        }
-        // Fixed width + shared min height so the sheet doesn't resize between the
-        // confirm / progress / summary states.
-        .frame(width: 560)
-        .frame(minHeight: 340, alignment: .top)
-        .animation(.easeInOut(duration: 0.2), value: model.uninstallProgress == nil)
-        .animation(.easeInOut(duration: 0.2), value: model.lastOutcome == nil)
-    }
-
-    private var confirmation: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label(hasSystem ? "Uninstall completely?" : "Move to Trash?", systemImage: "trash")
-                .font(.title3.weight(.semibold))
-            Text(introText)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if staged.apps.contains(where: \.isRunning) {
-                noteLabel(
-                    "Running apps will be quit first: \(staged.apps.filter(\.isRunning).map(\.name).joined(separator: ", "))",
-                    "exclamationmark.triangle", .orange)
-            }
-            if !staged.casks.isEmpty {
-                noteLabel("Homebrew apps are removed with brew uninstall --cask --zap (also clears their config & data).", "mug", .secondary)
-            }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(staged.apps) { app in
-                        appSection(app)
-                    }
-                }
-            }
-            .frame(minHeight: 200, maxHeight: 360)
-
-            HStack {
-                Text("Total \(formatBytes(currentTotal))")
-                    .font(.callout.weight(.medium))
-                    .monospacedDigit()
-                if hasSystem {
-                    Label("admin", systemImage: "lock.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Cancel") { model.staged = nil }
-                    .keyboardShortcut(.cancelAction)
-                Button(hasSystem ? "Uninstall" : "Move to Trash") { model.executeStagedUninstall() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-            }
-        }
-        .padding(20)
-    }
-
-    private var introText: String {
-        var text = "The app and the checked items below are removed — user files go to the Trash, so you can recover them. Uncheck anything you want to keep."
-        if hasSystem {
-            text += " Items marked 🔒 — system files and pkg-installed apps — are removed permanently and need your administrator password."
-        }
-        return text
-    }
-
-    private func noteLabel(_ text: String, _ symbol: String, _ color: Color) -> some View {
-        Label(text, systemImage: symbol)
-            .font(.callout)
-            .foregroundStyle(color)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var currentTotal: UInt64 {
-        // Read live from the model so unchecking items updates the total.
-        model.staged?.totalBytes ?? staged.totalBytes
-    }
-
-    private func appSection(_ app: InstalledApp) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                AppIconView(url: app.id, size: 20)
-                Text(app.name).fontWeight(.semibold)
-                if staged.casks[app.id] != nil {
-                    Text("Homebrew")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(.yellow.opacity(0.18)))
-                        .foregroundStyle(.yellow)
-                }
-                if staged.bundlesNeedingAdmin.contains(app.id) {
-                    Label("admin · permanent", systemImage: "lock.fill")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(.orange.opacity(0.16)))
-                        .foregroundStyle(.orange)
-                        .help("Installed by a pkg (root-owned) — removed permanently with your password")
-                }
-                Spacer()
-                Text(app.sizeBytes.map(formatBytes) ?? "")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(staged.leftovers[app.id] ?? []) { leftover in
-                leftoverRow(leftover)
-            }
-            if (staged.leftovers[app.id] ?? []).isEmpty {
-                Text("No leftover files found.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.leading, 28)
-            }
-            if let extensions = staged.systemExtensions[app.id], !extensions.isEmpty {
-                Label(
-                    "Has a system extension — remove it manually in System Settings ▸ General ▸ Login Items & Extensions; a restart may be needed.",
-                    systemImage: "puzzlepiece.extension"
-                )
-                .font(.caption2)
-                .foregroundStyle(.orange)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 28)
-            }
-        }
-    }
-
-    private func leftoverRow(_ leftover: Leftover) -> some View {
-        HStack(spacing: 8) {
-            Toggle("", isOn: Binding(
-                get: { !(model.staged?.excluded.contains(leftover.id) ?? false) },
-                set: { include in
-                    if include {
-                        model.staged?.excluded.remove(leftover.id)
-                    } else {
-                        model.staged?.excluded.insert(leftover.id)
-                    }
-                }
-            ))
-            .labelsHidden()
-            .toggleStyle(.checkbox)
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 4) {
-                    if leftover.requiresAdmin {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.orange)
-                            .help("System file — removed permanently with admin rights")
-                    }
-                    Text(leftover.id.lastPathComponent)
-                        .font(.caption)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Text("\(leftover.category.rawValue)\(leftover.requiresAdmin ? " · permanent" : "") · \(abbreviatedPath(leftover.id))")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer()
-            Text(formatBytes(leftover.sizeBytes))
-                .font(.caption)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-        .padding(.leading, 28)
-    }
-
-    private func abbreviatedPath(_ url: URL) -> String {
-        url.deletingLastPathComponent().path
-            .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
-    }
-}
-
-// MARK: - Live progress
-
-/// Shown in place of the confirmation while the uninstall runs: the current
-/// step, a bar (or spinner for one app), and per-app results as they finish.
-private struct UninstallProgressView: View {
-    let progress: AppsModel.UninstallProgress
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label("Uninstalling…", systemImage: "trash")
-                .font(.title3.weight(.semibold))
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(progress.phase.label)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .contentTransition(.identity)
-                if progress.totalApps > 1 {
-                    ProgressView(value: progress.fraction)
-                        .progressViewStyle(.linear)
-                    Text("\(progress.completedApps) of \(progress.totalApps) apps")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                } else {
-                    ProgressView()
-                        .progressViewStyle(.linear)
-                }
-            }
-
-            if !progress.results.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(progress.results) { result in
-                            resultRow(result)
-                        }
-                    }
-                }
-                .frame(minHeight: 60, maxHeight: 220)
-            }
-        }
-        .padding(20)
-    }
-
-    private func resultRow(_ result: AppsModel.AppResult) -> some View {
-        let style = Self.rowStyle(result.outcome)
-        return HStack(spacing: 8) {
-            AppIconView(url: result.id, size: 18)
-            Text(result.name).fontWeight(.medium)
-            Spacer()
-            Text(style.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-            Image(systemName: style.symbol)
-                .font(.system(size: 13))
-                .foregroundStyle(style.tint)
-        }
-        .font(.callout)
-    }
-
-    /// View-layer formatting of a model `AppResult.Outcome` into icon + copy, so
-    /// the model stays free of UI strings and byte formatting.
-    private static func rowStyle(_ outcome: AppsModel.AppResult.Outcome) -> (symbol: String, tint: Color, detail: String) {
-        switch outcome {
-        case .trashed(let items, let bytes):
-            return ("checkmark.circle.fill", .green, "\(items) item\(items == 1 ? "" : "s") · \(formatBytes(bytes))")
-        case .homebrew:
-            return ("checkmark.circle.fill", .green, "Removed with Homebrew")
-        case .removedViaAdmin:
-            return ("checkmark.circle.fill", .green, "Removed (system)")
-        case .pendingAdmin:
-            return ("lock.fill", .orange, "Needs your password")
-        case .failed(let items):
-            return ("exclamationmark.triangle.fill", .orange,
-                    "\(items) item\(items == 1 ? "" : "s") couldn't be removed")
-        }
-    }
-}
-
-// MARK: - Finished summary
-
-/// Replaces the progress view once the run completes, so the flow stays one
-/// sheet (confirm, run, done).
-private struct UninstallSummaryView: View {
-    let outcome: AppUninstaller.Outcome
-    let onDone: () -> Void
-
-    private var clean: Bool { outcome.failures.isEmpty && outcome.errorMessage == nil && !outcome.adminCancelled }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(clean ? "Uninstall finished" : "Uninstall incomplete",
-                  systemImage: clean ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(clean ? Color.green : .orange)
-
-            VStack(alignment: .leading, spacing: 6) {
-                summaryRow("Moved to Trash", "\(outcome.trashed.count) items · \(formatBytes(outcome.freedBytes))")
-                if outcome.systemRemoved > 0 {
-                    summaryRow("Removed permanently", "\(outcome.systemRemoved) system files")
-                }
-                if outcome.caskUninstalled > 0 {
-                    summaryRow("Homebrew", "\(outcome.caskUninstalled) uninstalled")
-                }
-                if !outcome.failures.isEmpty {
-                    summaryRow("Couldn't remove", "\(outcome.failures.count) (in use or protected)", warn: true)
-                }
-                if let error = outcome.errorMessage {
-                    summaryRow("System removal", error, warn: true)
-                }
-                if outcome.adminCancelled {
-                    summaryRow("System files kept", "password cancelled", warn: true)
-                }
-            }
-
-            HStack {
-                Spacer()
-                Button("Done", action: onDone)
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(20)
-    }
-
-    private func summaryRow(_ label: String, _ value: String, warn: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: warn ? "exclamationmark.circle" : "checkmark.circle")
-                .font(.system(size: 12))
-                .foregroundStyle(warn ? Color.orange : .secondary)
-                .frame(width: 18)
-            Text(label).foregroundStyle(.secondary)
-            Spacer(minLength: 12)
-            Text(value)
-                .font(.system(.callout, design: .rounded, weight: .medium))
-                .multilineTextAlignment(.trailing)
-        }
-        .font(.callout)
     }
 }

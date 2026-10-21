@@ -1,0 +1,5 @@
+{
+  "platforms": ["android", "apple"],
+  "android": { "modules": ["expo.modules.vitalstailnet.VitalsTailnetModule"] },
+  "apple": { "modules": ["VitalsTailnetModule"] }
+}

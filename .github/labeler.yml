@@ -11,7 +11,7 @@
 "area:website":
   - changed-files:
       - any-glob-to-any-file:
-          - "apps/website/**"
+          - "apps/marketing/**"
 
 "area:backend":
   - changed-files:

@@ -3,7 +3,7 @@ import PrivateSensors
 
 /// SoC rail power in watts: IOReport energy deltas over elapsed time. The Neural
 /// Engine reads near zero unless Core ML or vision work is running.
-struct PowerSnapshot {
+struct PowerSnapshot: Equatable {
     let cpuWatts: Double
     let gpuWatts: Double
     let aneWatts: Double

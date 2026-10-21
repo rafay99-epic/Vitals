@@ -23,9 +23,7 @@ private struct TemperaturesCard: View {
             if model.hasLoaded && model.cpuSensors.isEmpty && model.gpuTemp == nil
                 && model.ssdTemp == nil && model.batteryTemp == nil {
                 // Only after the first sample, so first mount doesn't flash "unavailable".
-                Text("Temperature sensors are unavailable on this Mac.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("Temperature sensors are unavailable on this Mac.")
             } else {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 24) {

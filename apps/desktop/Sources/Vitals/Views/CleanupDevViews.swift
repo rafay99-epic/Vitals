@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 /// Cleanup's Developer page: per-project regenerable build artifacts, deleted
 /// permanently. Display-only; every filesystem call goes through `CleanupModel`.
@@ -64,35 +63,17 @@ struct CleanupDeveloperPage: View {
     // MARK: Hero
 
     private var hero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(heroValue)
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                Text("Build artifacts and dependencies — all regenerable")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if model.isDevScanning {
-                ProgressView()
-                    .controlSize(.small)
-                Button(role: .cancel) { model.stopDevScan() } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                .controlSize(.large)
-                .help("Stop scanning")
-            } else {
-                Button { model.scanDev() } label: {
-                    Label(model.hasDevRun ? "Rescan" : "Scan", systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(model.isDevCleaning)
-                .help("Find regenerable build artifacts")
-            }
+        PageHero(value: heroValue, subtitle: "Build artifacts and dependencies — all regenerable") {
+            ScanButtons(
+                isScanning: model.isDevScanning,
+                hasRun: model.hasDevRun,
+                disabled: model.isDevCleaning,
+                help: "Find regenerable build artifacts",
+                scan: { model.scanDev() },
+                stop: { model.stopDevScan() }
+            )
         }
+        .monospacedDigit()
     }
 
     private var heroValue: String {
@@ -205,163 +186,5 @@ struct CleanupDeveloperPage: View {
 
     private var cleanButtonTitle: String {
         model.devSelectedBytes > 0 ? "Clean \(formatBytes(model.devSelectedBytes))…" : "Clean…"
-    }
-}
-
-// MARK: Developer rows
-
-private struct DevProjectRow: View {
-    let project: DevJunkScanner.Project
-    let selected: Bool
-    let isScanning: Bool
-    let selectedArtifacts: Set<URL>
-    let toggleProject: () -> Void
-    let toggleArtifact: (URL) -> Void
-    @State private var expanded = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            if expanded {
-                ForEach(project.artifacts) { artifact in
-                    Divider()
-                        .opacity(0.35)
-                        .padding(.leading, 47)
-                    DevArtifactRow(
-                        artifact: artifact,
-                        selected: selectedArtifacts.contains(artifact.url),
-                        isScanning: isScanning,
-                        toggle: { toggleArtifact(artifact.url) }
-                    )
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(selected ? AnyShapeStyle(Color.accentColor.opacity(0.10)) : AnyShapeStyle(.quaternary.opacity(0.3)))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(
-                    selected ? AnyShapeStyle(Color.accentColor.opacity(0.55)) : AnyShapeStyle(.separator.opacity(0.5)),
-                    lineWidth: 1
-                )
-        )
-        .animation(.easeOut(duration: 0.15), value: selected)
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            Button { toggleProject() } label: {
-                HStack(spacing: 11) {
-                    Image(systemName: "folder.badge.gearshape")
-                        .font(.system(size: 13, weight: .medium))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.orange)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color.orange.opacity(0.14))
-                        )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(project.name)
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(abbreviatedPath)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Text(activeCaption)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    Spacer(minLength: 10)
-                    sizeLabel
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .rotationEffect(.degrees(expanded ? 90 : 0))
-                    .frame(width: 18, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(expanded ? "Hide artifacts" : "Show \(project.artifacts.count) artifact\(project.artifacts.count == 1 ? "" : "s")")
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    @ViewBuilder
-    private var sizeLabel: some View {
-        if isScanning && project.totalBytes == 0 {
-            ProgressView()
-                .controlSize(.small)
-                .frame(width: 74, alignment: .trailing)
-        } else {
-            Text(formatBytes(project.totalBytes))
-                .font(.system(.callout, design: .rounded, weight: .semibold))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .frame(width: 74, alignment: .trailing)
-        }
-    }
-
-    private var abbreviatedPath: String {
-        (project.root.path as NSString).abbreviatingWithTildeInPath
-    }
-
-    private var activeCaption: String {
-        guard let date = project.lastActive else { return "activity unknown" }
-        return "active \(date.formatted(.relative(presentation: .named)))"
-    }
-}
-
-private struct DevArtifactRow: View {
-    let artifact: DevJunkScanner.Artifact
-    let selected: Bool
-    let isScanning: Bool
-    let toggle: () -> Void
-
-    var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: 10) {
-                Text(artifact.kindName)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(.quaternary.opacity(0.5)))
-                Spacer(minLength: 8)
-                if isScanning && artifact.sizeBytes == 0 {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Text(formatBytes(artifact.sizeBytes))
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .foregroundStyle(.secondary)
-                }
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
-            }
-            .padding(.leading, 47)
-            .padding(.trailing, 14)
-            .padding(.vertical, 7)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }

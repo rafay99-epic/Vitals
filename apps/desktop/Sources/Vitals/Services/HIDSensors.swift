@@ -11,8 +11,11 @@ final class HIDSensors {
     }
 
     private let client: IOHIDEventSystemClient?
+    /// `--probe` lists every sensor, including the ones no reading uses.
+    private let keepUnused: Bool
 
-    init() {
+    init(keepUnused: Bool = false) {
+        self.keepUnused = keepUnused
         guard let client = IOHIDEventSystemClientCreate(kCFAllocatorDefault) else {
             Log.noticeOnce(.sensors, key: "hid-client-create", "couldn't create the HID event-system client — no temperature sensors will be read")
             self.client = nil
@@ -28,14 +31,24 @@ final class HIDSensors {
 
     /// Listing services and copying names costs an IPC round-trip per sensor, so
     /// they're cached and re-listed every 5 minutes or when the list is empty.
-    private var sensors: [(service: IOHIDServiceClient, name: String)] = []
+    /// Sensors no reading uses (`tdev`, `tcal`, ...) are dropped here, so each
+    /// tick only pays for the ones that are shown or logged.
+    private struct Listed {
+        let service: IOHIDServiceClient
+        let name: String
+        let kind: VitalsModel.Sensor.Kind
+    }
+
+    private var sensors: [Listed] = []
     private var listedAt = Date.distantPast
     private static let relistInterval: TimeInterval = 300
 
-    func readAll() -> [Reading] {
+    /// Reads the sensors of the given kinds; CPU and GPU feed the menu bar and
+    /// history, the rest only matter while they're on screen.
+    func read(_ kinds: Set<VitalsModel.Sensor.Kind>) -> [Reading] {
         if sensors.isEmpty || Date().timeIntervalSince(listedAt) >= Self.relistInterval { relist() }
         let temperatureField = Int32(VITALS_HID_EVENT_TEMPERATURE << 16)
-        return sensors.compactMap { sensor in
+        return sensors.filter { kinds.contains($0.kind) }.compactMap { sensor in
             guard let event = IOHIDServiceClientCopyEvent(sensor.service, Int64(VITALS_HID_EVENT_TEMPERATURE), 0, 0)
             else { return nil }
             let value = IOHIDEventGetFloatValue(event, temperatureField)
@@ -58,7 +71,8 @@ final class HIDSensors {
             ) != 0,
                 let name = IOHIDServiceClientCopyProperty(service, "Product" as CFString) as? String
             else { return nil }
-            return (service, name)
+            let kind = VitalsModel.kind(for: name)
+            return kind == .other && !keepUnused ? nil : Listed(service: service, name: name, kind: kind)
         }
     }
 }
