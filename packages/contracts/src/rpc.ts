@@ -7,6 +7,7 @@ import { ActivityIngestInput, ActivityIngestResult } from "./activity.ts";
 import { AuthError, CommandRejected, Unavailable } from "./auth.ts";
 import { CommandCancelInput, CommandReceipt, CommandRunInput } from "./commands.ts";
 import { GuardSettings, GuardState } from "./guard.ts";
+import { LanKey } from "./ids.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, StatsLiveInput } from "./stats.ts";
 import { Hello, SequencedEvent, SystemEventsInput } from "./system.ts";
@@ -92,6 +93,14 @@ export const ActivityIngest = Rpc.make("activity.ingest", {
   error: AuthError,
 });
 
+export const DeviceLanKey = Rpc.make("device.lanKey", {
+  payload: Schema.Struct({ key: LanKey }),
+  success: Empty,
+  error: AuthError,
+});
+
+export const DeviceForget = Rpc.make("device.forget", { payload: Empty, success: Empty, error: AuthError });
+
 export class ScopeAuthorization extends RpcMiddleware.Service<ScopeAuthorization>()(
   "@vitals/contracts/ScopeAuthorization",
   { error: AuthError },
@@ -111,6 +120,8 @@ export const VitalsRpc = RpcGroup.make(
   GuardUpdate,
   ClipboardGet,
   ActivityIngest,
+  DeviceLanKey,
+  DeviceForget,
 ).middleware(ScopeAuthorization);
 
 export type VitalsRpcs = RpcGroup.Rpcs<typeof VitalsRpc>;

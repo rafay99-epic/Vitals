@@ -1,4 +1,4 @@
-import { type PairRequest, type PairResponse, type Scope, type SessionInfo, DEFAULT_PAIRED_SCOPES } from "@vitals/contracts";
+import { type DeviceInfo, type PairRequest, type PairResponse, type Scope, type SessionInfo, DEFAULT_PAIRED_SCOPES } from "@vitals/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Store } from "../persistence/Store.ts";
-import { randomToken, type SessionMatch } from "../persistence/RemoteStore.ts";
+import { type NewSession, randomToken, type SessionMatch } from "../persistence/RemoteStore.ts";
 
 const TICKET_TTL_MS = 60_000;
 
@@ -29,6 +29,9 @@ export class Auth extends Context.Service<
     readonly unpair: (token: string) => Effect.Effect<boolean>;
     readonly replaceWebSession: (previousToken: string, deviceId: string) => Effect.Effect<void>;
     readonly issueTicket: (bearer: string) => { readonly ticket: string; readonly expiresAt: number } | AuthFailure;
+    readonly issueDeviceTicket: (deviceId: string) => string | null;
+    readonly pairLan: (device: DeviceInfo, lanKey: string) => NewSession;
+    readonly loopbackSecret: string;
     readonly redeemTicket: (ticket: string) => Session | null;
     readonly revoked: (session: Session) => Effect.Effect<void>;
     readonly revoke: (deviceId: string) => Effect.Effect<boolean>;
@@ -43,7 +46,8 @@ export const layer = (initialOwner: string | null) =>
       const store = yield* Store;
       const activity = yield* ActivityLog;
       let owner = initialOwner;
-      const tickets = new Map<string, { readonly sessionToken: string; readonly expiresAt: number }>();
+      const tickets = new Map<string, { readonly resolve: (now: number) => SessionMatch | null; readonly expiresAt: number }>();
+      const loopbackSecret = randomToken();
       const invalidations = new Map<string, Deferred.Deferred<void>>();
       const versions = new Map<string, number>();
       let epoch = 0;
@@ -61,10 +65,17 @@ export const layer = (initialOwner: string | null) =>
         return null;
       };
 
+      const retire = (lanKey: string | null) => {
+        const prior = lanKey === null ? null : store.lanDevice(lanKey);
+        if (prior !== null) Effect.runSync(signal(prior.id));
+      };
+
       const pair = (request: PairRequest, login: string | null): Paired | AuthFailure => {
         const identity = checkIdentity(login);
         if (identity !== null) return identity;
-        const result = store.redeemPairing(request.code, request.device, DEFAULT_PAIRED_SCOPES, Date.now());
+        const lanKey = request.lanKey ?? null;
+        retire(lanKey);
+        const result = store.redeemPairing(request.code, request.device, DEFAULT_PAIRED_SCOPES, Date.now(), lanKey);
         if (typeof result === "string") {
           log("warn", "pairing.rejected", { reason: result, device: request.device.name });
           return { reason: "credentials", message: `Pairing code ${result}` };
@@ -73,24 +84,41 @@ export const layer = (initialOwner: string | null) =>
         return { deviceId: result.deviceId, token: result.token, scopes: DEFAULT_PAIRED_SCOPES, expiresAt: result.expiresAt };
       };
 
+      const mint = (resolve: (now: number) => SessionMatch | null, now: number) => {
+        for (const [key, value] of tickets) if (value.expiresAt < now) tickets.delete(key);
+        const ticket = randomToken();
+        tickets.set(ticket, { resolve, expiresAt: now + TICKET_TTL_MS });
+        return { ticket, expiresAt: now + TICKET_TTL_MS };
+      };
+
       const issueTicket = (bearer: string) => {
         const now = Date.now();
-        const session = store.findSession(bearer, now);
-        if (session === null) {
+        if (store.findSession(bearer, now) === null) {
           log("warn", "session.rejected", {});
           return { reason: "credentials" as const, message: "Session is not valid" };
         }
-        for (const [key, value] of tickets) if (value.expiresAt < now) tickets.delete(key);
-        const ticket = randomToken();
-        tickets.set(ticket, { sessionToken: bearer, expiresAt: now + TICKET_TTL_MS });
-        return { ticket, expiresAt: now + TICKET_TTL_MS };
+        return mint((at) => store.findSession(bearer, at), now);
+      };
+
+      const issueDeviceTicket = (deviceId: string): string | null => {
+        const now = Date.now();
+        if (store.findDeviceSession(deviceId, now) === null) return null;
+        return mint((at) => store.findDeviceSession(deviceId, at), now).ticket;
+      };
+
+      const pairLan = (device: DeviceInfo, lanKey: string): NewSession => {
+        retire(lanKey);
+        const created = store.createLanDevice(device, DEFAULT_PAIRED_SCOPES, lanKey, Date.now());
+        log("info", "pairing.lan", { device: device.name, platform: device.platform }, created.deviceId);
+        return created;
       };
 
       const redeemTicket = (ticket: string): Session | null => {
         const entry = tickets.get(ticket);
         tickets.delete(ticket);
-        if (entry === undefined || entry.expiresAt < Date.now()) return null;
-        const match = store.findSession(entry.sessionToken, Date.now());
+        const now = Date.now();
+        if (entry === undefined || entry.expiresAt < now) return null;
+        const match = entry.resolve(now);
         return match === null ? null : { ...match, version: versionOf(match.device.id) };
       };
 
@@ -180,6 +208,9 @@ export const layer = (initialOwner: string | null) =>
         unpair,
         replaceWebSession,
         issueTicket,
+        issueDeviceTicket,
+        pairLan,
+        loopbackSecret,
         redeemTicket,
         revoked,
         revoke,

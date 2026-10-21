@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-import { DeviceId, EpochMs } from "./ids.ts";
+import { DeviceId, EpochMs, LanKey } from "./ids.ts";
 
 export const Scope = Schema.Literals(["read", "operate", "destructive", "clipboard"]);
 export type Scope = typeof Scope.Type;
@@ -28,6 +28,7 @@ export const PairingCode = Schema.String.check(
 export const PairRequest = Schema.Struct({
   code: PairingCode,
   device: DeviceInfo,
+  lanKey: Schema.optional(LanKey),
 });
 export type PairRequest = typeof PairRequest.Type;
 

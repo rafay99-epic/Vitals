@@ -41,6 +41,7 @@ interface DeviceRow {
   readonly created_at: number;
   readonly last_seen_at: number | null;
   readonly revoked_at: number | null;
+  readonly lan_key: string | null;
 }
 
 interface CommandRow {
@@ -52,6 +53,12 @@ interface CommandRow {
   readonly deadline_at: number | null;
   readonly finished_at: number | null;
   readonly error: string | null;
+}
+
+export interface NewSession {
+  readonly deviceId: DeviceId;
+  readonly token: string;
+  readonly expiresAt: number;
 }
 
 export interface SessionMatch {
@@ -98,6 +105,9 @@ export class RemoteStore {
     | "insertDevice"
     | "insertSession"
     | "findSession"
+    | "findDeviceSession"
+    | "findLanDevice"
+    | "setLanKey"
     | "touchSession"
     | "touchDevice"
     | "listDevices"
@@ -120,7 +130,7 @@ export class RemoteStore {
       findGrant: prepare("SELECT id, expires_at, consumed_at FROM pairing_grants WHERE code_hash = ?"),
       consumeGrant: prepare("UPDATE pairing_grants SET consumed_at = ?, device_id = ? WHERE id = ? AND consumed_at IS NULL"),
       insertDevice: prepare(
-        "INSERT INTO devices (id, name, platform, model, app_version, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO devices (id, name, platform, model, app_version, scopes, created_at, lan_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       ),
       insertSession: prepare(
         "INSERT INTO sessions (id, device_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
@@ -129,6 +139,12 @@ export class RemoteStore {
         `SELECT s.id AS session_id, s.expires_at, d.* FROM sessions s JOIN devices d ON d.id = s.device_id
          WHERE s.token_hash = ? AND s.revoked_at IS NULL AND d.revoked_at IS NULL`,
       ),
+      findDeviceSession: prepare(
+        `SELECT s.id AS session_id, s.expires_at, d.* FROM sessions s JOIN devices d ON d.id = s.device_id
+         WHERE d.id = ? AND s.revoked_at IS NULL AND d.revoked_at IS NULL ORDER BY s.expires_at DESC LIMIT 1`,
+      ),
+      findLanDevice: prepare("SELECT * FROM devices WHERE lan_key = ? AND revoked_at IS NULL"),
+      setLanKey: prepare("UPDATE devices SET lan_key = ? WHERE id = ? AND revoked_at IS NULL"),
       touchSession: prepare("UPDATE sessions SET last_used_at = ?, expires_at = ? WHERE id = ?"),
       touchDevice: prepare("UPDATE devices SET last_seen_at = ? WHERE id = ?"),
       listDevices: prepare("SELECT * FROM devices WHERE revoked_at IS NULL ORDER BY created_at"),
@@ -159,30 +175,22 @@ export class RemoteStore {
     device: DeviceInfo,
     scopes: ReadonlyArray<Scope>,
     now: number,
-  ): { readonly deviceId: DeviceId; readonly token: string; readonly expiresAt: number } | "invalid" | "expired" | "used" {
+    lanKey: string | null = null,
+  ): NewSession | "invalid" | "expired" | "used" {
     const grant = this.statements.findGrant.get(sha256(code)) as
       | { readonly id: string; readonly expires_at: number; readonly consumed_at: number | null }
       | null;
     if (grant === null) return "invalid";
     if (grant.consumed_at !== null) return "used";
     if (grant.expires_at < now) return "expired";
-    const deviceId = makeDeviceId(newId());
-    const token = randomToken();
-    const expiresAt = now + SESSION_TTL_MS;
+    const created = this.newSession(now);
     const committed = this.db.transaction(() => {
-      this.statements.insertDevice.run(
-        deviceId,
-        device.name,
-        device.platform,
-        device.model,
-        device.appVersion,
-        JSON.stringify(scopes),
-        now,
-      );
-      if (this.statements.consumeGrant.run(now, deviceId, grant.id).changes !== 1) {
+      this.retireLanKey(lanKey, now);
+      this.insertDevice(created, device, scopes, now, lanKey);
+      if (this.statements.consumeGrant.run(now, created.deviceId, grant.id).changes !== 1) {
         throw new Error("grant already consumed");
       }
-      this.statements.insertSession.run(newId(), deviceId, sha256(token), now, expiresAt);
+      this.statements.insertSession.run(newId(), created.deviceId, sha256(created.token), now, created.expiresAt);
       return true;
     });
     try {
@@ -190,18 +198,80 @@ export class RemoteStore {
     } catch {
       return "used";
     }
-    return { deviceId, token, expiresAt };
+    return created;
+  }
+
+  createLanDevice(device: DeviceInfo, scopes: ReadonlyArray<Scope>, lanKey: string, now: number): NewSession {
+    const created = this.newSession(now);
+    this.db.transaction(() => {
+      this.retireLanKey(lanKey, now);
+      this.insertDevice(created, device, scopes, now, lanKey);
+      this.statements.insertSession.run(newId(), created.deviceId, sha256(created.token), now, created.expiresAt);
+    })();
+    return created;
+  }
+
+  bindLanKey(deviceId: string, lanKey: string, now: number): boolean {
+    return this.db.transaction(() => {
+      for (const row of this.statements.findLanDevice.all(lanKey) as ReadonlyArray<DeviceRow>) {
+        if (row.id === deviceId) return true;
+        this.statements.revokeSessions.run(now, row.id);
+        this.statements.revokeDevice.run(now, row.id);
+      }
+      return this.statements.setLanKey.run(lanKey, deviceId).changes === 1;
+    })();
+  }
+
+  lanDevice(lanKey: string): Omit<Device, "connected"> | null {
+    const row = this.statements.findLanDevice.get(lanKey) as DeviceRow | null;
+    return row === null ? null : toDevice(row);
+  }
+
+  findDeviceSession(deviceId: string, now: number): SessionMatch | null {
+    const row = this.statements.findDeviceSession.get(deviceId) as
+      | (DeviceRow & { readonly session_id: string; readonly expires_at: number })
+      | null;
+    return row === null ? null : this.touch(row, now);
+  }
+
+  private newSession(now: number): NewSession {
+    return { deviceId: makeDeviceId(newId()), token: randomToken(), expiresAt: now + SESSION_TTL_MS };
+  }
+
+  private insertDevice(created: NewSession, device: DeviceInfo, scopes: ReadonlyArray<Scope>, now: number, lanKey: string | null): void {
+    this.statements.insertDevice.run(
+      created.deviceId,
+      device.name,
+      device.platform,
+      device.model,
+      device.appVersion,
+      JSON.stringify(scopes),
+      now,
+      lanKey,
+    );
+  }
+
+  private retireLanKey(lanKey: string | null, now: number): void {
+    if (lanKey === null) return;
+    for (const row of this.statements.findLanDevice.all(lanKey) as ReadonlyArray<DeviceRow>) {
+      this.statements.revokeSessions.run(now, row.id);
+      this.statements.revokeDevice.run(now, row.id);
+    }
+  }
+
+  private touch(row: DeviceRow & { readonly session_id: string; readonly expires_at: number }, now: number): SessionMatch | null {
+    if (row.expires_at < now) return null;
+    const expiresAt = now + SESSION_TTL_MS;
+    this.statements.touchSession.run(now, expiresAt, row.session_id);
+    this.statements.touchDevice.run(now, row.id);
+    return { sessionId: row.session_id, device: toDevice(row), expiresAt };
   }
 
   findSession(token: string, now: number): SessionMatch | null {
     const row = this.statements.findSession.get(sha256(token)) as
       | (DeviceRow & { readonly session_id: string; readonly expires_at: number })
       | null;
-    if (row === null || row.expires_at < now) return null;
-    const expiresAt = now + SESSION_TTL_MS;
-    this.statements.touchSession.run(now, expiresAt, row.session_id);
-    this.statements.touchDevice.run(now, row.id);
-    return { sessionId: row.session_id, device: toDevice(row), expiresAt };
+    return row === null ? null : this.touch(row, now);
   }
 
   devices(): ReadonlyArray<Omit<Device, "connected">> {

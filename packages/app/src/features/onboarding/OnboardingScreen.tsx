@@ -1,17 +1,17 @@
-import { Button, channels, colors, Mark, Mono, Sans, Serif, Tag } from "@vitals/ui";
+import { Button, channels, colors, Mono, Sans, Serif, Tag } from "@vitals/ui";
 import * as Clipboard from "expo-clipboard";
 import { type ReactNode, useState } from "react";
-import { Linking, Pressable, ScrollView, Share, View } from "react-native";
+import { Pressable, ScrollView, Share, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FirstBeat } from "../../components/FirstBeat.tsx";
 import { haptics } from "../../lib/haptics";
-import { BREW_INSTALL, SITE_URL, TAILSCALE_STORE_URL } from "../../lib/links.ts";
+import { BREW_INSTALL, SITE_URL } from "../../lib/links.ts";
 import { finishOnboarding } from "../../persistence/onboarding";
 
-type Page = "welcome" | "mac" | "remote" | "tailscale" | "pair";
+type Page = "welcome" | "mac" | "remote";
 
-const ORDER: ReadonlyArray<Page> = ["welcome", "mac", "remote", "tailscale", "pair"];
+const ORDER: ReadonlyArray<Page> = ["welcome", "mac", "remote"];
 
 interface PageSpec {
   readonly kicker: string;
@@ -97,29 +97,6 @@ function MacSketch() {
   );
 }
 
-function Device({ name }: { readonly name: string }) {
-  return (
-    <View className="flex-1 items-center gap-1 border border-line3 py-3">
-      <Serif size="s">{name}</Serif>
-      <Mono className="text-[10px]">signed in</Mono>
-    </View>
-  );
-}
-
-function Tailnet() {
-  return (
-    <View className="gap-3 px-[22px] pt-6">
-      <View className="h-32 flex-row items-center gap-3" accessible accessibilityLabel="Phone and Mac, both signed in to Tailscale">
-        <Device name="Phone" />
-        <Mark width={56} />
-        <Device name="Mac" />
-      </View>
-      <CopyRow text="Tailscale for this phone" action="open" onPress={() => void Linking.openURL(TAILSCALE_STORE_URL)} />
-      <CopyRow text="tailscale.com/download for the Mac" action="share" onPress={() => void Share.share({ message: "Tailscale for Mac: https://tailscale.com/download/mac" }).catch(() => undefined)} />
-    </View>
-  );
-}
-
 const PAGES: Record<Page, PageSpec> = {
   welcome: {
     kicker: "Welcome",
@@ -130,32 +107,18 @@ const PAGES: Record<Page, PageSpec> = {
     art: Line,
   },
   mac: {
-    kicker: "Step 1 of 4",
+    kicker: "Step 1 of 2",
     title: "Get Vitals for Mac.",
     body: "Free and open source, for Apple silicon Macs on macOS 15 or later. Install it with Homebrew or download it from the site.",
     next: "It is installed",
     art: GetTheMac,
   },
   remote: {
-    kicker: "Step 2 of 4",
+    kicker: "Step 2 of 2",
     title: "Turn on Remote.",
-    body: "Open Vitals on the Mac. In the sidebar under Maintain, pick Remote and switch on remote access.",
-    next: "Remote is on",
+    body: "Open Vitals on the Mac. In the sidebar under Maintain, pick Remote and switch on remote access. Keep this phone on the same Wi-Fi.",
+    next: "Find my Mac",
     art: MacSketch,
-  },
-  tailscale: {
-    kicker: "Step 3 of 4",
-    title: "Tailscale on both.",
-    body: "Vitals talks to your Mac only over your own tailnet. Sign in to Tailscale with the same account on the Mac and on this phone.",
-    next: "Both are on",
-    art: Tailnet,
-  },
-  pair: {
-    kicker: "Step 4 of 4",
-    title: "Pair this phone.",
-    body: "In Remote on the Mac, choose Pair new device. A code appears. Scan it next.",
-    next: "Scan the code",
-    art: Line,
   },
 };
 

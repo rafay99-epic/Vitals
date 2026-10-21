@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Auth } from "../auth/Auth.ts";
 import { Bridge, type AdminHandler } from "../bridge/Bridge.ts";
+import { Lan } from "../lan/Lan.ts";
 import { Store } from "../persistence/Store.ts";
 import { Serve } from "../tailscale/Serve.ts";
 import { Connections } from "../ws/Connections.ts";
@@ -17,6 +18,7 @@ export const layer = Layer.effectDiscard(
     const serve = yield* Serve;
     const connections = yield* Connections;
     const activity = yield* ActivityLog;
+    const lan = yield* Lan;
 
     const handle: AdminHandler = (op) =>
       Effect.gen(function* () {
@@ -28,7 +30,7 @@ export const layer = Layer.effectDiscard(
             return {
               _tag: "CreatePairing",
               code,
-              url: status.url === null ? null : `${status.url}/pair#code=${code}`,
+              url: status.url === null ? null : `${status.url}/pair#code=${code}${lan.info === null ? "" : `&key=${lan.info.key}`}`,
               expiresAt,
             } satisfies AdminResult;
           }
@@ -49,6 +51,10 @@ export const layer = Layer.effectDiscard(
             const changed = yield* auth.setScopes(op.deviceId, op.scopes);
             if (!changed) return yield* Effect.fail("unknown device");
             return { _tag: "SetScopes" } satisfies AdminResult;
+          }
+          case "ResolvePairPrompt": {
+            if (!lan.resolvePrompt(op.id, op.allow)) return yield* Effect.fail("that request has ended");
+            return { _tag: "ResolvePairPrompt" } satisfies AdminResult;
           }
         }
       });

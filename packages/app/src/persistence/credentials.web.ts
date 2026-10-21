@@ -21,4 +21,4 @@ export const loadCredentials = async (): Promise<Credentials | null> => {
 
 export const saveCredentials = async (_credentials: Credentials): Promise<void> => {};
 
-export const clearCredentials = async (): Promise<boolean> => unpair(origin(), null);
+export const clearCredentials = async (_alreadyRevoked = false): Promise<boolean> => unpair(origin(), null);

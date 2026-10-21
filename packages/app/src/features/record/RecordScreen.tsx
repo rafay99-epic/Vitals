@@ -11,8 +11,9 @@ import { sessions } from "../../connection/session.ts";
 import { useRemote } from "../../connection/useRemote.ts";
 import { deviceInfo } from "../../lib/device.ts";
 import { haptics } from "../../lib/haptics";
-import { hostOf } from "../../lib/host.ts";
+import { addressOf } from "../../lib/host.ts";
 import type { RecordStackParams } from "../../navigation/types.ts";
+import { linkOf } from "../../state/vitals.ts";
 import { notificationPermission, requestNotifications } from "../../notifications/alerts";
 import { startAlertWatch } from "../../notifications/background";
 import type { PermissionState } from "../../notifications/permission.ts";
@@ -101,7 +102,7 @@ export function RecordScreen({ navigation }: Props) {
         <Row plain label="Model" value={mac === null ? "--" : `${mac.chip} · ${mac.model}`} />
         <Row plain label="macOS" value={mac?.os ?? "--"} />
         <Row plain label="Vitals" value={mac === null ? "--" : `${mac.vitalsVersion} (${mac.channel})`} />
-        <Row plain label="Address" detail={hostOf(remote.credentials.baseUrl)} />
+        <Row label="Connection" detail={addressOf(remote.credentials)} value={linkOf(state).label} onPress={() => navigation.navigate("Connection")} />
       </Section>
 
       <Section title="This device">

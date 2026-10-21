@@ -4,6 +4,7 @@ import { newId } from "@vitals/shared";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 
 export interface ActivityEvent {
@@ -60,8 +61,11 @@ class ActivityWriter {
   private readonly bumpConnection: Statement;
   private readonly bumpRollup: Statement;
 
-  constructor(db: Database) {
+  private readonly onDirty: () => void;
+
+  constructor(db: Database, onDirty: () => void = () => {}) {
     this.db = db;
+    this.onDirty = onDirty;
     this.insertEvent = db.prepare(
       `INSERT OR IGNORE INTO events (event_id, at, received_at, source, level, kind, device_id, connection_id, rpc, command_id, duration_ms, data_json)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -87,6 +91,7 @@ class ActivityWriter {
   }
 
   record(event: ActivityEvent): void {
+    this.onDirty();
     if (this.pending >= MAX_QUEUE) {
       if (this.frames.length > 0) {
         this.frames.shift();
@@ -100,6 +105,7 @@ class ActivityWriter {
   }
 
   frame(frame: FrameRecord): void {
+    this.onDirty();
     const delta = this.connectionDeltas.get(frame.connectionId) ?? { msgsIn: 0, msgsOut: 0, bytesIn: 0, bytesOut: 0 };
     if (frame.dir === "in") {
       delta.msgsIn += 1;
@@ -218,9 +224,17 @@ export const layer = (db: Database) =>
   Layer.effect(
     ActivityLog,
     Effect.gen(function* () {
-      const writer = new ActivityWriter(db);
+      const dirty = yield* Queue.sliding<void>(1);
+      const writer = new ActivityWriter(db, () => {
+        Queue.offerUnsafe(dirty, undefined);
+      });
       const flush = Effect.sync(() => writer.flush());
-      yield* flush.pipe(Effect.repeat(Schedule.spaced("250 millis")), Effect.forkScoped);
+      yield* Queue.take(dirty).pipe(
+        Effect.andThen(Effect.sleep("250 millis")),
+        Effect.andThen(flush),
+        Effect.forever,
+        Effect.forkScoped,
+      );
       yield* Effect.sync(() => writer.prune()).pipe(Effect.repeat(Schedule.spaced("1 hour")), Effect.forkScoped);
       yield* Effect.addFinalizer(() => flush);
       return ActivityLog.of({

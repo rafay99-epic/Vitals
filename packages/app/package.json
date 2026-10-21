@@ -12,9 +12,13 @@
   "dependencies": {
     "@vitals/client-runtime": "workspace:*",
     "@vitals/contracts": "workspace:*",
+    "@vitals/discovery": "workspace:*",
+    "@vitals/noise": "workspace:*",
     "@vitals/shared": "workspace:*",
+    "@vitals/tailnet": "workspace:*",
     "@vitals/ui": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "expo-crypto": "~58.0.7"
   },
   "peerDependencies": {
     "@react-navigation/bottom-tabs": "*",

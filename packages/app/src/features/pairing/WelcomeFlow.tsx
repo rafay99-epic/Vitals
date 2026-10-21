@@ -4,7 +4,7 @@ import { Platform, View } from "react-native";
 
 import { sessions } from "../../connection/session.ts";
 import { useRemote } from "../../connection/useRemote.ts";
-import { hostOf } from "../../lib/host.ts";
+import { addressOf } from "../../lib/host.ts";
 import { notificationPermission } from "../../notifications/alerts";
 import type { PermissionState } from "../../notifications/permission.ts";
 import { scopeLine } from "../../state/commands.ts";
@@ -40,7 +40,7 @@ export function WelcomeFlow() {
         <Serif size="hero" italic tone="pulse" accessibilityRole="header">
           Admitted.
         </Serif>
-        <Mono>{mac === null ? hostOf(remote.credentials.baseUrl) : `${mac.name} · ${mac.chip} · ${mac.os}`}</Mono>
+        <Mono>{mac === null ? addressOf(remote.credentials) : `${mac.name} · ${mac.chip} · ${mac.os}`}</Mono>
       </View>
       <View className="my-6">
         <FirstBeat />

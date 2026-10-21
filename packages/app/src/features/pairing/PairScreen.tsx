@@ -45,7 +45,7 @@ function Progress() {
   );
 }
 
-export function PairScreen() {
+export function PairScreen({ onFind }: { readonly onFind?: (() => void) | undefined }) {
   const pairing = useStore(sessions.pairing);
   const [baseUrl, setBaseUrl] = useState(initialBaseUrl);
   const [code, setCode] = useState("");
@@ -89,8 +89,8 @@ export function PairScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
-            placeholder="https://your-mac.tailnet.ts.net:7443"
-            hint="Your Mac's Tailscale name, shown with the code"
+            placeholder="https://your-mac.tailnet.ts.net"
+            hint="The address shown under the code on your Mac"
           />
         )}
         <CodeInput value={code} length={PAIRING_CODE_LENGTH} onChange={(value) => setCode(normalizeCode(value))} onSubmit={submit} error={error} />
@@ -99,7 +99,12 @@ export function PairScreen() {
         </View>
       </Section>
       {pairing.busy ? <Progress /> : null}
-      <Mono className="px-[22px] pt-6">Pairing stays on your tailnet. Nothing goes through our servers.</Mono>
+      {onFind === undefined ? null : (
+        <View className="px-[22px] pt-4">
+          <Button label="Find my Mac on this Wi-Fi" variant="text" block onPress={onFind} />
+        </View>
+      )}
+      <Mono className="px-[22px] pt-6">Pairing stays between your devices. Nothing goes through our servers.</Mono>
     </Screen>
   );
 }

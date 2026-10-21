@@ -35,6 +35,9 @@ final class ProcessSampler {
     }
 
     private struct Identity {
+        /// `ri_proc_start_abstime`: tells a reused pid apart from the cached one
+        /// without another syscall.
+        let startAbs: UInt64
         let ppid: pid_t
         let uid: uid_t
         let startTimeMs: Int64
@@ -68,6 +71,7 @@ final class ProcessSampler {
 
         var currentCPUTime: [pid_t: UInt64] = [:]
         var currentMemory: [pid_t: UInt64] = [:]
+        var startAbs: [pid_t: UInt64] = [:]
         var deltas: [(pid: pid_t, ticks: UInt64)] = []
         for pid in pids.prefix(Int(filled)) where pid > 0 {
             var usage = rusage_info_v4()
@@ -78,6 +82,7 @@ final class ProcessSampler {
             }
             guard result == 0 else { continue }
             currentMemory[pid] = usage.ri_phys_footprint
+            startAbs[pid] = usage.ri_proc_start_abstime
             // On Apple Silicon these are Mach ticks, not nanoseconds; converted below.
             let cpuTime = usage.ri_user_time + usage.ri_system_time
             currentCPUTime[pid] = cpuTime
@@ -121,14 +126,13 @@ final class ProcessSampler {
                            cpuPercent: percentByPid[$0.key] ?? 0, memory: $0.value) }
 
         guard includeTable else {
-            identities.removeAll(keepingCapacity: true)
             return Sampled(byCPU: Array(byCPU), byMemory: Array(byMemory), table: [])
         }
         var table: [Row] = []
         table.reserveCapacity(currentMemory.count)
         var nextIdentities: [pid_t: Identity] = [:]
         for (pid, memory) in currentMemory {
-            guard let identity = identity(of: pid) else { continue }
+            guard let identity = identity(of: pid, startAbs: startAbs[pid] ?? 0) else { continue }
             nextIdentities[pid] = identity
             table.append(Row(
                 pid: pid,
@@ -145,13 +149,16 @@ final class ProcessSampler {
         return Sampled(byCPU: Array(byCPU), byMemory: Array(byMemory), table: table)
     }
 
-    private func identity(of pid: pid_t) -> Identity? {
+    /// A pid seen last sweep with the same start time reuses its identity, so a
+    /// steady process table costs one syscall per process instead of two.
+    private func identity(of pid: pid_t, startAbs: UInt64) -> Identity? {
+        if let cached = identities[pid], cached.startAbs == startAbs { return cached }
         var info = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
         guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
         let startTimeMs = Int64(info.pbi_start_tvsec) * 1000 + Int64(info.pbi_start_tvusec) / 1000
-        if let cached = identities[pid], cached.startTimeMs == startTimeMs { return cached }
         return Identity(
+            startAbs: startAbs,
             ppid: pid_t(info.pbi_ppid),
             uid: info.pbi_uid,
             startTimeMs: startTimeMs,

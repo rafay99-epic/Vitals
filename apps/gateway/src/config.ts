@@ -1,6 +1,9 @@
+import { LAN_PORTS } from "@vitals/contracts";
 import * as Context from "effect/Context";
 
 export type Channel = "stable" | "nightly" | "dev";
+
+export const MAX_FRAME_BYTES = 1024 * 1024;
 
 export interface GatewayConfigShape {
   readonly channel: Channel;
@@ -11,6 +14,7 @@ export interface GatewayConfigShape {
   readonly tailscaleBin: string | null;
   readonly manageServe: boolean;
   readonly ownerLogin: string | null;
+  readonly lanPort: number | null;
 }
 
 export class GatewayConfig extends Context.Service<GatewayConfig, GatewayConfigShape>()("@vitals/gateway/GatewayConfig") {}
@@ -41,5 +45,6 @@ export const configFromEnv = (env: Record<string, string | undefined>): GatewayC
     tailscaleBin: env["VITALS_TAILSCALE_BIN"] ?? null,
     manageServe: env["VITALS_REMOTE_MANAGE_SERVE"] !== "0",
     ownerLogin: env["VITALS_REMOTE_OWNER"] ?? null,
+    lanPort: env["VITALS_REMOTE_LAN"] === "0" ? null : parsePort(env["VITALS_REMOTE_LAN_PORT"], LAN_PORTS[channel]),
   };
 };

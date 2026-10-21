@@ -28,3 +28,6 @@ export const ProcessRef = Schema.Struct({
   startTimeMs: NonNegativeInt,
 });
 export type ProcessRef = typeof ProcessRef.Type;
+
+export const LanKey = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
+export type LanKey = typeof LanKey.Type;

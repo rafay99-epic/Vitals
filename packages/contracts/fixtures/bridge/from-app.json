@@ -22,5 +22,6 @@
   { "t": "result", "id": "q-3", "ok": null, "error": "clipboard unavailable" },
   { "t": "admin", "id": "a-1", "op": { "_tag": "CreatePairing" } },
   { "t": "admin", "id": "a-3", "op": { "_tag": "SetScopes", "deviceId": "dev-1", "scopes": ["read", "operate", "destructive"] } },
-  { "t": "log", "level": "info", "kind": "desktop.remote.toggled", "data": { "enabled": true } }
+  { "t": "log", "level": "info", "kind": "desktop.remote.toggled", "data": { "enabled": true } },
+  { "t": "admin", "id": "a-9", "op": { "_tag": "ResolvePairPrompt", "id": "p-1", "allow": true } }
 ]

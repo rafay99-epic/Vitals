@@ -1,4 +1,4 @@
-import { fetchOpenAlerts } from "@vitals/client-runtime";
+import { createConnection, fetchOpenAlerts } from "@vitals/client-runtime";
 import type { Alert } from "@vitals/contracts";
 import * as Schema from "effect/Schema";
 import * as BackgroundTask from "expo-background-task";
@@ -6,6 +6,9 @@ import * as SecureStore from "expo-secure-store";
 import * as TaskManager from "expo-task-manager";
 
 import { KEYCHAIN_OPTIONS, loadCredentials } from "../persistence/credentials";
+import type { Credentials } from "../persistence/credentialsSchema.ts";
+import { loadDeviceKey } from "../persistence/deviceKey";
+import { CLIENT_VERSION, routesOf } from "../state/remote.ts";
 import { notifyAlert } from "./alerts";
 
 const TASK = "vitals.alerts";
@@ -46,12 +49,47 @@ export const markAlertsSeen = (alerts: ReadonlyArray<Alert>): Promise<void> => d
 
 export const notifyOnce = (alert: Alert): Promise<void> => deliver([alert], true);
 
+const WIFI_TIMEOUT_MS = 10_000;
+
+const wifiSocket = (url: string) => {
+  const socket = new WebSocket(url);
+  socket.binaryType = "arraybuffer";
+  return socket;
+};
+
+const alertsOverWifi = async (credentials: Credentials): Promise<ReadonlyArray<Alert> | null> => {
+  const macKey = credentials.macKey ?? null;
+  const deviceKey = await loadDeviceKey().catch(() => null);
+  const routes = routesOf(credentials).filter((route) => route._tag === "Lan");
+  if (macKey === null || deviceKey === null || routes.length === 0) return null;
+  const connection = createConnection({ routes: () => routes, token: credentials.token, macKey: () => macKey, deviceKey, clientVersion: CLIENT_VERSION, webSocket: wifiSocket });
+  return new Promise((resolve) => {
+    const finish = (alerts: ReadonlyArray<Alert> | null) => {
+      clearTimeout(timer);
+      stop();
+      connection.dispose();
+      resolve(alerts);
+    };
+    const timer = setTimeout(() => finish(null), WIFI_TIMEOUT_MS);
+    const stop = connection.state.subscribe(() => {
+      const state = connection.state.get();
+      if (state._tag === "Ready") finish(state.hello.alerts);
+      if (state._tag === "Backoff" || state._tag === "Revoked") finish(null);
+    });
+  });
+};
+
+const openAlerts = async (credentials: Credentials): Promise<ReadonlyArray<Alert> | null> => {
+  const viaTailnet = credentials.baseUrl === null ? null : await fetchOpenAlerts(credentials.baseUrl, credentials.token, 0);
+  return viaTailnet?.alerts ?? (await alertsOverWifi(credentials));
+};
+
 const checkAlerts = async (): Promise<void> => {
   const credentials = await loadCredentials();
   if (credentials === null) return;
-  const open = await fetchOpenAlerts(credentials.baseUrl, credentials.token, 0);
+  const open = await openAlerts(credentials);
   if (open === null) throw new Error("Mac unreachable");
-  await deliver(open.alerts, true, open.alerts);
+  await deliver(open, true, open);
 };
 
 TaskManager.defineTask(TASK, async () => {

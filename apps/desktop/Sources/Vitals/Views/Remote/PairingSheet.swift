@@ -16,6 +16,12 @@ struct PairingSheet: View {
                         .frame(width: 220, height: 220)
                         .accessibilityLabel("Pairing QR code")
                 }
+                if let address {
+                    Text(address)
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
                 Text(grouped(pairing.code))
                     .font(.system(.title, design: .monospaced).weight(.semibold))
                     .textSelection(.enabled)
@@ -25,7 +31,7 @@ struct PairingSheet: View {
                         .monospacedDigit()
                         .foregroundStyle(remaining > 30 ? Color.secondary : Color.orange)
                 }
-                Text("Scan with the Vitals app, or open the link on the phone. The code works once.")
+                Text(address == nil ? "Scan with the Vitals app. The code works once." : "Scan with the Vitals app, or open the address on the phone and enter the code. It works once.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -51,6 +57,12 @@ struct PairingSheet: View {
                 if offered, remote.pairing == nil, remote.adminError == nil { isPresented = false }
             }
         }
+    }
+
+    /// Host and port of the tailnet URL, the part a person would type.
+    private var address: String? {
+        guard let link = remote.status?.url, let url = URL(string: link), let host = url.host() else { return nil }
+        return url.port.map { "\(host):\($0)" } ?? host
     }
 
     private func grouped(_ code: String) -> String {

@@ -183,11 +183,71 @@ extension BridgeQuery: Decodable {
 
 struct GatewayStatus: Codable, Equatable, Sendable {
     enum Serve: String, Codable, Sendable { case off, starting, serving, degraded }
+
+    /// The gateway's Wi-Fi listener: what Bonjour advertises.
+    struct Lan: Codable, Equatable, Sendable {
+        let port: Int
+        /// The Mac's base64url X25519 public key; phones pin it.
+        let key: String
+        /// The gateway reached its own Wi-Fi address. False while macOS's firewall or
+        /// Local Network prompt is unanswered or denied. nil from an older gateway.
+        let reachable: Bool?
+    }
+
     let serve: Serve
     @Nullable var url: String?
     @Nullable var detail: String?
     @Nullable var ownerLogin: String?
     let clients: Int
+    @Nullable var lan: Lan?
+    /// Optional so an older gateway that omits it still decodes.
+    var setup: TailscaleSetup?
+}
+
+/// The next thing the user has to do for away access, as the gateway sees it.
+struct TailscaleSetup: Codable, Equatable, Sendable {
+    enum Step: String, Codable, Sendable {
+        case install, start, signin, magicdns, https, ready, external
+
+        /// Unknown steps from a newer gateway read as `external` (shows the detail) instead of failing the whole status.
+        init(from decoder: Decoder) throws {
+            self = Step(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .external
+        }
+
+        /// The "step N of 4" position. nil when Tailscale is managed elsewhere.
+        var number: Int? {
+            switch self {
+            case .install: return 1
+            case .start, .signin: return 2
+            case .magicdns, .https: return 3
+            case .ready: return 4
+            case .external: return nil
+            }
+        }
+    }
+
+    let step: Step
+    /// A page to open for this step, such as Tailscale's one-time HTTPS consent link.
+    @Nullable var url: String?
+}
+
+struct DeviceInfo: Codable, Equatable, Sendable {
+    let name: String
+    let platform: String
+    let model: String
+    let appVersion: String
+}
+
+/// A phone on the Wi-Fi asking to pair. The user allows or denies it on the Mac.
+struct PairPrompt: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let device: DeviceInfo
+    /// Four digits the phone also shows, so the user can match them.
+    let code: String
+    let address: String
+    let expiresAt: Int64
+
+    var expiry: Date { Date(timeIntervalSince1970: TimeInterval(expiresAt) / 1000) }
 }
 
 struct RemoteDevice: Codable, Equatable, Identifiable, Sendable {
@@ -208,6 +268,7 @@ enum AdminResult: Equatable, Sendable {
     case listDevices([RemoteDevice])
     case revokeDevice
     case setScopes
+    case resolvePairPrompt
 }
 
 extension AdminResult: Decodable {
@@ -225,6 +286,7 @@ extension AdminResult: Decodable {
         case "ListDevices": self = .listDevices(try c.decode([RemoteDevice].self, forKey: .devices))
         case "RevokeDevice": self = .revokeDevice
         case "SetScopes": self = .setScopes
+        case "ResolvePairPrompt": self = .resolvePairPrompt
         case let other:
             throw DecodingError.dataCorruptedError(forKey: ._tag, in: c, debugDescription: "unknown admin result \(other)")
         }
@@ -269,10 +331,12 @@ enum ToApp: Equatable, Sendable {
     case query(id: String, query: BridgeQuery)
     case adminResult(id: String, result: AdminResult?, error: String?)
     case status(GatewayStatus)
+    case pairPrompt(PairPrompt)
+    case pairPromptEnded(id: String)
 }
 
 extension ToApp: Decodable {
-    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status }
+    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -295,6 +359,8 @@ extension ToApp: Decodable {
                 error: try c.decodeIfPresent(String.self, forKey: .error)
             )
         case "status": self = .status(try c.decode(GatewayStatus.self, forKey: .status))
+        case "pairPrompt": self = .pairPrompt(try c.decode(PairPrompt.self, forKey: .prompt))
+        case "pairPromptEnded": self = .pairPromptEnded(id: try c.decode(String.self, forKey: .id))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .t, in: c, debugDescription: "unknown message \(other)")
         }

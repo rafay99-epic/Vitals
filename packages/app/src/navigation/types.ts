@@ -9,6 +9,7 @@ export type RecordStackParams = {
   Record: undefined;
   Updates: undefined;
   Diagnostics: undefined;
+  Connection: undefined;
 };
 
 export type TabParams = {

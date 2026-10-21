@@ -2,11 +2,14 @@ import { type Query, type QueryResult, PROTOCOL_VERSION, Unavailable, VitalsRpc 
 import * as Effect from "effect/Effect";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
-import type { Session } from "../auth/Auth.ts";
+import { Auth, type Session } from "../auth/Auth.ts";
 import { Bridge } from "../bridge/Bridge.ts";
 import { CommandService } from "../commands/CommandService.ts";
 import { EventLog } from "../events/EventLog.ts";
+import { Lan } from "../lan/Lan.ts";
 import { Hubs } from "../live/Hubs.ts";
+import { Store } from "../persistence/Store.ts";
+import { Serve } from "../tailscale/Serve.ts";
 
 const unexpected = (tag: string) => new Unavailable({ message: `Unexpected ${tag} reply from Vitals` });
 
@@ -25,6 +28,10 @@ export const handlersLayer = (session: Session, connectionId: string) =>
       const events = yield* EventLog;
       const commands = yield* CommandService;
       const activity = yield* ActivityLog;
+      const lan = yield* Lan;
+      const store = yield* Store;
+      const auth = yield* Auth;
+      const serve = yield* Serve;
       const caller = { id: session.device.id, name: session.device.name };
 
       const ask = <Tag extends QueryResult["_tag"]>(q: Extract<Query, { readonly _tag: Tag }>) =>
@@ -40,7 +47,9 @@ export const handlersLayer = (session: Session, connectionId: string) =>
           Effect.gen(function* () {
             const identity = yield* bridge.identity.pipe(Effect.orElseSucceed(() => null));
             const open = yield* events.openAlerts(0);
+            const routes = lan.routes((yield* serve.status).url);
             return {
+              ...(routes === null ? {} : { routes }),
               protocol: PROTOCOL_VERSION,
               mac: identity?.mac ?? null,
               keepAwake: identity?.keepAwake ?? null,
@@ -79,6 +88,19 @@ export const handlersLayer = (session: Session, connectionId: string) =>
               });
             }
             return { accepted: batch.length };
+          }),
+        "device.forget": () =>
+          Effect.gen(function* () {
+            activity.record({ at: Date.now(), source: "client", level: "info", kind: "device.unpaired", deviceId: session.device.id, data: {} });
+            yield* Effect.forkDetach(Effect.andThen(Effect.sleep("200 millis"), auth.revoke(session.device.id)));
+            return {};
+          }),
+        "device.lanKey": ({ key }) =>
+          Effect.sync(() => {
+            if (store.bindLanKey(session.device.id, key, Date.now())) {
+              activity.record({ at: Date.now(), source: "gateway", level: "info", kind: "device.lan.bound", deviceId: session.device.id, data: {} });
+            }
+            return {};
           }),
       });
     }),

@@ -148,7 +148,7 @@ export function AlarmsScreen() {
   const guard = ready ? watched : null;
   const locked = !useScopes().includes("operate");
   const confirmed = useRef<GuardSettings | null>(null);
-  const queue = useRef<Promise<void>>(Promise.resolve());
+  const queue = useRef<Promise<void> | null>(null);
 
   const receive = useCallback((next: GuardState) => {
     confirmed.current = next.settings;
@@ -170,7 +170,7 @@ export function AlarmsScreen() {
   };
 
   const update = (edit: Edit) => {
-    queue.current = queue.current.then(() => send(edit)).catch(() => remote.show("Pressure Guard did not update. Try again.", "bad"));
+    queue.current = (queue.current ?? Promise.resolve()).then(() => send(edit)).catch(() => remote.show("Pressure Guard did not update. Try again.", "bad"));
   };
 
   const open = guard?.active ?? alerts;

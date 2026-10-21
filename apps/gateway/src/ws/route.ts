@@ -23,6 +23,8 @@ const frameBytes = (value: unknown): number => JSON.stringify(value)?.length ?? 
 export const loginHeader = (request: HttpServerRequest.HttpServerRequest): string | null =>
   request.headers["tailscale-user-login"] ?? null;
 
+export const LOOPBACK_HEADER = "x-vitals-loopback";
+
 const scopeLayer = (session: Session, connectionId: string, record: ActivityLog["Service"]["record"]) =>
   Layer.succeed(ScopeAuthorization)((effect, { rpc, payload }) => {
     const method = rpc._tag;
@@ -118,7 +120,8 @@ export const wsRoute = HttpRouter.add(
       return problem(426, "protocol_incompatible", `Update the app to protocol ${PROTOCOL_VERSION}`);
     }
     const login = loginHeader(request);
-    const identity = auth.checkIdentity(login);
+    const loopback = request.headers[LOOPBACK_HEADER] === auth.loopbackSecret;
+    const identity = loopback ? null : auth.checkIdentity(login);
     if (identity !== null) {
       activity.record({ at: Date.now(), source: "gateway", level: "warn", kind: "ws.upgrade.rejected", data: { status: 403 } });
       return problem(403, identity.reason, identity.message);
@@ -131,7 +134,7 @@ export const wsRoute = HttpRouter.add(
     const connectionId = newId();
     const deviceId = session.device.id;
     const clientVersion = url.value.searchParams.get("client");
-    activity.connectionOpened({ id: connectionId, deviceId, openedAt: Date.now(), tsLogin: login, clientVersion });
+    activity.connectionOpened({ id: connectionId, deviceId, openedAt: Date.now(), tsLogin: loopback ? "wifi" : login, clientVersion });
     activity.record({ at: Date.now(), source: "gateway", level: "info", kind: "ws.opened", deviceId, connectionId, data: { clientVersion } });
 
     const served = Effect.gen(function* () {

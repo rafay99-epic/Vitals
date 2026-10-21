@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@vitals/contracts": "workspace:*",
+    "@vitals/noise": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

@@ -3,7 +3,8 @@ import * as Schema from "effect/Schema";
 import { Scope } from "./auth.ts";
 import { Command, CommandReceipt } from "./commands.ts";
 import { GuardSettings, GuardState } from "./guard.ts";
-import { CommandId, DeviceId, NonNegativeInt, PositiveInt } from "./ids.ts";
+import { CommandId, DeviceId, LanKey, NonNegativeInt, PositiveInt } from "./ids.ts";
+import { PairPrompt } from "./lan.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, Topic } from "./stats.ts";
 import { BRIDGE_VERSION, KeepAwakeState, MacInfo, SystemEvent } from "./system.ts";
@@ -33,6 +34,7 @@ export const AdminOp = Schema.Union([
   Schema.TaggedStruct("ListDevices", {}),
   Schema.TaggedStruct("RevokeDevice", { deviceId: DeviceId }),
   Schema.TaggedStruct("SetScopes", { deviceId: DeviceId, scopes: Schema.Array(Scope) }),
+  Schema.TaggedStruct("ResolvePairPrompt", { id: Schema.String, allow: Schema.Boolean }),
 ]);
 export type AdminOp = typeof AdminOp.Type;
 
@@ -41,11 +43,15 @@ export const AdminResult = Schema.Union([
   Schema.TaggedStruct("ListDevices", { devices: Schema.Array(Device) }),
   Schema.TaggedStruct("RevokeDevice", {}),
   Schema.TaggedStruct("SetScopes", {}),
+  Schema.TaggedStruct("ResolvePairPrompt", {}),
 ]);
 export type AdminResult = typeof AdminResult.Type;
 
 export const ServeState = Schema.Literals(["off", "starting", "serving", "degraded"]);
 export type ServeState = typeof ServeState.Type;
+
+export const TailscaleStep = Schema.Literals(["install", "start", "signin", "magicdns", "https", "ready", "external"]);
+export type TailscaleStep = typeof TailscaleStep.Type;
 
 export const GatewayStatus = Schema.Struct({
   serve: ServeState,
@@ -53,6 +59,8 @@ export const GatewayStatus = Schema.Struct({
   detail: Schema.NullOr(Schema.String),
   ownerLogin: Schema.NullOr(Schema.String),
   clients: NonNegativeInt,
+  lan: Schema.NullOr(Schema.Struct({ port: PositiveInt, key: LanKey, reachable: Schema.Boolean })),
+  setup: Schema.Struct({ step: TailscaleStep, url: Schema.NullOr(Schema.String) }),
 });
 export type GatewayStatus = typeof GatewayStatus.Type;
 
@@ -81,6 +89,8 @@ export const ToApp = Schema.Union([
     error: Schema.NullOr(Schema.String),
   }),
   Schema.Struct({ t: Schema.Literal("status"), status: GatewayStatus }),
+  Schema.Struct({ t: Schema.Literal("pairPrompt"), prompt: PairPrompt }),
+  Schema.Struct({ t: Schema.Literal("pairPromptEnded"), id: Schema.String }),
 ]);
 export type ToApp = typeof ToApp.Type;
 

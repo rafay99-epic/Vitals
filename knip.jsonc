@@ -28,7 +28,10 @@
         "fingerprint.config.js"
       ],
       "ignoreDependencies": [
-        "babel-plugin-react-compiler"
+        "babel-plugin-react-compiler",
+        "@vitals/discovery",
+        "expo-crypto",
+        "@vitals/tailnet"
       ]
     },
     "apps/web": {

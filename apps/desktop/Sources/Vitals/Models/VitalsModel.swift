@@ -114,14 +114,30 @@ final class VitalsModel {
     @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var menuBarPanelVisible = false
     @ObservationIgnored private var remoteTopics: Set<String> = []
-    @ObservationIgnored private var remoteProcessTable = false
+    @ObservationIgnored private var processTableDemand = ProcessTableDemand.off
+    @ObservationIgnored private var processTableAt = Date.distantPast
     @ObservationIgnored var onSampled: (([ProcessSampler.Row]) -> Void)?
 
-    func setRemoteNeeds(topics: Set<String>, processTable: Bool) {
+    /// Who needs the full process table. A phone watching processes gets it
+    /// every tick; Pressure Guard alone gets a fresh sweep every
+    /// `guardSweepInterval`, which its 10 s+ holds can't tell apart.
+    enum ProcessTableDemand { case off, guardOnly, live }
+
+    private static let guardSweepInterval: TimeInterval = 10
+
+    func setRemoteNeeds(topics: Set<String>, processTable: ProcessTableDemand) {
         let cadenceChanged = topics.isEmpty != remoteTopics.isEmpty
         remoteTopics = topics
-        remoteProcessTable = processTable
+        processTableDemand = processTable
         if cadenceChanged { restartTimerIfAwake() }
+    }
+
+    private func processTableDue(at now: Date) -> Bool {
+        switch processTableDemand {
+        case .off: return false
+        case .live: return true
+        case .guardOnly: return now.timeIntervalSince(processTableAt) >= Self.guardSweepInterval
+        }
     }
 
     private var samplingInterval: Double {
@@ -161,7 +177,7 @@ final class VitalsModel {
 
     /// Optional reads needed this tick. GPU also feeds the GPU menu-bar metric
     /// and the dropdown's GPU row; the rest only matter with the window on screen.
-    private var currentNeeds: SensorSampler.Needs {
+    private func currentNeeds(at now: Date) -> SensorSampler.Needs {
         let section = windowOnScreen ? visibleSection : nil
         func showing(_ sections: NavSection...) -> Bool { section.map(sections.contains) ?? false }
         return SensorSampler.Needs(
@@ -172,7 +188,9 @@ final class VitalsModel {
                 || remoteTopics.contains("gpu"),
             power: showing(.overview, .cpu, .gpu, .battery, .history) || remoteTopics.contains("power"),
             networkDetails: showing(.overview, .network) || remoteTopics.contains("network"),
-            processTable: remoteProcessTable
+            processTable: processTableDue(at: now),
+            battery: windowOnScreen || menuBarPanelVisible || remoteTopics.contains("battery"),
+            peripheralTemps: windowOnScreen || menuBarPanelVisible || remoteTopics.contains("thermal")
         )
     }
     private static let maxChartPoints = 300
@@ -284,7 +302,7 @@ final class VitalsModel {
     /// can be seen; `history` keeps recording, and the next reveal catches up.
     private func publishChartsIfVisible() {
         guard windowOnScreen || menuBarPanelVisible else { return }
-        chartHistory = history.thinned(to: Self.maxChartPoints)
+        chartHistory = history.bucketed(to: Self.maxChartPoints, span: Double(settings.historyMinutes) * 60)
     }
 
     /// One sample at a time: a tick that finds the previous one running is dropped.
@@ -307,7 +325,9 @@ final class VitalsModel {
         // May restart the timer and re-enter `tick`; `isSampling` makes that a no-op.
         settings.updatePowerState()
 
-        let needs = currentNeeds
+        let now = Date()
+        let needs = currentNeeds(at: now)
+        if needs.processTable { processTableAt = now }
         samplingTask = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -326,8 +346,10 @@ final class VitalsModel {
         let classified = snapshot.sensors
         assignIfChanged(&cpuSensors, to: classified.filter { $0.kind == .cpu })
         assignIfChanged(&gpuTemp, to: Self.average(of: classified, kind: .gpu))
-        assignIfChanged(&ssdTemp, to: Self.average(of: classified, kind: .storage))
-        assignIfChanged(&batteryTemp, to: Self.average(of: classified, kind: .battery))
+        if sampled.peripheralTemps {
+            assignIfChanged(&ssdTemp, to: Self.average(of: classified, kind: .storage))
+            assignIfChanged(&batteryTemp, to: Self.average(of: classified, kind: .battery))
+        }
         assignIfChanged(&fans, to: snapshot.fans)
         assignIfChanged(&hasSMC, to: snapshot.hasSMC)
         assignIfChanged(&thermalState, to: ProcessInfo.processInfo.thermalState)
@@ -518,7 +540,7 @@ final class VitalsModel {
         }
     }
 
-    nonisolated private static func kind(for name: String) -> Sensor.Kind {
+    nonisolated static func kind(for name: String) -> Sensor.Kind {
         let n = name.lowercased()
         if n.contains("pacc") || n.contains("eacc") || n.contains("tdie") || n.contains("cpu") { return .cpu }
         if n.contains("gpu") { return .gpu }

@@ -70,8 +70,12 @@ export interface Link {
 
 export const linkOf = (state: ConnectionState): Link => {
   switch (state._tag) {
-    case "Ready":
-      return state.hello.mac === null ? { label: "no signal", tone: "off" } : { label: "live", tone: "live" };
+    case "Ready": {
+      if (state.hello.mac === null) return { label: "no signal", tone: "off" };
+      const route = state.route === "lan" ? "Wi-Fi" : "Tailscale";
+      const latency = state.latencyMs === null ? "" : ` · ${String(state.latencyMs)} ms`;
+      return { label: `${route}${latency}`, tone: state.route === "lan" ? "live" : "away" };
+    }
     case "Connecting":
       return { label: "connecting", tone: "quiet" };
     case "Backoff":

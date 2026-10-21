@@ -4,6 +4,7 @@ import { Scope } from "./auth.ts";
 import { CommandReceipt } from "./commands.ts";
 import { EpochMs, NonNegativeInt, ProcessRef } from "./ids.ts";
 import { Alert } from "./guard.ts";
+import { MacRoutes } from "./lan.ts";
 import { ThermalState } from "./stats.ts";
 
 export const PROTOCOL_VERSION = 1 as const;
@@ -62,5 +63,6 @@ export const Hello = Schema.Struct({
   alerts: Schema.Array(Alert),
   serverTime: EpochMs,
   scopes: Schema.Array(Scope),
+  routes: Schema.optional(MacRoutes),
 });
 export type Hello = typeof Hello.Type;

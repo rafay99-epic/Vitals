@@ -7,6 +7,7 @@ export interface CommandResult {
 export type Runner = (args: ReadonlyArray<string>, timeoutMs: number) => Promise<CommandResult>;
 
 export interface TailscaleStatus {
+  readonly backendState: string | null;
   readonly running: boolean;
   readonly dnsName: string | null;
   readonly ownerLogin: string | null;
@@ -62,12 +63,13 @@ const parseJson = (json: string): unknown => {
 
 export const parseStatus = (json: string): TailscaleStatus => {
   const parsed = parseJson(json);
-  if (!isRecord(parsed)) return { running: false, dnsName: null, ownerLogin: null, magicDns: false };
+  if (!isRecord(parsed)) return { backendState: null, running: false, dnsName: null, ownerLogin: null, magicDns: false };
   const raw: RawStatus = parsed;
   const dnsName = raw.Self?.DNSName?.replace(/\.$/, "") ?? null;
   const userId = raw.Self?.UserID;
   const ownerLogin = userId === undefined ? null : (raw.User?.[String(userId)]?.LoginName ?? null);
   return {
+    backendState: raw.BackendState ?? null,
     running: raw.BackendState === "Running",
     dnsName: dnsName === "" ? null : dnsName,
     ownerLogin,
@@ -77,7 +79,7 @@ export const parseStatus = (json: string): TailscaleStatus => {
 
 export const status = async (run: Runner): Promise<TailscaleStatus> => {
   const result = await run(["status", "--json", "--peers=false"], 3_500);
-  if (result.code !== 0) return { running: false, dnsName: null, ownerLogin: null, magicDns: false };
+  if (result.code !== 0) return { backendState: null, running: false, dnsName: null, ownerLogin: null, magicDns: false };
   return parseStatus(result.stdout);
 };
 
@@ -105,3 +107,7 @@ export const serveOff = async (run: Runner, httpsPort: number): Promise<CommandR
 
 export const httpsUrl = (dnsName: string, httpsPort: number): string =>
   httpsPort === 443 ? `https://${dnsName}` : `https://${dnsName}:${httpsPort}`;
+
+const CONSENT_URL = /https:\/\/login\.tailscale\.com\/f\/serve\S*/;
+
+export const consentUrl = (stderr: string): string | null => CONSENT_URL.exec(stderr)?.[0] ?? null;

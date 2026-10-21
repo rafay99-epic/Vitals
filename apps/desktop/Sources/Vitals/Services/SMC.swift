@@ -55,15 +55,21 @@ final class SMC {
     /// Fan count straight from the SMC, readable before the first sample.
     var fanCount: Int { read("FNum").map { max(0, Int($0)) } ?? 0 }
 
-    func fans() -> [Fan] {
+    /// Fan count and rated limits are fixed by the hardware, so they're read
+    /// once; each tick then reads only the live keys.
+    private lazy var fanLimits: [(min: Double, max: Double)] = {
         guard let count = read("FNum").map({ Int($0) }), count > 0 else { return [] }
-        return (0..<min(count, 10)).compactMap { i in
+        return (0..<min(count, 10)).map { (min: read("F\($0)Mn") ?? 0, max: read("F\($0)Mx") ?? 0) }
+    }()
+
+    func fans() -> [Fan] {
+        fanLimits.enumerated().compactMap { i, limits in
             guard let rpm = read("F\(i)Ac") else { return nil }
             return Fan(
                 id: i,
                 rpm: rpm,
-                minRPM: read("F\(i)Mn") ?? 0,
-                maxRPM: read("F\(i)Mx") ?? 0,
+                minRPM: limits.min,
+                maxRPM: limits.max,
                 targetRPM: read("F\(i)Tg") ?? 0,
                 isManual: read("F\(i)Md").map { $0 > 0.5 }
             )

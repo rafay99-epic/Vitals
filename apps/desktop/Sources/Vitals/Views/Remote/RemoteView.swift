@@ -31,10 +31,13 @@ struct RemoteView: View {
 private struct RemoteDevicesTab: View {
     @Environment(RemoteModel.self) private var remote
     @State private var showingPairing = false
+    @State private var showingAwayAccess = false
 
     var body: some View {
         MetricScroll {
             StatusCard()
+            if !remote.pairPrompts.isEmpty { PairPromptsCard() }
+            if remote.isEnabled { RoutesCard(showingAwayAccess: $showingAwayAccess) }
             if !remote.pendingCommands.isEmpty { PendingCommandsCard() }
             KeepAwakeCard()
             SectionCard(title: "Devices", symbol: "iphone.gen3") {
@@ -59,6 +62,7 @@ private struct RemoteDevicesTab: View {
         .sheet(isPresented: $showingPairing, onDismiss: { remote.clearPairing() }, content: {
             PairingSheet(isPresented: $showingPairing)
         })
+        .sheet(isPresented: $showingAwayAccess) { AwayAccessSheet(isPresented: $showingAwayAccess) }
         .task(id: remote.state) { await remote.refreshDevices() }
     }
 }
@@ -98,7 +102,9 @@ private struct StatusCard: View {
 
     private var detail: String? {
         if case let .failed(message) = remote.state { return message }
-        guard remote.isEnabled else { return "Phones and browsers on your tailnet can monitor and control this Mac." }
+        guard remote.isEnabled else {
+            return "Phones on your Wi-Fi or tailnet can monitor and control this Mac. macOS asks twice when this turns on: choose Allow both times."
+        }
         return remote.status?.url ?? remote.status?.detail
     }
 
@@ -109,6 +115,119 @@ private struct StatusCard: View {
             Text(title).foregroundStyle(.secondary)
             Text(value).textSelection(.enabled)
         }
+    }
+}
+
+/// Wi-Fi pair requests. The notification is the main surface; this row covers notifications being off.
+private struct PairPromptsCard: View {
+    @Environment(RemoteModel.self) private var remote
+
+    var body: some View {
+        SectionCard(title: "Wants to connect", symbol: "iphone.radiowaves.left.and.right") {
+            VStack(spacing: 0) {
+                ForEach(remote.pairPrompts) { prompt in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(prompt.device.name).font(.body.weight(.medium))
+                            Text("over Wi-Fi · \(prompt.address)").font(.callout).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(prompt.code)
+                            .font(.system(.title3, design: .monospaced).weight(.semibold))
+                            .accessibilityLabel("Code \(prompt.code)")
+                        Button("Deny", role: .destructive) { Task { await remote.resolvePairPrompt(prompt.id, allow: false) } }
+                        Button("Allow") { Task { await remote.resolvePairPrompt(prompt.id, allow: true) } }
+                    }
+                    .padding(.vertical, 8)
+                    if prompt.id != remote.pairPrompts.last?.id { Divider() }
+                }
+            }
+        }
+    }
+}
+
+/// How a phone reaches this Mac: Bonjour on the local network, Tailscale from anywhere else.
+private struct RoutesCard: View {
+    @Environment(RemoteModel.self) private var remote
+    @Binding var showingAwayAccess: Bool
+
+    var body: some View {
+        SectionCard(title: "Routes", symbol: "point.3.connected.trianglepath.dotted") {
+            VStack(spacing: 0) {
+                route("Wi-Fi", detail: wifiDetail) {
+                    Text(wifiState.label).foregroundStyle(wifiState.color)
+                }
+                if wifiState == .blocked {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("macOS is holding the Wi-Fi route. Allow both prompts: incoming connections for vitals-gateway, and \(Channel.current.displayName) on your local network.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Button("Open Local Network settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.link)
+                    }
+                    .padding(.bottom, 8)
+                }
+                Divider()
+                route("Tailscale", detail: "away access") {
+                    if remote.status?.setup?.step == .ready {
+                        Text("ready").foregroundStyle(.green)
+                    } else {
+                        Button("set up ›") { showingAwayAccess = true }
+                            .buttonStyle(.link)
+                            .disabled(remote.status?.setup == nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private var advertising: Bool { remote.lanAdvertiser.advertised != nil }
+
+    private enum WifiState {
+        case off, blocked, ready
+
+        var label: String {
+            switch self {
+            case .off: return "off"
+            case .blocked: return "waiting for macOS"
+            case .ready: return "ready"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .off: return .secondary
+            case .blocked: return .orange
+            case .ready: return .green
+            }
+        }
+    }
+
+    /// Ready only once the gateway has reached its own Wi-Fi address; until then a
+    /// phone on the same network would connect and hear nothing back.
+    private var wifiState: WifiState {
+        guard let lan = remote.status?.lan, advertising else { return .off }
+        return lan.reachable == false ? .blocked : .ready
+    }
+
+    private var wifiDetail: String {
+        let parts = LanAdvertiser.lanAddresses() + (advertising ? ["Bonjour on"] : [])
+        return parts.isEmpty ? "not on a network" : parts.joined(separator: " · ")
+    }
+
+    private func route(_ title: String, detail: String, @ViewBuilder value: () -> some View) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body.weight(.medium))
+                Text(detail).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            Spacer()
+            value()
+        }
+        .padding(.vertical, 8)
     }
 }
 

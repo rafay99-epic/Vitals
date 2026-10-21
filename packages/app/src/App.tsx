@@ -1,9 +1,11 @@
 import { type BottomTabBarProps, createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { DarkTheme, type LinkingOptions, NavigationContainer, type Theme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { discoverySupported } from "@vitals/discovery";
 import { colors, type GlyphName, Mono, TabBar, Toast, useWide } from "@vitals/ui";
+import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,16 +17,18 @@ import { ChannelScreen } from "./features/chart/ChannelScreen.tsx";
 import { ChartScreen } from "./features/chart/ChartScreen.tsx";
 import { DiagnosticsScreen } from "./features/diagnostics/DiagnosticsScreen.tsx";
 import { OnboardingScreen } from "./features/onboarding/OnboardingScreen.tsx";
+import { FindMacScreen } from "./features/pairing/FindMacScreen.tsx";
 import { OrdersScreen } from "./features/orders/OrdersScreen.tsx";
 import { PairScreen } from "./features/pairing/PairScreen.tsx";
 import { WelcomeFlow } from "./features/pairing/WelcomeFlow.tsx";
+import { ConnectionScreen } from "./features/record/ConnectionScreen.tsx";
 import { RecordScreen } from "./features/record/RecordScreen.tsx";
 import { PlayUpdateSheet } from "./features/updates/PlayUpdateSheet";
 import { UpdateGate } from "./features/updates/UpdateGate";
 import { UpdatesScreen } from "./features/updates/UpdatesScreen";
 import { WardScreen } from "./features/ward/WardScreen.tsx";
 import { useAppFonts } from "./lib/fonts";
-import { hostOf } from "./lib/host.ts";
+import { addressOf } from "./lib/host.ts";
 import type { ChartStackParams, RecordStackParams, TabParams } from "./navigation/types.ts";
 import { finishOnboarding, onboarded } from "./persistence/onboarding";
 import { useStore } from "./state/useStore.ts";
@@ -34,16 +38,20 @@ const theme: Theme = {
   colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, border: colors.line, text: colors.ink, primary: colors.ink, notification: colors.alarmHigh },
 };
 
+const scheme = Constants.expoConfig?.scheme;
+const nativePrefix = typeof scheme === "string" ? `${scheme}://` : null;
+
 const linking: LinkingOptions<TabParams> = {
-  enabled: Platform.OS === "web",
-  prefixes: [],
+  enabled: Platform.OS === "web" || nativePrefix !== null,
+  prefixes: Platform.OS === "web" || nativePrefix === null ? [] : [nativePrefix],
+  filter: (url) => !/:\/\/pair\b/.test(url),
   config: {
     screens: {
       ChartTab: { path: "chart", screens: { Chart: "", Channel: ":channel" } },
       Orders: "orders",
       Ward: "ward",
       Alarms: "alarms",
-      RecordTab: { path: "record", screens: { Record: "", Updates: "updates", Diagnostics: "diagnostics" } },
+      RecordTab: { path: "record", screens: { Record: "", Updates: "updates", Diagnostics: "diagnostics", Connection: "connection" } },
     },
   },
 };
@@ -78,6 +86,7 @@ function RecordNavigator() {
     <RecordStack.Navigator screenOptions={stackOptions}>
       <RecordStack.Screen name="Record" component={RecordScreen} />
       <RecordStack.Screen name="Updates" component={UpdatesScreen} />
+      <RecordStack.Screen name="Connection" component={ConnectionScreen} />
       <RecordStack.Screen name="Diagnostics" component={DiagnosticsScreen} />
     </RecordStack.Navigator>
   );
@@ -95,7 +104,7 @@ function BedsideTabBar({ state, navigation, wide }: BottomTabBarProps & { readon
     if (name === active || event.defaultPrevented) return;
     navigation.navigate(route.name, route.params);
   };
-  return <TabBar items={items} active={active} onSelect={select} rail={wide} footer={<Mono>{hostOf(remote.credentials.baseUrl)}</Mono>} />;
+  return <TabBar items={items} active={active} onSelect={select} rail={wide} footer={<Mono>{addressOf(remote.credentials)}</Mono>} />;
 }
 
 const phoneTabBar = (props: BottomTabBarProps) => <BedsideTabBar {...props} wide={false} />;
@@ -132,8 +141,10 @@ function PairedTabs() {
 
 function Unpaired() {
   const ready = useStore(onboarded);
+  const [scan, setScan] = useState(!discoverySupported);
   if (ready === null) return <View className="flex-1 bg-bg" />;
-  return ready ? <PairScreen /> : <OnboardingScreen />;
+  if (!ready) return <OnboardingScreen />;
+  return scan ? <PairScreen onFind={discoverySupported ? () => setScan(false) : undefined} /> : <FindMacScreen onScan={() => setScan(true)} />;
 }
 
 function Root() {

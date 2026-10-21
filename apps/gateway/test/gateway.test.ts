@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-import { MAX_FRAME_BYTES } from "../src/app.ts";
+import { MAX_FRAME_BYTES } from "../src/config.ts";
 import { adminOp, alertFixture, clientLayer, makeClient, ownerHeaders, pairDevice, sample, startGateway, ticketFor } from "./harness.ts";
 
 const commandId = Schema.decodeUnknownSync(CommandId);

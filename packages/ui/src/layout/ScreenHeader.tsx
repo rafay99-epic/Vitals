@@ -5,10 +5,11 @@ import Animated from "react-native-reanimated";
 import { swap } from "../motion";
 import { Mono, Sans, Serif, type Tone } from "../typography.tsx";
 
-export type LinkTone = "live" | "quiet" | "warn" | "off";
+export type LinkTone = "live" | "away" | "quiet" | "warn" | "off";
 
 const LINK: Record<LinkTone, { readonly dot: string; readonly tone: Tone }> = {
   live: { dot: "●", tone: "pulse" },
+  away: { dot: "●", tone: "resp" },
   quiet: { dot: "○", tone: "dim" },
   warn: { dot: "○", tone: "alarmMedium" },
   off: { dot: "○", tone: "mute" },

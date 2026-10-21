@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import SystemConfiguration
 
 @MainActor
 @Observable
@@ -32,6 +33,9 @@ final class RemoteModel {
 
     private(set) var pendingCommands: [String: PendingCommand] = [:]
     private(set) var adminError: String?
+    /// Phones on the Wi-Fi waiting for Allow or Deny, oldest first.
+    private(set) var pairPrompts: [PairPrompt] = []
+    let lanAdvertiser = LanAdvertiser()
 
     var isEnabled: Bool { settings.remoteEnabled }
 
@@ -45,6 +49,7 @@ final class RemoteModel {
     @ObservationIgnored private var gatewayGeneration = 0
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var needs = NeedsMessage.none
+    @ObservationIgnored private var classifyGeneration = 0
     @ObservationIgnored private var sampleSeq = 0
     @ObservationIgnored private var adminWaiters: [String: CheckedContinuation<AdminResult, Error>] = [:]
     @ObservationIgnored private var guardEngine: PressureGuard
@@ -56,6 +61,7 @@ final class RemoteModel {
     @ObservationIgnored private var lastGuardSent: WireGuardState?
     @ObservationIgnored private var lastThermal = ProcessInfo.processInfo.thermalState
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var promptExpiry: [String: Task<Void, Never>] = [:]
 
     struct AdminFailure: Error, Equatable { let message: String }
 
@@ -131,6 +137,7 @@ final class RemoteModel {
             return
         }
         state = .starting
+        NotificationManager.shared.requestAuthorizationIfNeeded()
         var environment = ProcessInfo.processInfo.environment
         environment["VITALS_CHANNEL"] = Channel.current.rawValue
         environment["VITALS_REMOTE_DATA_DIR"] = Self.dataDirectory.path
@@ -174,6 +181,8 @@ final class RemoteModel {
         devices = []
         pairing = nil
         needs = .none
+        lanAdvertiser.update(nil)
+        endAllPairPrompts()
         updateVitalsNeeds()
         failAdminWaiters("Remote access is off")
     }
@@ -183,6 +192,8 @@ final class RemoteModel {
         gateway = nil
         guardState = nil
         needs = .none
+        lanAdvertiser.update(nil)
+        endAllPairPrompts()
         updateVitalsNeeds()
         failAdminWaiters("The gateway stopped")
         guard settings.remoteEnabled else {
@@ -233,6 +244,12 @@ final class RemoteModel {
             if let result { waiter.resume(returning: result) } else { waiter.resume(throwing: AdminFailure(message: error ?? "Failed")) }
         case let .status(next):
             status = next
+            lanAdvertiser.update(next.lan)
+            Task { await refreshDevices() }
+        case let .pairPrompt(prompt):
+            showPairPrompt(prompt)
+        case let .pairPromptEnded(id):
+            endPairPrompt(id)
             Task { await refreshDevices() }
         }
     }
@@ -295,6 +312,46 @@ final class RemoteModel {
         await refreshDevices()
     }
 
+    // MARK: Wi-Fi pairing
+
+    /// Notification first; RemoteView lists the same prompts for when notifications are off.
+    private func showPairPrompt(_ prompt: PairPrompt) {
+        pairPrompts.removeAll { $0.id == prompt.id }
+        pairPrompts.append(prompt)
+        NotificationManager.shared.send(
+            title: "\(prompt.device.name) wants to connect",
+            body: "over Wi-Fi · code \(prompt.code) · read and operate",
+            id: NotificationManager.pairNotificationId(prompt.id),
+            categoryId: NotificationManager.Category.remotePair
+        )
+        promptExpiry[prompt.id]?.cancel()
+        promptExpiry[prompt.id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, prompt.expiry.timeIntervalSinceNow)))
+            guard !Task.isCancelled else { return }
+            self?.endPairPrompt(prompt.id)
+        }
+    }
+
+    private func endPairPrompt(_ id: String) {
+        pairPrompts.removeAll { $0.id == id }
+        promptExpiry.removeValue(forKey: id)?.cancel()
+        NotificationManager.shared.remove(id: NotificationManager.pairNotificationId(id))
+    }
+
+    private func endAllPairPrompts() {
+        pairPrompts.map(\.id).forEach(endPairPrompt)
+    }
+
+    func resolvePairPrompt(_ id: String, allow: Bool) async {
+        endPairPrompt(id)
+        do {
+            _ = try await admin(.resolvePairPrompt(id: id, allow: allow))
+        } catch {
+            Log.notice(.remote, "couldn't resolve pair prompt \(id)", error: error)
+        }
+        if allow { await refreshDevices() }
+    }
+
     private func admin(_ op: AdminOp) async throws -> AdminResult {
         guard gateway != nil else { throw AdminFailure(message: "Remote access is off") }
         let id = UUID().uuidString
@@ -317,11 +374,13 @@ final class RemoteModel {
     // MARK: Sampling
 
     private func updateVitalsNeeds() {
-        let active = gateway != nil
-        vitals.setRemoteNeeds(
-            topics: active ? Set(needs.topics) : [],
-            processTable: active && (guardEngine.settings.enabled || needs.processes != nil)
-        )
+        vitals.setRemoteNeeds(topics: gateway == nil ? [] : Set(needs.topics), processTable: processTableDemand)
+    }
+
+    private var processTableDemand: VitalsModel.ProcessTableDemand {
+        guard gateway != nil else { return .off }
+        if needs.processes != nil { return .live }
+        return guardEngine.settings.enabled ? .guardOnly : .off
     }
 
     private func sampled(_ table: [ProcessSampler.Row]) {
@@ -335,11 +394,24 @@ final class RemoteModel {
             lastThermal = thermal
             send(.event(.thermalChanged(at: Self.now(), state: thermal.wireName)))
         }
-        guard gateway != nil, !table.isEmpty else { return }
-        latestTable = table
-        latestClassified = ProcessGroups.classify(table)
-        if let request = needs.processes { send(.processes(processesSnapshot(limit: request.limit, at: now))) }
-        evaluateGuard(now: now)
+        guard gateway != nil else { return }
+        if !table.isEmpty { classify(table) }
+        if processTableDemand != .off, !latestTable.isEmpty { evaluateGuard(now: now) }
+    }
+
+    /// Grouping walks every process's parent chain, so it runs off the main actor.
+    /// A newer table supersedes a slower, older result; the table and its
+    /// classification are always swapped in together.
+    private func classify(_ table: [ProcessSampler.Row]) {
+        classifyGeneration += 1
+        let generation = classifyGeneration
+        Task { [weak self] in
+            let classified = await Task.detached(priority: .utility) { ProcessGroups.classify(table) }.value
+            guard let self, generation == self.classifyGeneration, self.gateway != nil else { return }
+            self.latestTable = table
+            self.latestClassified = classified
+            if let request = self.needs.processes { self.send(.processes(self.processesSnapshot(limit: request.limit, at: Date()))) }
+        }
     }
 
     private func processesSnapshot(limit: Int, at date: Date) -> WireProcesses {
@@ -400,7 +472,7 @@ final class RemoteModel {
             active: guardEngine.active,
             calmApplied: !calmActions.isEmpty
         )
-        guardState = next
+        if next != guardState { guardState = next }
         if needs.guardState, next != lastGuardSent {
             lastGuardSent = next
             send(.guardState(next))
@@ -441,6 +513,7 @@ final class RemoteModel {
         switch action {
         case let .cancelCommand(id): router.cancel(id)
         case .calmDown: _ = calmDown()
+        case let .resolvePair(id, allow): Task { await resolvePairPrompt(id, allow: allow) }
         }
     }
 
@@ -540,7 +613,7 @@ final class RemoteModel {
 
     private func macInfo() -> WireMac {
         WireMac(
-            name: Host.current().localizedName ?? "Mac",
+            name: SCDynamicStoreCopyComputerName(nil, nil) as String? ?? "Mac",
             model: HardwareInfo.modelIdentifier,
             chip: HardwareInfo.chipName,
             os: HardwareInfo.osVersion,

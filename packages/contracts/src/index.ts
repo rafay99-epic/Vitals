@@ -9,3 +9,4 @@ export * from "./rpc.ts";
 export * from "./scopes.ts";
 export * from "./stats.ts";
 export * from "./system.ts";
+export * from "./lan.ts";

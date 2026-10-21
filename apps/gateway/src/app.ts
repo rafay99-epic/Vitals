@@ -11,9 +11,10 @@ import * as Admin from "./admin/Admin.ts";
 import * as Auth from "./auth/Auth.ts";
 import * as Bridge from "./bridge/Bridge.ts";
 import * as CommandService from "./commands/CommandService.ts";
-import { GatewayConfig, type GatewayConfigShape } from "./config.ts";
+import { GatewayConfig, type GatewayConfigShape, MAX_FRAME_BYTES } from "./config.ts";
 import * as EventLog from "./events/EventLog.ts";
 import { apiRoutes, staticRoutes } from "./http/routes.ts";
+import * as Lan from "./lan/Lan.ts";
 import * as Hubs from "./live/Hubs.ts";
 import { ACTIVITY_MIGRATIONS, REMOTE_MIGRATIONS } from "./persistence/migrations.ts";
 import { openDatabase } from "./persistence/sqlite.ts";
@@ -40,7 +41,8 @@ const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
   );
   const bridged = Bridge.layer.pipe(Layer.provideMerge(core));
   const authed = Auth.layer(config.ownerLogin).pipe(Layer.provideMerge(bridged));
-  const evented = EventLog.layer(activityDb).pipe(Layer.provideMerge(authed));
+  const lanned = Lan.layer.pipe(Layer.provideMerge(authed));
+  const evented = EventLog.layer(activityDb).pipe(Layer.provideMerge(lanned));
   const services = Layer.mergeAll(Hubs.layer, CommandService.layer, Serve.layer).pipe(Layer.provideMerge(evented));
   const ready = Layer.effectDiscard(
     Effect.gen(function* () {
@@ -50,8 +52,6 @@ const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
   );
   return Layer.mergeAll(Admin.layer, ready).pipe(Layer.provideMerge(services));
 };
-
-export const MAX_FRAME_BYTES = 1024 * 1024;
 
 const routes = (config: GatewayConfigShape) => Layer.mergeAll(apiRoutes, wsRoute, staticRoutes(config.webDir));
 

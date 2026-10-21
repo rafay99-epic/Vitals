@@ -82,12 +82,14 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     },
     infoPlist: {
       NSCameraUsageDescription: "Scan the pairing code shown in Vitals on your Mac.",
-      NSLocalNetworkUsageDescription: "Connect to your Mac over your tailnet.",
+      NSLocalNetworkUsageDescription: "Find and connect to Vitals on your Mac over Wi-Fi.",
+      NSBonjourServices: ["_vitals._tcp"],
+      NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
     },
   },
   android: {
     package: `com.syntaxlabtechnology.vitals.remote${current.suffix}`,
-    permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE"],
+    permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE", "ACCESS_LOCAL_NETWORK"],
     adaptiveIcon: {
       foregroundImage: `./assets/adaptive-foreground${current.art}.png`,
       monochromeImage: `./assets/adaptive-monochrome${current.art}.png`,
@@ -119,6 +121,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
       "expo-build-properties",
       {
         android: {
+          usesCleartextTraffic: true,
           extraProguardRules: [
             "-keep class * extends androidx.room.RoomDatabase { <init>(); }",
             "-keep class androidx.work.impl.WorkDatabase_Impl { *; }",

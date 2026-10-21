@@ -15,5 +15,8 @@
   { "t": "query", "id": "q-3", "q": { "_tag": "Clipboard" } },
   { "t": "adminResult", "id": "a-1", "ok": { "_tag": "CreatePairing", "code": "ABCD2345EFGH", "url": "https://mac.tail1234.ts.net:7445/pair#code=ABCD2345EFGH", "expiresAt": 1790000300000 }, "error": null },
   { "t": "adminResult", "id": "a-2", "ok": null, "error": "unknown device" },
-  { "t": "status", "status": { "serve": "serving", "url": "https://mac.tail1234.ts.net:7445", "detail": null, "ownerLogin": "owner@", "clients": 1 } }
+  { "t": "status", "status": { "serve": "serving", "url": "https://mac.tail1234.ts.net:7445", "detail": null, "ownerLogin": "owner@", "clients": 1, "lan": { "port": 47812, "key": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", "reachable": true }, "setup": { "step": "ready", "url": null } } },
+  { "t": "pairPrompt", "prompt": { "id": "p-1", "device": { "name": "Pixel 9", "platform": "android", "model": "Pixel 9", "appVersion": "1.0.0" }, "code": "4819", "address": "192.168.1.44", "expiresAt": 1790000120000 } },
+  { "t": "pairPromptEnded", "id": "p-1" },
+  { "t": "adminResult", "id": "a-9", "ok": { "_tag": "ResolvePairPrompt" }, "error": null }
 ]

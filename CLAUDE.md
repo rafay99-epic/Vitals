@@ -155,9 +155,18 @@ pnpm dmg                  # desktop app + DMG (macOS only)
 # web client: pnpm --filter @vitals/web export → apps/web/dist, served by the gateway; build.sh bundles it
 # android APK: pnpm --filter @vitals/mobile android:dev | android:prod (pnpm manages deps; Bun only compiles and tests the gateway)
 #   release builds sign with the shared upload key (Lumo's) when ~/.gradle/gradle.properties sets VITALS_UPLOAD_{STORE_FILE,STORE_PASSWORD,KEY_ALIAS,KEY_PASSWORD}; otherwise debug-signed. EAS reads the same key from gitignored apps/mobile/credentials.json
+# phone native libs: packages/tailnet/scripts/build-native.sh (Go + gomobile + NDK) builds the embedded Tailscale AAR/xcframework; run it before any native build (outputs are gitignored, so EAS cloud builds need it added first)
 # OTA update: pnpm --filter @vitals/mobile update:dev | update:prod (publishes the JS bundle to that channel)
 # website e2e locally: E2E_BROWSER="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" pnpm turbo test:e2e --filter=marketing
 ```
+
+## Remote routes (phone ↔ Mac)
+
+- Two routes to one device record. **Wi-Fi**: the gateway listens on `0.0.0.0` (`LAN_PORTS`: 47810 stable, 47811 nightly, 47812 dev), serves only `/.well-known/vitals` (public advert with the Mac's X25519 key) and `/lan`, a Noise IK channel (`@vitals/noise`, checked against the cacophony vectors). The proxy maps the phone's static key to its device and pipes decrypted frames into the loopback `/ws`, so auth, scopes, revocation and activity logging are shared. **Tailscale**: unchanged Serve HTTPS + owner identity + token.
+- The Swift app advertises `_vitals._tcp` over Bonjour (TXT `k` key, `n` name, `c` channel, `v`). New Wi-Fi pairings need a click on the Mac (A3 notification, 4-digit code from the handshake hash, 2 min expiry). QR pairing sends the phone's Wi-Fi key; older pairings bind it with `device.lanKey`.
+- `client-runtime` probes routes in parallel (Wi-Fi first, 1.2 s), moves a live session from Tailscale to Wi-Fi make-before-break (60 s check, network change, Bonjour sighting), holds a failed route off for 5 min, and reports route + latency in `Ready`. Wi-Fi is skipped off local networks and until the phone's key is enrolled.
+- macOS 15 must allow both the firewall prompt for `vitals-gateway` and Local Network for the app; the gateway self-tests its Wi-Fi address and reports `lan.reachable`, and Remote shows "waiting for macOS" until it passes. Shell tools run from a terminal are themselves subject to Local Network privacy, so `curl` to the Mac's own LAN IP is not a valid test.
+- Built-in Tailscale (`@vitals/tailnet`, tsnet via gomobile) makes the phone its own tailnet node and tunnels `127.0.0.1:<port>` to the Mac's Wi-Fi listener over the tailnet, so the same Noise route works away from home without the Tailscale app.
 
 ## Desktop architecture
 

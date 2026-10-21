@@ -10,6 +10,7 @@
   "dependencies": {
     "@effect/platform-bun": "catalog:",
     "@vitals/contracts": "workspace:*",
+    "@vitals/noise": "workspace:*",
     "@vitals/shared": "workspace:*",
     "@vitals/tailscale": "workspace:*",
     "effect": "catalog:"

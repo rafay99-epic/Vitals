@@ -161,6 +161,7 @@ export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-
     tailscaleBin: null,
     manageServe: false,
     ownerLogin: OWNER,
+    lanPort: port + 2_000,
   };
   const app = new FakeApp();
   const transport = Layer.succeed(BridgeTransportService, { lines: app.lines, write: app.write, onClose: () => {} });
@@ -178,6 +179,7 @@ export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-
   return {
     app,
     base,
+    lanBase: `http://127.0.0.1:${port + 2_000}`,
     dataDir,
     stop: async (keepData = false) => {
       await Effect.runPromise(Fiber.interrupt(dispose));

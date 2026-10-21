@@ -38,7 +38,11 @@ describe("pairing links", () => {
     expect(parsePairingUrl("https://mac.ts.net:7445/pair#code=abcd-efgh-jklm")).toEqual({
       baseUrl: "https://mac.ts.net:7445",
       code: "ABCDEFGHJKLM",
+      macKey: null,
     });
+    const key = "q".repeat(43);
+    expect(parsePairingUrl(`https://mac.ts.net:7445/pair#code=ABCDEFGHJKLM&key=${key}`)?.macKey).toBe(key);
+    expect(parsePairingUrl("https://mac.ts.net:7445/pair#code=ABCDEFGHJKLM&key=short")?.macKey).toBeNull();
     expect(parsePairingUrl("https://mac.ts.net/pair#code=ABCD")).toBeNull();
     expect(parsePairingUrl("ftp://mac.ts.net/pair#code=ABCDEFGHJKLM")).toBeNull();
     expect(parsePairingUrl("not a url")).toBeNull();
@@ -46,7 +50,7 @@ describe("pairing links", () => {
 
   test("app deep links carry a full pairing link", () => {
     const link = encodeURIComponent("https://mac.ts.net:7445/pair#code=ABCDEFGHJKLM");
-    expect(parsePairingDeepLink(`vitals-preview://pair?link=${link}`)).toEqual({ baseUrl: "https://mac.ts.net:7445", code: "ABCDEFGHJKLM" });
+    expect(parsePairingDeepLink(`vitals-preview://pair?link=${link}`)).toEqual({ baseUrl: "https://mac.ts.net:7445", code: "ABCDEFGHJKLM", macKey: null });
     expect(parsePairingDeepLink(`vitals://other?link=${link}`)).toBeNull();
     expect(parsePairingDeepLink("vitals://pair")).toBeNull();
     expect(parsePairingDeepLink("https://mac.ts.net:7445/pair#code=ABCDEFGHJKLM")).toBeNull();

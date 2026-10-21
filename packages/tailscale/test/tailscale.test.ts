@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { bunRunner, httpsUrl, parseServeTarget, parseStatus, serveOn, status, type Runner } from "../src/index.ts";
+import { bunRunner, consentUrl, httpsUrl, parseServeTarget, parseStatus, serveOn, status, type Runner } from "../src/index.ts";
 
 const sample = JSON.stringify({
   BackendState: "Running",
@@ -12,6 +12,7 @@ const sample = JSON.stringify({
 describe("tailscale", () => {
   test("parses dns name and owner login", () => {
     expect(parseStatus(sample)).toEqual({
+      backendState: "Running",
       running: true,
       dnsName: "mac.tail1234.ts.net",
       ownerLogin: "owner@",
@@ -52,10 +53,17 @@ describe("tailscale", () => {
     expect(missing.code).not.toBe(0);
     expect(parseStatus("not json").running).toBe(false);
     expect(await status(async () => ({ code: 0, stdout: "{", stderr: "" }))).toEqual({
+      backendState: null,
       running: false,
       dnsName: null,
       ownerLogin: null,
       magicDns: false,
     });
+  });
+
+  test("finds the one-time serve consent link in CLI output", () => {
+    const stderr = "Serve is not enabled on your tailnet.\nTo enable, visit:\n\n         https://login.tailscale.com/f/serve?node=nXyZ123\n";
+    expect(consentUrl(stderr)).toBe("https://login.tailscale.com/f/serve?node=nXyZ123");
+    expect(consentUrl("error: connection refused")).toBeNull();
   });
 });

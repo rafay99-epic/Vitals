@@ -47,6 +47,13 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
       CREATE INDEX commands_created ON commands(created_at);
     `,
   },
+  {
+    id: 2,
+    sql: `
+      ALTER TABLE devices ADD COLUMN lan_key TEXT;
+      CREATE UNIQUE INDEX devices_lan_key ON devices(lan_key) WHERE lan_key IS NOT NULL AND revoked_at IS NULL;
+    `,
+  },
 ];
 
 export const ACTIVITY_MIGRATIONS: ReadonlyArray<Migration> = [

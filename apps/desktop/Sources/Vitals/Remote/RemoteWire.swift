@@ -295,10 +295,11 @@ enum AdminOp: Equatable, Sendable {
     case listDevices
     case revokeDevice(String)
     case setScopes(deviceId: String, scopes: [String])
+    case resolvePairPrompt(id: String, allow: Bool)
 }
 
 extension AdminOp: Encodable {
-    private enum Keys: String, CodingKey { case _tag, deviceId, scopes }
+    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -312,6 +313,10 @@ extension AdminOp: Encodable {
             try c.encode("SetScopes", forKey: ._tag)
             try c.encode(id, forKey: .deviceId)
             try c.encode(scopes, forKey: .scopes)
+        case let .resolvePairPrompt(id, allow):
+            try c.encode("ResolvePairPrompt", forKey: ._tag)
+            try c.encode(id, forKey: .id)
+            try c.encode(allow, forKey: .allow)
         }
     }
 }
