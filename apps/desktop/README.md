@@ -71,7 +71,8 @@ cd Vitals
 
 The script compiles with SwiftPM, assembles `build/Vitals.app`, compiles the
 channel's Icon Composer file (`Resources/Icons/<channel>/AppIcon.icon`) with
-`actool`, and ad-hoc signs the bundle.
+`actool`, and signs the bundle ad-hoc by default (`CODESIGN_IDENTITY` switches
+to a stable certificate, see below).
 
 ### Option A — DMG installer (recommended)
 
