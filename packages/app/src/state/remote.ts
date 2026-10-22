@@ -8,7 +8,7 @@ import {
   type RouteKind,
   Store,
 } from "@vitals/client-runtime";
-import { type Alert, type ActivityLevel, type Command, type CommandReceipt, type LanEndpoint, type MacRoutes, CommandId, EventId } from "@vitals/contracts";
+import { type ActivityLevel, type Command, type CommandReceipt, type LanEndpoint, type MacRoutes, CommandId, EventId } from "@vitals/contracts";
 import type { KeyPair } from "@vitals/noise";
 import { newId } from "@vitals/shared";
 import { motion, type ToastTone } from "@vitals/ui";
@@ -88,7 +88,6 @@ export class Remote {
     credentials: Credentials,
     deviceKey: KeyPair | null,
     webSocket: ConnectionOptions["webSocket"],
-    onAlert: (alert: Alert) => void,
     onLink: (credentials: Credentials) => void,
   ) {
     this.link = new Store(credentials);
@@ -118,7 +117,7 @@ export class Remote {
     );
     this.live = new LiveData(this.connection);
     this.stopSampleClock = diagnostics.enabled ? this.live.latest.subscribe(() => diagnostics.sample(Date.now())) : null;
-    this.events = new MacEvents(this.connection, onAlert);
+    this.events = new MacEvents(this.connection);
     this.flushTimer = setInterval(() => void this.flush(), FLUSH_MS);
     this.stopTunnelWatch = tunnel.subscribe(() => {
       if (tunnel.get()._tag === "Ready") this.connection.wake("network");

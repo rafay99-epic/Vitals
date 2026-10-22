@@ -376,6 +376,18 @@ Bun.serve<{ readonly path: string; socket: WebSocket | null; pending: Array<stri
   },
 });
 
+// For testing notifications: `kill -USR1 <pid>` raises a fresh alert, `kill -USR2 <pid>` clears the newest one.
+const raised: Array<typeof agentAlert> = [];
+process.on("SIGUSR1", () => {
+  const alert = { ...agentAlert, id: `alert-agents-${String(Date.now())}`, raisedAt: Date.now() };
+  raised.push(alert);
+  emit({ t: "event", event: { _tag: "AlertRaised", at: Date.now(), alert } });
+});
+process.on("SIGUSR2", () => {
+  const alert = raised.pop();
+  if (alert !== undefined) emit({ t: "event", event: { _tag: "AlertCleared", at: Date.now(), alert: { ...alert, clearedAt: Date.now() } } });
+});
+
 setTimeout(() => emit({ t: "admin", id: "pair-1", op: { _tag: "CreatePairing" } }), 1_000);
 // Every paired test phone gets every permission, so destructive flows can be tested too.
 setInterval(() => emit({ t: "admin", id: `devices-${String(Date.now())}`, op: { _tag: "ListDevices" } }), 5_000);

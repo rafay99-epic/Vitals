@@ -17,7 +17,7 @@ import { AppState, Linking, Platform } from "react-native";
 
 import { deviceInfo } from "../lib/device.ts";
 import { forgetCalmAction, onCalmAction, prepareNotifications } from "../notifications/alerts";
-import { markAlertsSeen, notifyOnce, startAlertWatch, stopAlertWatch } from "../notifications/background";
+import { startAlertWatch, stopAlertWatch, syncAlerts } from "../notifications/background";
 import { clearCredentials, loadCredentials, saveCredentials } from "../persistence/credentials";
 import { loadDeviceKey } from "../persistence/deviceKey";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
@@ -258,20 +258,19 @@ class SessionManager {
       credentials,
       deviceKey,
       openSocket,
-      (alert) => {
-        if (AppState.currentState === "active") void markAlertsSeen([alert]);
-        else void notifyOnce(alert);
-      },
       (next) => void saveCredentials(next).catch(() => undefined),
     );
     let active = true;
     void prepareNotifications().then(async (granted) => {
       if (granted && active) remote.record("info", "client.alerts.watch", { background: await startAlertWatch() });
     });
-    const stopSeq = remote.connection.state.subscribe(() => {
-      const state = remote.connection.state.get();
-      if (state._tag === "Ready" && AppState.currentState === "active") void markAlertsSeen(state.hello.alerts);
-    });
+    // The shade mirrors the Mac's open alerts: new ones are posted, cleared ones taken down.
+    // Only a Ready connection's list is the real set; before that the store is still empty.
+    // Also re-run on return to the app, which catches alerts held back until notifications were allowed.
+    const syncShade = () => {
+      if (remote.connection.state.get()._tag === "Ready") void syncAlerts(remote.events.alerts.get(), AppState.currentState === "active");
+    };
+    const stopAlerts = remote.events.alerts.subscribe(syncShade);
     let queuedCalm: (() => void) | null = null;
     const calmDown = () => void remote.run({ _tag: "CalmDown", alertId: null });
     const stopCalm = onCalmAction(() => {
@@ -286,7 +285,7 @@ class SessionManager {
     let suspendTimer: ReturnType<typeof setTimeout> | null = null;
     const appState = AppState.addEventListener("change", (next) => {
       if (next === "active") {
-        void markAlertsSeen(remote.events.alerts.get());
+        syncShade();
         if (suspendTimer !== null) clearTimeout(suspendTimer);
         suspendTimer = null;
         remote.record("info", "client.app.fg");
@@ -310,7 +309,7 @@ class SessionManager {
       network.remove();
       stopCalm();
       queuedCalm?.();
-      stopSeq();
+      stopAlerts();
       remote.dispose();
     };
     this.session.set({ status: "paired", remote });

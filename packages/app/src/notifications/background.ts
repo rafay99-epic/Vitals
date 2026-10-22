@@ -9,7 +9,7 @@ import { KEYCHAIN_OPTIONS, loadCredentials } from "../persistence/credentials";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { loadDeviceKey } from "../persistence/deviceKey";
 import { CLIENT_VERSION, routesOf } from "../state/remote.ts";
-import { notifyAlert } from "./alerts";
+import { dismissAlert, notificationPermission, notifyAlert } from "./alerts";
 
 const TASK = "vitals.alerts";
 const STATE_KEY = "vitals.remote.alerts";
@@ -32,22 +32,23 @@ const readNotified = async (): Promise<ReadonlyArray<string>> => {
   return decoded?._tag === "Some" ? decoded.value : [];
 };
 
-const deliver = (alerts: ReadonlyArray<Alert>, show: boolean, openNow: ReadonlyArray<Alert> | null = null) =>
+/// Makes the notification shade match `open`, the Mac's full list of open alerts: each alert is
+/// posted once, and taken down when it is no longer open. `quiet` while the app is on screen,
+/// where the alert already shows. Used live and by the background check.
+export const syncAlerts = (open: ReadonlyArray<Alert>, quiet: boolean): Promise<void> =>
   serialized(async () => {
+    // Until notifications are allowed nothing reaches the shade, so leave every alert unposted.
+    if ((await notificationPermission()) !== "granted") return;
     const notified = await readNotified();
     const seen = new Set(notified);
-    const fresh = [...new Map(alerts.filter((alert) => !seen.has(alert.id)).map((alert) => [alert.id, alert])).values()];
-    if (show) await Promise.all(fresh.map((alert) => notifyAlert(alert)));
-    const delivered = fresh.map((alert) => alert.id);
-    const open = openNow === null ? null : new Set<string>(openNow.map((alert) => alert.id));
-    const stillOpen = open === null ? notified : notified.filter((id) => open.has(id));
-    if (delivered.length === 0 && stillOpen.length === notified.length) return;
-    await SecureStore.setItemAsync(STATE_KEY, JSON.stringify([...stillOpen, ...delivered].slice(-NOTIFIED_KEPT)), KEYCHAIN_OPTIONS);
+    const openIds = new Set<string>(open.map((alert) => alert.id));
+    const fresh = [...new Map(open.filter((alert) => !seen.has(alert.id)).map((alert) => [alert.id, alert])).values()];
+    const cleared = notified.filter((id) => !openIds.has(id));
+    await Promise.all([...fresh.map((alert) => notifyAlert(alert, quiet)), ...cleared.map((id) => dismissAlert(id))]);
+    if (fresh.length === 0 && cleared.length === 0) return;
+    const kept = notified.filter((id) => openIds.has(id));
+    await SecureStore.setItemAsync(STATE_KEY, JSON.stringify([...kept, ...fresh.map((alert) => alert.id)].slice(-NOTIFIED_KEPT)), KEYCHAIN_OPTIONS);
   });
-
-export const markAlertsSeen = (alerts: ReadonlyArray<Alert>): Promise<void> => deliver(alerts, false);
-
-export const notifyOnce = (alert: Alert): Promise<void> => deliver([alert], true);
 
 const WIFI_TIMEOUT_MS = 10_000;
 
@@ -89,7 +90,7 @@ const checkAlerts = async (): Promise<void> => {
   if (credentials === null) return;
   const open = await openAlerts(credentials);
   if (open === null) throw new Error("Mac unreachable");
-  await deliver(open, true, open);
+  await syncAlerts(open, false);
 };
 
 TaskManager.defineTask(TASK, async () => {

@@ -115,7 +115,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     ["expo-camera", { cameraPermission: "Scan the pairing code shown in Vitals on your Mac." }],
-    ["expo-notifications", { color: "#ffffff" }],
+    ["expo-notifications", { icon: "./assets/notification-icon.png", color: "#5cf2a6" }],
     "expo-background-task",
     [
       "expo-build-properties",

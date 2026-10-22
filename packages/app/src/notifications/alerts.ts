@@ -8,13 +8,13 @@ const CATEGORY = "pressure";
 const CHANNEL = "pressure";
 const CALM_ACTION = "calm";
 
+// A quiet alert goes to the shade only, with no banner or sound. The poster marks it quiet when the
+// app is on screen and already showing the alert.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const loud = notification.request.content.data?.["quiet"] !== true;
+    return { shouldShowBanner: loud, shouldShowList: true, shouldPlaySound: loud, shouldSetBadge: false };
+  },
 });
 
 export const prepareNotifications = async (): Promise<boolean> => {
@@ -37,18 +37,20 @@ export const notificationPermission = async (): Promise<PermissionState> => {
 
 export const requestNotifications = async (): Promise<boolean> => (await Notifications.requestPermissionsAsync()).granted;
 
-export const notifyAlert = async (alert: Alert): Promise<void> => {
+export const notifyAlert = async (alert: Alert, quiet: boolean): Promise<void> => {
   await Notifications.scheduleNotificationAsync({
     identifier: alert.id,
     content: {
       title: alert.severity === "critical" ? "Mac under heavy pressure" : "Mac under pressure",
       body: `${alert.summary}. ${alert.plan.summary}.`,
       categoryIdentifier: CATEGORY,
-      data: { alertId: alert.id },
+      data: { alertId: alert.id, quiet },
     },
     trigger: Platform.OS === "android" ? { channelId: CHANNEL } : null,
   });
 };
+
+export const dismissAlert = (id: string): Promise<void> => Notifications.dismissNotificationAsync(id);
 
 export const forgetCalmAction = (): Promise<void> => Notifications.clearLastNotificationResponseAsync();
 

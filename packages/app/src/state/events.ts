@@ -26,10 +26,8 @@ export class MacEvents {
   private calmTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSeq: number | null = null;
   private readonly stops: Array<() => void> = [];
-  private readonly onAlert: (alert: Alert) => void;
 
-  constructor(connection: Connection, onAlert: (alert: Alert) => void) {
-    this.onAlert = onAlert;
+  constructor(connection: Connection) {
     this.stops.push(
       connection.watch(
         (client) => client["system.events"]({ afterSeq: this.lastSeq }),
@@ -106,7 +104,6 @@ export class MacEvents {
       case "AlertRaised":
         this.alerts.update((current) => [event.alert, ...current.filter((item) => item.id !== event.alert.id)]);
         this.logRaised(event.alert);
-        this.onAlert(event.alert);
         break;
       case "AlertCleared":
         this.alerts.update((current) => current.filter((item) => item.id !== event.alert.id));

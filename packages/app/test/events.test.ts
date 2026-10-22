@@ -40,7 +40,7 @@ const fakeConnection = (state: Store<ConnectionState>): Connection => ({
 describe("MacEvents", () => {
   test("a heartbeat does not bring back alerts cleared after connecting", () => {
     const state = new Store<ConnectionState>({ _tag: "Idle" });
-    const events = new MacEvents(fakeConnection(state), () => {});
+    const events = new MacEvents(fakeConnection(state));
     state.set(ready(20));
     expect(events.alerts.get()).toEqual([alert]);
     events.alerts.set([]);
