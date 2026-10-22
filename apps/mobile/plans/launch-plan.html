@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Remote · launch plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --s1:#0b0b0b; --s2:#131313; --s3:#1b1b1b; --line:#1c1c1c; --line2:#2a2a2a; --line3:#333;
+  --mute:#6b6b6b; --dim:#9c9c9c; --ink2:#d4d4d4; --ink:#fff;
+  --yellow:#f2ec6b; --orange:#ffb45c; --red:#ff4d6d; --green:#5cf2a6; --blue:#74d4ff; --pink:#ff6b8b; --violet:#c8a8ff;
+  --serif:"Instrument Serif",Georgia,serif; --sans:"Geist",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+a{color:var(--yellow)}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding:40px 22px 120px}
+.grid{display:grid;grid-template-columns:200px 1fr;gap:44px}
+nav.toc{position:sticky;top:24px;align-self:start;font:12px/2 var(--mono)}
+nav.toc a{color:var(--dim);text-decoration:none;display:block}
+nav.toc a:hover{color:var(--ink)}
+h1{font:italic 60px/1 var(--serif);margin:8px 0 12px}
+h2{font:italic 38px/1.05 var(--serif);margin:64px 0 14px;border-top:1px solid var(--line2);padding-top:20px}
+h3{font:600 15px/1.3 var(--sans);margin:26px 0 8px}
+.kicker{font:500 10px var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+.lede{font:21px/1.4 var(--serif);color:var(--ink2);max-width:780px}
+p,li{color:var(--ink2)}
+code{font:12.5px var(--mono);color:var(--ink);background:var(--s1);border:1px solid var(--line2);padding:1px 5px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+th{font:500 10px var(--mono);letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 9px;border-bottom:1px solid var(--line3)}
+td{padding:9px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+td:first-child{color:var(--ink)}
+.tag{font:500 10px var(--mono);letter-spacing:1px;text-transform:uppercase}
+.now{color:var(--green)} .pick{color:var(--yellow)} .later{color:var(--dim)} .no{color:var(--red)}
+.callout{border:1px solid var(--orange);padding:16px 18px;margin:16px 0}
+.callout ol{margin:6px 0;padding-left:20px} .callout li{margin:6px 0}
+.note{border-left:3px solid var(--yellow);padding:4px 0 4px 16px;color:var(--ink2);margin:14px 0}
+
+/* ---------- direction grid ---------- */
+.dirs{display:grid;grid-template-columns:1fr;gap:28px;margin-top:18px}
+.dir{border-top:1px solid var(--line2);padding-top:16px}
+.dir-h{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+.dir-h b{font:italic 30px/1 var(--serif);font-weight:400}
+.dir-h span{font:500 12px var(--mono);color:var(--yellow)}
+.dir ul{margin:6px 0 10px;padding:0;list-style:none;display:flex;gap:4px 20px;flex-wrap:wrap;font-size:13px}
+.dir .p::before{content:"+ ";color:var(--green)} .dir .m::before{content:"− ";color:var(--red)}
+.row{display:flex;gap:18px;overflow-x:auto;padding:10px 0 6px;align-items:flex-start}
+.cap{font:500 10px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:6px}
+
+/* feature graphic 1024x500 shown at 0.5 */
+.fg{width:512px;height:250px;position:relative;overflow:hidden;flex:none;background:#000;border:1px solid var(--line2)}
+/* screenshot 1080x1920 shown at 0.2 */
+.ss{width:216px;height:384px;position:relative;overflow:hidden;flex:none;border:1px solid var(--line2)}
+.icon{width:96px;height:96px;border-radius:22px;flex:none;position:relative;overflow:hidden;border:1px solid var(--line2)}
+
+/* mini phone */
+.ph{position:absolute;width:118px;height:250px;border-radius:20px;border:1.5px solid #2c2c2c;background:#000;overflow:hidden}
+.ph .w{font:italic 19px/1 var(--serif);padding:22px 9px 2px}
+.ph .m{font:5px var(--mono);color:var(--dim);padding:0 9px 6px}
+.ph .st{margin:0 9px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);font:5px var(--mono);color:var(--orange);padding:4px 0}
+.ph .ch{padding:5px 9px 2px;border-bottom:1px solid var(--line)}
+.ph .ch .t{display:flex;justify-content:space-between;align-items:baseline;font:500 4.5px var(--mono);letter-spacing:.4px}
+.ph .ch .t b{font:13px var(--serif);font-weight:400;color:var(--ink)}
+.ph svg{display:block;width:100%;height:10px}
+.ph .dk{position:absolute;left:6px;right:6px;bottom:7px;height:20px;border-radius:10px;background:#141414;border:1px solid var(--line2);display:flex;justify-content:space-around;align-items:center}
+.ph .dk i{width:5px;height:5px;border-radius:1.5px;border:1px solid var(--mute)}
+.ph .dk i.on{border-color:var(--yellow);box-shadow:0 0 0 4px rgba(242,236,107,.13)}
+.ph .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--s2);border-radius:12px 12px 0 0;padding:6px 8px 10px}
+.ph .sheet .t{font:600 8px var(--sans);margin:4px 0 2px}
+.ph .sheet .s{font:5px var(--sans);color:var(--dim);margin-bottom:5px}
+.ph .hold{height:16px;border:1px solid var(--red);border-radius:6px;position:relative;overflow:hidden;font:600 5.5px var(--sans);color:#000;display:flex;align-items:center;justify-content:center}
+.ph .hold::before{content:"";position:absolute;inset:0;width:70%;background:var(--red)}
+.ph .hold span{position:relative}
+
+/* mini mac window */
+.mac{position:absolute;border-radius:10px;border:1px solid #2c2c2c;background:#0c0c0c;overflow:hidden;display:flex}
+.mac .bar{position:absolute;top:6px;left:8px;display:flex;gap:4px}
+.mac .bar i{width:6px;height:6px;border-radius:50%;background:#3a3a3a}
+.mac .side{width:30%;border-right:1px solid var(--line);padding:22px 8px 8px;display:flex;flex-direction:column;gap:5px}
+.mac .side span{height:5px;border-radius:2px;background:#222}
+.mac .side span.on{background:#3a3a3a}
+.mac .main{flex:1;padding:22px 10px 10px;display:grid;grid-template-columns:1fr 1fr;gap:6px;align-content:start}
+.mac .card{border:1px solid var(--line2);border-radius:5px;padding:5px;background:#111}
+.mac .card b{display:block;font:500 4.5px var(--mono);letter-spacing:.4px}
+.mac .card em{font:14px var(--serif);font-style:normal;color:var(--ink)}
+.mac .card svg{display:block;width:100%;height:9px}
+
+/* brand page mock */
+.brand{border:1px solid var(--line2);background:#000;padding:22px;margin-top:14px}
+.brand .top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.brand h4{font:italic 44px/1 var(--serif);font-weight:400;margin:0}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line2);padding:9px 13px;font:600 12px var(--sans);color:var(--ink);background:none}
+.btn.y{background:var(--yellow);color:#000;border-color:var(--yellow)}
+.brand table td{font-size:12.5px}
+.thumb{width:44px;height:28px;border:1px solid var(--line2);background:#0b0b0b;display:inline-block;vertical-align:middle}
+
+/* storyboard */
+.story{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-top:12px}
+.frame{border:1px solid var(--line2);aspect-ratio:9/16;position:relative;overflow:hidden;background:#000}
+.frame .n{position:absolute;top:6px;left:8px;font:500 9px var(--mono);color:var(--dim)}
+.frame .c{position:absolute;left:10px;right:10px;bottom:10px;font:12px/1.35 var(--sans);color:var(--ink2)}
+.frame svg{position:absolute;left:0;right:0;top:40%;width:100%;height:40px}
+.draw path{stroke-dasharray:400;stroke-dashoffset:400;animation:draw 2.4s ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.draw path{animation:none;stroke-dashoffset:0}}
+
+footer{margin-top:80px;border-top:1px solid var(--line2);padding-top:14px;font:11px var(--mono);color:var(--mute)}
+@media (max-width:860px){.grid{grid-template-columns:1fr} nav.toc{position:static;columns:2} h1{font-size:44px}}
+@media print{nav.toc{display:none}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ecg" viewBox="0 0 230 24" preserveAspectRatio="none"><path d="M0 14H40l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h29" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></symbol>
+  <symbol id="art" viewBox="0 0 230 24" preserveAspectRatio="none"><path d="M0 18L12 5 20 12 28 10 46 18 58 5 66 12 74 10 92 18 104 5 112 12 120 10 138 18 150 5 158 12 166 10 184 18 196 5 204 12 212 10 230 18" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></symbol>
+  <symbol id="wave" viewBox="0 0 230 24" preserveAspectRatio="none"><path d="M0 13C20 3 40 23 60 13S100 3 120 13 160 23 180 13 220 3 230 13" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></symbol>
+  <symbol id="mark" viewBox="0 0 48 32"><path d="M2 18 H12 L16 26 L24 4 L28 18 H46" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+</svg>
+
+<div class="wrap">
+  <div class="kicker">Vitals Remote · next steps · 2026-10-23</div>
+  <h1>Launch plan.</h1>
+  <p class="lede">Four tracks: a leaner connection, an honest privacy policy, store assets with a motion piece, and a brand page that hands you every file in one click. The first two need no design decisions and start now. The other two wait for your pick below.</p>
+
+  <div class="grid">
+  <nav class="toc" aria-label="Contents">
+    <a href="#scope">01 Scope</a>
+    <a href="#connection">02 Connection</a>
+    <a href="#privacy">03 Privacy policy</a>
+    <a href="#assets">04 Store assets</a>
+    <a href="#directions">05 Pick a look</a>
+    <a href="#motion">06 Motion</a>
+    <a href="#brand">07 Brand page</a>
+    <a href="#play">08 Play checklist</a>
+    <a href="#order">09 Order of work</a>
+    <a href="#decide">10 Your decisions</a>
+  </nav>
+
+  <main>
+  <section id="scope">
+    <h2>01 Scope.</h2>
+    <table>
+      <thead><tr><th>Track</th><th>What</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Connection</td><td>Built-in Tailscale only when it's needed, and fewer background checks</td><td><span class="tag now">building now</span></td></tr>
+        <tr><td>Privacy policy</td><td>Cover the phone app, Wi-Fi Remote, update checks, Tailscale logs, the QR scanner</td><td><span class="tag now">building now</span></td></tr>
+        <tr><td>Store assets</td><td>Play and App Store icon, feature graphic, screenshots, Mac and phone together</td><td><span class="tag pick">needs your pick</span></td></tr>
+        <tr><td>Motion</td><td>A 20-second promo for Play (YouTube) and an App Store preview, from the same source</td><td><span class="tag pick">needs your pick</span></td></tr>
+        <tr><td>Brand page</td><td><code>/brand</code> on the website, with Android, iOS and everything as one-click zips</td><td><span class="tag pick">needs your pick</span></td></tr>
+        <tr><td>Multiple Macs</td><td>Dropped. You have one Mac.</td><td><span class="tag no">not doing</span></td></tr>
+        <tr><td>Android and iOS on one Mac</td><td>Already works: the Mac keeps a list of paired phones, and each phone pairs on its own</td><td><span class="tag later">nothing to build</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="connection">
+    <h2>02 Connection.</h2>
+    <p>I read the connection code before planning. It's already smarter than I expected: every route is probed in parallel, and a network change or seeing the Mac on Wi-Fi wakes it up straight away. So this track is small, and it targets the two costs that matter.</p>
+    <table>
+      <thead><tr><th>Change</th><th>Why</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>Built-in Tailscale starts only when Wi-Fi can't reach the Mac, and stops after 3 minutes back on Wi-Fi</td><td>Today, once it's on, the embedded node runs from launch even at home. That costs battery and data for nothing.</td><td><code>packages/app/src/connection/session.ts</code>, <code>tunnel.ts</code></td></tr>
+        <tr><td>Fallback "is Wi-Fi back?" check every 5 minutes instead of every minute</td><td>Network changes and seeing the Mac on Wi-Fi already trigger the switch immediately. The timer is only a safety net.</td><td><code>packages/client-runtime/src/connection.ts</code></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>Not doing, and why:</b>
+      <ul>
+        <li><b>A lighter heartbeat RPC.</b> It would need a protocol change, the hello it replaces is already small, and older Macs would need a fallback.</li>
+        <li><b>"Try the last route first".</b> Routes are already probed in parallel, so it would save nothing.</li>
+        <li><b>Push alerts through Firebase.</b> That's a privacy change for you to decide later.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <h2>03 Privacy policy.</h2>
+    <p>The page at <code>/privacy</code> covers the Mac app well, but it's behind on the phone app and on Remote. These are the changes, each checked against the code:</p>
+    <table>
+      <thead><tr><th>Section</th><th>Change</th></tr></thead>
+      <tbody>
+        <tr><td>Short version, §1</td><td>Readings history is a SQLite file now, <code>~/.vitals/history/history.sqlite3</code>, not a CSV</td></tr>
+        <tr><td>§7 Remote</td><td>Remote also works directly over your Wi-Fi, encrypted end to end and pinned to your Mac's key. It is not only Tailscale any more.</td></tr>
+        <tr><td>New: the phone app</td><td>What the phone stores, and each permission and why it's needed:
+          <ul>
+            <li>What it stores: the pairing, a session token and the device key, all in secure storage.</li>
+            <li>Camera: only to read the pairing QR, processed on the phone.</li>
+            <li>Local network: to find your Mac on Wi-Fi.</li>
+            <li>Notifications: local only, with no push service.</li>
+          </ul>
+          It also sends your phone's name to your own Mac.</td></tr>
+        <tr><td>New: update checks</td><td>The app checks Expo's update server (<code>u.expo.dev</code>) for new versions. That request carries a random per-install ID, the platform and the app version. Google Play can also offer store updates.</td></tr>
+        <tr><td>New: QR scanner</td><td>On Android the scanner uses Google ML Kit. ML Kit sends Google diagnostics: device model, OS, app version, a per-install ID and performance metrics. No images leave the phone.</td></tr>
+        <tr><td>New: built-in Tailscale</td><td>Only if you turn it on. The phone joins your tailnet through Tailscale's servers, and Tailscale's standard client logs are uploaded to Tailscale. Their privacy policy is linked.</td></tr>
+        <tr><td>Updated date</td><td>"Last updated" moves to the day this ships</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="assets">
+    <h2>04 Store assets.</h2>
+    <p>Exact sizes each store requires. Every image is generated from coded templates on the website, so one change updates everything.</p>
+    <table>
+      <thead><tr><th>Asset</th><th>Google Play</th><th>App Store</th></tr></thead>
+      <tbody>
+        <tr><td>App icon</td><td>512×512 PNG</td><td>1024×1024 PNG, no transparency</td></tr>
+        <tr><td>Feature graphic</td><td>1024×500, no transparency</td><td>none</td></tr>
+        <tr><td>Phone screenshots</td><td>6 at 1080×1920</td><td>6 at 1320×2868 (6.9-inch)</td></tr>
+        <tr><td>Promo video</td><td>YouTube link, 1920×1080</td><td>App preview, 886×1920, 15 to 30 s</td></tr>
+        <tr><td>Brand marks</td><td colspan="2">Mark and wordmark as SVG and PNG, on black and on white</td></tr>
+      </tbody>
+    </table>
+    <h3>How they're made</h3>
+    <ul>
+      <li><b>One system.</b> The new phone screens and the Mac window become coded components on the website. The same components render the homepage section, every store image and the promo video. The homepage phones get updated to the new design along the way, because today they still show the old Chart, Orders and Ward tabs.</li>
+      <li><b>Exact pixels.</b> Each asset is a render-only route, for example <code>/brand/render/feature-graphic</code>, at the exact store size. A script uses <code>playwright-core</code> (already a dev dependency) to save the PNGs and record the video. Then ffmpeg makes the MP4s, and the script builds the zips.</li>
+      <li><b>Honest numbers.</b> Your rules say readings are never invented, so the screens use one real snapshot from your Mac (CPU, memory, fans, processes), captured once and stored as fixture data. I'd capture it with your OK.</li>
+    </ul>
+  </section>
+
+  <section id="directions">
+    <h2>05 Pick a look.</h2>
+    <p>Three directions for the store set. Each is shown as a feature graphic at half size, two screenshots at a fifth, and the icon. The brand page and motion follow whichever you pick.</p>
+    <div class="dirs">
+
+      <div class="dir">
+        <div class="dir-h"><b>A · Pulse line</b><span>the heartbeat ties the Mac to the phone</span></div>
+        <ul><li class="p">Tells the story in one image: Mac on the left, phone on the right, joined by the ECG line</li><li class="p">Extends the brand mark you already have</li><li class="m">The busiest of the three</li></ul>
+        <div class="row">
+          <div><div class="fg" role="img" aria-label="Direction A feature graphic">
+            <div class="mac" style="left:26px;top:52px;width:250px;height:156px"><div class="bar"><i></i><i></i><i></i></div><div class="side"><span class="on"></span><span></span><span></span><span></span><span></span></div><div class="main">
+              <div class="card"><b style="color:var(--green)">CPU</b><em>71%</em><svg style="color:var(--green)"><use href="#ecg"/></svg></div>
+              <div class="card"><b style="color:var(--pink)">MEMORY</b><em>29.4</em><svg style="color:var(--pink)"><use href="#art"/></svg></div>
+              <div class="card"><b style="color:var(--orange)">TEMP</b><em>68°</em><svg style="color:var(--orange)"><use href="#wave"/></svg></div>
+              <div class="card"><b style="color:var(--blue)">FANS</b><em>2410</em><svg style="color:var(--blue)"><use href="#wave"/></svg></div>
+            </div></div>
+            <svg style="position:absolute;left:276px;top:118px;width:110px;height:30px;color:var(--green)" viewBox="0 0 110 30"><path d="M0 15H38l5 6 6-18 7 22 5-10h49" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            <div class="ph" style="left:386px;top:6px;transform:scale(.95);transform-origin:top left">
+              <div class="w" style="color:var(--pink)">Busy.</div><div class="m">M3 Max · Wi-Fi · 12 ms</div>
+              <div class="st">▲ Too many agents · 25 running</div>
+              <div class="ch"><div class="t" style="color:var(--green)">PULSE · CPU<b>71%</b></div><svg style="color:var(--green)"><use href="#ecg"/></svg></div>
+              <div class="ch"><div class="t" style="color:var(--pink)">PRESS · MEMORY<b>29.4</b></div><svg style="color:var(--pink)"><use href="#art"/></svg></div>
+              <div class="dk"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div style="position:absolute;left:26px;top:14px;font:italic 26px/1 var(--serif)">Your Mac, in your pocket.</div>
+          </div><div class="cap">Feature graphic · 1024×500</div></div>
+
+          <div><div class="ss" role="img" aria-label="Direction A screenshot one" style="background:#000">
+            <div style="position:absolute;left:14px;top:16px;right:14px;font:italic 24px/1.05 var(--serif)">Every number,<br>live from your Mac.</div>
+            <div class="ph" style="left:49px;top:96px;transform:scale(1.02);transform-origin:top left"><div class="w">Busy.</div><div class="m">M3 Max · Wi-Fi</div><div class="ch"><div class="t" style="color:var(--green)">PULSE · CPU<b>71%</b></div><svg style="color:var(--green)"><use href="#ecg"/></svg></div><div class="ch"><div class="t" style="color:var(--pink)">PRESS · MEMORY<b>29.4</b></div><svg style="color:var(--pink)"><use href="#art"/></svg></div><div class="ch"><div class="t" style="color:var(--orange)">TEMP<b>68°</b></div><svg style="color:var(--orange)"><use href="#wave"/></svg></div><div class="dk"><i class="on"></i><i></i><i></i><i></i><i></i></div></div>
+          </div><div class="cap">Screenshot 1 · Home</div></div>
+
+          <div><div class="ss" role="img" aria-label="Direction A screenshot two" style="background:#000">
+            <div style="position:absolute;left:14px;top:16px;right:14px;font:italic 24px/1.05 var(--serif)">Shut it down<br>from bed.</div>
+            <div class="ph" style="left:49px;top:96px;transform:scale(1.02);transform-origin:top left"><div class="w" style="opacity:.3">Control.</div><div class="sheet"><div class="t">Shut down your Mac?</div><div class="s">Safari and Xcode are open.</div><div class="hold"><span>Hold to shut down</span></div></div></div>
+          </div><div class="cap">Screenshot 2 · Shut down</div></div>
+
+          <div><div class="icon" style="background:#000;display:flex;align-items:center;justify-content:center;color:var(--green)"><svg style="width:62px;height:42px"><use href="#mark"/></svg></div><div class="cap">Icon</div></div>
+        </div>
+      </div>
+
+      <div class="dir">
+        <div class="dir-h"><b>B · Big number</b><span>one giant live reading per image</span></div>
+        <ul><li class="p">Reads best as a small thumbnail in the store</li><li class="p">Editorial, very punk: a huge serif number with a yellow underline</li><li class="m">The Mac only shows up in the feature graphic</li></ul>
+        <div class="row">
+          <div><div class="fg" role="img" aria-label="Direction B feature graphic" style="background:#000">
+            <div style="position:absolute;left:24px;top:36px;font:150px/0.85 var(--serif);color:var(--yellow)">71<span style="font:34px var(--mono);color:var(--dim)">%</span></div>
+            <div style="position:absolute;left:28px;bottom:26px;font:500 11px var(--mono);letter-spacing:1.5px;color:var(--dim)">CPU ON YOUR MAC · RIGHT NOW · ON YOUR PHONE</div>
+            <div class="mac" style="left:250px;top:46px;width:150px;height:110px;opacity:.85"><div class="bar"><i></i><i></i><i></i></div><div class="side"><span class="on"></span><span></span><span></span></div><div class="main"><div class="card"><b style="color:var(--green)">CPU</b><em>71%</em></div><div class="card"><b style="color:var(--pink)">MEM</b><em>29.4</em></div></div></div>
+            <div class="ph" style="right:22px;top:20px;transform:scale(.85);transform-origin:top right"><div class="w">Busy.</div><div class="ch"><div class="t" style="color:var(--green)">PULSE<b>71%</b></div><svg style="color:var(--green)"><use href="#ecg"/></svg></div><div class="dk"><i class="on"></i><i></i><i></i><i></i><i></i></div></div>
+          </div><div class="cap">Feature graphic · 1024×500</div></div>
+          <div><div class="ss" role="img" aria-label="Direction B screenshot one" style="background:#000">
+            <div style="position:absolute;left:14px;top:12px;font:110px/0.9 var(--serif);color:var(--yellow)">25</div>
+            <div style="position:absolute;left:16px;top:116px;font:500 8px var(--mono);letter-spacing:1px;color:var(--dim)">AGENTS RUNNING · CALM THEM IN ONE TAP</div>
+            <div class="ph" style="left:49px;top:136px;transform:scale(.98);transform-origin:top left"><div class="w" style="color:var(--pink)">Busy.</div><div class="st">▲ Too many agents · 25 running</div><div class="sheet"><div class="t">Too many agents</div><div class="s">Calming lowers their priority.</div><div style="height:14px;border-radius:5px;background:var(--yellow);font:600 5.5px var(--sans);color:#000;display:flex;align-items:center;justify-content:center">Calm it down</div></div></div>
+          </div><div class="cap">Screenshot 1 · Calm</div></div>
+          <div><div class="ss" role="img" aria-label="Direction B screenshot two" style="background:#000">
+            <div style="position:absolute;left:14px;top:12px;font:110px/0.9 var(--serif);color:var(--red)">10<span style="font:30px var(--mono)">s</span></div>
+            <div style="position:absolute;left:16px;top:116px;font:500 8px var(--mono);letter-spacing:1px;color:var(--dim)">TO CHANGE YOUR MIND AFTER SHUT DOWN</div>
+            <div class="ph" style="left:49px;top:136px;transform:scale(.98);transform-origin:top left"><div class="w">Control.</div><div style="position:absolute;left:6px;right:6px;bottom:32px;height:16px;border-radius:6px;background:var(--orange);font:600 5.5px var(--sans);color:#000;display:flex;align-items:center;padding:0 6px">Shutting down in 7 s · Cancel</div><div class="dk"><i></i><i></i><i class="on"></i><i></i><i></i></div></div>
+          </div><div class="cap">Screenshot 2 · Countdown</div></div>
+          <div><div class="icon" style="background:var(--yellow);display:flex;align-items:center;justify-content:center;color:#000"><svg style="width:62px;height:42px"><use href="#mark"/></svg></div><div class="cap">Icon</div></div>
+        </div>
+      </div>
+
+      <div class="dir">
+        <div class="dir-h"><b>C · Night desk</b><span>the real scene: a Mac on the desk, a phone in your hand</span></div>
+        <ul><li class="p">The warmest of the three: it shows when you'd actually use it, at night from bed</li><li class="p">Mac and phone are in every image</li><li class="m">Needs the most careful lighting so it doesn't look like stock art</li></ul>
+        <div class="row">
+          <div><div class="fg" role="img" aria-label="Direction C feature graphic" style="background:radial-gradient(120% 90% at 30% 40%,#111 0,#000 70%)">
+            <div class="mac" style="left:26px;top:40px;width:240px;height:150px;box-shadow:0 0 60px rgba(92,242,166,.08)"><div class="bar"><i></i><i></i><i></i></div><div class="side"><span class="on"></span><span></span><span></span><span></span></div><div class="main"><div class="card"><b style="color:var(--green)">CPU</b><em>71%</em><svg style="color:var(--green)"><use href="#ecg"/></svg></div><div class="card"><b style="color:var(--pink)">MEMORY</b><em>29.4</em><svg style="color:var(--pink)"><use href="#art"/></svg></div><div class="card"><b style="color:var(--orange)">TEMP</b><em>68°</em></div><div class="card"><b style="color:var(--blue)">FANS</b><em>2410</em></div></div></div>
+            <div class="ph" style="left:286px;top:96px;transform:rotate(-6deg) scale(.86);box-shadow:-20px 20px 40px rgba(0,0,0,.8)"><div class="w">Busy.</div><div class="st">▲ Too many agents</div><div class="ch"><div class="t" style="color:var(--green)">PULSE<b>71%</b></div><svg style="color:var(--green)"><use href="#ecg"/></svg></div><div class="dk"><i class="on"></i><i></i><i></i><i></i><i></i></div></div>
+            <div style="position:absolute;right:22px;top:34px;width:200px;text-align:right;font:italic 24px/1.1 var(--serif)">The Mac stays on the desk.<br><span style="color:var(--dim)">You stay in bed.</span></div>
+          </div><div class="cap">Feature graphic · 1024×500</div></div>
+          <div><div class="ss" role="img" aria-label="Direction C screenshot one" style="background:radial-gradient(100% 70% at 50% 30%,#121212 0,#000 70%)">
+            <div style="position:absolute;left:0;right:0;top:16px;text-align:center;font:italic 22px/1.05 var(--serif)">Watch it from the couch.</div>
+            <div class="mac" style="left:20px;top:64px;width:176px;height:96px;opacity:.55"><div class="side"><span class="on"></span><span></span></div><div class="main"><div class="card"><b style="color:var(--green)">CPU</b><em>71%</em></div></div></div>
+            <div class="ph" style="left:49px;top:120px;transform:scale(1);transform-origin:top left"><div class="w">Busy.</div><div class="ch"><div class="t" style="color:var(--green)">PULSE · CPU<b>71%</b></div><svg style="color:var(--green)"><use href="#ecg"/></svg></div><div class="ch"><div class="t" style="color:var(--pink)">PRESS<b>29.4</b></div><svg style="color:var(--pink)"><use href="#art"/></svg></div><div class="dk"><i class="on"></i><i></i><i></i><i></i><i></i></div></div>
+          </div><div class="cap">Screenshot 1 · Home</div></div>
+          <div><div class="ss" role="img" aria-label="Direction C screenshot two" style="background:radial-gradient(100% 70% at 50% 30%,#121212 0,#000 70%)">
+            <div style="position:absolute;left:0;right:0;top:16px;text-align:center;font:italic 22px/1.05 var(--serif)">Find what's eating it.</div>
+            <div class="ph" style="left:49px;top:70px"><div class="w" style="font-size:16px">Apps.</div><div style="margin:2px 8px 4px;height:9px;border-radius:4px;background:var(--s2)"></div><div style="display:flex;gap:3px;padding:0 8px 4px"><i style="width:14px;height:7px;border-radius:4px;background:var(--yellow)"></i><i style="width:20px;height:7px;border-radius:4px;background:var(--s2)"></i><i style="width:20px;height:7px;border-radius:4px;background:var(--s2)"></i></div><div style="font:5px var(--sans);padding:3px 8px;color:var(--ink2)">claude · 38% CPU</div><div style="font:5px var(--sans);padding:3px 8px;color:var(--ink2)">codex · 22% CPU</div><div style="font:5px var(--sans);padding:3px 8px;color:var(--ink2)">qemu-system · 61% CPU</div><div class="dk"><i></i><i class="on"></i><i></i><i></i><i></i></div></div>
+          </div><div class="cap">Screenshot 2 · Apps</div></div>
+          <div><div class="icon" style="background:radial-gradient(80% 80% at 30% 25%,#1d1d1d 0,#000 70%);display:flex;align-items:center;justify-content:center;color:var(--green)"><svg style="width:62px;height:42px"><use href="#mark"/></svg></div><div class="cap">Icon</div></div>
+        </div>
+      </div>
+    </div>
+    <p>The six screenshots in each direction tell one journey: Home, Apps, calm the agents, Control, shut down from bed, and Mac plus phone together.</p>
+  </section>
+
+  <section id="motion">
+    <h2>06 Motion.</h2>
+    <p>One 20-second piece, rendered from the same coded components and recorded in a headless browser, exported at 1920×1080 for YouTube (Play) and 886×1920 for the App Store preview. Only transform and opacity animate, and it has no music unless you send a track.</p>
+    <div class="story">
+      <div class="frame"><span class="n">0:00</span><svg class="draw" viewBox="0 0 230 24" preserveAspectRatio="none" style="color:var(--green)"><path d="M0 14H90l5 5 5-17 6 20 5-8h119" fill="none" stroke="currentColor" stroke-width="2"/></svg><div class="c">Black. One heartbeat draws across the screen.</div></div>
+      <div class="frame"><span class="n">0:03</span><div class="mac" style="left:12px;right:12px;top:30%;height:30%"><div class="side"><span class="on"></span><span></span></div><div class="main"><div class="card"><b style="color:var(--green)">CPU</b><em>71%</em></div></div></div><div class="c">The line becomes the Mac's CPU trace inside the Vitals window.</div></div>
+      <div class="frame"><span class="n">0:07</span><div class="ph" style="left:50%;top:14%;transform:translateX(-50%) scale(.8)"><div class="w" style="color:var(--pink)">Busy.</div><div class="st">▲ Too many agents</div><div class="dk"><i class="on"></i><i></i><i></i><i></i><i></i></div></div><div class="c">The trace runs off the Mac and onto a phone: Home, live.</div></div>
+      <div class="frame"><span class="n">0:11</span><div class="ph" style="left:50%;top:14%;transform:translateX(-50%) scale(.8)"><div class="w">Busy.</div><div class="sheet"><div class="t">Too many agents</div><div style="height:12px;border-radius:5px;background:var(--yellow)"></div></div></div><div class="c">A tap. The sheet rises and the agents calm down.</div></div>
+      <div class="frame"><span class="n">0:15</span><div class="ph" style="left:50%;top:14%;transform:translateX(-50%) scale(.8)"><div class="w">Control.</div><div class="sheet"><div class="t">Shut down?</div><div class="hold"><span>Hold</span></div></div></div><div class="c">Night. A thumb holds Shut down and the bar fills red.</div></div>
+      <div class="frame"><span class="n">0:18</span><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--green)"><svg style="width:70px;height:46px"><use href="#mark"/></svg><div style="font:italic 26px var(--serif);color:var(--ink)">Vitals.</div></div><div class="c">End card: Vitals, then "Your Mac, in your pocket."</div></div>
+    </div>
+  </section>
+
+  <section id="brand">
+    <h2>07 Brand page.</h2>
+    <p>A new <code>/brand</code> route on the website, in the site's own style. Every file is generated by the same script and committed under <code>public/brand/</code>, so the page needs no server and a download is a plain link.</p>
+    <div class="brand" role="img" aria-label="Brand page mock">
+      <div class="top">
+        <div><div class="kicker">Vitals · brand</div><h4>Brand.</h4><p style="margin:6px 0 0;font-size:13px;color:var(--dim)">Store assets, icons and marks. Free to use when writing about Vitals.</p></div>
+        <div class="btns"><button class="btn y">Download Android kit · 6.2 MB</button><button class="btn">iOS kit · 7.8 MB</button><button class="btn">Everything · 15 MB</button></div>
+      </div>
+      <table style="margin-top:18px">
+        <thead><tr><th></th><th>Asset</th><th>Size</th><th>Store</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><span class="thumb" style="background:#000;border-color:var(--green)"></span></td><td>App icon</td><td>512×512 · 1024×1024</td><td>Play · App Store</td><td><a href="#">PNG</a></td></tr>
+          <tr><td><span class="thumb" style="width:56px"></span></td><td>Feature graphic</td><td>1024×500</td><td>Play</td><td><a href="#">PNG</a></td></tr>
+          <tr><td><span class="thumb" style="width:16px;height:28px"></span></td><td>Screenshots, 6</td><td>1080×1920 · 1320×2868</td><td>Play · App Store</td><td><a href="#">ZIP</a></td></tr>
+          <tr><td><span class="thumb"></span></td><td>Promo video</td><td>1920×1080 · 886×1920</td><td>YouTube · App preview</td><td><a href="#">MP4</a></td></tr>
+          <tr><td><span class="thumb" style="background:var(--yellow)"></span></td><td>Mark and wordmark</td><td>SVG · PNG, black and white</td><td>Press</td><td><a href="#">ZIP</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The zips are built by the same script, one per store plus one with everything. Each holds the files with the names the stores expect, plus a short <code>README.txt</code> listing which file goes in which upload slot.</p>
+  </section>
+
+  <section id="play">
+    <h2>08 Play checklist.</h2>
+    <table>
+      <thead><tr><th>Item</th><th>State</th></tr></thead>
+      <tbody>
+        <tr><td>Signed release, target SDK 36, 16 KB native alignment</td><td><span class="tag now">done, verified</span></td></tr>
+        <tr><td>Own upload key for Vitals (it uses Lumo's today)</td><td><span class="tag pick">your call</span></td></tr>
+        <tr><td>App bundle (.aab) through <code>eas build --profile production</code></td><td><span class="tag later">after assets</span></td></tr>
+        <tr><td>Privacy policy URL: <code>vitals.rafay99.com/privacy</code></td><td><span class="tag now">this round</span></td></tr>
+        <tr><td>Data safety form: draft answers below</td><td><span class="tag now">this round</span></td></tr>
+        <tr><td>Store listing text, content rating, no ads, target audience 13+</td><td><span class="tag later">after assets</span></td></tr>
+        <tr><td>Closed test with 12 testers for 14 days, only if the account is personal</td><td><span class="tag pick">depends on account type</span></td></tr>
+      </tbody>
+    </table>
+    <h3>Data safety, draft answers</h3>
+    <table>
+      <thead><tr><th>Data</th><th>Collected</th><th>By</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Device or other IDs</td><td>Yes, a random per-install ID</td><td>Expo updates, ML Kit</td><td>App functionality (updates), Analytics (ML Kit diagnostics)</td></tr>
+        <tr><td>App info and performance</td><td>Yes</td><td>ML Kit; Tailscale, only if built-in Tailscale is on</td><td>Diagnostics</td></tr>
+        <tr><td>Device name</td><td>Sent only to your own Mac</td><td>Vitals</td><td>Not collected by us (it never reaches our servers)</td></tr>
+        <tr><td>Photos, location, contacts, messages, financial info</td><td>No</td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="order">
+    <h2>09 Order of work.</h2>
+    <table>
+      <thead><tr><th>#</th><th>Work</th><th>Branch and PR</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Connection changes, reviewed by caveman and ponytail</td><td><code>feat/remote-connection</code>, stacked on PR #154</td></tr>
+        <tr><td>2</td><td>Privacy policy</td><td><code>docs/privacy-mobile</code> into <code>nightly</code></td></tr>
+        <tr><td>3</td><td>Real snapshot from your Mac, saved as fixture data</td><td>needs your OK, about one minute of your time</td></tr>
+        <tr><td>4</td><td>Coded phone and Mac components on the website, and the homepage updated to the new app</td><td><code>feat/brand</code></td></tr>
+        <tr><td>5</td><td>Render routes, the asset script, PNGs, MP4s and zips</td><td><code>feat/brand</code></td></tr>
+        <tr><td>6</td><td><code>/brand</code> page</td><td><code>feat/brand</code></td></tr>
+        <tr><td>7</td><td>App bundle and Play listing</td><td>with you, in Play Console</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decide">
+    <h2>10 Your decisions.</h2>
+    <div class="callout"><ol>
+      <li><b>Look:</b> A Pulse line, B Big number, or C Night desk. Mixing is fine, for example "C with A's line".</li>
+      <li><b>Tagline:</b> "Your Mac, in your pocket." or one of your own.</li>
+      <li><b>Real snapshot:</b> OK to pair the emulator with your Mac once so the assets show true numbers? That means one Allow click on your Mac.</li>
+      <li><b>Upload key:</b> keep Lumo's, or generate a dedicated Vitals key now? The dedicated key is my recommendation.</li>
+      <li><b>Tailscale logs:</b> keep the upload (and disclose it), or turn it off?</li>
+      <li><b>Play account:</b> personal or organization? That decides whether the 14-day closed test applies.</li>
+    </ol></div>
+  </section>
+  </main>
+  </div>
+  <footer>Last updated 2026-10-23 · Opus 5.5 via Claude Code in T3 Code</footer>
+</div>
+</body>
+</html>

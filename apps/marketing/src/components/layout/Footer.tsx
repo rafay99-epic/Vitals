@@ -38,6 +38,7 @@ export function Footer() {
         <span className="text-ink">Project</span>
         <Link to="/releases" className={linkClass}>Chart notes</Link>
         <a href="/#nightly" className={linkClass}>Nightly</a>
+        <Link to="/brand" className={linkClass}>Brand</Link>
         <a href={RELEASES_URL} target="_blank" rel="noreferrer" className={linkClass}>GitHub releases</a>
         <a href={REPO_URL} target="_blank" rel="noreferrer" className={linkClass}>GitHub</a>
       </div>
