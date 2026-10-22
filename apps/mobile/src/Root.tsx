@@ -1,6 +1,6 @@
 import "../global.css";
 
-import { App } from "@vitals/app";
+import { App } from "./App.tsx";
 
 export function Root() {
   return <App />;

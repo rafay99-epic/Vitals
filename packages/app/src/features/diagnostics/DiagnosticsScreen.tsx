@@ -57,7 +57,8 @@ export function DiagnosticsScreen({ navigation }: Props) {
   );
 }
 
-function Diagnostics({ onBack }: { readonly onBack: () => void }) {
+/** The dev-build diagnostics view, usable from any navigator. */
+export function Diagnostics({ onBack, parent = "Record" }: { readonly onBack: () => void; readonly parent?: string }) {
   const now = useNow(1000);
   useFrameRate();
 
@@ -79,7 +80,7 @@ function Diagnostics({ onBack }: { readonly onBack: () => void }) {
     <Screen
       top={
         <>
-          <BackHeader parent="Record" onBack={onBack} />
+          <BackHeader parent={parent} onBack={onBack} />
           <TabHeader title="Diagnostics." meta={`dev build · up ${uptime(now)} · kept in memory only`} />
         </>
       }
