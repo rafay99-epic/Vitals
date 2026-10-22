@@ -86,6 +86,9 @@ export function SettingsScreen({ navigation }: Props<"Settings">) {
   );
 }
 
+/** The innermost cause of a native error chain, without the Java wrapper text. */
+const causeOf = (reason: string): string => (reason.split(/Caused by:\s*/).at(-1) ?? reason).replace(/^[\w.$]+:\s*/, "").trim();
+
 function BuiltInTailscale() {
   const remote = useRemote();
   const state = useStore(tunnel);
@@ -97,7 +100,7 @@ function BuiltInTailscale() {
   };
   const value = { Off: "Turn on", Starting: "Starting", NeedsLogin: "Sign in", Ready: "On", Failed: "Try again" }[state._tag];
   const idle = state._tag === "Ready" || state._tag === "Starting";
-  return <Row label="Built-in Tailscale" detail={state._tag === "Failed" ? state.reason : "No Tailscale app needed"} value={value} valueColor={state._tag === "Ready" ? color.blue : color.ink} onPress={idle ? undefined : press} />;
+  return <Row label="Built-in Tailscale" detail={state._tag === "Failed" ? `Could not start: ${causeOf(state.reason)}` : "No Tailscale app needed"} value={value} valueColor={state._tag === "Ready" ? color.blue : color.ink} onPress={idle ? undefined : press} />;
 }
 
 interface RouteRow {
