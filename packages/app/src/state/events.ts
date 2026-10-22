@@ -40,10 +40,14 @@ export class MacEvents {
         (receipt) => this.receipt(receipt),
       ),
     );
+    // Heartbeats re-emit Ready with the hello from connect time. Apply that snapshot once per
+    // connection, or later alerts vanish and cleared ones come back on every beat.
+    let applied: object | null = null;
     this.stops.push(
       connection.state.subscribe(() => {
         const state = connection.state.get();
-        if (state._tag !== "Ready") return;
+        if (state._tag !== "Ready" || state.hello === applied) return;
+        applied = state.hello;
         this.keepAwake.set(state.hello.keepAwake);
         this.alerts.set(state.hello.alerts);
         for (const alert of state.hello.alerts) this.logRaised(alert);
