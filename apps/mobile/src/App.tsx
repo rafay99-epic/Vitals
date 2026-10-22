@@ -19,8 +19,8 @@ import { AppState, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { checkForUpdate } from "./lib/updates.ts";
-import type { HomeStackParams, SettingsStackParams, TabParams } from "./navigation.ts";
+import { checkForUpdate, launchedNewUpdate, updateState } from "./lib/updates.ts";
+import { type HomeStackParams, navigationRef, openUpdates, type SettingsStackParams, type TabParams } from "./navigation.ts";
 import { PendingStrip } from "./PendingStrip.tsx";
 import { AlertsScreen } from "./screens/AlertsScreen.tsx";
 import { AppsScreen } from "./screens/AppsScreen.tsx";
@@ -111,8 +111,24 @@ function DockBar({ state, navigation }: BottomTabBarProps) {
 
 const renderDock = (props: BottomTabBarProps) => <DockBar {...props} />;
 
+/** Tells the user, quietly, when an update is ready and after it has installed. */
+function useUpdateToasts() {
+  useEffect(() => {
+    void launchedNewUpdate().then((updated) => {
+      if (updated) toast.show("Vitals is up to date", { action: "View", onAction: openUpdates });
+    });
+    let previous = updateState.get()._tag;
+    return updateState.subscribe(() => {
+      const next = updateState.get()._tag;
+      if (next === "Ready" && previous !== "Ready") toast.show("A new version is ready", { action: "View", onAction: openUpdates });
+      previous = next;
+    });
+  }, []);
+}
+
 function Shell() {
   useRemoteToasts();
+  useUpdateToasts();
   return (
     <View style={styles.fill}>
       <Tabs.Navigator
@@ -172,7 +188,7 @@ export function App() {
     <GestureHandlerRootView style={styles.fill}>
       <SafeAreaProvider>
         <StatusBar style="light" />
-        <NavigationContainer theme={theme} linking={linking}>
+        <NavigationContainer ref={navigationRef} theme={theme} linking={linking}>
           <Root />
         </NavigationContainer>
       </SafeAreaProvider>

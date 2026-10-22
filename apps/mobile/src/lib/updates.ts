@@ -1,4 +1,5 @@
 import { Store } from "@vitals/client-runtime";
+import * as SecureStore from "expo-secure-store";
 import * as Updates from "expo-updates";
 
 import { color } from "../ui/tokens.ts";
@@ -60,3 +61,16 @@ export const checkForUpdate = (force = false): Promise<void> => {
 
 /** Restarts into the downloaded update. Only offered when one is ready. */
 export const restartIntoUpdate = (): Promise<void> => Updates.reloadAsync({ reloadScreenOptions: { backgroundColor: color.bg, fade: true, spinner: { enabled: false } } });
+
+const SEEN_KEY = "vitals.remote.update-seen";
+
+/**
+ * True when this launch runs a different update than the last launch did, so the app can
+ * confirm "updated" once. False on the very first launch.
+ */
+export const launchedNewUpdate = async (): Promise<boolean> => {
+  const current = Updates.updateId ?? "built-in";
+  const seen = await SecureStore.getItemAsync(SEEN_KEY).catch(() => null);
+  await SecureStore.setItemAsync(SEEN_KEY, current).catch(() => undefined);
+  return seen !== null && seen !== current;
+};

@@ -198,7 +198,12 @@ export function UpdatesScreen() {
         <Row label="Status" detail={update._tag === "Failed" ? update.reason : undefined} value={UPDATE_WORD[update._tag]} valueColor={update._tag === "Ready" ? color.yellow : color.dim} />
         <PlayRow />
       </Group>
-      {update._tag === "Ready" ? <BigButton label="Restart to update" onPress={() => void restartIntoUpdate()} /> : null}
+      {update._tag === "Ready" ? (
+        <>
+          <BigButton label="Restart to update" onPress={() => void restartIntoUpdate()} />
+          <Note>Takes a second. The screen stays dark and your Mac is not touched.</Note>
+        </>
+      ) : null}
       {update._tag !== "Off" && update._tag !== "Ready" ? <BigButton ghost label="Check now" disabled={update._tag === "Checking" || update._tag === "Downloading"} onPress={() => void checkForUpdate(true)} /> : null}
       <Note>Updates download in the background and install the next time you open the app. Nothing blocks you.</Note>
     </Page>
