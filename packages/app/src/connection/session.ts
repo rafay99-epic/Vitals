@@ -23,7 +23,7 @@ import { loadDeviceKey } from "../persistence/deviceKey";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { Remote } from "../state/remote.ts";
 import { localNetwork, macKeyOf, startNearby, stopNearby } from "./nearby.ts";
-import { startTunnel } from "./tunnel.ts";
+import { runTunnelOnDemand } from "./tunnel.ts";
 
 const SUSPEND_AFTER_MS = 10_000;
 
@@ -301,8 +301,10 @@ class SessionManager {
       trackLocalNetwork(next);
       if (AppState.currentState === "active") remote.connection.wake("network");
     });
+    const stopTunnelWatch = runTunnelOnDemand(remote.connection, () => remote.credentials);
     this.teardown = () => {
       active = false;
+      stopTunnelWatch();
       if (suspendTimer !== null) clearTimeout(suspendTimer);
       appState.remove();
       network.remove();
@@ -311,7 +313,6 @@ class SessionManager {
       stopSeq();
       remote.dispose();
     };
-    if (credentials.builtInTailscale === true) void startTunnel(credentials);
     this.session.set({ status: "paired", remote });
   }
 
