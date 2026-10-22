@@ -24,7 +24,7 @@ export default function Terms() {
         <P>
           Vitals is a hardware-monitoring utility for Apple Silicon Macs. It reads temperature sensors, fan speeds, CPU usage,
           memory statistics, battery condition, and related system information, and displays them in a dashboard and the macOS menu
-          bar. It can optionally log readings to a CSV file on your machine, keeps a local diagnostic log to aid troubleshooting,
+          bar. It keeps a history of readings in a local database on your machine (you can turn it off or export it as CSV), keeps a local diagnostic log to aid troubleshooting,
           and, where you explicitly enable it, controls fan speeds within manufacturer-rated ranges.
         </P>
         <P>
