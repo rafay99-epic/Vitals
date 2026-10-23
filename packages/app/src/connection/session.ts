@@ -92,10 +92,10 @@ class SessionManager {
     else this.queued = link;
   }
 
-  async handleLink(link: PairingLink | null): Promise<boolean> {
+  async handleLink(link: PairingLink | null, quiet = false): Promise<boolean> {
     if (link === null || this.usedCodes.has(link.code)) return false;
     this.usedCodes.add(link.code);
-    const paired = await this.pairWith(link);
+    const paired = await this.pairWith(link, quiet);
     if (!paired) this.usedCodes.delete(link.code);
     return paired;
   }
@@ -106,8 +106,11 @@ class SessionManager {
     void (async () => {
       const early = this.queued;
       this.queued = null;
-      if (await this.handleLink(early ?? (await launchPairingLink()))) return;
       const credentials = await loadCredentials();
+      // A paired app that restarts (an update, a reload) still sees the pairing link it was
+      // opened with. If that stale link fails, keep the saved pairing instead of flashing the
+      // pairing screen.
+      if (await this.handleLink(early ?? (await launchPairingLink()), credentials !== null)) return;
       if (this.session.get().status === "paired") return;
       if (credentials === null) this.session.set({ status: "unpaired" });
       else this.open(credentials, await this.deviceKey());
@@ -117,24 +120,28 @@ class SessionManager {
     });
   }
 
-  async pairWith(link: PairingLink): Promise<boolean> {
-    this.pairing.set({ busy: true, error: null });
+  /** Pairs with a link. `quiet` failures leave the session alone, for a stale launch link. */
+  async pairWith(link: PairingLink, quiet = false): Promise<boolean> {
+    this.pairing.set({ busy: !quiet, error: null });
     try {
-      return await this.completePairing(link);
+      return await this.completePairing(link, quiet);
     } catch {
-      this.pairing.set({ busy: false, error: "Pairing could not be saved on this device. Try again." });
-      if (this.session.get().status === "loading") this.session.set({ status: "unpaired" });
+      this.failPairing("Pairing could not be saved on this device. Try again.", quiet);
       return false;
     }
   }
 
-  private async completePairing(link: PairingLink): Promise<boolean> {
+  private failPairing(message: string, quiet: boolean): void {
+    this.pairing.set({ busy: false, error: quiet ? null : message });
+    if (!quiet && this.session.get().status === "loading") this.session.set({ status: "unpaired" });
+  }
+
+  private async completePairing(link: PairingLink, quiet: boolean): Promise<boolean> {
     const device = await this.deviceKey();
     const lanKey = device === null ? null : deviceKeyText(device);
     const outcome = await pair(link, deviceInfo(), undefined, lanKey);
     if (!outcome.ok) {
-      this.pairing.set({ busy: false, error: outcome.message });
-      if (this.session.get().status === "loading") this.session.set({ status: "unpaired" });
+      this.failPairing(outcome.message, quiet);
       return false;
     }
     if (Platform.OS === "web") globalThis.history?.replaceState(null, "", "/");

@@ -20,6 +20,7 @@
     "apps/gateway": {
       "entry": [
         "src/main.ts",
+        "scripts/*.ts",
         "test/**/*.ts"
       ]
     },
@@ -29,7 +30,6 @@
       ],
       "ignoreDependencies": [
         "babel-plugin-react-compiler",
-        "@vitals/discovery",
         "expo-crypto",
         "@vitals/tailnet"
       ]

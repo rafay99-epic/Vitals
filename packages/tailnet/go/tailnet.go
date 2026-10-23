@@ -8,6 +8,8 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -26,6 +28,15 @@ func Start(dir, hostname string) error {
 	defer mu.Unlock()
 	if server != nil {
 		return nil
+	}
+	// Tailscale's log policy looks for a logs folder in desktop-OS places that do not
+	// exist inside an Android app and panics when it finds none. Point it inside dir.
+	logs := filepath.Join(dir, "logs")
+	if err := os.MkdirAll(logs, 0o700); err != nil {
+		return err
+	}
+	if err := os.Setenv("TS_LOGS_DIR", logs); err != nil {
+		return err
 	}
 	s := &tsnet.Server{Dir: dir, Hostname: hostname, Ephemeral: false}
 	if err := s.Start(); err != nil {
