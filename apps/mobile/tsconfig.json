@@ -12,7 +12,6 @@
   "include": [
     "index.ts",
     "src",
-    "app.config.ts",
     "nativewind-env.d.ts"
   ]
 }

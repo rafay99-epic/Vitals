@@ -9,7 +9,7 @@ import { PairScreen } from "@vitals/app/features/pairing/PairScreen.tsx";
 import { WelcomeFlow } from "@vitals/app/features/pairing/WelcomeFlow.tsx";
 import { checkPlay, startPlayUpdate } from "@vitals/app/features/updates/playUpdate.ts";
 import { hideSplash } from "@vitals/app/lib/splash.ts";
-import { isDevBuild } from "@vitals/app/lib/variant.ts";
+import { isStoreBuild } from "@vitals/app/lib/variant.ts";
 import { finishOnboarding, onboarded } from "@vitals/app/persistence/onboarding.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { discoverySupported } from "@vitals/discovery";
@@ -49,7 +49,7 @@ const linking: LinkingOptions<TabParams> = {
       Apps: "apps",
       Control: "control",
       Alerts: "alerts",
-      SettingsTab: { path: "settings", screens: { Settings: "", Connection: "connection", Notifications: "notifications", Updates: "updates", Phone: "phone", Help: "help", ...(isDevBuild ? { Diagnostics: "diagnostics" } : {}) } },
+      SettingsTab: { path: "settings", screens: { Settings: "", Connection: "connection", Notifications: "notifications", Updates: "updates", Phone: "phone", Help: "help", ...(isStoreBuild ? {} : { Diagnostics: "diagnostics" }) } },
     },
   },
 };
@@ -79,7 +79,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="Updates" component={UpdatesScreen} />
       <SettingsStack.Screen name="Phone" component={PhoneScreen} />
       <SettingsStack.Screen name="Help" component={HelpScreen} />
-      {isDevBuild ? <SettingsStack.Screen name="Diagnostics" component={DiagnosticsRoute} /> : null}
+      {isStoreBuild ? null : <SettingsStack.Screen name="Diagnostics" component={DiagnosticsRoute} />}
     </SettingsStack.Navigator>
   );
 }

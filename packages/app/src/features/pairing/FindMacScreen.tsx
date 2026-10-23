@@ -8,12 +8,13 @@ import { FirstBeat } from "../../components/FirstBeat.tsx";
 import { macKeyOf, nearby } from "../../connection/nearby.ts";
 import { type NearbyWait, sessions } from "../../connection/session.ts";
 import { haptics } from "../../lib/haptics";
-import { isDevBuild } from "../../lib/variant";
+import { channel } from "../../lib/variant";
 import { useStore } from "../../state/useStore.ts";
 
 const nameOf = (mac: FoundMac): string => mac.txt["n"] ?? mac.name;
 
-const sameChannel = (mac: FoundMac): boolean => (mac.txt["c"] === "dev") === isDevBuild;
+/** Dev phones pair with Dev Macs; Stable and Nightly phones with Stable and Nightly Macs. */
+const sameChannel = (mac: FoundMac): boolean => (mac.txt["c"] === "dev") === (channel === "dev");
 
 const pairable = (macs: ReadonlyArray<FoundMac>): ReadonlyArray<FoundMac> => macs.filter((mac) => macKeyOf(mac) !== null && sameChannel(mac));
 

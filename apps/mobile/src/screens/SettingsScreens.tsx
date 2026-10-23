@@ -9,7 +9,7 @@ import { updateInfo } from "@vitals/app/features/updates/updateInfo.ts";
 import { deviceInfo } from "@vitals/app/lib/device.ts";
 import { hostOf } from "@vitals/app/lib/host.ts";
 import { TAILSCALE_STORE_URL } from "@vitals/app/lib/links.ts";
-import { isDevBuild } from "@vitals/app/lib/variant.ts";
+import { isStoreBuild } from "@vitals/app/lib/variant.ts";
 import { notificationPermission, requestNotifications } from "@vitals/app/notifications/alerts.ts";
 import { startAlertWatch } from "@vitals/app/notifications/background.ts";
 import type { PermissionState } from "@vitals/app/notifications/permission.ts";
@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Linking, StyleSheet, View } from "react-native";
 
 import { LINK_COLOR, useMac } from "../lib/remote.ts";
+import { checkNightly, installedBuild, nightlyState, nightlySupported } from "../lib/nightly.ts";
 import { checkForUpdate, restartIntoUpdate, type UpdateState, updateState } from "../lib/updates.ts";
 import type { SettingsStackParams } from "../navigation.ts";
 import { UnpairSheet } from "../sheets/SendSheets.tsx";
@@ -189,6 +190,24 @@ function PlayRow() {
   );
 }
 
+/** Nightly only: new native builds come as an APK from GitHub. Downloading opens the browser, and
+ *  Android installs it over this one (same signature, higher build). */
+function NightlyRow() {
+  const nightly = useStore(nightlyState);
+  useEffect(() => {
+    void checkNightly();
+  }, []);
+  if (!nightlySupported) return null;
+  const value = { Unchecked: "Checking", Current: "Up to date", Available: "New build", Unavailable: "Not available" }[nightly._tag];
+  const detail = nightly._tag === "Unavailable" ? nightly.reason : nightly._tag === "Available" ? `Build ${String(nightly.build)} is ready` : `Build ${String(installedBuild)} installed`;
+  return (
+    <>
+      <Row label="Nightly build" detail={detail} value={value} valueColor={nightly._tag === "Available" ? color.yellow : color.dim} />
+      {nightly._tag === "Available" ? <BigButton label={`Download build ${String(nightly.build)}`} onPress={() => void Linking.openURL(nightly.url)} /> : null}
+    </>
+  );
+}
+
 export function UpdatesScreen() {
   const update = useStore(updateState);
   const info = updateInfo();
@@ -200,6 +219,7 @@ export function UpdatesScreen() {
         <Row first label="Vitals Remote" value={`${Constants.expoConfig?.version ?? CLIENT_VERSION} · ${info.running}`} />
         <Row label="Status" detail={update._tag === "Failed" ? update.reason : undefined} value={UPDATE_WORD[update._tag]} valueColor={update._tag === "Ready" ? color.yellow : color.dim} />
         <PlayRow />
+        <NightlyRow />
       </Group>
       {update._tag === "Ready" ? (
         <>
@@ -251,7 +271,7 @@ export function HelpScreen({ navigation }: Props<"Help">) {
       <Group>
         <Row first label="App version" value={`${Constants.expoConfig?.version ?? CLIENT_VERSION}`} />
         <Row label="Connection" value={link.label} />
-        {isDevBuild ? <Row label="Diagnostics" detail="Frame rate, calls, memory" onPress={() => navigation.navigate("Diagnostics")} /> : null}
+        {isStoreBuild ? null : <Row label="Diagnostics" detail="Frame rate, calls, memory" onPress={() => navigation.navigate("Diagnostics")} />}
       </Group>
       <Note>Vitals Remote shows what Vitals on your Mac reads. Keep Vitals running on the Mac, with Remote turned on.</Note>
     </Page>

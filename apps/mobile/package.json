@@ -6,11 +6,14 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "android:dev": "APP_VARIANT=dev expo prebuild --clean --platform android && APP_VARIANT=dev expo run:android --variant release",
-    "android:prod": "APP_VARIANT=prod expo prebuild --clean --platform android && APP_VARIANT=prod expo run:android --variant release",
+    "android:nightly": "APP_VARIANT=nightly expo prebuild --clean --platform android && APP_VARIANT=nightly expo run:android --variant release",
+    "android:stable": "APP_VARIANT=stable expo prebuild --clean --platform android && APP_VARIANT=stable expo run:android --variant release",
+    "release:nightly": "scripts/release-nightly.sh",
     "update:dev": "APP_VARIANT=dev npx -y eas-cli@latest update --channel dev --environment development --platform all --message \"$(git log -1 --pretty=%s)\"",
-    "update:prod": "APP_VARIANT=prod npx -y eas-cli@latest update --channel production --environment production --platform all --message \"$(git log -1 --pretty=%s)\""
+    "update:nightly": "APP_VARIANT=nightly npx -y eas-cli@latest update --channel nightly --environment preview --platform all --message \"$(git log -1 --pretty=%s)\"",
+    "update:stable": "APP_VARIANT=stable npx -y eas-cli@latest update --channel production --environment production --platform all --message \"$(git log -1 --pretty=%s)\""
   },
   "dependencies": {
     "@expo/metro-runtime": "~58.0.0",
@@ -26,6 +29,7 @@
     "@vitals/tailnet": "workspace:*",
     "@vitals/ui": "workspace:*",
     "expo": "catalog:",
+    "expo-application": "~58.1.2",
     "expo-background-task": "~58.0.11",
     "expo-build-properties": "~58.0.11",
     "expo-camera": "~58.0.11",
@@ -58,6 +62,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.12",
+    "@types/node": "^26.6.5",
     "@types/react": "catalog:",
     "babel-plugin-react-compiler": "^1.0.0",
     "babel-preset-expo": "~58.0.18",

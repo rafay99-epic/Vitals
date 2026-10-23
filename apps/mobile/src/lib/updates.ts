@@ -30,6 +30,8 @@ const publishedAt = (manifest: Updates.Manifest | undefined): number | null => {
   return Number.isFinite(created) ? created : null;
 };
 
+const NO_CHANNEL = /no channel named/i;
+
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : "Could not reach the update server");
 
 const run = async (): Promise<void> => {
@@ -44,6 +46,8 @@ const run = async (): Promise<void> => {
     const fetched = await Updates.fetchUpdateAsync();
     updateState.set(fetched.isNew || fetched.isRollBackToEmbedded ? { _tag: "Ready", publishedAt: publishedAt(check.manifest) } : { _tag: "Current", at: Date.now() });
   } catch (error) {
+    // A channel nobody has published to yet (a fresh Nightly) has nothing newer than the built-in code.
+    if (error instanceof Error && NO_CHANNEL.test(error.message)) return updateState.set({ _tag: "Current", at: Date.now() });
     updateState.set({ _tag: "Failed", at: Date.now(), reason: reasonOf(error) });
   }
 };
