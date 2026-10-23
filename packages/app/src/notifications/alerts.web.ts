@@ -12,7 +12,7 @@ export const prepareNotifications = async (): Promise<boolean> => (await notific
 export const requestNotifications = async (): Promise<boolean> =>
   "Notification" in globalThis && (await Notification.requestPermission()) === "granted";
 
-export const notifyAlert = async (alert: Alert): Promise<void> => {
+export const notifyAlert = async (alert: Alert, _quiet: boolean): Promise<void> => {
   if (!("Notification" in globalThis) || Notification.permission !== "granted") return;
   const notification = new Notification(alert.severity === "critical" ? "Mac under heavy pressure" : "Mac under pressure", {
     body: `${alert.summary}. ${alert.plan.summary}.`,
