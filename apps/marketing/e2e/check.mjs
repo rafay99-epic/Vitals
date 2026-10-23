@@ -114,6 +114,19 @@ try {
     )
   }
 
+  // --- Brand page: every download must point at a file render.mjs actually produced ---
+  await page.goto(`${BASE}/brand`, { waitUntil: 'networkidle' })
+  console.log('/brand:')
+  const downloads = await page.evaluate(() => [...new Set([...document.querySelectorAll('a[download]')].map((a) => a.href))])
+  check('lists the store kits', downloads.some((h) => h.endsWith('/brand/vitals-brand.zip')))
+  const missing = []
+  for (const href of downloads) {
+    const res = await fetch(href, { method: 'HEAD' })
+    // The SPA fallback answers any path with index.html, so a dead link shows up as HTML.
+    if (!res.ok || res.headers.get('content-type')?.includes('text/html')) missing.push(href)
+  }
+  check(`all ${downloads.length} downloads resolve`, missing.length === 0)
+
   // The old multi-page URLs must still resolve (router redirects /terms/ → /terms).
   await page.goto(`${BASE}/terms/`, { waitUntil: 'networkidle' })
   console.log('/terms/ (legacy):')

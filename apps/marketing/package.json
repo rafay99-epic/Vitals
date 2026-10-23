@@ -9,7 +9,8 @@
     "lint": "echo 'website lint skipped: typescript-eslint has no TypeScript 7 support yet (its parser needs the classic TS compiler API, removed in TS7-native). tsc -b still type-checks the code under TS7. To re-enable, restore \"eslint .\" here once typescript-eslint ships TS7 support \u2014 see eslint.config.js.'",
     "preview": "vite preview",
     "test": "bun test",
-    "test:e2e": "node e2e/check.mjs"
+    "test:e2e": "node e2e/check.mjs",
+    "brand": "node brand/render.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",

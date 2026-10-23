@@ -1,0 +1,257 @@
+<!doctype html>
+<!--
+  Store and brand artwork, composed from real app captures in ./screens.
+  Open with ?a=<asset> at the asset's exact pixel size (see ASSETS in render.mjs).
+  Everything here is static layout: the numbers come from the captures, not from this file.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vitals artwork</title>
+<style>
+@font-face{font-family:"Instrument Serif";font-style:italic;src:url(../public/fonts/InstrumentSerif-Italic.ttf)}
+@font-face{font-family:Geist;font-weight:400;src:url(../public/fonts/Geist-Regular.ttf)}
+@font-face{font-family:Geist;font-weight:600;src:url(../public/fonts/Geist-SemiBold.ttf)}
+@font-face{font-family:"Geist Mono";font-weight:500;src:url(../public/fonts/GeistMono-Medium.ttf)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#000;overflow:hidden}
+#stage{position:relative;overflow:hidden;background:#000;color:#fff}
+.abs{position:absolute}
+.headline{font-family:"Instrument Serif";font-style:italic;font-weight:400;letter-spacing:-0.01em;line-height:1}
+.sub{font-family:Geist;font-weight:400;color:#c9c9c9;line-height:1.35}
+.kicker{font-family:"Geist Mono";font-weight:500;letter-spacing:.14em;text-transform:uppercase}
+.phone{position:absolute;background:#050505;box-shadow:0 0 0 2px #2c2c2c inset,0 60px 140px rgba(0,0,0,.9)}
+.screen{position:absolute;background-repeat:no-repeat;background-color:#000;overflow:hidden}
+.bar{position:absolute;left:0;right:0;top:0;background:#000;display:flex;justify-content:space-between;align-items:center;font-family:Geist;font-weight:600;color:#fff}
+.island{position:absolute;left:50%;transform:translateX(-50%);background:#000;border-radius:999px}
+.pop{position:absolute;background-repeat:no-repeat}
+.mac{position:absolute;background-size:100% 100%;background-repeat:no-repeat;box-shadow:0 0 0 2px #2c2c2c,0 60px 160px rgba(0,0,0,.9)}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var SCREEN_W = 1080, SCREEN_H = 2400, STATUS_H = 120;
+  var params = new URLSearchParams(location.search);
+  var asset = params.get("a") || "play-1";
+  var W = window.innerWidth, H = window.innerHeight;
+  var stage = document.getElementById("stage");
+  stage.style.width = W + "px";
+  stage.style.height = H + "px";
+
+  function el(tag, cls, style, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (style) Object.assign(node.style, style);
+    if (text) node.textContent = text;
+    return node;
+  }
+  function px(n) { return Math.round(n) + "px"; }
+
+  /** Story for the six screenshots. Copy is final; crops are in capture pixels (1080x2400). */
+  var SHOTS = [
+    { screen: "home", accent: "#5cf2a6", title: "Your Mac\nhas a _pulse._", sub: "Live CPU, memory, heat and fans,\nright on your phone.", crop: [0, 628, 1080, 240] },
+    { screen: "alert", accent: "#f2ec6b", title: "Calm 25 agents\nin _one tap._", sub: "Vitals spots the trouble.\nYou fix it from the couch.", crop: [36, 2022, 1008, 146] },
+    { screen: "apps-agents", accent: "#ffb45c", title: "Find what's\n_eating it._", sub: "Every app, agent and emulator.\nSearchable.", crop: [30, 460, 1050, 116] },
+    { screen: "hold", accent: "#ff4d6d", title: "Shut it down\nfrom _bed._", sub: "Hold to confirm. Ten seconds\nto change your mind.", crop: [33, 1912, 1014, 166] },
+    { screen: "cpu", accent: "#5cf2a6", title: "Go deep on\n_any reading._", sub: "History, every core, the peaks.\nOne tap away.", crop: [24, 408, 560, 268] },
+    { screen: "home-calm", accent: "#74d4ff", title: "One Mac.\nOne _heartbeat._", sub: "Wi-Fi or Tailscale.\nNo cloud. No account.", mac: true }
+  ];
+
+  /** A phone frame holding a capture, with a clean shared status bar. Returns the frame box. */
+  function phone(parent, name, x, y, screenW) {
+    var k = screenW / SCREEN_W;
+    var screenH = SCREEN_H * k;
+    var pad = screenW * 0.032;
+    var frame = el("div", "phone", {
+      left: px(x - pad), top: px(y - pad), width: px(screenW + pad * 2), height: px(screenH + pad * 2),
+      borderRadius: px(screenW * 0.13)
+    });
+    var screen = el("div", "screen", {
+      left: px(pad), top: px(pad), width: px(screenW), height: px(screenH), borderRadius: px(screenW * 0.105),
+      backgroundImage: "url(screens/" + name + ".png)", backgroundSize: px(screenW) + " " + px(screenH)
+    });
+    var bar = el("div", "bar", { height: px(STATUS_H * k), padding: "0 " + px(70 * k), fontSize: px(42 * k) });
+    bar.appendChild(el("span", "", null, "9:41"));
+    bar.appendChild(statusIcons(k));
+    screen.appendChild(bar);
+    screen.appendChild(el("div", "island", { top: px(30 * k), width: px(250 * k), height: px(72 * k), background: "#0b0b0b" }));
+    frame.appendChild(screen);
+    parent.appendChild(frame);
+    return { x: x, y: y, k: k };
+  }
+
+  function statusIcons(k) {
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 150 40");
+    svg.setAttribute("width", px(150 * k));
+    svg.setAttribute("height", px(40 * k));
+    var shapes = [
+      ["rect", { x: 0, y: 26, width: 7, height: 10, rx: 2 }], ["rect", { x: 11, y: 20, width: 7, height: 16, rx: 2 }],
+      ["rect", { x: 22, y: 13, width: 7, height: 23, rx: 2 }], ["rect", { x: 33, y: 6, width: 7, height: 30, rx: 2 }],
+      ["path", { d: "M52 15a28 28 0 0 1 34 0l-4 5a21 21 0 0 0-26 0zM59 23a16 16 0 0 1 20 0l-4 5a9 9 0 0 0-12 0zM66 31l3-3 3 3-3 4z" }],
+      ["rect", { x: 98, y: 8, width: 44, height: 24, rx: 7, fill: "none", stroke: "#fff", "stroke-width": 2.5, opacity: 0.5 }],
+      ["rect", { x: 102, y: 12, width: 36, height: 16, rx: 4 }], ["rect", { x: 144, y: 16, width: 4, height: 8, rx: 2, opacity: 0.5 }]
+    ];
+    shapes.forEach(function (s) {
+      var node = document.createElementNS(NS, s[0]);
+      Object.keys(s[1]).forEach(function (a) { node.setAttribute(a, s[1][a]); });
+      if (!s[1].fill) node.setAttribute("fill", "#fff");
+      svg.appendChild(node);
+    });
+    return svg;
+  }
+
+  /** A crop of the capture, enlarged in place so it reads as lifting off the screen. */
+  function pop(parent, name, crop, box, scale, color) {
+    var k = box.k * scale;
+    var w = crop[2] * k, h = crop[3] * k;
+    var cx = box.x + (crop[0] + crop[2] / 2) * box.k, cy = box.y + (crop[1] + crop[3] / 2) * box.k;
+    parent.appendChild(el("div", "pop", {
+      left: px(cx - w / 2), top: px(cy - h / 2), width: px(w), height: px(h),
+      borderRadius: px(34 * k), backgroundImage: "url(screens/" + name + ".png)",
+      backgroundSize: px(SCREEN_W * k) + " " + px(SCREEN_H * k),
+      backgroundPosition: px(-crop[0] * k) + " " + px(-crop[1] * k), backgroundColor: "#0c0c0c",
+      boxShadow: "0 0 0 " + px(3 * k) + " " + color + "66, 0 " + px(50 * k) + " " + px(120 * k) + " rgba(0,0,0,.9), 0 0 " + px(160 * k) + " " + color + "40"
+    }));
+  }
+
+  /** One continuous heartbeat across all six screenshots; each panel draws its slice. */
+  function heartbeat(parent, index, y, height) {
+    var total = W * SHOTS.length;
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", height);
+    svg.setAttribute("viewBox", (index * W) + " 0 " + W + " " + height);
+    svg.style.position = "absolute";
+    svg.style.left = "0";
+    svg.style.top = px(y - height / 2);
+    var defs = document.createElementNS(NS, "defs");
+    var grad = document.createElementNS(NS, "linearGradient");
+    grad.setAttribute("id", "g");
+    grad.setAttribute("gradientUnits", "userSpaceOnUse");
+    grad.setAttribute("x1", "0"); grad.setAttribute("x2", String(total));
+    SHOTS.forEach(function (shot, i) {
+      var stop = document.createElementNS(NS, "stop");
+      stop.setAttribute("offset", String((i + 0.5) / SHOTS.length));
+      stop.setAttribute("stop-color", shot.accent);
+      grad.appendChild(stop);
+    });
+    var blur = document.createElementNS(NS, "filter");
+    blur.setAttribute("id", "glow");
+    blur.setAttribute("x", "-10%"); blur.setAttribute("y", "-50%"); blur.setAttribute("width", "120%"); blur.setAttribute("height", "200%");
+    var fe = document.createElementNS(NS, "feGaussianBlur");
+    fe.setAttribute("stdDeviation", String(W * 0.012));
+    blur.appendChild(fe);
+    defs.appendChild(grad); defs.appendChild(blur); svg.appendChild(defs);
+    var mid = height / 2, amp = height * 0.42, d = "M0 " + mid;
+    for (var i = 0; i < SHOTS.length; i++) {
+      // One beat in each panel's left margin, so every screenshot shows a spike of its own.
+      var bx = i * W + W * 0.075, u = W * 0.018;
+      d += " H" + bx + " l" + u + " " + amp * 0.35 + " l" + u + " " + -amp * 1.25 + " l" + u * 1.2 + " " + amp * 1.5 + " l" + u + " " + -amp * 0.6;
+    }
+    d += " H" + total;
+    [["url(#glow)", W * 0.016, 0.85], ["", W * 0.005, 1]].forEach(function (layer) {
+      var path = document.createElementNS(NS, "path");
+      path.setAttribute("d", d);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "url(#g)");
+      path.setAttribute("stroke-width", String(layer[1]));
+      path.setAttribute("stroke-linejoin", "round");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("opacity", String(layer[2]));
+      if (layer[0]) path.setAttribute("filter", layer[0]);
+      svg.appendChild(path);
+    });
+    parent.appendChild(svg);
+  }
+
+  function glow(parent, color, cx, cy, r, alpha) {
+    parent.appendChild(el("div", "abs", {
+      left: px(cx - r), top: px(cy - r), width: px(r * 2), height: px(r * 2), borderRadius: "50%",
+      background: "radial-gradient(closest-side," + color + " 0%,transparent 100%)", opacity: String(alpha)
+    }));
+  }
+
+  /** Title lines with _marked words_ in the accent, a short accent rule above, the subline below. */
+  function headline(parent, text, sub, color, top) {
+    var u = W / 1080;
+    var title = el("div", "headline abs", { left: px(80 * u), right: px(60 * u), top: px(top), fontSize: px(132 * u), whiteSpace: "pre-line" });
+    text.split("_").forEach(function (part, i) {
+      title.appendChild(i % 2 ? el("span", "", { color: color }, part) : document.createTextNode(part));
+    });
+    parent.appendChild(title);
+    parent.appendChild(el("div", "sub abs", { left: px(84 * u), right: px(80 * u), top: px(top + 132 * u * 2.1), fontSize: px(42 * u), whiteSpace: "pre-line" }, sub));
+    parent.appendChild(el("div", "abs", { left: px(84 * u), top: px(top - 46 * u), width: px(70 * u), height: px(8 * u), background: color, borderRadius: px(4 * u) }));
+  }
+
+  function screenshot(index) {
+    var shot = SHOTS[index];
+    var u = W / 1080;
+    var color = shot.accent;
+    var top = H * 0.085;
+    var phoneTop = top + 132 * u * 2.1 + 42 * u * 3.5;
+    glow(stage, color, W / 2, H * 0.72, W * 0.75, 0.16);
+    heartbeat(stage, index, H * 0.78, H * 0.16);
+    headline(stage, shot.title, shot.sub, color, top);
+    if (shot.mac) {
+      var macW = W * 1.18, macH = macW * 1520 / 2200;
+      stage.appendChild(el("div", "mac", {
+        left: px(W * 0.06), top: px(phoneTop + 10 * u), width: px(macW), height: px(macH), borderRadius: px(26 * u),
+        backgroundImage: "url(screens/mac-overview.png)"
+      }));
+      var smallW = W * 0.5;
+      phone(stage, shot.screen, W * 0.1, phoneTop + macH * 0.42, smallW);
+      return;
+    }
+    var avail = H - phoneTop - H * 0.035;
+    var screenW = Math.min(W * 0.66, (avail / (SCREEN_H / SCREEN_W)) * 0.94);
+    var box = phone(stage, shot.screen, (W - screenW) / 2, phoneTop, screenW);
+    pop(stage, shot.screen, shot.crop, box, 1.22, color);
+  }
+
+  /** 1024x500: the beat runs in from the left and lands in the phone, the real Mac sits behind. */
+  function featureGraphic() {
+    var u = W / 1024;
+    var macW = W * 0.6, macH = macW * 1520 / 2200;
+    stage.appendChild(el("div", "mac", {
+      left: px(W * 0.5), top: px(H * 0.16), width: px(macW), height: px(macH), borderRadius: px(12 * u),
+      backgroundImage: "url(screens/mac-overview.png)", transform: "perspective(1600px) rotateY(-16deg)", transformOrigin: "right center"
+    }));
+    // Fade the Mac into the black on its left so the phone stands in front of it.
+    stage.appendChild(el("div", "abs", { left: px(W * 0.4), top: "0", width: px(W * 0.3), height: px(H), background: "linear-gradient(90deg,#000 35%,transparent)" }));
+    glow(stage, "#5cf2a6", W * 0.56, H * 0.6, W * 0.26, 0.22);
+    var y = H * 0.8, spike = W * 0.3, end = W * 0.46;
+    var d = "M0 " + y + " H" + spike + " l" + 10 * u + " " + 14 * u + " l" + 12 * u + " " + -78 * u + " l" + 14 * u + " " + 100 * u + " l" + 11 * u + " " + -36 * u + " H" + end;
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("width", W); svg.setAttribute("height", H);
+    svg.style.position = "absolute"; svg.style.left = "0"; svg.style.top = "0";
+    [[12, 0.22], [3.4, 1]].forEach(function (layer) {
+      var path = document.createElementNS(NS, "path");
+      path.setAttribute("d", d); path.setAttribute("fill", "none"); path.setAttribute("stroke", "#5cf2a6");
+      path.setAttribute("stroke-width", String(layer[0] * u)); path.setAttribute("opacity", String(layer[1]));
+      path.setAttribute("stroke-linejoin", "round"); path.setAttribute("stroke-linecap", "round");
+      svg.appendChild(path);
+    });
+    stage.appendChild(svg);
+    phone(stage, "home-calm", W * 0.47, H * 0.075, W * 0.19);
+    var title = el("div", "headline abs", { left: px(W * 0.055), top: px(H * 0.13), fontSize: px(80 * u), whiteSpace: "pre-line" });
+    title.appendChild(document.createTextNode("Your Mac\nhas a "));
+    title.appendChild(el("span", "", { color: "#5cf2a6" }, "pulse."));
+    stage.appendChild(title);
+    stage.appendChild(el("div", "kicker abs", { left: px(W * 0.058), top: px(H * 0.53), fontSize: px(12 * u), color: "#9c9c9c" }, "Vitals Remote · Android and iPhone"));
+  }
+
+  if (asset === "feature") featureGraphic();
+  else {
+    var match = /(\d)$/.exec(asset);
+    screenshot(match ? Number(match[1]) - 1 : 0);
+  }
+  document.fonts.ready.then(function () { document.body.dataset.ready = "1"; });
+})();
+</script>
+</body>
+</html>

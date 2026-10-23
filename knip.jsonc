@@ -6,7 +6,8 @@
   },
   "ignoreBinaries": [
     "swift",
-    "swiftlint"
+    "swiftlint",
+    "sips"
   ],
   "workspaces": {
     ".": {
