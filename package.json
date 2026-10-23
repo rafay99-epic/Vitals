@@ -22,7 +22,7 @@
     "export:web": "pnpm --filter @vitals/web export"
   },
   "dependencies": {
-    "@convex-dev/rate-limiter": "^0.3.2",
+    "@convex-dev/rate-limiter": "^0.4.2",
     "convex": "^1.42.3"
   },
   "devDependencies": {

@@ -63,8 +63,8 @@ importers:
   .:
     dependencies:
       '@convex-dev/rate-limiter':
-        specifier: ^0.3.2
-        version: 0.3.2(convex@1.47.0(react@19.3.1))(react@19.3.1)
+        specifier: ^0.4.2
+        version: 0.4.2(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
       convex:
         specifier: ^1.42.3
         version: 1.47.0(react@19.3.1)
@@ -1078,10 +1078,15 @@ packages:
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
 
-  '@convex-dev/rate-limiter@0.3.2':
-    resolution: {integrity: sha512-+oBPsBfFbzdxiF/9XaaTQmVnvDlvEfg/c69/v8LxTbw4VLuiflIKlfnPQL8OS0azXQQ11hcPWHmU8ytFmHKDXA==}
+  '@convex-dev/batch-worker@0.3.5':
+    resolution: {integrity: sha512-kTxLGy1TXRN6WLcENcoRWWnvPshv1sIZp2EpPqGqCB4FxDI7m8tEHUr+jCLdhGtSZT1UHkWtb1w8YYuEzTxHWQ==}
     peerDependencies:
-      convex: ^1.24.8
+      convex: ^1.43.0
+
+  '@convex-dev/rate-limiter@0.4.2':
+    resolution: {integrity: sha512-njheoDd//MZgxtw+0PP3LL47PVMkvOKZmXDjYglDKSu5IdrfJtGmz/EHd6px9UcALuk/w7LTo83YwQ3bTGsMIg==}
+    peerDependencies:
+      convex: ^1.43.0
       react: ^18.2.0 || ^19.0.0
     peerDependenciesMeta:
       react:
@@ -3128,6 +3133,28 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  convex-helpers@0.1.129:
+    resolution: {integrity: sha512-8QJLbym0fKsf3tYcF2ZTX37NeYt/BkOFBjBwB2LR1fXUAajeYaTLV11gi/0IVOU/jCdH2j/VseHhHid1qQcqFw==}
+    hasBin: true
+    peerDependencies:
+      '@standard-schema/spec': ^1.0.0
+      convex: ^1.46.0
+      hono: ^4.0.5
+      react: ^17.0.2 || ^18.0.0 || ^19.0.0
+      typescript: ^5.5 || ^6.0.0 || ^7.0.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@standard-schema/spec':
+        optional: true
+      hono:
+        optional: true
+      react:
+        optional: true
+      typescript:
+        optional: true
+      zod:
+        optional: true
 
   convex@1.47.0:
     resolution: {integrity: sha512-B1z/lOmex7i09NASq8+2WG9rZLzGXXOSkpwGOpaNIvOs4awyW4RMgpVBjt8r2wvvHwhEBEsOr2pGYpulnmAxYQ==}
@@ -5629,11 +5656,28 @@ snapshots:
       hashery: 1.5.1
       keyv: 5.6.0
 
-  '@convex-dev/rate-limiter@0.3.2(convex@1.47.0(react@19.3.1))(react@19.3.1)':
+  '@convex-dev/batch-worker@0.3.5(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)':
     dependencies:
+      convex: 1.47.0(react@19.3.1)
+      convex-helpers: 0.1.129(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - hono
+      - react
+      - typescript
+      - zod
+
+  '@convex-dev/rate-limiter@0.4.2(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)':
+    dependencies:
+      '@convex-dev/batch-worker': 0.3.5(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
       convex: 1.47.0(react@19.3.1)
     optionalDependencies:
       react: 19.3.1
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - hono
+      - typescript
+      - zod
 
   '@effect/platform-bun@4.0.5(effect@4.0.5)':
     dependencies:
@@ -7808,6 +7852,14 @@ snapshots:
   content-type@2.1.0: {}
 
   convert-source-map@2.0.0: {}
+
+  convex-helpers@0.1.129(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7):
+    dependencies:
+      convex: 1.47.0(react@19.3.1)
+    optionalDependencies:
+      react: 19.3.1
+      typescript: 7.0.2
+      zod: 4.6.7
 
   convex@1.47.0(react@19.3.1):
     dependencies:
