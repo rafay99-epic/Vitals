@@ -116,7 +116,8 @@ const CONNECT_TIMEOUT = "15 seconds";
 const PING_TIMEOUT = "15 seconds";
 const PROBE_TIMEOUT = "3 seconds";
 const HEARTBEAT_MS = 15_000;
-const UPGRADE_EVERY_MS = 60_000;
+// Network changes and seeing the Mac on Wi-Fi trigger an upgrade at once; this is only the safety net.
+const UPGRADE_EVERY_MS = 5 * 60_000;
 const HOLD_OFF_MS = 5 * 60_000;
 const LAN_PROBE_MS = 1_200;
 
