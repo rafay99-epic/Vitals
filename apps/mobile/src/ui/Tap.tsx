@@ -31,7 +31,7 @@ export function Tap({ style, layout, children, scale = motion.pressScale, onPres
     onPressOut?.(event);
   };
   return (
-    <Pressable {...rest} style={layout} disabled={disabled} onPressIn={down} onPressOut={up} accessibilityState={{ disabled: disabled === true }}>
+    <Pressable {...rest} style={layout} disabled={disabled} onPressIn={down} onPressOut={up} accessibilityState={{ ...rest.accessibilityState, disabled: disabled === true }}>
       <Animated.View style={[style, feel, disabled === true ? { opacity: 0.4 } : null]}>{children}</Animated.View>
     </Pressable>
   );

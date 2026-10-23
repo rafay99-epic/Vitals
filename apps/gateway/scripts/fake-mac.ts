@@ -171,7 +171,7 @@ setInterval(() => {
   if (need.guard) emit({ t: "guard", data: guardState() });
 }, 2_000);
 
-const kinds = new Map<string, string>();
+const issued = new Map<string, { readonly kind: string; readonly deviceId: string }>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const receipt = (id: string, kind: string, deviceId: string, status: string, deadlineAt: number | null) =>
@@ -182,10 +182,15 @@ const setKeepAwake = (next: typeof keepAwake) => {
   emit({ t: "event", event: { _tag: "KeepAwakeChanged", at: Date.now(), state: keepAwake } });
 };
 
+const removeProc = (pid: number | null) => {
+  const index = procs.findIndex((proc) => proc.pid === pid);
+  if (index >= 0) procs.splice(index, 1);
+};
+
 const apply = (message: Extract<ToApp, { t: "cmd" }>) => {
   const command = message.command;
   const done = () => receipt(message.id, command._tag, message.deviceId, "done", null);
-  kinds.set(message.id, command._tag);
+  issued.set(message.id, { kind: command._tag, deviceId: message.deviceId });
   switch (command._tag) {
     case "Processes":
       for (const { target, action } of command.actions) {
@@ -214,6 +219,7 @@ const apply = (message: Extract<ToApp, { t: "cmd" }>) => {
     case "ForceQuitApp": {
       const index = apps.findIndex((app) => app.pid === command.app.pid);
       if (index >= 0) apps.splice(index, 1);
+      removeProc(command.app.pid);
       return done();
     }
     case "HideApp": {
@@ -223,7 +229,7 @@ const apply = (message: Extract<ToApp, { t: "cmd" }>) => {
     }
     case "StopEmulator": {
       const index = emulators.findIndex((emulator) => emulator.id === command.id);
-      if (index >= 0) emulators.splice(index, 1);
+      if (index >= 0) removeProc(emulators.splice(index, 1)[0]?.pid ?? null);
       return done();
     }
     case "ShutDown":
@@ -262,7 +268,8 @@ const write = (line: string): void => {
       return apply(message);
     case "cancel": {
       clearTimeout(timers.get(message.id));
-      emit({ t: "receipt", receipt: { id: message.id, kind: kinds.get(message.id) ?? "ShutDown", deviceId: "unknown", status: "cancelled", createdAt: Date.now(), deadlineAt: null, finishedAt: Date.now(), error: null } });
+      const order = issued.get(message.id);
+      receipt(message.id, order?.kind ?? "ShutDown", order?.deviceId ?? "unknown", "cancelled", null);
       return;
     }
     case "query": {
@@ -320,8 +327,10 @@ Effect.runFork(Layer.launch(makeApp(config, { transport })));
 
 const upstream = `127.0.0.1:${String(GATEWAY_PORT)}`;
 
+// Loopback only by default: the proxy signs every request in as the owner, over plain HTTP. The
+// emulator reaches it as 10.0.2.2. For a real phone on the LAN, opt in with FAKE_MAC_HOST=0.0.0.0.
 Bun.serve<{ readonly path: string; socket: WebSocket | null; pending: Array<string | ArrayBuffer> }>({
-  hostname: "0.0.0.0",
+  hostname: process.env["FAKE_MAC_HOST"] ?? "127.0.0.1",
   port: PROXY_PORT,
   fetch(request, server) {
     const url = new URL(request.url);

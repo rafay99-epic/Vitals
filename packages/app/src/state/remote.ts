@@ -169,10 +169,12 @@ export class Remote {
     return null;
   }
 
-  async cancel(receipt: CommandReceipt): Promise<void> {
+  /** Cancels a pending order. Resolves true once the Mac confirms; a failure is shown and resolves false. */
+  async cancel(receipt: CommandReceipt): Promise<boolean> {
     const result = await this.connection.call((client) => client["command.cancel"]({ commandId: receipt.id }));
     if (result.ok) this.events.receipt(result.value);
     else this.show(result.error.message, "bad");
+    return result.ok;
   }
 
   private toastTimer: ReturnType<typeof setTimeout> | null = null;

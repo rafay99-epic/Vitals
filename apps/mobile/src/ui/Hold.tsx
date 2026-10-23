@@ -28,6 +28,14 @@ export function Hold({ label, onCommit, small = false, disabled = false }: HoldP
     [],
   );
 
+  // Losing permission (or the target) mid-hold cancels it, so a destructive commit can't land late.
+  useEffect(() => {
+    if (!disabled || timer.current === null) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+    progress.set(0);
+  }, [disabled, progress]);
+
   const commit = () => {
     timer.current = null;
     progress.set(0);
@@ -60,7 +68,9 @@ export function Hold({ label, onCommit, small = false, disabled = false }: HoldP
       accessibilityHint="Press and hold to confirm"
       accessibilityState={{ disabled }}
       accessibilityActions={[{ name: "activate", label }]}
-      onAccessibilityAction={commit}
+      onAccessibilityAction={() => {
+        if (!disabled) commit();
+      }}
       style={[styles.box, small ? styles.small : null, disabled ? styles.off : null]}
     >
       <View style={StyleSheet.absoluteFill} pointerEvents="none">

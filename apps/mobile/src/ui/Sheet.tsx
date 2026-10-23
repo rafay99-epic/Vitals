@@ -1,6 +1,6 @@
 import { Store } from "@vitals/client-runtime";
 import { type ComponentType, type ReactNode, useEffect, useRef, useState } from "react";
-import { BackHandler, Keyboard, type LayoutChangeEvent, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import { BackHandler, Keyboard, type LayoutChangeEvent, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,12 +44,19 @@ export function SheetHost() {
   const size = useSharedValue(screen);
   const current = useRef<Entry | null>(null);
   const opening = useRef(false);
+  // Content taller than the sheet's cap scrolls instead (big text, short screens). Dragging the sheet
+  // away is off then, so the two gestures never fight; the scrim, back and Cancel still close it.
+  const [overflow, setOverflow] = useState(false);
+  const viewport = useRef(0);
+  const content = useRef(0);
+  const checkOverflow = () => setOverflow(content.current > viewport.current + 1);
 
   useEffect(() => {
     const show = (entry: Entry | null) => {
       current.current = entry;
       opening.current = entry !== null;
       drag.set(0);
+      setOverflow(false);
       setShown(entry);
     };
     const settle = () => show(wanted.get());
@@ -86,6 +93,7 @@ export function SheetHost() {
 
   const close = sheet.close;
   const pan = Gesture.Pan()
+    .enabled(!overflow)
     .activeOffsetY(8)
     .failOffsetX([-24, 24])
     .onUpdate((event) => {
@@ -121,7 +129,21 @@ export function SheetHost() {
           style={[styles.sheet, { maxHeight: screen - insets.top - 24, paddingBottom: Math.max(insets.bottom, 12) + 12 }, body]}
         >
           <View style={styles.grab} />
-          <Content />
+          <ScrollView
+            bounces={false}
+            scrollEnabled={overflow}
+            keyboardShouldPersistTaps="handled"
+            onLayout={(event) => {
+              viewport.current = event.nativeEvent.layout.height;
+              checkOverflow();
+            }}
+            onContentSizeChange={(_, height) => {
+              content.current = height;
+              checkOverflow();
+            }}
+          >
+            <Content />
+          </ScrollView>
         </Animated.View>
       </GestureDetector>
     </View>

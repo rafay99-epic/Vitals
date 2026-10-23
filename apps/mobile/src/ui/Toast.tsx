@@ -48,8 +48,10 @@ export const toast = {
 export function ToastHost({ pinned }: { readonly pinned?: ReactNode }) {
   const message = useStore(current);
   const insets = useSafeAreaInsets();
+  // The host unmounts on unpair: drop the message too, or it would come back with no timer to clear it.
   useEffect(() => () => {
     if (timer !== null) clearTimeout(timer);
+    current.set(null);
   }, []);
   return (
     <View pointerEvents="box-none" style={[styles.host, { bottom: insets.bottom + DOCK_BOTTOM + DOCK_HEIGHT + 10 }]}>

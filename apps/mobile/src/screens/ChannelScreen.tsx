@@ -5,18 +5,32 @@ import { CHANNELS } from "@vitals/app/features/chart/channels.ts";
 import { History } from "@vitals/app/features/chart/History.tsx";
 import { useLiveTopics } from "@vitals/app/features/chart/hooks.ts";
 import { useLatest, useSignal } from "@vitals/app/state/useVitals.ts";
-import { channels, Trace } from "@vitals/ui";
+import { type Channel, channels, Trace } from "@vitals/ui";
 import { StyleSheet, View } from "react-native";
 
 import { useMac } from "../lib/remote.ts";
 import type { HomeStackParams } from "../navigation.ts";
-import { BackBar, color, Page, T, Title } from "../ui/index.ts";
+import { BackBar, color, Empty, Page, T, Title } from "../ui/index.ts";
 
 type Props = NativeStackScreenProps<HomeStackParams, "Channel">;
 
-/** Detail for one reading: the live value, a larger trace, history, and the extra numbers. */
+const isChannel = (value: string): value is Channel => value in CHANNELS;
+
+/** Detail for one reading. The channel comes from a deep link too, so an unknown one gets a way back. */
 export function ChannelScreen({ route }: Props) {
-  const channel = route.params.channel;
+  const channel: string = route.params.channel;
+  return isChannel(channel) ? (
+    <ChannelDetail channel={channel} />
+  ) : (
+    <Page>
+      <BackBar parent="Home" />
+      <Empty title="Nothing here" detail="That reading does not exist." />
+    </Page>
+  );
+}
+
+/** The live value, a larger trace, history, and the extra numbers. */
+function ChannelDetail({ channel }: { readonly channel: Channel }) {
   const def = CHANNELS[channel];
   useLiveTopics(def.topics);
   const remote = useRemote();

@@ -3,7 +3,6 @@
 package tailnet
 
 import (
-	"errors"
 	"net"
 	"time"
 
@@ -35,11 +34,14 @@ func interfaces() ([]netmon.Interface, error) {
 	if ip := outboundIP("udp6", "[2001:4860:4860::8888]:53"); ip != nil {
 		addrs = append(addrs, &net.IPNet{IP: ip, Mask: net.CIDRMask(128, 128)})
 	}
-	if len(addrs) == 0 {
-		return nil, errors.New("tailnet: no network route found")
+	// With no route yet (airplane mode, a Wi-Fi handoff) report the interface as down rather than
+	// failing, so the node still starts and netmon picks the network up when it comes back.
+	var flags net.Flags
+	if len(addrs) > 0 {
+		flags = net.FlagUp | net.FlagRunning
 	}
 	return []netmon.Interface{{
-		Interface: &net.Interface{Index: 1, MTU: 1500, Name: "android", Flags: net.FlagUp | net.FlagRunning},
+		Interface: &net.Interface{Index: 1, MTU: 1500, Name: "android", Flags: flags},
 		AltAddrs:  addrs,
 	}}, nil
 }

@@ -54,7 +54,7 @@ const UPDATE_WORD: Record<UpdateState["_tag"], string> = {
   Downloading: "Downloading",
   Ready: "Ready to install",
   Current: "Up to date",
-  Failed: "Could not check",
+  Failed: "Update failed",
 };
 
 export function SettingsScreen({ navigation }: Props<"Settings">) {
@@ -120,7 +120,7 @@ const useRoutes = (): { readonly wifi: RouteRow; readonly away: RouteRow; readon
   const wifiValue = route === "lan" ? "In use" : lan === undefined ? "Not on this Wi-Fi" : "Ready";
   const awayValue = route === "tailnet" ? "In use" : link.baseUrl === null ? "Not set up" : "Ready as backup";
   return {
-    wifi: { detail: lan === undefined ? "Same network as the Mac" : `${lan.host} · encrypted`, value: wifiValue, color: route === "lan" ? color.green : color.dim },
+    wifi: { detail: lan === undefined ? "Not on the Mac's Wi-Fi" : `${lan.host} · encrypted`, value: wifiValue, color: route === "lan" ? color.green : color.dim },
     away: { detail: link.baseUrl === null ? "Reach the Mac away from home" : hostOf(link.baseUrl), value: awayValue, color: route === "tailnet" ? color.blue : color.dim },
     latency: state._tag === "Ready" && state.latencyMs !== null ? `${String(state.latencyMs)} ms` : null,
     hasAway: link.baseUrl !== null,

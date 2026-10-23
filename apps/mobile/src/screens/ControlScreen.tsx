@@ -27,7 +27,7 @@ const awakeOf = (state: KeepAwakeState | null, chosen: Awake | null): Awake => {
   if (state?.active !== true) return "off";
   if (state.until === null) return "always";
   if (chosen === "1h" || chosen === "4h") return chosen;
-  return state.until - Date.now() <= HOUR * 1.1 ? "1h" : "4h";
+  return state.until - Date.now() <= 2.5 * HOUR ? "1h" : "4h";
 };
 
 const awakeLine = (state: KeepAwakeState | null): string | undefined => {
@@ -40,11 +40,15 @@ function KeepAwake() {
   const access = useAccess();
   const state = useStore(remote.events.keepAwake);
   const [chosen, setChosen] = useState<Awake | null>(null);
+  // Remember the pick only once the Mac accepts it, so a failed request can't show a state the Mac isn't in.
   const choose = (next: Awake) => {
-    setChosen(next);
-    if (next === "off") return void send(remote, { _tag: "AllowSleep" }, "Your Mac can sleep again");
+    if (next === "off") {
+      setChosen(null);
+      return void send(remote, { _tag: "AllowSleep" }, "Your Mac can sleep again");
+    }
     const until = next === "always" ? null : Date.now() + (next === "1h" ? HOUR : 4 * HOUR);
-    void send(remote, { _tag: "KeepAwake", until, display: false, whileProcess: null }, next === "always" ? "Keeping your Mac awake until you stop it" : `Keeping your Mac awake for ${next === "1h" ? "1 hour" : "4 hours"}`);
+    const done = next === "always" ? "Keeping your Mac awake until you stop it" : `Keeping your Mac awake for ${next === "1h" ? "1 hour" : "4 hours"}`;
+    void send(remote, { _tag: "KeepAwake", until, display: false, whileProcess: null }, done).then((ok) => ok && setChosen(next));
   };
   return (
     <>

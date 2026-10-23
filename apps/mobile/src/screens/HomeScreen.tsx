@@ -120,7 +120,8 @@ function Attention() {
   const signal = useSignal();
   if (state._tag === "Backoff") return <Retry state={state} />;
   if (!signal) return <StatusLine text="○ No signal from the Mac yet" tint={color.dim} />;
-  const first = alerts[0];
+  // A critical alert outranks newer warnings.
+  const first = alerts.find((alert) => alert.severity === "critical") ?? alerts[0];
   if (first !== undefined) {
     const more = alerts.length > 1 ? ` · +${String(alerts.length - 1)}` : "";
     return <StatusLine text={`▲ ${ALERT_TITLE[first.rule]} · ${first.summary}${more}`} tint={first.severity === "critical" ? color.red : color.orange} onPress={() => sheet.open(AlertSheet)} />;
@@ -128,6 +129,10 @@ function Attention() {
   if (calmed) return <StatusLine text="✓ Calmed" tint={color.dim} />;
   return null;
 }
+
+/** What a screen reader hears: the same reading the screen shows, or no signal when it shows `--`. */
+const readingLabel = (name: string, reading: { readonly value: string; readonly unit: string }, signal: boolean) =>
+  signal ? `${name}, ${reading.value} ${reading.unit}` : `${name}, no signal`;
 
 function Wave({ channel, name, max, onOpen }: { readonly channel: Channel; readonly name: string; readonly max: number | null; readonly onOpen: (channel: Channel) => void }) {
   const remote = useRemote();
@@ -137,7 +142,7 @@ function Wave({ channel, name, max, onOpen }: { readonly channel: Channel; reado
   const spec = channels[channel];
   const tint = signal ? spec.color : color.mute;
   return (
-    <Tap onPress={() => onOpen(channel)} accessibilityRole="button" accessibilityLabel={`${name}, ${reading.value} ${reading.unit}`} accessibilityHint={`Opens ${name} details`} scale={0.99} style={styles.wave}>
+    <Tap onPress={() => onOpen(channel)} accessibilityRole="button" accessibilityLabel={readingLabel(name, reading, signal)} accessibilityHint={`Opens ${name} details`} scale={0.99} style={styles.wave}>
       <View style={styles.waveTop}>
         <T v="tag" color={tint}>{spec.tag === name.toUpperCase() ? spec.tag : `${spec.tag} · ${name.toUpperCase()}`}</T>
         <T v="value" color={signal ? color.ink : color.mute}>
@@ -154,7 +159,7 @@ function Mini({ channel, name, onOpen }: { readonly channel: Channel; readonly n
   const reading = useLatest(CHANNELS[channel].reading);
   const signal = useSignal();
   return (
-    <Tap onPress={() => onOpen(channel)} accessibilityRole="button" accessibilityLabel={`${name}, ${reading.value} ${reading.unit}`} layout={styles.miniSlot}>
+    <Tap onPress={() => onOpen(channel)} accessibilityRole="button" accessibilityLabel={readingLabel(name, reading, signal)} layout={styles.miniSlot}>
       <T v="tag" color={channels[channel].color}>
         {name.toUpperCase()}
       </T>

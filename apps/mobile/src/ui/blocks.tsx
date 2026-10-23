@@ -106,7 +106,7 @@ export function Row({ label, detail, value, valueColor = color.dim, control, onP
         value
       )}
       {control}
-      {onPress === undefined || danger ? null : <Icon name="chevron" size={15} color={color.mute} />}
+      {onPress === undefined ? null : <Icon name="chevron" size={15} color={color.mute} />}
     </>
   );
   const style = [styles.row, first ? null : styles.rowLine];

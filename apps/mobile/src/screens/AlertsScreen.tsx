@@ -36,7 +36,7 @@ function AlertCard({ alert, calmed, canAct }: { readonly alert: Alert; readonly 
         {`▲ ${ALERT_TITLE[alert.rule]}`}
       </T>
       <T v="body" color={color.ink2}>{`${alert.summary}. Since ${formatClock(alert.raisedAt)}.`}</T>
-      <T v="small" style={styles.cardPlan}>{`Calming will ${alert.plan.summary.charAt(0).toLowerCase()}${alert.plan.summary.slice(1)}. Nothing gets closed.`}</T>
+      <T v="small" style={styles.cardPlan}>Calming lowers the priority of what is crowding the Mac right now. Nothing gets closed.</T>
       {canAct ? (
         <View style={styles.cardButton}>
           <BigButton label={calmed ? "Calm again" : "Calm it down"} onPress={() => calm(remote, alert)} />
@@ -119,6 +119,8 @@ export function AlertsScreen() {
   const calmedRecently = useStore(remote.events.calmed);
   const ready = useStore(remote.connection.state)._tag === "Ready";
   const [watched, setWatched] = useState<GuardState | null>(null);
+  // Edits wait for a snapshot taken since this screen last gained focus, so they never build on stale rules.
+  const [fresh, setFresh] = useState(false);
   const confirmed = useRef<GuardSettings | null>(null);
   const queue = useRef<Promise<void> | null>(null);
   const guard = ready ? watched : null;
@@ -126,22 +128,35 @@ export function AlertsScreen() {
   const receive = useCallback((next: GuardState) => {
     confirmed.current = next.settings;
     setWatched(next);
+    setFresh(true);
   }, []);
-  useFocusEffect(useCallback(() => remote.connection.watch((client) => client["guard.watch"]({}), receive), [remote, receive]));
+  useFocusEffect(
+    useCallback(() => {
+      setFresh(false);
+      return remote.connection.watch((client) => client["guard.watch"]({}), receive);
+    }, [remote, receive]),
+  );
 
+  const revert = () => setWatched((current) => (current === null || confirmed.current === null ? current : { ...current, settings: confirmed.current }));
   const save = async (edit: Edit) => {
     const base = confirmed.current;
     if (base === null) return;
     const result = await remote.connection.call((client) => client["guard.update"](edit(base)));
     if (!result.ok) {
       toast.show(result.error.message, { tone: "bad" });
+      revert();
       return;
     }
     confirmed.current = result.value;
     setWatched((current) => (current === null ? current : { ...current, settings: result.value }));
   };
+  // Shows the change at once so a quick second tap toggles back, then saves in order against what the Mac confirmed.
   const update = (edit: Edit) => {
-    queue.current = (queue.current ?? Promise.resolve()).then(() => save(edit)).catch(() => toast.show("The rule did not change. Try again.", { tone: "bad" }));
+    setWatched((current) => (current === null ? current : { ...current, settings: edit(current.settings) }));
+    queue.current = (queue.current ?? Promise.resolve()).then(() => save(edit)).catch(() => {
+      toast.show("The rule did not change. Try again.", { tone: "bad" });
+      revert();
+    });
   };
 
   const open = guard?.active ?? events;
@@ -171,7 +186,7 @@ export function AlertsScreen() {
         ]}
       />
       <Label>Tell me when</Label>
-      <Rules guard={guard} locked={!access.operate} onChange={update} />
+      <Rules guard={guard} locked={!access.operate || !fresh} onChange={update} />
       <Label>Earlier</Label>
       <Earlier />
     </Page>

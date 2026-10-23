@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { appSheet, processSheet, usage } from "../sheets/ProcessSheets.tsx";
 import { Chip, color, Empty, SearchField, sheet, T, Tap, Title, useDockSpace } from "../ui/index.ts";
 
-type GroupKey = "apps" | Exclude<ProcessGroupId, "protected">;
+type GroupKey = "apps" | ProcessGroupId;
 type SortBy = "cpu" | "memory";
 
 const GROUPS: ReadonlyArray<{ readonly key: GroupKey; readonly label: string; readonly chip: string; readonly tint: string }> = [
@@ -18,10 +18,11 @@ const GROUPS: ReadonlyArray<{ readonly key: GroupKey; readonly label: string; re
   { key: "devServers", label: "Dev servers", chip: "Dev", tint: color.violet },
   { key: "browsers", label: "Browsers", chip: "Browsers", tint: color.orange },
   { key: "other", label: "Background", chip: "Background", tint: color.tele },
+  { key: "protected", label: "System", chip: "System", tint: color.dim },
 ];
 
 const TINT = new Map(GROUPS.map((group) => [group.key, group.tint]));
-const COLLAPSED = 3;
+const COLLAPSED = 5;
 const APPS_EVERY_MS = 10_000;
 
 type Item =
@@ -98,6 +99,7 @@ export function AppsScreen() {
   const [sortBy, setSortBy] = useState<SortBy>("cpu");
   const [snapshot, setSnapshot] = useState<ProcessesSnapshot | null>(null);
   const [apps, setApps] = useState<AppsSnapshot | null>(null);
+  const [appsFailed, setAppsFailed] = useState(false);
   const [filter, setFilter] = useState<GroupKey | "all">("all");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<ReadonlySet<GroupKey>>(new Set());
@@ -108,7 +110,9 @@ export function AppsScreen() {
       let live = true;
       const load = () =>
         void remote.connection.call((client) => client["apps.list"]({})).then((result) => {
-          if (live && result.ok) setApps(result.value);
+          if (!live) return;
+          if (result.ok) setApps(result.value);
+          setAppsFailed(!result.ok);
         });
       load();
       const timer = setInterval(load, APPS_EVERY_MS);
@@ -128,7 +132,7 @@ export function AppsScreen() {
     const data = collapse ? all.slice(0, COLLAPSED) : all;
     return [{ key: group.key, title: group.label, total: all.length, hidden: all.length - data.length, data }];
   });
-  const loading = snapshot === null && apps === null;
+  const loading = snapshot === null && apps === null && !appsFailed;
 
   const header = (
     <View style={{ paddingTop: insets.top + 6 }}>
@@ -149,6 +153,11 @@ export function AppsScreen() {
           return count === 0 ? null : <Chip key={group.key} label={group.chip} count={count} on={filter === group.key} onPress={() => setFilter(filter === group.key ? "all" : group.key)} />;
         })}
       </ScrollView>
+      {appsFailed ? (
+        <T v="small" color={color.orange} style={styles.failed}>
+          Open apps could not be read. Retrying.
+        </T>
+      ) : null}
     </View>
   );
 
@@ -195,4 +204,5 @@ const styles = StyleSheet.create({
   tag: { borderWidth: 1, borderColor: color.line2, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   tagWarn: { borderColor: color.orange },
   more: { paddingLeft: 66, paddingVertical: 8 },
+  failed: { paddingHorizontal: 20, paddingBottom: 6 },
 });

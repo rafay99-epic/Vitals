@@ -83,7 +83,7 @@ export function PowerTiles({ raised = false }: { readonly raised?: boolean }) {
   const end = (ending: Ending) => () => sheet.open(confirmSheet(ending));
   return (
     <>
-      {access.operate ? null : <SheetNote>This phone can only watch. Turn on control for it in Vitals on the Mac.</SheetNote>}
+      {access.operate || access.destructive ? null : <SheetNote>This phone can only watch. Turn on control for it in Vitals on the Mac.</SheetNote>}
       <TileGrid>
         <Tile icon="moon" label="Sleep" raised={raised} disabled={!access.operate} onPress={now({ _tag: "Sleep", graceSeconds: 0 }, "Your Mac is going to sleep")} />
         <Tile icon="lock" label="Lock" raised={raised} disabled={!access.operate} onPress={now({ _tag: "Lock" }, "Locked")} />

@@ -60,7 +60,11 @@ export const checkForUpdate = (force = false): Promise<void> => {
 };
 
 /** Restarts into the downloaded update. Only offered when one is ready. */
-export const restartIntoUpdate = (): Promise<void> => Updates.reloadAsync({ reloadScreenOptions: { backgroundColor: color.bg, fade: true, spinner: { enabled: false } } });
+export const restartIntoUpdate = (): Promise<void> =>
+  Updates.reloadAsync({ reloadScreenOptions: { backgroundColor: color.bg, fade: true, spinner: { enabled: false } } }).catch((error: unknown) => {
+    // Settings then shows the reason and offers Check now, instead of sitting on Ready after a reload that never happened.
+    updateState.set({ _tag: "Failed", at: Date.now(), reason: reasonOf(error) });
+  });
 
 const SEEN_KEY = "vitals.remote.update-seen";
 

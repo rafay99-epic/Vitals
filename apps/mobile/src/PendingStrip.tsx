@@ -24,7 +24,7 @@ function Countdown({ receipt }: { readonly receipt: Pending }) {
     <Animated.View entering={SlideInDown.duration(motion.toastIn).easing(curve.out)} exiting={FadeOut.duration(motion.toastOut)} accessibilityRole="alert" style={styles.strip}>
       <T v="strong" color={color.bg} style={styles.text}>{`${VERB[receipt.kind] ?? orderLabel(receipt.kind)} in ${secondsLeft(receipt.deadlineAt, now)}`}</T>
       {access.operate ? (
-        <Tap onPress={() => void remote.cancel(receipt).then(() => toast.show("Cancelled"))} accessibilityRole="button" hitSlop={12}>
+        <Tap onPress={() => void remote.cancel(receipt).then((ok) => ok && toast.show("Cancelled"))} accessibilityRole="button" hitSlop={12}>
           <T v="strong" color={color.bg} style={styles.cancel}>
             Cancel
           </T>
@@ -34,10 +34,10 @@ function Countdown({ receipt }: { readonly receipt: Pending }) {
   );
 }
 
-/** Pinned above the dock while a timed order (shut down, restart) counts down on the Mac. */
+/** Pinned above the dock while timed orders (shut down, restart) count down on the Mac, one strip each. */
 export function PendingStrip() {
-  const pending = useStore(useRemote().events.receipts).find(isPending);
-  return pending === undefined ? null : <Countdown key={pending.id} receipt={pending} />;
+  const pending = useStore(useRemote().events.receipts).filter(isPending);
+  return pending.map((receipt) => <Countdown key={receipt.id} receipt={receipt} />);
 }
 
 const styles = StyleSheet.create({

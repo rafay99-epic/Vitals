@@ -30,15 +30,17 @@ export function processSheet(row: ProcessRow, emulator: Emulator | null) {
     return (
       <>
         <SheetHeader title={row.name} detail={`${GROUP_NAME[row.group]} · ${usage(row)} · pid ${String(row.pid)}`} />
-        {access.operate ? (
+        {row.group === "protected" ? (
+          <SheetNote>macOS needs this one. Vitals does not pause, slow or quit it.</SheetNote>
+        ) : access.operate ? (
           <>
             {row.paused ? (
-              <ActionRow icon="play" label="Resume" detail="Pick up where it stopped" onPress={() => run(act(row, "resume"), `${row.name} resumed`)} />
+              <ActionRow icon="play" label="Resume" detail="Pick up where it stopped" onPress={() => run(act(row, "resume"), `${row.name} resumed`, { command: act(row, "pause"), done: `${row.name} paused` })} />
             ) : (
               <ActionRow icon="pause" label="Pause" detail="Freezes it. Resume any time" onPress={() => run(act(row, "pause"), `${row.name} paused`, { command: act(row, "resume"), done: `${row.name} resumed` })} />
             )}
             {row.throttled ? (
-              <ActionRow icon="slow" label="Normal priority" detail="Back to full speed" onPress={() => run(act(row, "unthrottle"), `${row.name} back to normal`)} />
+              <ActionRow icon="slow" label="Normal priority" detail="Back to full speed" onPress={() => run(act(row, "unthrottle"), `${row.name} back to normal`, { command: act(row, "throttle"), done: `${row.name} slowed down` })} />
             ) : (
               <ActionRow
                 icon="slow"
@@ -56,7 +58,7 @@ export function processSheet(row: ProcessRow, emulator: Emulator | null) {
         ) : (
           <SheetNote>{WATCH_ONLY}</SheetNote>
         )}
-        {access.destructive ? (
+        {access.destructive && row.group !== "protected" ? (
           <>
             {emulator === null ? null : <Hold label="Hold to stop this emulator" onCommit={() => run({ _tag: "StopEmulator", kind: emulator.kind, id: emulator.id }, `Stopping ${emulator.name}`)} />}
             <Hold label="Hold to quit" onCommit={() => run(act(row, "terminate"), `Asked ${row.name} to quit`)} />
