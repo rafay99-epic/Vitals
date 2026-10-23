@@ -5,7 +5,7 @@ import { useTitle } from '../lib/useTitle'
 export default function Privacy() {
   useTitle('Privacy Policy — Vitals')
   return (
-    <LegalLayout title="Privacy Policy" updated="October 20, 2026">
+    <LegalLayout title="Privacy Policy" updated="October 23, 2026">
       <Section title="The short version">
         <P>
           <Strong>The Vitals app does not collect, store, transmit, or sell any of your personal data. It has no analytics, no
@@ -14,13 +14,15 @@ export default function Privacy() {
           hit a bug, the App can open your email program with those logs so you can choose to send them to the developer yourself —
           nothing is transmitted unless you press Send. Its only automatic network requests go to GitHub, to check for and download
           releases. Remote access, which is off until you turn it on, sends readings only to devices you pair, over your own
-          Tailscale network (section 7). This website is almost as quiet: it sets no cookies and does no cross-site tracking — its one measurement tool is
-          Vercel Web Analytics, an anonymized, cookieless page counter described in section 8.
+          Wi-Fi or your own Tailscale network (section 7). The Vitals Remote phone app talks to your Mac the same way; its only
+          other network requests check for app updates, send Google basic diagnostics from the Android QR scanner, and, if you
+          turn on built-in Tailscale, go to Tailscale (section 8). This website is almost as quiet: it sets no cookies and does no cross-site tracking — its one measurement tool is
+          Vercel Web Analytics, an anonymized, cookieless page counter described in section 9.
         </P>
         <P>
           The rest of this policy spells that out in detail. It is issued by <Strong>{COMPANY}</Strong>, developer of Vitals
-          (<ExtLink href={DEVELOPER_URL}>{DEVELOPER} — rafay99.com</ExtLink>), and covers both the Vitals macOS application (the
-          "App") and this website.
+          (<ExtLink href={DEVELOPER_URL}>{DEVELOPER} — rafay99.com</ExtLink>), and covers the Vitals macOS application (the
+          "App"), the Vitals Remote phone app for Android and iOS (the "phone app"), and this website.
         </P>
       </Section>
 
@@ -34,9 +36,10 @@ export default function Privacy() {
           <Item>Battery charge, health, cycle count, and power flow from the battery controller</Item>
         </List>
         <P>
-          <Strong>None of this leaves your machine.</Strong> Readings exist in the App's memory while it runs. If you enable
-          logging, readings are appended to a CSV file stored at <Strong>~/.vitals/history/history.csv</Strong> on your Mac — a file you can
-          open, export, or delete at any time. The App never uploads this file anywhere.
+          <Strong>None of this leaves your machine</Strong>, unless you turn on Remote and pair a device (section 7). Readings
+          exist in the App's memory while it runs, and a history of them is kept in a database at{' '}
+          <Strong>~/.vitals/history/history.sqlite3</Strong> on your Mac. History is on by default and can be turned off in
+          Settings; you can export it as CSV or delete it at any time. The App never uploads it anywhere.
         </P>
       </Section>
 
@@ -82,8 +85,8 @@ export default function Privacy() {
 
       <Section title="5. Network requests the App makes">
         <P>
-          The App contacts the internet in one scenario: software updates. Remote access, if you turn it on, stays inside your own
-          Tailscale network and is covered separately in section 7.
+          The App contacts the internet in one scenario: software updates. Remote access, if you turn it on, stays on your own
+          Wi-Fi and your own Tailscale network and is covered separately in section 7.
         </P>
         <List>
           <Item>
@@ -116,16 +119,24 @@ export default function Privacy() {
 
       <Section title="7. Remote access (off by default)">
         <P>
-          If you turn on Remote in the App, a small gateway runs on your Mac and is published only to your own Tailscale network
-          with <Strong>tailscale serve</Strong>. Phones and browsers you pair with a one-time code can then read your Mac's live
-          readings and send the commands you allow. Nothing is exposed to the public internet, and only your own Tailscale login
-          can connect.
+          If you turn on Remote in the App, a small gateway runs on your Mac. Phones and browsers you pair with a one-time code
+          can then read your Mac's live readings and send the commands you allow. They reach it two ways, and neither is exposed
+          to the public internet:
         </P>
         <List>
           <Item>
+            <Strong>On your Wi-Fi:</Strong> the Mac announces itself on your local network (Bonjour) and accepts connections
+            there. Every connection is encrypted end to end and pinned to your Mac's own key, so a device that is not paired, or a
+            Mac pretending to be yours, cannot read anything. To be found, the Mac shows its computer name and its public key to
+            other devices on the same network; readings and commands are never visible.
+          </Item>
+          <Item>
+            <Strong>Over Tailscale:</Strong> the gateway is also published to your own Tailscale network with{' '}
+            <Strong>tailscale serve</Strong>, so only your own Tailscale login can connect when you are away from home.
+          </Item>
+          <Item>
             <Strong>What travels:</Strong> the readings listed in section 1, process names and resource use, the list of running
-            apps, and commands you send. This goes directly between your devices over Tailscale's encrypted connection; it never
-            passes through our servers.
+            apps, and commands you send. This goes directly between your devices, encrypted; it never passes through our servers.
           </Item>
           <Item>
             <Strong>What is stored on your Mac:</Strong> paired devices, hashed session tokens, the command history, and an activity
@@ -133,12 +144,15 @@ export default function Privacy() {
             (frames after 3 days, events after 30). You can read this log in Vitals under Remote, Activity.
           </Item>
           <Item>
-            <Strong>What the phone app stores:</Strong> the Mac address and a session token in the phone's secure storage, plus a
-            short queue of its own connection events that it uploads to your Mac. A paired browser keeps only a session cookie
-            that page scripts cannot read, and nothing in browser storage.
+            <Strong>What the phone app stores:</Strong> the Mac's address and key, the Tailscale login that owns the Mac (if it
+            uses Tailscale), a session token and its own device key, all in the phone's secure storage. It also keeps a queue of
+            up to 5,000 of its own connection events in a local database, uploads them to your Mac, and then deletes them. When you
+            pair, it tells your Mac the phone's name, model, platform and app version so you can recognise it in Vitals. A paired browser keeps
+            only a session cookie that page scripts cannot read, and nothing in browser storage.
           </Item>
           <Item>
-            <Strong>Alerts:</Strong> Pressure Guard alerts reach your phone over your tailnet only. While the app is open they
+            <Strong>Alerts:</Strong> Pressure Guard alerts reach your phone over the same encrypted Wi-Fi or Tailscale
+            connection, and nothing else. While the app is open they
             arrive live; in the background the phone checks your Mac about every 15 minutes and shows a local notification. No
             push service is involved: not Expo, not Google Firebase, not Apple's push service.
           </Item>
@@ -146,7 +160,52 @@ export default function Privacy() {
         <P>Turning Remote off stops the gateway and removes the tailnet entry. Revoking a device on the Mac signs it out at once.</P>
       </Section>
 
-      <Section title="8. This website">
+      <Section title="8. The phone app: permissions and other services">
+        <P>
+          The Vitals Remote phone app has no account, no analytics and no advertising. Everything above about Remote applies to
+          it. It asks for these permissions, each only for the reason given:
+        </P>
+        <List>
+          <Item>
+            <Strong>Camera:</Strong> only to read the pairing QR code shown by Vitals on your Mac. Nothing is recorded or stored.
+          </Item>
+          <Item>
+            <Strong>Local network:</Strong> to find your Mac on your Wi-Fi and connect to it directly.
+          </Item>
+          <Item>
+            <Strong>Notifications:</Strong> to show Pressure Guard alerts. They are created on the phone; no push service is used.
+          </Item>
+        </List>
+        <P>The phone app also talks to these services, and only these:</P>
+        <List>
+          <Item>
+            <Strong>App updates (Expo):</Strong> the app checks Expo's update server for new versions and downloads them. The
+            request carries the platform, the update channel, the app's runtime version, the ID of the update it is running, and a
+            random identifier created when the app was installed; it is not linked to you or your Mac. Expo processes it under the{' '}
+            <ExtLink href="https://expo.dev/privacy">Expo Privacy Policy</ExtLink>, and we can see only aggregate counts of
+            update downloads.
+          </Item>
+          <Item>
+            <Strong>Google Play:</Strong> on Android, the app asks Google Play at launch whether a store update is available.
+          </Item>
+          <Item>
+            <Strong>QR scanner on Android (Google ML Kit):</Strong> the scanner reads the code on the phone; no image leaves it.
+            ML Kit sends Google basic diagnostics (device model, Android version, app version, a per-installation identifier and
+            performance metrics), as described in{' '}
+            <ExtLink href="https://developers.google.com/ml-kit/android-data-disclosure">Google's ML Kit data disclosure</ExtLink>.
+            On iOS the scanner uses Apple's on-device camera APIs and sends nothing.
+          </Item>
+          <Item>
+            <Strong>Built-in Tailscale (off unless you turn it on):</Strong> the phone joins your own Tailscale network
+            through Tailscale's coordination servers. It starts only when your Mac cannot be reached over Wi-Fi and stops a few
+            minutes after it can. The phone appears in your Tailscale network under a name based on your phone's name and stays
+            listed there until you remove it in Tailscale. Like every Tailscale client it uploads its connection logs to Tailscale. This is covered by the{' '}
+            <ExtLink href="https://tailscale.com/privacy-policy">Tailscale Privacy Policy</ExtLink>.
+          </Item>
+        </List>
+      </Section>
+
+      <Section title="9. This website">
         <P>The website you are reading is a static page. It sets <Strong>no cookies</Strong>, embeds no advertising, and uses no
         fingerprinting. It uses exactly one measurement tool, disclosed here:</P>
         <List>
@@ -169,22 +228,24 @@ export default function Privacy() {
         </List>
       </Section>
 
-      <Section title="9. What we never do">
+      <Section title="10. What we never do">
         <List>
           <Item>We do not collect, buy, sell, rent, share, or trade personal data — we have none to begin with.</Item>
           <Item>We do not profile you, advertise to you, or track you across apps or websites — the website's analytics are
           aggregate page counts, not profiles of people.</Item>
           <Item>We do not use your hardware readings for any purpose; they never reach us.</Item>
-          <Item>We receive nothing from the App automatically — a diagnostic log reaches us only if you choose to email it as a
-          problem report.</Item>
+          <Item>We receive nothing from the App or the phone app automatically — a diagnostic log reaches us only if you choose
+          to email it as a problem report. The one thing we can see is the aggregate count of phone app update downloads in
+          Expo's dashboard (section 8), which identifies no one.</Item>
           <Item>We hold no user database, so there is nothing to breach, subpoena, or leak on our side.</Item>
         </List>
       </Section>
 
-      <Section title="10. Data retention">
+      <Section title="11. Data retention">
         <P>
           The App transmits nothing to us, so there is nothing of yours for us to retain. The only persistent data the App creates
-          — the optional readings log, the diagnostic log, and your settings — lives on your Mac and is yours to delete. A problem
+          — the readings history (on by default, kept for 365 days), the diagnostic log, and your settings — lives on your Mac and
+          is yours to delete. With Remote on, the gateway's activity log and command history are pruned as described in section 7. A problem
           report you choose to email is ordinary correspondence: it is kept only as long as needed to investigate the issue.
           Uninstalling the App and removing the helper deletes the App's presence from your system; your logs remain until you
           delete them, since they are your data.
@@ -193,7 +254,7 @@ export default function Privacy() {
         </P>
       </Section>
 
-      <Section title="11. Your rights (GDPR, CCPA, and similar laws)">
+      <Section title="12. Your rights (GDPR, CCPA, and similar laws)">
         <P>
           Privacy laws such as the EU/UK GDPR and the California CCPA/CPRA grant rights to access, correct, delete, and port
           personal data, and to object to or restrict its processing. Because we process no personal data, there is nothing for us
@@ -203,22 +264,23 @@ export default function Privacy() {
         </P>
       </Section>
 
-      <Section title="12. Children's privacy">
+      <Section title="13. Children's privacy">
         <P>
           The Services are not directed at children and collect no data from anyone, children included. We are not aware of any way
           the Services could accumulate children's personal information.
         </P>
       </Section>
 
-      <Section title="13. Security">
+      <Section title="14. Security">
         <P>
-          Because your data never leaves your Mac, its security is governed by your machine's own protections (FileVault, macOS
+          Unless you turn on Remote, your data never leaves your Mac, so its security is governed by your machine's own protections (FileVault, macOS
           permissions, your user account). The fan-control helper is installed with root ownership and accepts state only from a
-          file in a protected location. Update downloads come exclusively from GitHub Releases over HTTPS.
+          file in a protected location. Update downloads come exclusively from GitHub Releases over HTTPS. Remote connections are
+          encrypted end to end and accepted only from devices you paired.
         </P>
       </Section>
 
-      <Section title="14. Changes to this policy">
+      <Section title="15. Changes to this policy">
         <P>
           If the App's behavior ever changes in a way that affects privacy — for example, if a future version began transmitting
           anything to a server automatically — this policy will be updated before that change ships, the "Last updated" date will
@@ -226,7 +288,7 @@ export default function Privacy() {
         </P>
       </Section>
 
-      <Section title="15. Contact">
+      <Section title="16. Contact">
         <P>
           Privacy questions can be raised via <ExtLink href={DEVELOPER_URL}>rafay99.com</ExtLink> or by opening an issue on the{' '}
           <ExtLink href={REPO_URL}>GitHub repository</ExtLink>.
