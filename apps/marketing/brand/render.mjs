@@ -1,11 +1,14 @@
 // Renders the store artwork in compose.html to PNGs under public/brand, then zips the kits.
-// Run from apps/marketing: `bun run brand` (uses the system Chrome or Brave, or E2E_BROWSER).
+// Run from apps/marketing on macOS: `bun run brand` (uses the system Chrome or Brave, or E2E_BROWSER).
+// macOS only: icons go through `sips`, and the kits need `zip` on PATH.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
-const brandDir = fileURLToPath(new URL('.', import.meta.url))
+if (process.platform !== 'darwin') throw new Error('render: needs macOS (sips) for the store icons')
+
+const composeUrl = new URL('compose.html', import.meta.url).href
 const outDir = fileURLToPath(new URL('../public/brand/', import.meta.url))
 const iconSource = fileURLToPath(new URL('../../mobile/assets/icon.png', import.meta.url))
 
@@ -34,7 +37,7 @@ mkdirSync(`${outDir}ios`, { recursive: true })
 const browser = await chromium.launch({ executablePath })
 for (const asset of ASSETS) {
   const page = await browser.newPage({ viewport: { width: asset.width, height: asset.height } })
-  await page.goto(`file://${brandDir}compose.html?a=${asset.a}`)
+  await page.goto(`${composeUrl}?a=${asset.a}`)
   await page.waitForSelector('body[data-ready]')
   // Background images load lazily, so wait for every capture the page references.
   await page.waitForLoadState('networkidle')
@@ -44,10 +47,11 @@ for (const asset of ASSETS) {
 }
 await browser.close()
 
-// Store icons: Play wants 512x512, the App Store 1024x1024. Both reject alpha, so flatten to JPEG and back.
+// Store icons: Play wants 512x512, the App Store 1024x1024. Both reject an alpha channel, so flatten
+// through a best-quality JPEG and back to PNG.
 const icon = (size, file) => {
   const jpg = `${outDir}${file}.jpg`
-  execFileSync('sips', ['-z', String(size), String(size), '-s', 'format', 'jpeg', iconSource, '--out', jpg], { stdio: 'ignore' })
+  execFileSync('sips', ['-z', String(size), String(size), '-s', 'format', 'jpeg', '-s', 'formatOptions', 'best', iconSource, '--out', jpg], { stdio: 'ignore' })
   execFileSync('sips', ['-s', 'format', 'png', jpg, '--out', `${outDir}${file}`], { stdio: 'ignore' })
   rmSync(jpg)
 }

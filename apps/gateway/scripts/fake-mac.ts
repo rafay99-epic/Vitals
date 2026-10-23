@@ -45,7 +45,7 @@ const MAC = {
   coreCount: 10,
   memoryBytes: 16 * GB,
   hasBattery: true,
-  hasFans: !CALM,
+  hasFans: true,
   vitalsVersion: "0.214",
   channel: "dev",
 };
@@ -64,9 +64,14 @@ interface Proc {
 const started = Date.now() - 2 * HOUR;
 const AGENTS = ["claude", "codex", "claude", "gemini", "claude", "codex", "opencode"];
 const procs: Array<Proc> = [
-  ...Array.from({ length: 25 }, (_, index): Proc => ({ pid: 30_000 + index, startTimeMs: started, name: AGENTS[index % AGENTS.length] ?? "claude", group: "agents", cpuPercent: 38 * 0.82 ** index, memoryBytes: 1.2 * GB * 0.88 ** index, throttled: false, paused: false })),
-  { pid: 9001, startTimeMs: started, name: "qemu-system-aarch64", group: "emulators", cpuPercent: 61, memoryBytes: 4 * GB, throttled: false, paused: false },
-  { pid: 9002, startTimeMs: started, name: "Simulator", group: "emulators", cpuPercent: 3, memoryBytes: 1.1 * GB, throttled: false, paused: false },
+  // The calm scene is the same Mac at rest: two idle agents and no emulator running.
+  ...Array.from({ length: CALM ? 2 : 25 }, (_, index): Proc => ({ pid: 30_000 + index, startTimeMs: started, name: AGENTS[index % AGENTS.length] ?? "claude", group: "agents", cpuPercent: 38 * 0.82 ** index, memoryBytes: 1.2 * GB * 0.88 ** index, throttled: false, paused: false })),
+  ...(CALM
+    ? []
+    : [
+        { pid: 9001, startTimeMs: started, name: "qemu-system-aarch64", group: "emulators", cpuPercent: 61, memoryBytes: 4 * GB, throttled: false, paused: false } satisfies Proc,
+        { pid: 9002, startTimeMs: started, name: "Simulator", group: "emulators", cpuPercent: 3, memoryBytes: 1.1 * GB, throttled: false, paused: false } satisfies Proc,
+      ]),
   { pid: 9101, startTimeMs: started, name: "node (vite)", group: "devServers", cpuPercent: 4, memoryBytes: 410 * MB, throttled: false, paused: false },
   { pid: 9102, startTimeMs: started, name: "bun dev", group: "devServers", cpuPercent: 2, memoryBytes: 180 * MB, throttled: false, paused: false },
   { pid: 501, startTimeMs: started, name: "Safari", group: "browsers", cpuPercent: 4, memoryBytes: 820 * MB, throttled: false, paused: false },
@@ -88,10 +93,12 @@ const apps = [
   { pid: 504, bundleId: "com.figma.Desktop", name: "Figma", active: false, hidden: false },
   { pid: 505, bundleId: "com.apple.Music", name: "Music", active: false, hidden: true },
 ];
-const emulators = [
-  { kind: "android", id: "emulator-5554", name: "Pixel 9", pid: 9001 },
-  { kind: "ios", id: "8E1F0C6A-2B9D-4C1E-9A77-3C1D5E0B2F41", name: "iPhone 17", pid: 9002 },
-];
+const emulators = CALM
+  ? []
+  : [
+      { kind: "android", id: "emulator-5554", name: "Pixel 9", pid: 9001 },
+      { kind: "ios", id: "8E1F0C6A-2B9D-4C1E-9A77-3C1D5E0B2F41", name: "iPhone 17", pid: 9002 },
+    ];
 
 let keepAwake = { active: false, display: false, until: null as number | null, whileProcess: null as { pid: number; startTimeMs: number } | null };
 let calmApplied = false;
@@ -128,9 +135,9 @@ let alertOpen = !CALM;
 
 const guardState = () => ({
   settings: guardSettings,
-  pressure: "warning",
-  thermal: "fair",
-  swapUsedBytes: 2.1 * GB,
+  pressure: CALM ? "normal" : "warning",
+  thermal: CALM ? "nominal" : "fair",
+  swapUsedBytes: (CALM ? 0.3 : 2.1) * GB,
   groups: totals(),
   active: alertOpen ? [agentAlert] : [],
   calmApplied,
@@ -140,19 +147,20 @@ let seq = 0;
 const sample = () => {
   seq += 1;
   const busy = CALM ? 0.42 : calmApplied ? 0.55 : 1;
-  const cores = Array.from({ length: 10 }, (_, id) => ({ id, percent: Math.min(100, wobble(70 * busy, 40)), isPerformance: id >= 4 }));
+  const cores = Array.from({ length: 10 }, (_, id) => ({ id, percent: Math.min(100, wobble(70 * busy, 40)), isPerformance: id >= 6 }));
   return {
     seq,
     at: Date.now(),
     cpu: { overall: Math.min(100, wobble(71 * busy, 14)), performance: Math.min(100, wobble(80 * busy, 12)), efficiency: Math.min(100, wobble(40, 20)), perCore: cores },
     gpu: { utilization: CALM ? wobble(1, 1) : wobble(18, 10), memoryUsedBytes: 2.3 * GB, coreCount: 30 },
     thermal: { state: CALM ? "nominal" : "fair", cpuC: wobble(CALM ? 47 : calmApplied ? 56 : 68, 2), gpuC: wobble(52, 4), storageC: 41, batteryC: 33, sensors: [] },
-    fans: CALM ? [] : [
-      { id: 0, rpm: wobble(calmApplied ? 1320 : 2410, 120), minRpm: 1200, maxRpm: 5800 },
-      { id: 1, rpm: wobble(calmApplied ? 1300 : 2380, 120), minRpm: 1200, maxRpm: 5800 },
+    // Same Mac in both scenes; at rest its fans are simply off, and say so.
+    fans: [
+      { id: 0, rpm: CALM ? 0 : wobble(calmApplied ? 1320 : 2410, 120), minRpm: 1200, maxRpm: 5800 },
+      { id: 1, rpm: CALM ? 0 : wobble(calmApplied ? 1300 : 2380, 120), minRpm: 1200, maxRpm: 5800 },
     ],
     memory: { totalBytes: 16 * GB, usedBytes: wobble((CALM ? 12.4 : 14.1) * GB, 0.2 * GB), appBytes: 8 * GB, wiredBytes: 2.5 * GB, compressedBytes: 1.5 * GB, cachedBytes: 2 * GB, freeBytes: 1 * GB, swapUsedBytes: (CALM ? 0.3 : 2.1) * GB, swapTotalBytes: 4 * GB, pressure: CALM ? "normal" : "warning" },
-    battery: { percent: 85, charging: false, externalPower: CALM, watts: wobble(-23, 4), timeRemainingMinutes: 190, cycleCount: 212, healthPercent: 94, temperatureC: 33, condition: "Normal" },
+    battery: { percent: 85, charging: CALM, externalPower: CALM, watts: CALM ? wobble(23, 4) : wobble(-23, 4), timeRemainingMinutes: 190, cycleCount: 212, healthPercent: 94, temperatureC: 33, condition: "Normal" },
     power: { cpuWatts: wobble(16 * busy, 4), gpuWatts: wobble(4, 2), aneWatts: 0.2 },
     network: { inBytesPerSec: wobble(2.1 * MB, MB), outBytesPerSec: wobble(300_000, 200_000), wifiRssi: -52, primaryInterface: "en0" },
     disk: { readBytesPerSec: wobble(4 * MB, 3 * MB), writeBytesPerSec: wobble(2 * MB, 2 * MB) },
