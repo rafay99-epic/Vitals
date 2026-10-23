@@ -11,7 +11,9 @@ updates:
     target-branch: "nightly"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "bun"
+  # The JS workspace is pnpm. Dependabot's "npm" ecosystem updates pnpm-lock.yaml with the
+  # bump; "bun" did not, so every JS bump failed CI on `pnpm install --frozen-lockfile`.
+  - package-ecosystem: "npm"
     directory: "/"
     target-branch: "nightly"
     schedule:
