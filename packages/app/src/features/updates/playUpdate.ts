@@ -3,6 +3,8 @@ import * as InAppUpdates from "expo-in-app-updates";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+import { channel } from "../../lib/variant";
+
 import { KEYCHAIN_OPTIONS } from "../../persistence/credentials";
 
 export type PlayState =
@@ -14,9 +16,10 @@ export type PlayState =
 
 const DISMISSED_KEY = "vitals.remote.play-dismissed";
 
-export const playSupported = Platform.OS === "android";
+/** Only Stable is installed from Google Play; Nightly updates from GitHub, Dev is local. */
+export const playSupported = Platform.OS === "android" && channel === "stable";
 
-export const playState = new Store<PlayState>(playSupported ? { _tag: "Unchecked" } : { _tag: "Unavailable", reason: "Google Play is Android only" });
+export const playState = new Store<PlayState>(playSupported ? { _tag: "Unchecked" } : { _tag: "Unavailable", reason: "only the store app updates from Google Play" });
 
 export const playPrompt = new Store<string | null>(null);
 

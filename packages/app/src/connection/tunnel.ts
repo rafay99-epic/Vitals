@@ -3,7 +3,7 @@ import { LAN_PORTS } from "@vitals/contracts";
 import { forwardTo, startTailnet, stopTailnet, tailnetState, tailnetSupported } from "@vitals/tailnet";
 
 import { deviceInfo } from "../lib/device.ts";
-import { isDevBuild } from "../lib/variant";
+import { channel } from "../lib/variant";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { localNetwork } from "./nearby.ts";
 
@@ -31,7 +31,7 @@ const nodeName = (): string =>
 const tunnelTarget = (credentials: Credentials): string | null => {
   if (credentials.baseUrl === null) return null;
   const host = new URL(credentials.baseUrl).hostname;
-  const port = credentials.lan?.[0]?.port ?? (isDevBuild ? LAN_PORTS.dev : LAN_PORTS.stable);
+  const port = credentials.lan?.[0]?.port ?? LAN_PORTS[channel];
   return `${host}:${String(port)}`;
 };
 

@@ -5,7 +5,7 @@ import Constants from "expo-constants";
 import { Share, View } from "react-native";
 
 import { TabHeader } from "../../components/TabHeader.tsx";
-import { isDevBuild } from "../../lib/variant";
+import { isStoreBuild } from "../../lib/variant";
 import type { RecordStackParams } from "../../navigation/types.ts";
 import { diagnostics, type MethodStats } from "../../state/diagnostics.ts";
 import { useLink, useNow } from "../../state/useVitals.ts";
@@ -49,7 +49,7 @@ function Link() {
 }
 
 export function DiagnosticsScreen({ navigation }: Props) {
-  if (isDevBuild) return <Diagnostics onBack={() => navigation.goBack()} />;
+  if (!isStoreBuild) return <Diagnostics onBack={() => navigation.goBack()} />;
   return (
     <Screen top={<BackHeader parent="Record" onBack={() => navigation.goBack()} />}>
       <EmptyState title="Diagnostics are in the dev build." />

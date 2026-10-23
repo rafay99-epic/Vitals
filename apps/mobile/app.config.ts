@@ -1,18 +1,49 @@
+import { execFileSync } from "node:child_process";
+
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { type ConfigPlugin, withAppBuildGradle } from "expo/config-plugins";
 
-type Variant = "dev" | "prod";
+/**
+ * Three apps, like the Mac's channels (`VITALS_CHANNEL`), installable side by side:
+ * Stable ships to the stores from `main`, Nightly is the beta built from `nightly` and handed out
+ * as an APK, and Dev is local only. APP_VARIANT picks one; anything else builds Dev.
+ */
+type Variant = "stable" | "nightly" | "dev";
 
-const variant: Variant = process.env["APP_VARIANT"] === "prod" ? "prod" : "dev";
+const variant: Variant = process.env["APP_VARIANT"] === "stable" ? "stable" : process.env["APP_VARIANT"] === "nightly" ? "nightly" : "dev";
 
 const PROJECT_ID = "4db0c236-4405-41ad-ad17-dabb1942aa86";
 
 const VARIANTS: Record<Variant, { readonly name: string; readonly suffix: string; readonly scheme: string; readonly channel: string; readonly art: string }> = {
+  stable: { name: "Vitals", suffix: "", scheme: "vitals", channel: "production", art: "" },
+  nightly: { name: "Vitals Nightly", suffix: ".nightly", scheme: "vitals-nightly", channel: "nightly", art: "-nightly" },
   dev: { name: "Vitals Dev", suffix: ".dev", scheme: "vitals-dev", channel: "dev", art: "-dev" },
-  prod: { name: "Vitals", suffix: "", scheme: "vitals", channel: "production", art: "" },
 };
 
 const current = VARIANTS[variant];
+
+/**
+ * The same scheme as the Mac app: version `0.<commit count>`, and the count itself is the Android
+ * versionCode and iOS build number, so each build orders after the last. Each app counts its own
+ * branch (Stable `main`, Nightly `nightly`), and each branch's count only grows. CI can pin it
+ * with VITALS_COMMIT_COUNT. A shallow clone counts too few commits, so Stable and Nightly refuse
+ * one rather than ship a wrong number; Dev builds and tooling just get 0.
+ */
+const commitCount = (): number => {
+  const pinned = process.env["VITALS_COMMIT_COUNT"];
+  const git = (...args: ReadonlyArray<string>) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    if (pinned === undefined && git("rev-parse", "--is-shallow-repository") === "true") throw new Error("shallow clone");
+    const count = Number(pinned ?? git("rev-list", "--count", "HEAD"));
+    if (!Number.isInteger(count) || count < 1) throw new Error(`not a commit count: ${String(pinned)}`);
+    return count;
+  } catch (cause) {
+    if (variant !== "dev") throw new Error("Vitals Remote: Stable and Nightly builds take their version from the full git history. Build from a full clone or set VITALS_COMMIT_COUNT.", { cause });
+    return 0;
+  }
+};
+
+const commits = commitCount();
 
 const FONT_ROOT = "../../packages/ui/node_modules/@expo-google-fonts";
 
@@ -57,7 +88,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
   name: current.name,
   slug: "vitals-remote",
   scheme: current.scheme,
-  version: "1.0.0",
+  version: `0.${String(commits)}`,
   icon: `./assets/icon${current.art}.png`,
   orientation: "portrait",
   userInterfaceStyle: "dark",
@@ -74,6 +105,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     bundleIdentifier: `com.syntaxlabtechnology.vitals.remote${current.suffix}`,
+    buildNumber: String(commits),
     supportsTablet: false,
     icon: {
       light: `./assets/icon${current.art}.png`,
@@ -89,6 +121,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: `com.syntaxlabtechnology.vitals.remote${current.suffix}`,
+    versionCode: commits,
     permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE", "ACCESS_LOCAL_NETWORK"],
     adaptiveIcon: {
       foregroundImage: `./assets/adaptive-foreground${current.art}.png`,

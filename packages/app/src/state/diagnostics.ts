@@ -1,7 +1,7 @@
 import type { Connection, ConnectionState } from "@vitals/client-runtime";
 import { RingBuffer } from "@vitals/shared";
 
-import { isDevBuild } from "../lib/variant";
+import { isStoreBuild } from "../lib/variant";
 
 export interface Transition {
   readonly at: number;
@@ -97,7 +97,7 @@ class Method {
 }
 
 class Diagnostics {
-  readonly enabled = isDevBuild;
+  readonly enabled = !isStoreBuild;
   readonly startedAt = Date.now();
   readonly transitions: Array<Transition> = [];
   readonly faults: Array<Fault> = [];
