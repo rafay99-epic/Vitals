@@ -159,6 +159,8 @@ export const MacClip = Schema.Struct({
   stored: Schema.NullOr(ClipFileName),
   /** Absolute Mac path of a copied file or folder. Cloned or zipped into `clips/` on first download. */
   origin: Schema.NullOr(Schema.String),
+  /** Sent on purpose (the send-clipboard shortcut): shown to phones even with history off. */
+  pushed: Schema.optional(Schema.Boolean),
 });
 export type MacClip = typeof MacClip.Type;
 
