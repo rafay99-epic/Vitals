@@ -1,0 +1,1388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals · Share on the Mac · prototype</title>
+<style>
+:root{
+  --bg:#000; --ink:#fff; --ink2:rgba(255,255,255,.8); --dim:rgba(255,255,255,.56); --mute:rgba(255,255,255,.36);
+  --line:rgba(255,255,255,.09); --line2:rgba(255,255,255,.16);
+  --blue:#0a84ff; --green:#30d158; --orange:#ff9f0a; --red:#ff453a; --yellow:#ffd60a; --mint:#63e6e2; --indigo:#5e5ce6; --purple:#bf5af2; --cyan:#64d2ff; --pink:#ff375f;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro",system-ui,"Helvetica Neue",sans-serif;
+  --round:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --out:cubic-bezier(.23,1,.32,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:default;text-align:left}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.page{max-width:1440px;margin:0 auto;padding:36px 40px 80px}
+.kicker{font:500 11px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim)}
+h1{font:700 34px/1.1 var(--sans);letter-spacing:-.5px;margin:8px 0 10px}
+.lede{color:var(--ink2);max-width:820px;margin:0 0 24px}
+h2{font:600 20px/1.2 var(--sans);margin:0 0 12px}
+.page h3{font:500 11px var(--mono);letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+
+/* stage scaling */
+.stage-wrap{position:relative;width:100%;overflow:hidden;border-radius:14px;border:1px solid var(--line2)}
+#stage{position:absolute;left:0;top:0;width:1360px;height:860px;transform-origin:0 0;overflow:hidden;font:13px/1.35 var(--sans);color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;isolation:isolate;
+  background:
+    radial-gradient(900px 620px at 8% 100%,#5a2a86 0%,rgba(90,42,134,0) 62%),
+    radial-gradient(900px 560px at 100% 0%,#1d4796 0%,rgba(29,71,150,0) 62%),
+    radial-gradient(760px 520px at 62% 72%,#9c3b62 0%,rgba(156,59,98,0) 66%),
+    #110e26}
+.under{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-top:12px}
+.caption{font:12px var(--mono);color:var(--ink2);min-height:18px}
+.caption b{color:var(--yellow);font-weight:500}
+.tools{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font:12px var(--mono)}
+.tools button{color:var(--dim);cursor:pointer} .tools button:hover{color:#fff}
+.tools .read{color:var(--mute);max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:48px;margin-top:40px;align-items:start}
+.journeys{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line2);border-left:1px solid var(--line2)}
+.jbtn{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:11px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer}
+.jbtn:hover{background:#0c0c0c}
+.jbtn b{font:500 13.5px var(--sans);display:block}
+.jbtn small{font:11px var(--mono);color:var(--dim)}
+.jbtn .run{font:500 11px var(--mono);color:var(--yellow);white-space:nowrap}
+.jbtn.ok .run{color:var(--green)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:500 10.5px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line2)}
+td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+td:first-child{color:#fff;white-space:nowrap}
+.gallery-head{margin-top:64px;border-top:1px solid var(--line2);padding-top:22px}
+#gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px 22px;margin-top:16px}
+.gcell{margin:0}
+.gbox{position:relative;height:250px;overflow:hidden;border-radius:10px;border:1px solid var(--line);background:radial-gradient(500px 300px at 20% 100%,#2a1640 0%,rgba(0,0,0,0) 70%),#0b0a14}
+.gbox > .gin{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none}
+.gcell figcaption{font:500 10.5px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:8px}
+footer{margin-top:56px;font:11px var(--mono);color:var(--mute)}
+
+/* generic mac controls */
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.num{font-family:var(--round);font-variant-numeric:tabular-nums}
+.grow{flex:1;min-width:0}
+.trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dim{color:var(--dim)}
+.sp{flex:1}
+.btn{height:22px;padding:0 10px;border-radius:6px;background:rgba(255,255,255,.14);font-size:12.5px;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;box-shadow:inset 0 .5px 0 rgba(255,255,255,.14),0 .5px 1px rgba(0,0,0,.4);flex:none}
+.btn:active{background:rgba(255,255,255,.24)}
+.btn.def{background:var(--blue)}
+.btn.def:active{background:#0070e0}
+.btn[disabled]{opacity:.38;pointer-events:none}
+.btn.sm{height:20px;font-size:12px;padding:0 8px}
+.btn .ic{width:13px;height:13px}
+.lnk{color:#4da3ff;font-size:12px;white-space:nowrap}
+.ibtn{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--dim);flex:none}
+.ibtn:hover{background:rgba(255,255,255,.1);color:#fff}
+.ibtn .ic{width:14px;height:14px}
+.sw{width:28px;height:16px;border-radius:8px;background:rgba(255,255,255,.2);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transition:transform 180ms var(--out)}
+.sw.on{background:var(--blue)}
+.sw.on::after{transform:translateX(12px)}
+.cb{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);white-space:nowrap}
+.cbx{width:14px;height:14px;border-radius:4px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.25);display:grid;place-items:center;flex:none;font-style:normal}
+.cbx.on{background:var(--blue);border-color:var(--blue)}
+.cbx .ic{width:10px;height:10px;stroke-width:3;color:#fff}
+.popup{height:22px;padding:0 6px 0 9px;border-radius:6px;background:rgba(255,255,255,.14);font-size:12.5px;display:inline-flex;align-items:center;gap:6px;box-shadow:inset 0 .5px 0 rgba(255,255,255,.14),0 .5px 1px rgba(0,0,0,.4);white-space:nowrap}
+.popup .chevs{width:14px;height:14px;border-radius:4px;background:var(--blue);display:grid;place-items:center}
+.popup .chevs .ic{width:9px;height:9px;stroke-width:2.6}
+.keycap{font:500 12px var(--sans);letter-spacing:1px;padding:1px 6px;border-radius:5px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);white-space:nowrap}
+.tip{position:relative}
+.tip::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%) translateY(2px);white-space:nowrap;font:12px var(--sans);color:#fff;background:#3a3a3c;border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:3px 8px;opacity:0;pointer-events:none;transition:opacity 120ms,transform 160ms var(--out);z-index:5}
+.tip:hover::after{opacity:1;transform:translateX(-50%)}
+.tag{font-size:11px;color:var(--orange);display:inline-flex;align-items:center;gap:3px;margin-left:6px;font-weight:400;vertical-align:1px}
+.tag .ic{width:11px;height:11px}
+.tile{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none}
+.tile .ic{width:14px;height:14px}
+
+/* menu bar */
+.mb{position:absolute;left:0;right:0;top:0;height:26px;display:flex;align-items:center;padding:0 12px;gap:18px;background:rgba(14,12,30,.5);font-size:13px;z-index:200}
+.mb .app{font-weight:700}
+.mb .r{margin-left:auto;display:flex;align-items:center;gap:6px}
+.mbi{height:22px;padding:0 6px;border-radius:5px;display:flex;align-items:center;gap:4px;font-size:13px}
+.mbi .ic{width:16px;height:16px}
+.mbi.on,.mbi.hot{background:rgba(255,255,255,.24)}
+#mbPct{font:600 12px var(--round);font-variant-numeric:tabular-nums}
+.clock{padding:0 4px;white-space:nowrap}
+
+/* windows */
+.win{position:absolute;border-radius:12px;background:#1e1e20;border:1px solid rgba(255,255,255,.13);box-shadow:0 24px 70px rgba(0,0,0,.55),0 0 0 .5px rgba(0,0,0,.9);overflow:hidden}
+.lights{display:flex;gap:8px;flex:none}
+.lights i{width:12px;height:12px;border-radius:50%;background:#ff5f57;display:block}
+.lights i:nth-child(2){background:#febc2e} .lights i:nth-child(3){background:#28c840}
+#finder{left:24px;top:64px;width:540px;height:330px}
+.fbody{display:grid;grid-template-columns:150px 1fr;height:100%}
+.f-side{background:#262628;border-right:1px solid rgba(255,255,255,.06);padding:13px 8px;display:flex;flex-direction:column;gap:1px}
+.f-side .lights{margin:0 4px 16px}
+.f-sec{font-size:11px;font-weight:600;color:var(--mute);padding:8px 8px 3px}
+.f-it{height:24px;border-radius:6px;padding:0 8px;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2)}
+.f-it .ic{width:15px;height:15px;color:var(--blue)}
+.f-it.on{background:rgba(255,255,255,.1);color:#fff}
+.f-main{display:flex;flex-direction:column;min-width:0}
+.f-bar{height:44px;display:flex;align-items:center;gap:4px;padding:0 12px;border-bottom:1px solid rgba(255,255,255,.07)}
+.f-bar b{font-size:13px;margin-left:6px}
+.f-head,.f-row{display:grid;grid-template-columns:1fr 78px 118px;gap:8px;align-items:center;padding:0 12px}
+.f-head{height:24px;font-size:11px;color:var(--dim);border-bottom:1px solid rgba(255,255,255,.07)}
+.f-list{flex:1;overflow:auto;padding:2px 6px}
+.f-row{height:24px;border-radius:5px;font-size:12.5px;padding:0 6px}
+.f-row:nth-child(even){background:rgba(255,255,255,.025)}
+.f-row.sel{background:#0b5fd1}
+.f-row .nm{display:flex;align-items:center;gap:7px;min-width:0}
+.f-row .k,.f-row .s{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.f-row.sel .k,.f-row.sel .s{color:rgba(255,255,255,.85)}
+.f-row .s{text-align:right}
+.ficon{width:16px;height:16px;flex:none}
+.f-status{height:24px;font-size:11px;color:var(--dim);display:flex;align-items:center;justify-content:center;border-top:1px solid rgba(255,255,255,.07)}
+.f-empty{color:var(--dim);font-size:12px;padding:30px;text-align:center}
+
+#vwin{left:578px;top:44px}
+.vwin{width:760px;height:640px}
+.vbody{display:grid;grid-template-columns:190px 1fr;height:100%}
+.v-side{background:#232325;border-right:1px solid rgba(255,255,255,.06);padding:13px 10px 12px;display:flex;flex-direction:column;gap:1px}
+.v-side .lights{margin:0 4px 16px}
+.v-sec{font-size:11px;font-weight:600;color:var(--mute);padding:10px 8px 3px}
+.v-nav{height:25px;border-radius:7px;padding:0 8px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);flex:none}
+.v-nav .ic{width:15px;height:15px;color:var(--blue)}
+.v-nav.on{background:rgba(255,255,255,.1);color:#fff}
+.v-main{display:flex;flex-direction:column;min-height:0;min-width:0;background:#1c1c1e;position:relative}
+.segbar{display:flex;justify-content:center;padding:16px 0 4px;flex:none}
+.seg{display:inline-flex;padding:2px;border-radius:999px;background:rgba(255,255,255,.08);gap:2px}
+.seg button{height:22px;padding:0 14px;border-radius:999px;font-size:12.5px;color:var(--ink2)}
+.seg button.on{background:rgba(255,255,255,.2);color:#fff}
+.scroll{flex:1;overflow:auto;padding:12px 20px 22px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.stack{display:flex;flex-direction:column;gap:12px}
+.v-title{font:700 20px var(--sans);padding:22px 20px 2px}
+.empty{color:var(--dim);font-size:13px;text-align:center;padding:40px 0}
+.card{border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.card-h{display:flex;align-items:center;gap:8px}
+.card-h h4{margin:0;font-size:13px;font-weight:600}
+.row{display:flex;align-items:center;gap:10px;min-height:22px}
+.row .t{font-size:13px}
+.row .c{font-size:12px;color:var(--dim);margin-top:1px}
+.callout{font-size:12px;color:var(--dim)}
+.path{font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
+.path .ic{color:var(--blue);width:15px;height:15px}
+.drow{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+.drow:first-child{border-top:0;padding-top:2px}
+.drow > .ic{width:20px;height:20px;margin-top:1px}
+.drow .t{font-weight:500}
+.drow .scopes{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:5px}
+.rr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+.rr:first-child{border-top:0;padding-top:2px}
+.rr .nm{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .sub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .st{display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
+.bar{height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--blue);transform-origin:0 50%;transition:transform 200ms linear}
+.ok{color:var(--green)} .warn{color:var(--orange)} .bad{color:var(--red)}
+.rec{min-width:92px;height:22px;border-radius:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);font:500 12.5px var(--sans);letter-spacing:1px;display:inline-flex;align-items:center;justify-content:center;padding:0 10px}
+.rec.on{border-color:var(--blue);color:var(--dim);letter-spacing:0}
+
+/* sheets */
+.sheetwrap{position:absolute;inset:0;z-index:20;pointer-events:none}
+.sheetwrap .dim{position:absolute;inset:0;background:rgba(0,0,0,.28);opacity:0;transition:opacity 200ms}
+.sheet{position:absolute;left:50%;top:44px;width:500px;margin-left:-250px;background:#2b2b2d;border:1px solid rgba(255,255,255,.13);border-radius:14px;padding:16px 18px;box-shadow:0 24px 60px rgba(0,0,0,.6);opacity:0;transform:translateY(-14px) scale(.98);transition:opacity 180ms,transform 260ms var(--out);display:flex;flex-direction:column;gap:12px}
+.sheetwrap.open{pointer-events:auto}
+.sheetwrap.open .dim{opacity:1}
+.sheetwrap.open .sheet{opacity:1;transform:none}
+.sh-t{font:600 13px var(--sans);margin:0}
+.dropzone{border:1.5px dashed rgba(255,255,255,.22);border-radius:10px;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--dim);padding:12px}
+.dropzone .ic{width:26px;height:26px;stroke-width:1.5}
+.dropzone.hot{border-color:var(--blue);background:rgba(10,132,255,.1)}
+.dropzone.has{align-items:stretch;justify-content:flex-start}
+.dz-row{display:flex;align-items:center;gap:8px;color:#fff;font-size:12.5px;height:24px}
+.sh-lbl{font-size:12px;color:var(--dim)}
+.sh-foot{display:flex;align-items:center;gap:8px}
+.fo-row{height:28px;border-radius:6px;display:flex;align-items:center;gap:8px;padding:0 8px;font-size:13px}
+.fo-row .ic{color:var(--blue)}
+.fo-row.on{background:#0b5fd1}
+
+/* panel */
+.panel{width:330px;padding:14px;border-radius:14px;background:rgba(36,36,38,.98);border:1px solid rgba(255,255,255,.13);box-shadow:0 18px 50px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:12px}
+#panel{position:absolute;top:30px;z-index:210;opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity 140ms,transform 180ms var(--out)}
+#panel.open{opacity:1;transform:none;pointer-events:auto}
+.p-head{display:flex;justify-content:space-between;align-items:flex-start}
+.p-chip{font-size:15px;font-weight:600}
+.p-therm{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;margin-top:5px;padding:2px 7px;border-radius:99px;background:rgba(48,209,88,.14)}
+.p-therm i{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.p-temp{text-align:right}
+.p-temp b{display:block;font:600 24px var(--round);font-variant-numeric:tabular-nums}
+.p-temp small{font-size:10px;color:var(--dim)}
+.p-share{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.p-sec{font-size:11px;font-weight:600;color:var(--dim);display:flex;justify-content:space-between}
+.p-x{display:flex;flex-direction:column;gap:2px}
+.p-x .top{display:flex;align-items:center;gap:7px;font-size:12.5px}
+.p-x .top > .ic{width:15px;height:15px}
+.p-x .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);font-family:var(--round);font-variant-numeric:tabular-nums}
+.p-line{display:flex;align-items:center;gap:7px;font-size:12.5px;min-height:20px}
+.p-line > .ic{width:15px;height:15px}
+.p-sparks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.spk{padding:8px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06)}
+.spk-h{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);font-weight:500;margin-bottom:4px}
+.spk-h b{font:600 11.5px var(--round);font-variant-numeric:tabular-nums}
+.spk-s{display:block;width:100%;height:30px}
+.p-row{display:flex;align-items:center;gap:6px;font-size:11.5px}
+.p-hr{height:1px;background:rgba(255,255,255,.08)}
+.p-act{display:flex;align-items:center;gap:6px}
+
+/* menus, picker */
+.menu{min-width:210px;padding:5px;border-radius:10px;background:rgba(40,40,42,.98);border:1px solid rgba(255,255,255,.13);box-shadow:0 12px 34px rgba(0,0,0,.55);font-size:13px;position:relative}
+.mi{position:relative;height:22px;padding:0 10px 0 22px;border-radius:5px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.mi:hover,.mi.open{background:var(--blue)}
+.mi.dis{color:rgba(255,255,255,.3)}
+.mi.dis:hover{background:none}
+.mi .chev{margin-left:auto;width:11px;height:11px;stroke-width:2.4}
+.mi .chk{position:absolute;left:6px;width:11px;height:11px;stroke-width:2.6}
+.mi .ai{width:15px;height:15px;border-radius:4px}
+.mi > .menu{position:absolute;left:calc(100% + 2px);top:-6px}
+.mhead{font-size:11px;font-weight:600;color:var(--mute);padding:4px 10px 2px 22px}
+.msep{height:1px;margin:5px 8px;background:rgba(255,255,255,.12)}
+#ctx,#menu{position:absolute;z-index:230;display:none}
+.picker{width:300px;border-radius:14px;background:rgba(40,40,42,.98);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 50px rgba(0,0,0,.55);padding:14px;display:flex;flex-direction:column;gap:10px;position:relative}
+#picker{position:absolute;z-index:220;opacity:0;transform:scale(.96);pointer-events:none;transition:opacity 140ms,transform 180ms var(--out)}
+#picker.open{opacity:1;transform:none;pointer-events:auto}
+.pk-t{font-weight:600;font-size:13px}
+.pk-sub{font-size:12px;color:var(--dim);margin-top:-6px}
+.pk-row{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.04);width:100%}
+.pk-row.on{background:rgba(10,132,255,.12)}
+.pk-row b{display:block;font-weight:500;font-size:13px}
+.pk-row small{font-size:11px;color:var(--dim)}
+.pk-row .last{font-size:11px;color:var(--dim)}
+.pk-list{display:flex;flex-direction:column;gap:6px}
+.pk-foot{display:flex;justify-content:flex-end;gap:8px}
+.caret{position:absolute;width:14px;height:14px;background:rgba(40,40,42,.98);border:1px solid rgba(255,255,255,.14);transform:rotate(45deg)}
+.caret.up{top:-7px;border-right:0;border-bottom:0}
+.caret.down{bottom:-7px;border-left:0;border-top:0}
+
+/* notifications */
+#notifs{position:absolute;top:34px;right:10px;width:392px;display:flex;flex-direction:column;gap:8px;z-index:300}
+.nt{display:flex;border-radius:16px;background:rgba(46,46,48,.98);border:1px solid rgba(255,255,255,.13);box-shadow:0 10px 30px rgba(0,0,0,.45);overflow:hidden;width:392px}
+#notifs .nt{transform:translateX(380px);opacity:0;transition:transform 380ms var(--out),opacity 220ms}
+#notifs .nt.in{transform:none;opacity:1}
+.nb{flex:1;display:flex;gap:10px;padding:11px 12px;min-width:0}
+.ntext{min-width:0;flex:1}
+.nrow{display:flex;gap:8px;align-items:baseline}
+.nrow b{font-size:13px;font-weight:600;flex:1;min-width:0}
+.ntime{font-size:11px;color:var(--dim)}
+.nbody{font-size:12.5px;color:var(--ink2);margin-top:1px}
+.nact{display:flex;flex-direction:column;border-left:1px solid rgba(255,255,255,.1);width:92px;flex:none}
+.nact button{flex:1;font-size:12.5px;font-weight:500;text-align:center;padding:0 8px;min-height:30px}
+.nact button:hover{background:rgba(255,255,255,.06)}
+.nact button+button{border-top:1px solid rgba(255,255,255,.1)}
+
+/* app icons, dock */
+.ai{width:50px;height:50px;border-radius:12px;display:grid;place-items:center;position:relative;flex:none;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.25)}
+.ai svg{width:60%;height:60%;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ai.vitals{background:linear-gradient(180deg,#ff6b5e,#c3161f)}
+.ai.finder{background:linear-gradient(90deg,#8fd3ff 0 50%,#2a7de1 50% 100%)}
+.ai.safari{background:radial-gradient(circle at 50% 50%,#fff 0 30%,#2f8cff 31% 100%)}
+.ai.msgs{background:linear-gradient(180deg,#6ff07e,#1fbf3c)}
+.ai.notes{background:linear-gradient(180deg,#ffd84a 0 28%,#fbf7ea 28% 100%)}
+.ai.dl{background:linear-gradient(180deg,#5cb8ff,#1c74d8)}
+.ai.trash{background:linear-gradient(180deg,#d9dde2,#a7adb5)}
+.ai.trash svg{stroke:#555}
+.ai.notes svg{stroke:#a38a2a}
+.ai.safari svg{stroke:#d33}
+.nicon{width:34px;height:34px;border-radius:9px}
+.dock{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);display:flex;align-items:flex-end;gap:8px;padding:6px 8px;border-radius:20px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);z-index:150}
+.dk{position:relative;transition:transform 200ms var(--out)}
+.dk.hot{transform:translateY(-8px) scale(1.12)}
+.dk.bounce{animation:bounce 520ms var(--out) 2}
+@keyframes bounce{0%,100%{transform:none}40%{transform:translateY(-16px)}}
+.dk .dot{position:absolute;bottom:-5px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:rgba(255,255,255,.75)}
+.dsep{width:1px;height:46px;background:rgba(255,255,255,.22);margin:0 2px}
+.dprog{position:absolute;left:6px;right:6px;bottom:6px;height:6px;border-radius:3px;background:rgba(0,0,0,.6);overflow:hidden;opacity:0}
+.dprog.on{opacity:1}
+.dprog i{display:block;height:100%;background:#fff;transform-origin:0 50%;transform:scaleX(0);transition:transform 200ms linear}
+
+/* overlays */
+#ghost{position:absolute;left:0;top:0;z-index:400;pointer-events:none;display:none;align-items:center;gap:6px;padding:4px 9px 4px 5px;border-radius:7px;background:rgba(30,30,34,.9);font-size:12px;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+#ghost.on{display:flex}
+#ghost .plus{display:none;width:16px;height:16px;border-radius:50%;background:var(--green);place-items:center;margin-left:2px}
+#ghost .plus .ic{width:10px;height:10px;stroke-width:3}
+#ghost.over .plus{display:grid}
+#ring{position:absolute;width:44px;height:44px;border-radius:50%;border:2px solid var(--yellow);box-shadow:0 0 0 6px rgba(255,214,10,.2);transform:translate(-50%,-50%) scale(.6);opacity:0;transition:opacity 160ms,transform 260ms var(--out);z-index:500;pointer-events:none}
+#ring.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#hud{position:absolute;left:50%;top:330px;width:260px;margin-left:-130px;padding:18px;border-radius:18px;background:rgba(30,30,32,.92);border:1px solid rgba(255,255,255,.12);text-align:center;z-index:350;opacity:0;transform:scale(.96);transition:opacity 180ms,transform 220ms var(--out);pointer-events:none}
+#hud.on{opacity:1;transform:none}
+#hud .keys{font:600 30px var(--sans);letter-spacing:4px}
+#hud small{display:block;color:var(--dim);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-ecg" viewBox="0 0 24 24"><path d="M2 12h4l2.5-6 4 12 3-8 2 2H22"/></symbol>
+  <symbol id="i-apple" viewBox="0 0 24 24"><path d="M16.5 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.9-3.5.9s-1.9-.8-3.1-.8C6.9 7.3 5 8.5 5 11.5c0 3.3 2.4 8 4.2 8 .9 0 1.4-.6 2.6-.6s1.6.6 2.6.6c1.9 0 3.3-3.6 3.6-4.6-1.5-.6-1.5-2.1-1.5-2.3zM14.2 5.6c.7-.8 1.1-1.9 1-3-1 .1-2.1.7-2.7 1.5-.6.7-1.1 1.8-1 2.8 1.1.1 2.1-.5 2.7-1.3z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.2" r="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-batt" viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="3"/><rect x="4" y="9" width="12" height="6" rx="1.4" fill="currentColor" stroke="none"/><path d="M22 10.5v3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
+  <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="3"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/><rect x="3" y="13" width="18" height="6" rx="3"/><circle cx="16" cy="16" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12L4 7.5M12 12v9"/></symbol>
+  <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="9" rx="1.5"/><path d="M7 10v3M11 10v3M15 10v3M6 16v3M10 16v3M14 16v3M18 16v3"/></symbol>
+  <symbol id="i-battery" viewBox="0 0 24 24"><rect x="3" y="7" width="16" height="10" rx="2.5"/><path d="M21 10.5v3M7 10v4M10.5 10v4"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><path d="M8 20V5M4 9l4-4 4 4M16 4v15M12 15l4 4 4-4"/></symbol>
+  <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 14.5V5a2 2 0 0 0-4 0v9.5a4 4 0 1 0 4 0z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2.5"/><circle cx="17" cy="12" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="9" width="11" height="11" rx="2.5"/><path d="M8 6.5V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-.5"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+  <symbol id="i-iphone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 5h3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-checkc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M7.5 12.3l3 3 6-6.2" stroke="#1c1c1e" stroke-width="2.2"/></symbol>
+  <symbol id="i-xmark" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-xc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 16.5v-9M8.3 11l3.7-3.7 3.7 3.7" stroke="#fff" stroke-width="2"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 7.5v9M8.3 13l3.7 3.7 3.7-3.7" stroke="#fff" stroke-width="2"/></symbol>
+  <symbol id="i-wait" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 7.5V12l3 2" stroke="#1c1c1e" stroke-width="2"/></symbol>
+  <symbol id="i-ask" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.4" stroke="#1c1c1e" stroke-width="2"/><circle cx="12" cy="16.8" r="1.1" fill="#1c1c1e" stroke="none"/></symbol>
+  <symbol id="i-mag" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-chevs" viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="4" rx="1.2"/></symbol>
+  <symbol id="i-clipup" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="4" rx="1.2"/><path d="M12 17.5v-7M9 13.5l3-3 3 3"/></symbol>
+  <symbol id="i-tray" viewBox="0 0 24 24"><path d="M3.5 13.5l2.2-7.5h12.6l2.2 7.5v5a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5zM3.5 13.5h5l1 2h5l1-2h5M12 3v7M9 7.5l3 3 3-3"/></symbol>
+  <symbol id="i-trayup" viewBox="0 0 24 24"><path d="M3.5 13.5l2.2-7.5h2.5M15.8 6h2.5l2.2 7.5v5a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5zM3.5 13.5h5l1 2h5l1-2h5M12 11V2.5M9 5.5l3-3 3 3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.5-3 7.7-7 9.5-4-1.8-7-5-7-9.5V6z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M2.5 7a2 2 0 0 1 2-2h4.6l2 2.2h8.4a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 2.5h8l4.5 4.5v13a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5z"/><path d="M14 2.5V7h4.5"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 17.5l5-5 3.5 3.5 2.5-2.5 5 5"/></symbol>
+  <symbol id="i-desk" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v8.5M8.5 12.5l3.5 3.5 3.5-3.5"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8M7 6.5a7 7 0 1 0 10 0"/></symbol>
+  <symbol id="i-appout" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="15" height="15" rx="3.5"/><path d="M12 3.5h8.5V12M20.5 3.5l-9 9"/></symbol>
+  <symbol id="i-fan" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.8"/><path d="M12 10.2c0-4 1-6.7 3.4-6.7 2.6 0 2.6 4-3.4 6.7zM13.8 12c4 0 6.7 1 6.7 3.4 0 2.6-4 2.6-6.7-3.4zM12 13.8c0 4-1 6.7-3.4 6.7-2.6 0-2.6-4 3.4-6.7zM10.2 12c-4 0-6.7-1-6.7-3.4 0-2.6 4-2.6 6.7 3.4z"/></symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M7 3.5v2.5M10 3.5v2.5M13 3.5v2.5"/></symbol>
+  <symbol id="i-kbd" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 9.5h.01M9 9.5h.01M12 9.5h.01M15 9.5h.01M18 9.5h.01M7 14.5h10"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-face" viewBox="0 0 24 24"><path d="M8 8.5v2.5M16 8.5v2.5M7 15.5c3 2.2 7 2.2 10 0M12.5 4c-1 4-1.2 7-.6 10h-1.5"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><path d="M15.5 8.5l-2.2 4.8-4.8 2.2 2.2-4.8z"/></symbol>
+  <symbol id="i-bubble" viewBox="0 0 24 24"><path d="M12 4.5c4.7 0 8.5 3 8.5 6.8s-3.8 6.8-8.5 6.8c-1 0-1.9-.1-2.8-.4L5 19.5l1.1-3.6C4.4 14.7 3.5 13.1 3.5 11.3 3.5 7.5 7.3 4.5 12 4.5z"/></symbol>
+  <symbol id="i-lines" viewBox="0 0 24 24"><path d="M6 11h12M6 15h12M6 19h8"/></symbol>
+  <symbol id="i-bin" viewBox="0 0 24 24"><path d="M5 7h14M9 7V4.5h6V7M7 7l1 13h8l1-13M10.5 10.5v6M13.5 10.5v6"/></symbol>
+</svg>
+
+<div class="page">
+  <div class="kicker">Vitals for macOS · Share · clipboard and files between Mac and phone</div>
+  <h1>Share, on the Mac.</h1>
+  <p class="lede">Your paired phones and the Mac trade files both ways, LocalSend style, over the Wi-Fi or Tailscale route Remote already uses. The phone's latest copy shows up in the menu bar, and ⌃⌥⌘V sends the Mac's clipboard to the phone. Nothing new is always on screen: the menu bar panel grows a Share section only while something is happening, the menu bar and Dock icons take drops, Finder gets a Quick Action, and Remote gets a Sharing segment. Everything on the desktop below is clickable and draggable. Or run a journey.</p>
+
+  <div class="stage-wrap" id="wrap">
+    <div id="stage">
+      <div class="mb">
+        <svg class="ic" style="width:15px;height:15px"><use href="#i-apple"/></svg>
+        <span class="app">Finder</span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span>
+        <div class="r">
+          <button class="mbi" id="mbIcon" data-k="mb-icon" aria-label="Vitals"><svg class="ic"><use href="#i-ecg"/></svg><span id="mbPct" style="display:none"></span></button>
+          <span class="mbi"><svg class="ic"><use href="#i-wifi"/></svg></span>
+          <span class="mbi"><svg class="ic" style="width:22px"><use href="#i-batt"/></svg></span>
+          <span class="mbi"><svg class="ic" style="width:14px"><use href="#i-search"/></svg></span>
+          <span class="mbi"><svg class="ic" style="width:15px"><use href="#i-cc"/></svg></span>
+          <span class="clock">Sat Oct 24&nbsp;&nbsp;22:41</span>
+        </div>
+      </div>
+      <div class="win" id="finder"><div class="fbody"></div></div>
+      <div class="win vwin" id="vwin"><div class="vbody"></div><div class="sheetwrap"><div class="dim"></div><div class="sheet"></div></div></div>
+      <div class="dock" id="dock"></div>
+      <div class="panel" id="panel"></div>
+      <div id="picker"></div>
+      <div id="ctx"></div>
+      <div id="menu"></div>
+      <div id="notifs" aria-live="polite"></div>
+      <div id="hud"><div class="keys"></div><small></small></div>
+      <div id="ghost"></div>
+      <div id="ring"></div>
+    </div>
+  </div>
+  <div class="under">
+    <div>
+      <div class="caption" id="caption">Click the Vitals icon in the menu bar, right-click a file in Finder, or drag one onto Vitals.</div>
+      <div class="tools" id="tools"></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Journeys</h2>
+      <div class="journeys" id="journeys"></div>
+    </div>
+    <div>
+      <h2>What changes</h2>
+      <table>
+        <thead><tr><th>Where</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td>Menu bar icon</td><td>Takes file drops. While a transfer runs it shows the percent next to the glyph. Otherwise unchanged.</td></tr>
+          <tr><td>Menu bar panel</td><td>New Share section at the top, only while something is happening: asks, transfers with pause and cancel, waits, the last finished drop, and the phone's latest copy with Copy. The actions row gains Send clipboard, labelled with its shortcut.</td></tr>
+          <tr><td>Dock icon</td><td>Takes file drops and opens Remote › Sharing. Progress bar on the tile while sending.</td></tr>
+          <tr><td>Finder</td><td>Quick Actions › Send to Phone, plus Services › Send to Phone with Vitals as the fallback. Both open the phone picker when more than one phone can get files.</td></tr>
+          <tr><td>Phone picker</td><td>"Send to Pixel 9 Pro or iPhone 17?" Checkboxes, last used phone checked, offline phones still listed (they wait). Skipped when only one phone can get files.</td></tr>
+          <tr><td>Remote › Devices</td><td>Each phone gets a Files checkbox next to Read clipboard. The Clipboard card moves out.</td></tr>
+          <tr><td>Remote › Sharing</td><td>New segment between Devices and Activity: Files (save folder, auto-accept, web ask, largest drop, Send Files…), Recent, and the Clipboard card with two new rows.</td></tr>
+          <tr><td>Settings</td><td>Shortcuts: Send clipboard to phone, default ⌃⌥⌘V, recordable, plus who it goes to.</td></tr>
+          <tr><td>Notifications</td><td>Got, Wants to send (Accept, Decline), Sent, Waiting, Clipboard sent. No banner while the panel is open, since the panel already shows it.</td></tr>
+          <tr><td>Received files</td><td>Saved to ~/Downloads/Vitals. DMG, PKG and app files keep the quarantine flag, so Gatekeeper checks them before they run.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="gallery-head">
+    <h2>Every state, frozen</h2>
+    <div id="gallery"></div>
+  </div>
+  <footer>Mockup, numbers are illustrative. Device names, sizes and speeds are examples, not readings.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  function $(s, r) { return (r || document).querySelector(s); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function h(tag, a) {
+    var el = document.createElement(tag);
+    if (a) Object.keys(a).forEach(function (k) {
+      var v = a[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === "class") el.className = v;
+      else if (k === "style") el.setAttribute("style", v);
+      else if (k === "k") el.dataset.k = v;
+      else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    });
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c === null || c === undefined || c === false) return;
+        if (Array.isArray(c)) return add(c);
+        el.append(c instanceof Node ? c : String(c));
+      });
+    })(Array.prototype.slice.call(arguments, 2));
+    return el;
+  }
+  function icon(n, cls, style) {
+    var s = document.createElementNS(NS, "svg");
+    s.setAttribute("class", "ic" + (cls ? " " + cls : "")); s.setAttribute("aria-hidden", "true");
+    if (style) s.setAttribute("style", style);
+    var u = document.createElementNS(NS, "use"); u.setAttribute("href", "#i-" + n);
+    s.appendChild(u); return s;
+  }
+  function svg(str) { var t = document.createElement("template"); t.innerHTML = str.trim(); return t.content.firstChild; }
+  function appIcon(kind, cls) {
+    var glyph = { vitals: "ecg", finder: "face", safari: "compass", msgs: "bubble", notes: "lines", dl: "dl", trash: "bin" }[kind];
+    return h("div", { class: "ai " + kind + (cls ? " " + cls : "") }, icon(glyph));
+  }
+
+  /* ---------- data ---------- */
+  var MB = 1e6, GB = 1e9, CLOCK = "22:41";
+  function size(b) { if (b >= GB) return (b / GB).toFixed(1) + " GB"; if (b >= MB) return (b / MB).toFixed(1) + " MB"; return Math.round(b / 1e3) + " KB"; }
+  function ofSize(d, t) { var u = t >= GB ? GB : MB, n = t >= GB ? " GB" : " MB"; return (d / u).toFixed(1) + " of " + (t / u).toFixed(1) + n; }
+  var FILES = {
+    brand: { key: "brand", name: "brand-assets", bytes: 286 * MB, count: 214, kind: "folder", kindLabel: "Folder" },
+    trip: { key: "trip", name: "trip-video.mov", bytes: 4.1 * GB, kind: "movie", kindLabel: "QuickTime movie" },
+    apk: { key: "apk", name: "vitals-dev.apk", bytes: 48.2 * MB, kind: "apk", kindLabel: "Android package" },
+    invoice: { key: "invoice", name: "invoice-oct.pdf", bytes: 182e3, kind: "doc", kindLabel: "PDF document" }
+  };
+  var VITALS_DIR = { key: "vdir", name: "Vitals", bytes: 70 * MB, kind: "folder", kindLabel: "Folder", dir: "Vitals" };
+  var KIND = {
+    movie: ["film", "#bf5af2"], apk: ["doc", "#30d158"], folder: ["folder", "#5ab3ff"], doc: ["doc", "#c7c7cc"],
+    photo: ["photo", "#ff375f"], files: ["photo", "#ff9f0a"], dmg: ["disk", "#c7c7cc"], pkg: ["shield", "#d0a060"], sheet: ["doc", "#30d158"]
+  };
+  var APPISH = { dmg: 1, pkg: 1, apk: 1, app: 1 };
+  var DIRS = { "~/Downloads/Vitals": "Vitals", "~/Downloads": "Downloads", "~/Desktop": "Desktop", "~/Documents": "Documents" };
+
+  var XID = 0;
+  function mk(o) {
+    var x = Object.assign({ id: "x" + (++XID), done: 0, state: "running", at: CLOCK, route: "Wi-Fi", fresh: false, count: 1 }, o);
+    if (!x.ms) x.ms = Math.round(2600 + Math.min(2400, x.bytes / GB * 600));
+    return x;
+  }
+  function initial() {
+    XID = 0;
+    return {
+      devices: [
+        { id: "pixel", name: "Pixel 9 Pro", kind: "android", app: "1.6.0", online: true, files: true, scopes: { operate: true, destructive: false, clipboard: true } },
+        { id: "iphone", name: "iPhone 17", kind: "ios", app: "1.6.0", online: true, files: true, scopes: { operate: true, destructive: false, clipboard: true } },
+        { id: "web", name: "Chrome on Windows", kind: "web", app: "web", online: true, files: true, scopes: { operate: false, destructive: false, clipboard: false } }
+      ],
+      twoPhones: true, lastUsed: "pixel",
+      xfers: [
+        mk({ dir: "in", name: "Vitals-Nightly.dmg", bytes: 61.4 * MB, device: "pixel", kind: "dmg", state: "done", done: 61.4 * MB, at: "Yesterday", saveDir: "~/Downloads/Vitals", items: [{ name: "Vitals-Nightly.dmg", kind: "dmg" }] }),
+        mk({ dir: "out", name: "screen-recording.mov", bytes: 2.3 * GB, device: "iphone", kind: "movie", state: "failed", done: 1.1 * GB, at: "Yesterday", reason: "iPhone 17 closed Vitals", src: ["screen-recording.mov"] }),
+        mk({ dir: "in", name: "Scans", bytes: 8.6 * MB, count: 4, device: "iphone", kind: "folder", state: "done", done: 8.6 * MB, at: "Oct 22", saveDir: "~/Downloads/Vitals", items: [{ name: "Scans", kind: "folder" }] })
+      ],
+      fs: {
+        Vitals: [{ name: "Vitals-Nightly.dmg", bytes: 61.4 * MB, kind: "dmg", kindLabel: "Disk image" }, { name: "Scans", bytes: 8.6 * MB, kind: "folder", kindLabel: "Folder" }],
+        Downloads: [], Desktop: [{ name: "Screenshot 2026-10-24.png", bytes: 1.9 * MB, kind: "photo", kindLabel: "PNG image" }], Documents: [{ name: "Taxes 2025", bytes: 12 * MB, kind: "folder", kindLabel: "Folder" }]
+      },
+      phoneClip: null, sentClip: null, macClip: "Standup moved to 15:30, room 4B.",
+      saveDir: "~/Downloads/Vitals", autoPhones: true, askWeb: true, largest: 50,
+      clipHistory: true, keepDays: 7, usePhoneCopies: true,
+      shortcut: "⌃⌥⌘V", shortcutTo: "last", recording: false,
+      section: "remote", rtab: "devices", vwin: true,
+      panel: false, sheet: null, picker: null, ctx: null, menu: null,
+      finderDir: "Downloads", finderSel: []
+    };
+  }
+  var S = initial();
+  function dev(id) { return S.devices.filter(function (d) { return d.id === id; })[0]; }
+  function visibleDevices() { return S.devices.filter(function (d) { return S.twoPhones || d.id !== "iphone"; }); }
+  function paired() { return visibleDevices().filter(function (d) { return d.kind !== "web" && d.files; }); }
+  function itemsLabel(x) { return x.count > 1 ? x.count + " files" : "1 file"; }
+  function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
+
+  /* ---------- elements ---------- */
+  var stage = $("#stage"), wrap = $("#wrap"), finderEl = $("#finder"), vwinEl = $("#vwin"), panelEl = $("#panel"),
+    pickerEl = $("#picker"), ctxEl = $("#ctx"), menuEl = $("#menu"), notifEl = $("#notifs"), ghost = $("#ghost"),
+    ring = $("#ring"), hud = $("#hud"), mbIcon = $("#mbIcon"), mbPct = $("#mbPct"), dockEl = $("#dock"), caption = $("#caption");
+  var scale = 1;
+  function fit() { scale = Math.min(1, wrap.clientWidth / 1360); stage.style.transform = "scale(" + scale + ")"; wrap.style.height = Math.round(860 * scale) + "px"; }
+  window.addEventListener("resize", fit); fit();
+  function toStage(x, y) { var r = stage.getBoundingClientRect(); return [(x - r.left) / scale, (y - r.top) / scale]; }
+  function rectIn(el) { var r = el.getBoundingClientRect(), s = stage.getBoundingClientRect(); return { left: (r.left - s.left) / scale, top: (r.top - s.top) / scale, width: r.width / scale, height: r.height / scale }; }
+  var Z = 10;
+  function front(el) { el.style.zIndex = String(++Z); }
+
+  /* ---------- small builders ---------- */
+  function sw(on, k, fn, label) { return h("button", { class: "sw" + (on ? " on" : ""), role: "switch", "aria-checked": String(on), "aria-label": label, k: k, onclick: function () { fn(!on); } }); }
+  function cbx(on) { return h("i", { class: "cbx" + (on ? " on" : "") }, on ? icon("check") : null); }
+  function chk(label, on, fn, k) { return h("button", { class: "cb", k: k, role: "checkbox", "aria-checked": String(on), onclick: function () { fn(!on); } }, cbx(on), label); }
+  function tile(n, tint) { return h("div", { class: "tile", style: "background:" + tint + "24;color:" + tint }, icon(n)); }
+  function card(title, ic, tint, right) {
+    var body = Array.prototype.slice.call(arguments, 4);
+    return h("section", { class: "card" }, h("header", { class: "card-h" }, tile(ic, tint), h("h4", null, title), h("span", { class: "sp" }), right), body);
+  }
+  function popup(label, k, options, current, onPick) {
+    var cur = options.filter(function (o) { return o[0] === current; })[0];
+    var b = h("button", { class: "popup", k: k, "aria-label": label, onclick: function () { openMenu(b, options, current, onPick); } }, cur ? cur[1] : "", h("span", { class: "chevs" }, icon("chevs")));
+    return b;
+  }
+  function kindTile(kind) { var k = KIND[kind] || KIND.doc; return h("div", { class: "tile", style: "background:" + k[1] + "22;color:" + k[1] }, icon(k[0])); }
+  function quarantineTag(x) {
+    if (x.dir !== "in" || !APPISH[x.kind]) return null;
+    var tipText = x.kind === "apk" ? "Android app. Marked as downloaded on this Mac." : "macOS will check it before it runs.";
+    return h("span", { class: "tag tip", "data-tip": tipText }, icon("shield"), "App · quarantined");
+  }
+  function series(seed) {
+    var x = seed * 7919 % 233280, v = .45, out = [];
+    for (var i = 0; i < 40; i++) { x = (x * 9301 + 49297) % 233280; v = Math.max(.1, Math.min(.92, v + (x / 233280 - .5) * .28)); out.push(v); }
+    return out;
+  }
+  function sparkSvg(vals, color) {
+    var w = 136, hh = 30;
+    var pts = vals.map(function (v, i) { return (i * w / (vals.length - 1)).toFixed(1) + " " + (hh - v * hh * .9 - 1).toFixed(1); });
+    var line = "M" + pts.join(" L"), area = line + " L" + w + " " + hh + " L0 " + hh + " Z";
+    return svg('<svg class="spk-s" viewBox="0 0 ' + w + " " + hh + '" preserveAspectRatio="none"><path d="' + area + '" style="fill:' + color + ';opacity:.16"/><path d="' + line + '" style="fill:none;stroke:' + color + ';stroke-width:1.5" vector-effect="non-scaling-stroke"/></svg>');
+  }
+  function spark(title, val, color, seed) { return h("div", { class: "spk" }, h("div", { class: "spk-h" }, h("span", null, title), h("b", { style: "color:" + color }, val)), sparkSvg(series(seed), color)); }
+
+  /* ---------- menu bar panel ---------- */
+  function xferTop(x, extra) {
+    var d = dev(x.device);
+    return h("div", { class: "top" }, icon(x.dir === "out" ? "up" : "down", null, "color:" + (x.dir === "out" ? "var(--blue)" : "var(--green)")),
+      h("span", { class: "grow trunc" }, h("b", { style: "font-weight:500" }, x.name), h("span", { class: "dim" }, (x.dir === "out" ? " to " : " from ") + d.name)), extra);
+  }
+  function progBar(x) { return h("div", { class: "bar" }, h("i", { "data-prog": x.id, style: "transform:scaleX(" + (x.done / x.bytes).toFixed(4) + ")" })); }
+  function shareRows() {
+    var rows = [];
+    S.xfers.forEach(function (x) {
+      var d = dev(x.device);
+      if (x.state === "asking") rows.push(h("div", { class: "p-x" },
+        h("div", { class: "top" }, icon("ask", null, "color:var(--orange)"), h("span", { class: "grow trunc" }, h("b", { style: "font-weight:500" }, d.name), h("span", { class: "dim" }, " wants to send " + itemsLabel(x)))),
+        h("div", { class: "p-line" }, h("span", { class: "grow dim num", style: "font-size:11px;padding-left:22px" }, size(x.bytes)), h("button", { class: "btn sm", k: "pa-decline", onclick: function () { decline(x); } }, "Decline"), h("button", { class: "btn sm def", k: "pa-accept", onclick: function () { accept(x); } }, "Accept"))));
+      if (x.state === "running" || x.state === "paused") rows.push(h("div", { class: "p-x" },
+        xferTop(x, [
+          h("button", { class: "ibtn tip", "data-tip": x.state === "paused" ? "Resume" : "Pause", k: "px-pause", onclick: function () { pauseX(x); } }, icon(x.state === "paused" ? "play" : "pause")),
+          h("button", { class: "ibtn tip", "data-tip": "Cancel", k: "px-cancel", onclick: function () { cancelX(x); } }, icon("xc"))]),
+        progBar(x),
+        h("div", { class: "meta" }, h("span", { "data-pt": x.id }, ofSize(x.done, x.bytes) + " · " + x.route), h("span", { "data-pp": x.id }, x.state === "paused" ? "Paused" : Math.floor(x.done / x.bytes * 100) + "%"))));
+      if (x.state === "waiting") rows.push(h("div", { class: "p-x" },
+        h("div", { class: "top" }, icon("wait", null, "color:var(--orange)"), h("span", { class: "grow" }, "Waiting for " + d.name + ". Open Vitals on the phone."), h("button", { class: "btn sm", k: "pw-cancel", onclick: function () { cancelX(x); } }, "Cancel")),
+        h("div", { class: "dim trunc", style: "font-size:11px;padding-left:22px" }, x.name + " · " + (x.count > 1 ? x.count + " files · " : "") + size(x.bytes))));
+    });
+    var fresh = S.xfers.filter(function (x) { return x.fresh && x.state === "done"; })[0];
+    if (fresh) {
+      var d = dev(fresh.device);
+      rows.push(h("div", { class: "p-line" }, icon("checkc", null, "color:var(--green)"),
+        h("span", { class: "grow", style: "min-width:0" },
+          h("div", { class: "trunc" }, fresh.dir === "in" ? "Got " + (fresh.count > 1 ? fresh.count + " files" : fresh.name) : "Sent " + fresh.name),
+          h("div", { class: "trunc dim num", style: "font-size:11px" }, (fresh.dir === "in" ? "from " : "to ") + d.name + " · " + size(fresh.bytes))),
+        h("button", { class: "lnk", k: "pd-show", onclick: function () { revealInFinder(fresh); } }, "Show in Finder")));
+    }
+    if (S.sentClip) rows.push(h("div", { class: "p-line" }, icon("checkc", null, "color:var(--green)"), h("span", { class: "grow trunc" }, "Sent your clipboard to " + S.sentClip.to)));
+    if (S.phoneClip) rows.push(h("div", { class: "p-line" }, icon("clip", null, "color:var(--dim)"),
+      h("span", { class: "grow trunc" }, h("span", { class: "dim" }, dev(S.phoneClip.device).name + " copied: "), S.phoneClip.text),
+      h("button", { class: "btn sm", k: "pc-copy", onclick: function () { S.macClip = S.phoneClip.text; S.phoneClip.copied = true; renderOverlays(); renderTools(); } }, S.phoneClip.copied ? "Copied" : "Copy")));
+    return rows;
+  }
+  function panelContent() {
+    var rows = shareRows();
+    var to = clipTargets().map(function (d) { return d.name; }).join(" and ") || "your phone";
+    return [
+      h("div", { class: "p-head" }, h("div", null, h("div", { class: "p-chip" }, "Apple M4 Pro"), h("div", { class: "p-therm" }, h("i"), "Nominal")),
+        h("div", { class: "p-temp" }, h("b", null, "48°"), h("small", null, "avg CPU"))),
+      rows.length ? h("div", { class: "p-share", k: "p-share" }, h("div", { class: "p-sec" }, h("span", null, "Share")), rows) : null,
+      h("div", { class: "p-sparks" }, spark("Temp", "52°", "#ff9f0a", 3), spark("CPU", "14%", "#0a84ff", 5), spark("Memory", "21.4G", "#5e5ce6", 8), spark("Network", "↓ 2.1 MB/s", "#63e6e2", 13)),
+      h("div", { class: "p-row" }, icon("memory", null, "width:13px;height:13px;color:var(--dim)"), h("span", { class: "num" }, "21.4 / 48 GB"), h("span", { class: "sp" }), h("i", { style: "width:7px;height:7px;border-radius:50%;background:var(--green)" }), h("span", { class: "dim" }, "Normal")),
+      h("div", { class: "p-hr" }),
+      h("div", { class: "p-row", style: "font-size:13px" }, h("div", { class: "tile", style: "width:24px;height:24px;border-radius:6px;background:#64d2ff24;color:#64d2ff" }, icon("fan")), h("b", { class: "num", style: "font-weight:600" }, "1,804 rpm"), h("span", { class: "sp" }), h("span", { class: "dim", style: "font-size:11px" }, "Automatic")),
+      h("div", { class: "p-hr" }),
+      h("div", { class: "p-act" },
+        h("button", { class: "btn sm", k: "p-open", onclick: function () { S.panel = false; S.vwin = true; front(vwinEl); render(); } }, icon("appout"), "Open Vitals"),
+        h("span", { class: "sp" }),
+        h("button", { class: "btn sm tip", k: "p-clip", "data-tip": "Send clipboard to " + to, onclick: sendClipboard }, icon("clipup"), S.shortcut || "Send clipboard"),
+        h("button", { class: "btn sm tip", "data-tip": "Settings", k: "p-settings", onclick: function () { S.panel = false; S.vwin = true; S.section = "settings"; front(vwinEl); render(); } }, icon("gear")),
+        h("button", { class: "btn sm tip", "data-tip": "Quit Vitals" }, icon("power")))
+    ];
+  }
+
+  /* ---------- picker ---------- */
+  function pickerContent(p) {
+    var ps = paired(), bytes = p.files.reduce(function (a, f) { return a + f.bytes; }, 0);
+    var count = p.files.reduce(function (a, f) { return a + (f.count || 1); }, 0);
+    var label = (p.files.length === 1 ? p.files[0].name : p.files.length + " items") + (count > 1 ? " · " + count + " files" : "");
+    return [
+      h("div", { class: "caret " + (p.anchor === "dock" ? "down" : "up"), style: "left:" + (p.caret || 143) + "px" }),
+      h("div", { class: "pk-t" }, ps.length === 2 ? "Send to " + ps[0].name + " or " + ps[1].name + "?" : "Send to which phone?"),
+      h("div", { class: "pk-sub num" }, label + " · " + size(bytes)),
+      h("div", { class: "pk-list" }, ps.map(function (d) {
+        var on = p.to.indexOf(d.id) >= 0;
+        return h("button", { class: "pk-row" + (on ? " on" : ""), k: "pk-" + d.id, role: "checkbox", "aria-checked": String(on), onclick: function () {
+          if (on) p.to = p.to.filter(function (i) { return i !== d.id; }); else p.to = p.to.concat(d.id);
+          renderOverlays();
+        } }, cbx(on), icon("iphone", null, "width:18px;height:18px;color:" + (d.online ? "var(--green)" : "var(--dim)")),
+          h("span", { class: "grow" }, h("b", null, d.name), h("small", null, d.online ? "Wi-Fi" : "Offline, it will wait")),
+          d.id === S.lastUsed ? h("span", { class: "last" }, "Last used") : null);
+      })),
+      h("div", { class: "pk-foot" }, h("button", { class: "btn", k: "pk-cancel", onclick: function () { S.picker = null; renderOverlays(); } }, "Cancel"),
+        h("button", { class: "btn def", k: "pk-send", disabled: p.to.length ? null : true, onclick: function () { var q = S.picker; S.picker = null; startSend(q.files, q.to, q.origin); } }, p.to.length > 1 ? "Send to both" : "Send"))
+    ];
+  }
+  // anchor: where the popover points (menu bar icon or Dock icon). origin: what opens after Send.
+  function openPicker(files, anchor, origin) {
+    var ps = paired(), last = ps.filter(function (d) { return d.id === S.lastUsed; })[0] || ps[0];
+    S.picker = { files: files, to: [last.id], anchor: anchor, origin: origin };
+    renderOverlays();
+  }
+
+  /* ---------- menus ---------- */
+  function menuNode(items, setSub) {
+    return h("div", { class: "menu", role: "menu" }, items.map(function (it) {
+      if (it.sep) return h("div", { class: "msep" });
+      if (it.head) return h("div", { class: "mhead" }, it.head);
+      var hasSub = !!it.sub;
+      return h("div", { class: "mi" + (it.open ? " open" : "") + (it.dis ? " dis" : ""), k: it.k, role: "menuitem",
+        onmouseenter: setSub ? function () { var want = hasSub ? it.k : null; if (S.ctx && S.ctx.sub !== want) setSub(want); } : null,
+        onclick: function (e) {
+          e.stopPropagation();
+          if (hasSub) { if (setSub) setSub(it.k); return; }
+          if (it.dis) return;
+          S.ctx = null; S.menu = null; renderOverlays();
+          if (it.fn) it.fn();
+        } },
+        it.check ? icon("check", "chk") : null, it.app ? appIcon(it.app) : null, h("span", null, it.label),
+        (hasSub || it.chev) ? icon("chev-r", "chev") : null,
+        hasSub && it.open ? menuNode(it.sub) : null);
+    }));
+  }
+  function ctxMenu(c) {
+    var f = c.file, folder = f.kind === "folder";
+    var quick = [{ label: "Send to Phone", k: "m-send", app: "vitals", fn: function () { sendFromFinder(f); } }]
+      .concat(f.kind === "movie" ? [{ label: "Trim" }] : [], f.kind === "doc" ? [{ label: "Markup" }] : [], [{ sep: 1 }, { label: "Customize…" }]);
+    var services = [{ head: "Files and Folders" }, { label: "Send to Phone with Vitals", k: "m-svc-send", fn: function () { sendFromFinder(f); } }]
+      .concat(folder ? [{ label: "New Terminal at Folder" }] : [], [{ label: "Show in Finder", dis: true }]);
+    var items = [
+      { label: "Open" }, { label: "Open With", chev: 1 }, { sep: 1 }, { label: "Move to Trash" }, { sep: 1 },
+      { label: "Get Info" }, { label: "Rename" }, { label: "Compress “" + f.name + "”" }, { label: "Duplicate" }, { label: "Make Alias" }, { label: "Quick Look" },
+      { sep: 1 }, { label: "Copy" }, { label: "Share…" }, { sep: 1 },
+      { label: "Quick Actions", k: "m-quick", sub: quick, open: c.sub === "m-quick" },
+      { label: "Services", k: "m-services", sub: services, open: c.sub === "m-services" }
+    ];
+    return menuNode(items, function (k) { S.ctx.sub = k; renderOverlays(); });
+  }
+  function openMenu(anchor, options, current, onPick) {
+    var r = rectIn(anchor);
+    S.menu = { x: r.left, y: r.top + r.height + 3, items: options.map(function (o) { return { label: o[1], check: o[0] === current, k: "opt-" + String(o[0]).replace(/\W/g, ""), fn: function () { onPick(o[0]); render(); } }; }) };
+    renderOverlays();
+  }
+
+  /* ---------- finder ---------- */
+  function finderItems(dir) { return dir === "Downloads" ? [VITALS_DIR, FILES.brand, FILES.trip, FILES.apk, FILES.invoice].concat(S.fs.Downloads) : (S.fs[dir] || []); }
+  function fIcon(it) { var k = KIND[it.kind] || KIND.doc; return icon(k[0], "ficon", "color:" + k[1]); }
+  function fRow(it) {
+    var sel = S.finderSel.indexOf(it.name) >= 0;
+    var row = h("div", { class: "f-row" + (sel ? " sel" : ""), k: "f-" + (it.key || it.name.replace(/\W/g, "")),
+      onpointerdown: function (e) {
+        if (e.button !== 0) return;
+        S.finderSel = [it.name];
+        finderEl.querySelectorAll(".f-row").forEach(function (r) { r.classList.toggle("sel", r === row); });
+        drag = { file: it, x0: e.clientX, y0: e.clientY, on: false };
+      },
+      oncontextmenu: function (e) {
+        e.preventDefault(); e.stopPropagation();
+        S.finderSel = [it.name];
+        finderEl.querySelectorAll(".f-row").forEach(function (r) { r.classList.toggle("sel", r === row); });
+        var p = toStage(e.clientX, e.clientY);
+        S.ctx = { file: it, x: p[0], y: p[1], sub: null }; S.menu = null; S.picker = null; S.panel = false;
+        front(finderEl); renderOverlays();
+      },
+      ondblclick: function () { if (it.dir) { S.finderDir = it.dir; S.finderSel = []; render(); } } },
+      h("span", { class: "nm" }, fIcon(it), h("span", { class: "trunc" }, it.name)),
+      h("span", { class: "s num" }, it.kind === "folder" ? "--" : size(it.bytes)), h("span", { class: "k" }, it.kindLabel || ""));
+    return row;
+  }
+  function finderBody() {
+    var dir = S.finderDir, items = finderItems(dir);
+    var side = [["Recents", "clock"], ["Applications", "apps"], ["Desktop", "desk"], ["Documents", "doc"], ["Downloads", "dl"]];
+    return [
+      h("div", { class: "f-side" }, h("div", { class: "lights" }, h("i"), h("i"), h("i")), h("div", { class: "f-sec" }, "Favorites"),
+        side.map(function (s) {
+          var on = dir === s[0] || (s[0] === "Downloads" && dir === "Vitals");
+          return h("button", { class: "f-it" + (on ? " on" : ""), onclick: function () { if (S.fs[s[0]] || s[0] === "Downloads") { S.finderDir = s[0]; S.finderSel = []; render(); } } }, icon(s[1]), s[0]);
+        }), h("div", { class: "f-sec" }, "Locations"), h("div", { class: "f-it" }, icon("disk"), "Macintosh HD")),
+      h("div", { class: "f-main" },
+        h("div", { class: "f-bar" }, h("button", { class: "ibtn", onclick: function () { if (dir === "Vitals") { S.finderDir = "Downloads"; S.finderSel = []; render(); } } }, icon("chev-l")), h("button", { class: "ibtn" }, icon("chev-r")),
+          h("b", null, dir), h("span", { class: "sp" }), h("span", { class: "ibtn" }, icon("search"))),
+        h("div", { class: "f-head" }, h("span", null, "Name"), h("span", { style: "text-align:right" }, "Size"), h("span", null, "Kind")),
+        h("div", { class: "f-list" }, items.length ? items.map(fRow) : h("div", { class: "f-empty" }, "Empty")),
+        h("div", { class: "f-status" }, plural(items.length, "item")))
+    ];
+  }
+
+  /* ---------- vitals window ---------- */
+  var NAV = [["overview", "Overview", "grid"], "MONITOR", ["cpu", "CPU", "cpu"], ["gpu", "GPU", "cube"], ["memory", "Memory", "memory"], ["battery", "Battery", "battery"], ["network", "Network", "net"], ["temps", "Temps & Fans", "thermo"], ["history", "History", "clock"],
+    "MAINTAIN", ["disk", "Disk Health", "disk"], ["cleanup", "Cleanup", "sparkle"], ["apps", "Applications", "apps"], ["remote", "Remote", "radio"]];
+  function navItem(n) { return h("button", { class: "v-nav" + (S.section === n[0] ? " on" : ""), k: "nav-" + n[0], onclick: function () { S.section = n[0]; render(); } }, icon(n[2]), n[1]); }
+  function vbody() {
+    return [
+      h("aside", { class: "v-side" }, h("div", { class: "lights" }, h("i", { onclick: function () { S.vwin = false; render(); } }), h("i"), h("i")),
+        NAV.map(function (n) { return typeof n === "string" ? h("div", { class: "v-sec" }, n) : navItem(n); }),
+        h("span", { class: "sp" }), navItem(["settings", "Settings", "gear"])),
+      h("main", { class: "v-main" }, page())
+    ];
+  }
+  function page() {
+    if (S.section === "remote") return remotePage();
+    if (S.section === "settings") return settingsPage();
+    var label = NAV.filter(function (n) { return n[0] === S.section; })[0];
+    return [h("div", { class: "v-title" }, label ? label[1] : ""), h("div", { class: "empty" }, "Unchanged")];
+  }
+  var TABS = [["devices", "Devices"], ["sharing", "Sharing"], ["activity", "Activity"], ["pressure", "Pressure Guard"]];
+  function remotePage() {
+    var body = S.rtab === "devices" ? devicesTab() : S.rtab === "sharing" ? sharingTab() : [h("div", { class: "empty" }, "Unchanged")];
+    return [
+      h("div", { class: "segbar" }, h("div", { class: "seg", role: "tablist" }, TABS.map(function (t) {
+        return h("button", { class: S.rtab === t[0] ? "on" : "", role: "tab", k: "seg-" + t[0], onclick: function () { S.rtab = t[0]; render(); } }, t[1]);
+      }))),
+      h("div", { class: "scroll" }, h("div", { class: "stack" }, body))
+    ];
+  }
+  function devicesTab() {
+    return [
+      card("Remote access", "radio", "#30d158", sw(true, "sw-remote", function () {}, "Remote access"),
+        h("div", null, h("div", { class: "t", style: "font-weight:500" }, "Serving on your tailnet"), h("div", { class: "callout" }, "https://mac-studio.tail3f2a.ts.net"))),
+      card("Devices", "iphone", "#0a84ff", null,
+        h("div", null, visibleDevices().map(function (d) {
+          return h("div", { class: "drow" }, icon(d.kind === "web" ? "globe" : "iphone", null, "color:" + (d.online ? "var(--green)" : "var(--dim)")),
+            h("div", { class: "grow" }, h("div", { class: "t" }, d.name),
+              h("div", { class: "callout" }, (d.kind === "web" ? "Browser" : d.name) + " · app " + d.app + " · " + (d.online ? "connected" : "last seen 1 min ago")),
+              h("div", { class: "scopes" },
+                chk("Control", d.scopes.operate, function (v) { d.scopes.operate = v; render(); }),
+                chk("Shut down, kill, force quit", d.scopes.destructive, function (v) { d.scopes.destructive = v; render(); }),
+                chk("Read clipboard", d.scopes.clipboard, function (v) { d.scopes.clipboard = v; render(); }),
+                chk("Files", d.files, function (v) { d.files = v; render(); }, "files-" + d.id))),
+            h("button", { class: "btn" }, "Revoke"));
+        })),
+        h("div", null, h("button", { class: "btn" }, "Pair new device"))),
+      card("Keep awake", "cup", "#ff9f0a", h("button", { class: "btn" }, "Keep awake"), h("div", { class: "t" }, "Normal sleep"))
+    ];
+  }
+  function settingRow(label, caption, control) {
+    return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "t" }, label), caption ? h("div", { class: "c" }, caption) : null), control);
+  }
+  function sharingTab() {
+    return [
+      card("Files", "tray", "#0a84ff", h("button", { class: "btn", k: "send-files", onclick: openSendSheet }, "Send Files…"),
+        settingRow("Receive files into", null, h("span", { style: "display:flex;align-items:center;gap:8px" },
+          h("span", { class: "path", k: "files-dir" }, icon("folder"), S.saveDir),
+          h("button", { class: "btn", k: "files-change", onclick: openFolderSheet }, "Change…"))),
+        settingRow("Start without asking from my phones", "Phones with Files on. Bigger than the largest drop still asks.", sw(S.autoPhones, "sw-auto", function (v) { S.autoPhones = v; render(); }, "Start without asking from my phones")),
+        settingRow("Ask before receiving from the web", "Browser sessions always ask when this is on.", sw(S.askWeb, "sw-web", function (v) { S.askWeb = v; render(); }, "Ask before receiving from the web")),
+        settingRow("Largest drop", null, popup("Largest drop", "pop-largest", [[1, "1 GB"], [10, "10 GB"], [50, "50 GB"], [Infinity, "No limit"]], S.largest, function (v) { S.largest = v; })),
+        h("div", { class: "callout" }, "Or drop on the menu bar or Dock icon, or use Quick Actions › Send to Phone in Finder.")),
+      card("Recent", "clock", "#bf5af2", null, h("div", { k: "recent" }, S.xfers.map(recentRow))),
+      clipboardCard()
+    ];
+  }
+  function recentRow(x) {
+    var d = dev(x.device), st, acts = [];
+    if (x.state === "running") { st = h("span", { class: "num", "data-pp": x.id }, Math.floor(x.done / x.bytes * 100) + "%"); acts = [h("button", { class: "ibtn tip", "data-tip": "Pause", onclick: function () { pauseX(x); } }, icon("pause")), h("button", { class: "ibtn tip", "data-tip": "Cancel", onclick: function () { cancelX(x); } }, icon("xc"))]; }
+    else if (x.state === "paused") { st = h("span", { class: "dim" }, "Paused"); acts = [h("button", { class: "ibtn tip", "data-tip": "Resume", onclick: function () { pauseX(x); } }, icon("play")), h("button", { class: "ibtn tip", "data-tip": "Cancel", onclick: function () { cancelX(x); } }, icon("xc"))]; }
+    else if (x.state === "waiting") { st = h("span", { class: "warn" }, "Waiting"); acts = [h("button", { class: "btn sm", onclick: function () { cancelX(x); } }, "Cancel")]; }
+    else if (x.state === "asking") { st = h("span", { class: "warn" }, "Asking"); acts = [h("button", { class: "btn sm", onclick: function () { decline(x); } }, "Decline"), h("button", { class: "btn sm def", onclick: function () { accept(x); } }, "Accept")]; }
+    else if (x.state === "done") { st = h("span", { class: "ok" }, "Done"); acts = [h("button", { class: "ibtn tip", "data-tip": "Show in Finder", k: "rr-show", onclick: function () { revealInFinder(x); } }, icon("mag"))]; }
+    else if (x.state === "failed") { st = h("span", { class: "bad" }, "Failed"); acts = [h("button", { class: "btn sm", k: "rr-retry", onclick: function () { retry(x); } }, "Retry")]; }
+    else if (x.state === "cancelled") { st = h("span", { class: "dim" }, "Cancelled"); acts = [h("button", { class: "btn sm", onclick: function () { retry(x); } }, "Retry")]; }
+    else { st = h("span", { class: "dim" }, "Declined"); }
+    var sub = [x.count > 1 ? x.count + " files" : null, size(x.bytes), (x.dir === "out" ? "to " : "from ") + d.name, x.at].filter(Boolean).join(" · ");
+    if (x.state === "failed") sub = "Stopped at " + ofSize(x.done, x.bytes) + " · " + x.reason + " · " + x.at;
+    if (x.state === "waiting") sub = "Open Vitals on " + d.name + " · " + size(x.bytes);
+    if (x.state === "running" || x.state === "paused") sub = null;
+    return h("div", { class: "rr" }, kindTile(x.kind),
+      h("div", { style: "min-width:0" },
+        h("div", { class: "nm" }, icon(x.dir === "out" ? "up" : "down", null, "width:12px;height:12px;vertical-align:-1px;margin-right:5px;color:" + (x.dir === "out" ? "var(--blue)" : "var(--green)")), x.name, quarantineTag(x)),
+        sub ? h("div", { class: "sub num" }, sub) : null,
+        (x.state === "running" || x.state === "paused") ? [progBar(x), h("div", { class: "sub num", "data-pt": x.id }, ofSize(x.done, x.bytes) + " · " + x.route + " · " + (x.dir === "out" ? "to " : "from ") + d.name)] : null),
+      h("div", { class: "st" }, st, acts));
+  }
+  function clipboardCard() {
+    return card("Clipboard", "clip", "#ff9f0a", null,
+      settingRow("Clipboard history for phones", "Phones with Read clipboard see what you copy", sw(S.clipHistory, "sw-clip", function (v) { S.clipHistory = v; render(); }, "Clipboard history for phones")),
+      settingRow("Keep history for", null, popup("Keep history for", "pop-keep", [[1, "1 day"], [7, "7 days"], [30, "30 days"]], S.keepDays, function (v) { S.keepDays = v; })),
+      h("div", { class: "callout" }, "Passwords are always skipped. So are 1Password, Bitwarden, Passwords and Keychain Access."),
+      settingRow("Put phone copies on this Mac's clipboard", "On: paste with ⌘V right away. Off: they wait in the menu bar until you click Copy.", sw(S.usePhoneCopies, "sw-usephone", function (v) { S.usePhoneCopies = v; render(); }, "Put phone copies on this Mac's clipboard")),
+      settingRow("Send clipboard to phone", null, h("button", { class: "keycap", k: "clip-shortcut", onclick: function () { S.section = "settings"; render(); } }, S.shortcut || "None")),
+      h("div", { class: "row" }, h("span", { class: "grow num", style: "font-size:12px" }, "Using 212 MB for 148 clips · 6 pinned"), h("button", { class: "btn" }, "Clear history")));
+  }
+  function clipTargets() {
+    var ps = paired();
+    if (S.shortcutTo === "all") return ps;
+    if (S.shortcutTo === "last") { var last = ps.filter(function (d) { return d.id === S.lastUsed; })[0] || ps[0]; return last ? [last] : []; }
+    return ps.filter(function (d) { return d.id === S.shortcutTo; });
+  }
+  function settingsPage() {
+    var opts = [["last", "Last used phone"]].concat(paired().map(function (d) { return [d.id, d.name]; }), [["all", "All phones"]]);
+    return [h("div", { class: "v-title" }, "Settings"), h("div", { class: "scroll" }, h("div", { class: "stack" },
+      card("Shortcuts", "kbd", "#5e5ce6", null,
+        settingRow("Send clipboard to phone", "Works from any app", h("button", { class: "rec" + (S.recording ? " on" : ""), k: "sc-rec", onclick: function () { S.recording = !S.recording; render(); } }, S.recording ? "Type a shortcut" : (S.shortcut || "None"))),
+        settingRow("Sends to", null, popup("Sends to", "pop-to", opts, S.shortcutTo, function (v) { S.shortcutTo = v; }))),
+      h("div", { class: "empty", style: "padding:16px 0" }, "Other settings unchanged")))];
+  }
+
+  /* ---------- sheets ---------- */
+  function sheetContent() {
+    var sh = S.sheet;
+    if (sh.type === "folder") {
+      var opts = Object.keys(DIRS);
+      return [h("div", { class: "sh-t" }, "Receive files into"),
+        h("div", null, opts.map(function (o) { return h("button", { class: "fo-row" + (sh.pick === o ? " on" : ""), style: "width:100%", k: "fo-" + DIRS[o], onclick: function () { sh.pick = o; render(); } }, icon("folder"), o); })),
+        h("div", { class: "sh-foot" }, h("span", { class: "sp" }), h("button", { class: "btn", onclick: closeSheet }, "Cancel"),
+          h("button", { class: "btn def", k: "fo-choose", onclick: function () { S.saveDir = sh.pick; closeSheet(); } }, "Choose"))];
+    }
+    var ps = paired(), bytes = sh.files.reduce(function (a, f) { return a + f.bytes; }, 0);
+    return [
+      h("div", { class: "sh-t" }, "Send Files"),
+      h("div", { class: "dropzone" + (sh.files.length ? " has" : ""), k: "sheet-drop" },
+        sh.files.length ? sh.files.map(function (f) {
+          return h("div", { class: "dz-row" }, fIcon(f), h("span", { class: "grow trunc" }, f.name), h("span", { class: "dim num" }, size(f.bytes)),
+            h("button", { class: "ibtn", onclick: function () { sh.files = sh.files.filter(function (g) { return g !== f; }); render(); } }, icon("xmark")));
+        }) : [icon("trayup"), h("div", null, "Drop files or folders")],
+        h("div", { style: sh.files.length ? "margin-top:4px" : "" }, h("button", { class: "btn sm", k: "sheet-choose", onclick: function () {
+          var next = [FILES.invoice, FILES.brand, FILES.trip, FILES.apk].filter(function (f) { return sh.files.indexOf(f) < 0; })[0];
+          if (next) { sh.files.push(next); render(); }
+        } }, "Choose…"))),
+      h("div", { class: "sh-lbl" }, "To"),
+      h("div", { class: "pk-list" }, ps.map(function (d) {
+        var on = sh.to.indexOf(d.id) >= 0;
+        return h("button", { class: "pk-row" + (on ? " on" : ""), k: "st-" + d.id, onclick: function () { sh.to = on ? sh.to.filter(function (i) { return i !== d.id; }) : sh.to.concat(d.id); render(); } },
+          cbx(on), icon("iphone", null, "width:18px;height:18px;color:" + (d.online ? "var(--green)" : "var(--dim)")), h("span", { class: "grow" }, h("b", null, d.name), h("small", null, d.online ? "Wi-Fi" : "Offline, it will wait")));
+      })),
+      h("div", { class: "sh-foot" }, h("span", { class: "grow dim num", style: "font-size:12px" }, sh.files.length ? plural(sh.files.length, "item") + " · " + size(bytes) : "Nothing added"),
+        h("button", { class: "btn", onclick: closeSheet }, "Cancel"),
+        h("button", { class: "btn def", k: "sheet-send", disabled: sh.files.length && sh.to.length ? null : true, onclick: function () { var q = S.sheet; S.sheet = null; startSend(q.files, q.to, "sheet"); } }, "Send"))
+    ];
+  }
+  function openSendSheet() { S.sheet = { type: "send", files: [], to: [S.lastUsed] }; render(); }
+  function openFolderSheet() { S.sheet = { type: "folder", pick: S.saveDir }; render(); }
+  function closeSheet() { S.sheet = null; render(); }
+
+  /* ---------- notifications ---------- */
+  var NID = 0, ntimers = [];
+  function notifNode(n) {
+    return h("div", { class: "nt", "data-nid": n.id },
+      h("div", { class: "nb" }, appIcon("vitals", "nicon"), h("div", { class: "ntext" }, h("div", { class: "nrow" }, h("b", null, n.title), h("span", { class: "ntime" }, "now")), n.body ? h("div", { class: "nbody" }, n.body) : null)),
+      n.actions ? h("div", { class: "nact" }, n.actions.map(function (a) { return h("button", { k: a.k, onclick: function () { dismiss(n.id); a.fn(); } }, a.label); })) : null);
+  }
+  // No banner while the panel is open: the panel already shows the same line.
+  function notify(n) {
+    if (S.panel) return;
+    n.id = "n" + (++NID);
+    var node = notifNode(n);
+    notifEl.prepend(node);
+    void node.offsetWidth; node.classList.add("in");
+    var all = notifEl.querySelectorAll(".nt"); if (all.length > 3) all[all.length - 1].remove();
+    if (!n.sticky) ntimers.push(setTimeout(function () { dismiss(n.id); }, 6500));
+    if (n.xid) node.dataset.xid = n.xid;
+  }
+  function dismiss(id) {
+    var node = notifEl.querySelector('[data-nid="' + id + '"]'); if (!node) return;
+    node.classList.remove("in"); ntimers.push(setTimeout(function () { node.remove(); }, 320));
+  }
+  function dismissFor(xid) { notifEl.querySelectorAll('[data-xid="' + xid + '"]').forEach(function (n) { dismiss(n.dataset.nid); }); }
+
+  /* ---------- transfers ---------- */
+  var tickId = null;
+  function ensureTick() { if (tickId || !S.xfers.some(function (x) { return x.state === "running"; })) return; tickId = setInterval(tick, 200); }
+  function tick() {
+    var changed = false;
+    S.xfers.forEach(function (x) {
+      if (x.state !== "running") return;
+      x.done = Math.min(x.bytes, x.done + x.bytes * 200 / x.ms);
+      if (x.done >= x.bytes) { x.state = "done"; x.at = CLOCK; finish(x); changed = true; }
+    });
+    if (!S.xfers.some(function (x) { return x.state === "running"; })) { clearInterval(tickId); tickId = null; }
+    if (changed) render(); else updateProgress();
+  }
+  function finish(x) {
+    S.xfers.forEach(function (y) { y.fresh = false; }); x.fresh = true;
+    var d = dev(x.device);
+    if (x.dir === "in") {
+      var dir = DIRS[x.saveDir] || "Vitals";
+      x.items.forEach(function (it) { S.fs[dir].push(Object.assign({ kindLabel: it.kind === "photo" ? "HEIF image" : it.kind === "movie" ? "QuickTime movie" : "Document" }, it)); });
+      notify({ title: "Got " + (x.count > 1 ? x.count + " files" : x.name) + " from " + d.name, body: "In " + x.saveDir.replace("~/", "").replace("/", " › ") + " · " + size(x.bytes),
+        actions: [{ label: "Show in Finder", k: "n-show", fn: function () { revealInFinder(x); } }] });
+    } else {
+      notify({ title: "Sent " + x.name + " to " + d.name, body: size(x.bytes) + " over " + x.route });
+    }
+  }
+  function startSend(files, ids, origin) {
+    var bytes = files.reduce(function (a, f) { return a + f.bytes; }, 0), count = files.reduce(function (a, f) { return a + (f.count || 1); }, 0);
+    var name = files.length === 1 ? files[0].name : files.length + " items";
+    if (origin === "mb") S.panel = true;
+    if (origin === "dock") { S.vwin = true; S.section = "remote"; S.rtab = "sharing"; front(vwinEl); }
+    ids.forEach(function (id) {
+      var d = dev(id);
+      var x = mk({ dir: "out", name: name, bytes: bytes, count: count, device: id, kind: files.length === 1 ? files[0].kind : "files", src: files.map(function (f) { return f.name; }), state: d.online ? "running" : "waiting" });
+      S.xfers.unshift(x);
+      if (!d.online) notify({ title: "Waiting for " + d.name, body: "Open Vitals on the phone. " + name + " sends when it connects.", sticky: true, xid: x.id, actions: [{ label: "Cancel", k: "n-cancel", fn: function () { cancelX(x); } }] });
+    });
+    if (ids.length === 1) S.lastUsed = ids[0];
+    ensureTick(); render();
+  }
+  function sendFromFinder(f) {
+    var ps = paired();
+    if (!ps.length) { notify({ title: "No phone can get files", body: "Turn on Files for a phone in Remote › Devices." }); return; }
+    if (ps.length > 1) openPicker([f], "mb", "finder"); else startSend([f], [ps[0].id], "finder");
+  }
+  function incoming(devId, name, items, label) {
+    var d = dev(devId), bytes = items.reduce(function (a, i) { return a + i.bytes; }, 0);
+    var ask = d.kind === "web" ? S.askWeb : (!S.autoPhones || bytes > S.largest * GB);
+    var x = mk({ dir: "in", name: name, label: label, items: items, bytes: bytes, count: items.length, device: devId, kind: items.length === 1 ? items[0].kind : "files", state: ask ? "asking" : "running", saveDir: S.saveDir });
+    S.xfers.unshift(x);
+    if (ask) notify({ title: d.name + " wants to send " + (items.length === 1 ? items[0].name : items.length + " files") + " (" + size(bytes) + ")", body: items.map(function (i) { return i.name; }).join(", "), sticky: true, xid: x.id,
+      actions: [{ label: "Accept", k: "n-accept", fn: function () { accept(x); } }, { label: "Decline", k: "n-decline", fn: function () { decline(x); } }] });
+    ensureTick(); render();
+  }
+  function accept(x) { x.state = "running"; x.saveDir = S.saveDir; dismissFor(x.id); ensureTick(); render(); }
+  function decline(x) { x.state = "declined"; dismissFor(x.id); render(); }
+  function cancelX(x) { x.state = "cancelled"; dismissFor(x.id); render(); }
+  function pauseX(x) { x.state = x.state === "paused" ? "running" : "paused"; ensureTick(); render(); }
+  function retry(x) {
+    var d = dev(x.device);
+    x.state = d.online ? "running" : "waiting"; x.at = CLOCK;
+    if (!d.online) notify({ title: "Waiting for " + d.name, body: "Open Vitals on the phone. " + x.name + " sends when it connects.", sticky: true, xid: x.id, actions: [{ label: "Cancel", k: "n-cancel", fn: function () { cancelX(x); } }] });
+    ensureTick(); render();
+  }
+  function setOnline(id, on) {
+    var d = dev(id); d.online = on;
+    if (on) S.xfers.forEach(function (x) { if (x.device === id && x.state === "waiting") { x.state = "running"; dismissFor(x.id); } });
+    ensureTick(); render(); renderTools();
+  }
+  function revealInFinder(x) {
+    S.panel = false;
+    if (x.dir === "in") { S.finderDir = DIRS[x.saveDir] || "Vitals"; S.finderSel = x.items.map(function (i) { return i.name; }); }
+    else { S.finderDir = "Downloads"; S.finderSel = x.src || []; }
+    front(finderEl); render();
+  }
+
+  /* ---------- clipboard ---------- */
+  function sendClipboard() {
+    var to = clipTargets();
+    showHud(S.shortcut || "⌃⌥⌘V", "Send clipboard to phone");
+    if (!to.length) return;
+    var names = to.map(function (d) { return d.name; }).join(" and ");
+    var off = to.filter(function (d) { return !d.online; });
+    S.sentClip = { to: names, text: S.macClip };
+    if (off.length) notify({ title: off[0].name + " is offline", body: "It gets your clipboard when Vitals opens on the phone." });
+    else notify({ title: "Sent your clipboard to " + names, body: "“" + S.macClip + "”" });
+    renderOverlays();
+  }
+  var hudTimer = null;
+  function showHud(keys, label) {
+    $(".keys", hud).textContent = keys; $("small", hud).textContent = label;
+    hud.classList.add("on"); clearTimeout(hudTimer); hudTimer = setTimeout(function () { hud.classList.remove("on"); }, 1300);
+  }
+  function combo(e) {
+    var k = e.code && e.code.indexOf("Key") === 0 ? e.code.slice(3) : e.code && e.code.indexOf("Digit") === 0 ? e.code.slice(5) : e.key.length === 1 ? e.key.toUpperCase() : "";
+    return (e.ctrlKey ? "⌃" : "") + (e.altKey ? "⌥" : "") + (e.shiftKey ? "⇧" : "") + (e.metaKey ? "⌘" : "") + k;
+  }
+  document.addEventListener("keydown", function (e) {
+    if (S.recording) {
+      e.preventDefault();
+      if (e.key === "Escape") { S.recording = false; render(); return; }
+      if (e.key === "Backspace") { S.shortcut = ""; S.recording = false; render(); return; }
+      var c = combo(e);
+      if (/[⌃⌥⌘]/.test(c) && /[A-Z0-9]$/.test(c)) { S.shortcut = c; S.recording = false; render(); }
+      return;
+    }
+    if (e.key === "Escape") { S.ctx = null; S.menu = null; S.picker = null; S.panel = false; if (S.sheet) S.sheet = null; render(); return; }
+    if (S.shortcut && combo(e) === S.shortcut) { e.preventDefault(); sendClipboard(); }
+  });
+
+  /* ---------- drag and drop ---------- */
+  var drag = null;
+  function targets() {
+    var t = [["mb", mbIcon, 6], ["dock", $('[data-k="dock-vitals"]'), 4]];
+    if (S.sheet && S.sheet.type === "send") t.push(["sheet", vwinEl.querySelector('[data-k="sheet-drop"]'), 0]);
+    return t;
+  }
+  function hit(x, y) {
+    var found = null;
+    targets().forEach(function (t) {
+      if (!t[1]) return;
+      var r = t[1].getBoundingClientRect(), p = t[2] * scale;
+      var on = x >= r.left - p && x <= r.right + p && y >= r.top - p && y <= r.bottom + p;
+      t[1].classList.toggle("hot", on);
+      if (on) found = t;
+    });
+    return found;
+  }
+  window.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    if (!drag.on) {
+      if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+      drag.on = true; S.panel = false; S.ctx = null; S.picker = null; S.menu = null; renderOverlays();
+      ghost.replaceChildren(fIcon(drag.file), h("span", null, drag.file.name), h("span", { class: "plus" }, icon("plus")));
+      ghost.classList.add("on");
+    }
+    var p = toStage(e.clientX, e.clientY);
+    ghost.style.transform = "translate(" + (p[0] + 8) + "px," + (p[1] + 6) + "px)";
+    ghost.classList.toggle("over", !!hit(e.clientX, e.clientY));
+  });
+  window.addEventListener("pointerup", function (e) {
+    if (!drag) return;
+    var d = drag; drag = null;
+    if (!d.on) return;
+    var t = hit(e.clientX, e.clientY);
+    ghost.classList.remove("on", "over");
+    targets().forEach(function (x) { if (x[1]) x[1].classList.remove("hot"); });
+    if (t) dropOn(t[0], d.file);
+  });
+  function dropOn(where, file) {
+    if (where === "sheet") { if (S.sheet.files.indexOf(file) < 0) S.sheet.files.push(file); render(); return; }
+    var dk = $('[data-k="dock-vitals"]').parentNode;
+    if (where === "dock") { dk.classList.remove("bounce"); void dk.offsetWidth; dk.classList.add("bounce"); }
+    var ps = paired();
+    if (!ps.length) { notify({ title: "No phone can get files", body: "Turn on Files for a phone in Remote › Devices." }); return; }
+    if (ps.length > 1) openPicker([file], where, where); else startSend([file], [ps[0].id], where);
+  }
+
+  /* ---------- transient close on outside press ---------- */
+  stage.addEventListener("pointerdown", function (e) {
+    var t = e.target, changed = false;
+    if (S.menu && !t.closest("#menu")) { S.menu = null; changed = true; }
+    if (S.ctx && !t.closest("#ctx")) { S.ctx = null; changed = true; }
+    if (S.picker && !t.closest("#picker")) { S.picker = null; changed = true; }
+    if (S.panel && !t.closest("#panel") && !t.closest("#mbIcon")) { S.panel = false; changed = true; }
+    if (changed) renderOverlays();
+    var win = t.closest(".win"); if (win && win.style.zIndex !== String(Z)) front(win);
+  }, true);
+  stage.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  mbIcon.addEventListener("click", function () { S.panel = !S.panel; S.ctx = null; renderOverlays(); });
+
+  /* ---------- render ---------- */
+  var lastView = "";
+  function renderDock() {
+    if (dockEl.childNodes.length) return;
+    var apps = [["finder", "Finder"], ["safari", "Safari"], ["msgs", "Messages"], ["notes", "Notes"], ["vitals", "Vitals"]];
+    dockEl.append.apply(dockEl, apps.map(function (a) {
+      var ic = appIcon(a[0]);
+      if (a[0] === "vitals") { ic.dataset.k = "dock-vitals"; ic.append(h("div", { class: "dprog", id: "dprog" }, h("i"))); }
+      return h("div", { class: "dk tip", "data-tip": a[1], onclick: a[0] === "vitals" ? function () { S.vwin = true; front(vwinEl); render(); } : a[0] === "finder" ? function () { front(finderEl); } : null }, ic, (a[0] === "finder" || a[0] === "vitals") ? h("i", { class: "dot" }) : null);
+    }).concat([h("div", { class: "dsep" }), h("div", { class: "dk" }, appIcon("dl")), h("div", { class: "dk" }, appIcon("trash"))]));
+  }
+  function renderOverlays() {
+    panelEl.classList.toggle("open", S.panel);
+    mbIcon.classList.toggle("on", S.panel);
+    if (S.panel) {
+      // Opening the panel clears banners: it shows the same things.
+      notifEl.querySelectorAll(".nt.in").forEach(function (n) { dismiss(n.dataset.nid); });
+      panelEl.replaceChildren.apply(panelEl, panelContent().filter(Boolean));
+      var r = rectIn(mbIcon);
+      panelEl.style.left = Math.max(8, Math.min(r.left - 10, 1360 - 330 - 8)) + "px";
+    }
+    ctxEl.style.display = S.ctx ? "block" : "none";
+    if (S.ctx) { ctxEl.replaceChildren(ctxMenu(S.ctx)); ctxEl.style.left = Math.min(S.ctx.x, 1360 - 470) + "px"; ctxEl.style.top = Math.min(S.ctx.y, 840 - ctxEl.offsetHeight) + "px"; }
+    menuEl.style.display = S.menu ? "block" : "none";
+    if (S.menu) { menuEl.replaceChildren(menuNode(S.menu.items)); menuEl.style.left = S.menu.x + "px"; menuEl.style.top = S.menu.y + "px"; }
+    pickerEl.classList.toggle("open", !!S.picker);
+    if (S.picker) {
+      var anchor = S.picker.anchor === "dock" ? $('[data-k="dock-vitals"]') : mbIcon, ar = rectIn(anchor);
+      var cx = ar.left + ar.width / 2, left = Math.max(8, Math.min(cx - 150, 1360 - 308));
+      S.picker.caret = cx - left - 7;
+      pickerEl.replaceChildren(h("div", { class: "picker" }, pickerContent(S.picker)));
+      pickerEl.style.left = left + "px";
+      pickerEl.style.top = S.picker.anchor === "dock" ? (ar.top - pickerEl.offsetHeight - 14) + "px" : (ar.top + ar.height + 10) + "px";
+      pickerEl.style.transformOrigin = (cx - left) + "px " + (S.picker.anchor === "dock" ? "100%" : "0");
+    }
+    updateProgress();
+  }
+  function render() {
+    $(".fbody", finderEl).replaceChildren.apply($(".fbody", finderEl), finderBody());
+    vwinEl.style.display = S.vwin ? "" : "none";
+    var view = S.section + "/" + S.rtab, sc = vwinEl.querySelector(".scroll"), top = sc ? sc.scrollTop : 0;
+    $(".vbody", vwinEl).replaceChildren.apply($(".vbody", vwinEl), vbody());
+    var sc2 = vwinEl.querySelector(".scroll"); if (sc2 && view === lastView) sc2.scrollTop = top;
+    lastView = view;
+    var wrapS = $(".sheetwrap", vwinEl);
+    wrapS.classList.toggle("open", !!S.sheet);
+    if (S.sheet) $(".sheet", wrapS).replaceChildren.apply($(".sheet", wrapS), sheetContent());
+    renderDock();
+    renderOverlays();
+  }
+  function updateProgress() {
+    var act = S.xfers.filter(function (x) { return x.state === "running" || x.state === "paused"; });
+    act.forEach(function (x) {
+      var p = x.done / x.bytes;
+      stage.querySelectorAll('[data-prog="' + x.id + '"]').forEach(function (e) { e.style.transform = "scaleX(" + p.toFixed(4) + ")"; });
+      stage.querySelectorAll('[data-pt="' + x.id + '"]').forEach(function (e) { var full = e.classList.contains("sub"); e.textContent = ofSize(x.done, x.bytes) + " · " + x.route + (full ? " · " + (x.dir === "out" ? "to " : "from ") + dev(x.device).name : ""); });
+      stage.querySelectorAll('[data-pp="' + x.id + '"]').forEach(function (e) { e.textContent = x.state === "paused" ? "Paused" : Math.floor(p * 100) + "%"; });
+    });
+    var tot = act.reduce(function (a, x) { return a + x.bytes; }, 0), dn = act.reduce(function (a, x) { return a + x.done; }, 0);
+    mbPct.style.display = act.length ? "" : "none";
+    mbPct.textContent = act.length ? Math.floor(dn / tot * 100) + "%" : "";
+    var dp = $("#dprog");
+    if (dp) { dp.classList.toggle("on", act.length > 0); dp.firstChild.style.transform = "scaleX(" + (tot ? dn / tot : 0).toFixed(4) + ")"; }
+  }
+
+  /* ---------- phone side (simulated) ---------- */
+  var PHOTOS = [{ name: "IMG_2041.HEIC", bytes: 2.6 * MB, kind: "photo" }, { name: "IMG_2042.HEIC", bytes: 2.7 * MB, kind: "photo" }, { name: "IMG_2043.HEIC", bytes: 2.6 * MB, kind: "photo" }];
+  function phoneSendsPhotos() { incoming("pixel", "IMG_2041.HEIC and 2 more", PHOTOS.map(function (p) { return Object.assign({}, p); }), "3 photos"); }
+  function phoneSendsBig() { incoming("pixel", "beach.mov and 1 more", [{ name: "beach.mov", bytes: 1.398 * GB, kind: "movie" }, { name: "IMG_2051.HEIC", bytes: 2.1 * MB, kind: "photo" }], "2 files"); }
+  function phoneSendsDmg() { incoming("pixel", "Vitals-Nightly-2.dmg", [{ name: "Vitals-Nightly-2.dmg", bytes: 61.9 * MB, kind: "dmg" }], "1 disk image"); }
+  function webSends() { incoming("web", "report.xlsx", [{ name: "report.xlsx", bytes: 3.2 * MB, kind: "sheet" }], "1 file"); }
+  function phoneCopiesLink() {
+    S.phoneClip = { device: "pixel", text: "https://maps.app.goo.gl/q8Rk2Tz5RzX", copied: S.usePhoneCopies };
+    if (S.usePhoneCopies) S.macClip = S.phoneClip.text;
+    renderOverlays(); renderTools();
+  }
+  function macCopies() { S.macClip = "brew install --cask vitals"; renderTools(); showHud("⌘C", "Copied on the Mac"); }
+
+  var toolsEl = $("#tools");
+  function renderTools() {
+    var px = dev("pixel");
+    toolsEl.replaceChildren(
+      h("button", { onclick: function () { if (!running) { reset(); caption.textContent = "Reset."; } } }, "Reset"),
+      h("button", { onclick: phoneSendsPhotos }, "Pixel sends 3 photos"),
+      h("button", { onclick: phoneSendsBig }, "Pixel sends 1.4 GB"),
+      h("button", { onclick: phoneSendsDmg }, "Pixel sends a DMG"),
+      h("button", { onclick: webSends }, "Web sends a file"),
+      h("button", { onclick: phoneCopiesLink }, "Pixel copies a link"),
+      h("button", { onclick: function () { setOnline("pixel", !px.online); } }, px.online ? "Pixel goes offline" : "Pixel opens Vitals"),
+      h("button", { onclick: function () { S.twoPhones = !S.twoPhones; render(); renderTools(); } }, S.twoPhones ? "Unpair iPhone 17" : "Pair iPhone 17"),
+      h("span", { class: "read" }, "Mac clipboard: " + S.macClip));
+  }
+
+  function reset() {
+    clearInterval(tickId); tickId = null;
+    ntimers.forEach(clearTimeout); ntimers = []; notifEl.replaceChildren();
+    S = initial(); lastView = "";
+    ring.classList.remove("show"); ghost.classList.remove("on", "over"); hud.classList.remove("on");
+    finderEl.style.zIndex = "10"; vwinEl.style.zIndex = "11"; Z = 11;
+    render(); renderTools();
+  }
+
+  /* ---------- journeys ---------- */
+  var running = false;
+  function idle() { return !S.xfers.some(function (x) { return x.state === "running"; }); }
+  var JOURNEYS = [
+    { name: "Send a 4 GB video with Quick Actions", cost: "right-click, 5 clicks", done: "Sent. One banner, no window opened.", steps: [
+      ["ctx", "f-trip", "Right-click trip-video.mov in Finder"],
+      ["tap", "m-quick", "Open Quick Actions"],
+      ["tap", "m-send", "Choose Send to Phone"],
+      ["tap", "pk-iphone", "Check iPhone 17"],
+      ["tap", "pk-pixel", "Uncheck Pixel 9 Pro"],
+      ["tap", "pk-send", "Send"],
+      ["until", idle, "It sends over Wi-Fi. The menu bar shows the percent, the Dock tile a bar."]] },
+    { name: "Drag an APK onto the menu bar icon", cost: "1 drag, 1 click", done: "Two phones are paired, so it asked once. The panel shows the result.", steps: [
+      ["drag", "f-apk", "mb-icon", "Drag vitals-dev.apk onto the Vitals menu bar icon"],
+      ["look", "pk-pixel", "Two phones can get files, so it asks. Pixel 9 Pro was used last."],
+      ["tap", "pk-send", "Send"],
+      ["until", idle, "The panel opens on the transfer"]] },
+    { name: "Receive photos and open them in Finder", cost: "1 click", done: "They land in Downloads › Vitals, already selected.", steps: [
+      ["custom", phoneSendsPhotos, "On Pixel 9 Pro: share 3 photos to the Mac"],
+      ["look", "mb-icon", "It starts without asking. The menu bar shows the percent."],
+      ["until", idle, "Receiving"],
+      ["tap", "n-show", "Click Show in Finder on the banner"],
+      ["look", ".f-row.sel", "Finder opens on them"]] },
+    { name: "Approve a drop that isn't auto-accepted", cost: "1 click", done: "Nothing lands until you say so.", steps: [
+      ["tap", "seg-sharing", "Open Remote › Sharing"],
+      ["tap", "sw-auto", "Turn off Start without asking"],
+      ["custom", phoneSendsBig, "On Pixel 9 Pro: send 2 files, 1.4 GB"],
+      ["tap", "n-accept", "Accept on the banner"],
+      ["until", idle, "Receiving into ~/Downloads/Vitals"]] },
+    { name: "Phone is offline, the drop waits", cost: "1 drag, 1 click", done: "It started on its own the moment the phone connected.", steps: [
+      ["custom", function () { setOnline("pixel", false); }, "Pixel 9 Pro locks. Vitals on it disconnects."],
+      ["drag", "f-brand", "dock-vitals", "Drag brand-assets onto Vitals in the Dock"],
+      ["tap", "pk-send", "Send to Pixel 9 Pro, marked offline"],
+      ["tap", "mb-icon", "The panel says what to do"],
+      ["custom", function () { setOnline("pixel", true); }, "On the phone: open Vitals"],
+      ["until", idle, "It starts without a click"]] },
+    { name: "Copy a link on the phone, paste on the Mac", cost: "2 clicks", done: "The phone's copy is on the Mac clipboard. ⌘V pastes it anywhere.", steps: [
+      ["custom", phoneCopiesLink, "On Pixel 9 Pro: copy a link"],
+      ["tap", "mb-icon", "Open the menu bar panel"],
+      ["tap", "pc-copy", "Click Copy"],
+      ["custom", function () { showHud("⌘V", S.macClip); }, "Paste anywhere on the Mac"]] },
+    { name: "Change where files are saved", cost: "4 clicks", done: "New drops land on the Desktop. Old ones stay where they are.", steps: [
+      ["tap", "seg-sharing", "Open Remote › Sharing"],
+      ["tap", "files-change", "Click Change…"],
+      ["tap", "fo-Desktop", "Pick ~/Desktop"],
+      ["tap", "fo-choose", "Choose"],
+      ["look", "files-dir", "Saved"]] },
+    { name: "Send the Mac clipboard with ⌃⌥⌘V", cost: "1 shortcut", done: "Recordable in Settings › Shortcuts. The panel button shows the same keys.", steps: [
+      ["custom", macCopies, "Copy something on the Mac"],
+      ["key", null, "Press ⌃⌥⌘V"],
+      ["tap", "nav-settings", "Open Settings"],
+      ["look", "sc-rec", "Click it to record another"]] },
+    { name: "Send from the Vitals window", cost: "1 drag, 2 clicks", done: "Same transfer, same Recent list.", steps: [
+      ["tap", "seg-sharing", "Open Remote › Sharing"],
+      ["tap", "send-files", "Click Send Files…"],
+      ["drag", "f-invoice", "sheet-drop", "Drag invoice-oct.pdf into the sheet"],
+      ["tap", "sheet-send", "Send to Pixel 9 Pro"],
+      ["until", idle, "Sending"]] }
+  ];
+  function find(k) {
+    var sel = k.charAt(0) === "." ? k : '[data-k="' + k + '"]';
+    var list = Array.prototype.slice.call(stage.querySelectorAll(sel)).filter(function (e) {
+      return !e.closest("#panel:not(.open), #picker:not(.open), .sheetwrap:not(.open)") && e.getClientRects().length;
+    });
+    return list[list.length - 1];
+  }
+  function scrollTo(el) {
+    var sc = el.closest(".scroll"); if (!sc) return;
+    var er = el.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    if (er.top < sr.top) sc.scrollTop -= (sr.top - er.top) / scale + 20;
+    else if (er.bottom > sr.bottom) sc.scrollTop += (er.bottom - sr.bottom) / scale + 20;
+  }
+  async function showRing(el) {
+    scrollTo(el);
+    var r = rectIn(el);
+    ring.style.left = (r.left + Math.min(r.width / 2, 60)) + "px";
+    ring.style.top = (r.top + r.height / 2) + "px";
+    ring.classList.add("show"); await sleep(520);
+  }
+  async function dragAnim(a, b) {
+    var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    var x0 = ra.left + Math.min(60, ra.width / 2), y0 = ra.top + ra.height / 2, x1 = rb.left + rb.width / 2, y1 = rb.top + rb.height / 2;
+    a.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: x0, clientY: y0, button: 0, pointerId: 1, isPrimary: true }));
+    var N = 34;
+    for (var i = 1; i <= N; i++) {
+      var t = i / N, e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: x0 + (x1 - x0) * e, clientY: y0 + (y1 - y0) * e - Math.sin(Math.PI * t) * 50 * scale, pointerId: 1 }));
+      await sleep(22);
+    }
+    await sleep(280);
+    window.dispatchEvent(new PointerEvent("pointerup", { clientX: x1, clientY: y1, pointerId: 1, button: 0 }));
+  }
+  function say(j, text) { caption.replaceChildren(h("b", null, j.name), " · " + text); }
+  async function run(j, btn) {
+    if (running) return false;
+    running = true; reset(); await sleep(350);
+    var ok = true;
+    for (var i = 0; i < j.steps.length; i++) {
+      var s = j.steps[i], kind = s[0];
+      say(j, "step " + (i + 1) + " of " + j.steps.length + ": " + s[s.length - 1]);
+      if (kind === "wait") { await sleep(1100); continue; }
+      if (kind === "custom") { s[1](); await sleep(1100); continue; }
+      if (kind === "until") { var t0 = Date.now(); while (!s[1]() && Date.now() - t0 < 15000) await sleep(150); if (!s[1]()) ok = false; await sleep(700); continue; }
+      if (kind === "key") { document.dispatchEvent(new KeyboardEvent("keydown", { key: "v", code: "KeyV", ctrlKey: true, altKey: true, metaKey: true, bubbles: true })); await sleep(1400); continue; }
+      if (kind === "drag") {
+        var a = find(s[1]), b = find(s[2]);
+        if (!a || !b) { say(j, "could not find " + (a ? s[2] : s[1])); ok = false; break; }
+        await showRing(a); ring.classList.remove("show"); await dragAnim(a, b); await sleep(800); continue;
+      }
+      var el = find(s[1]);
+      if (!el) { say(j, "could not find " + s[1]); ok = false; break; }
+      await showRing(el);
+      if (kind === "tap") el.click();
+      if (kind === "ctx") { var r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: r.left + Math.min(90, r.width / 3), clientY: r.top + r.height / 2 })); }
+      await sleep(kind === "look" ? 1000 : 240);
+      ring.classList.remove("show");
+      await sleep(kind === "look" ? 300 : 650);
+    }
+    if (ok) say(j, j.done);
+    if (btn && ok) btn.classList.add("ok");
+    running = false;
+    return ok;
+  }
+  var jl = $("#journeys");
+  JOURNEYS.forEach(function (j, i) {
+    var b = h("button", { class: "jbtn", "data-j": String(i), onclick: function () { run(j, b); } }, h("span", null, h("b", null, j.name), h("small", null, j.cost + " · " + j.steps.length + " steps")), h("span", { class: "run" }, "Run ›"));
+    jl.append(b);
+  });
+  window.__proto = { journeys: JOURNEYS.map(function (j) { return j.name; }), run: function (i) { return run(JOURNEYS[i], jl.children[i]); }, isRunning: function () { return running; } };
+
+  /* ---------- gallery ---------- */
+  function galPanel() { return h("div", { class: "panel" }, panelContent().filter(Boolean)); }
+  function galWindow() {
+    return h("div", { class: "win vwin", style: "position:relative" }, h("div", { class: "vbody" }, vbody()),
+      h("div", { class: "sheetwrap" + (S.sheet ? " open" : "") }, h("div", { class: "dim" }), h("div", { class: "sheet" }, S.sheet ? sheetContent() : null)));
+  }
+  function galNotif(n) { n.id = "g"; var node = notifNode(n); node.classList.add("in"); return node; }
+  function galCtx(sub) { var c = { file: FILES.trip, sub: sub }; S.ctx = c; return h("div", { style: "width:470px;height:" + (sub === "m-quick" ? 440 : 470) + "px" }, ctxMenu(c)); }
+  function trip(o) { return mk(Object.assign({ dir: "out", name: "trip-video.mov", bytes: 4.1 * GB, device: "iphone", kind: "movie", src: ["trip-video.mov"] }, o)); }
+  var GALLERY = [
+    ["Panel · idle", null, galPanel],
+    ["Panel · sending", function () { S.xfers.unshift(trip({ done: 1.2 * GB })); }, galPanel],
+    ["Panel · waiting", function () { dev("pixel").online = false; S.xfers.unshift(mk({ dir: "out", name: "brand-assets", count: 214, bytes: 286 * MB, device: "pixel", kind: "folder", state: "waiting" })); }, galPanel],
+    ["Panel · asks, phone copied a link", function () { S.xfers.unshift(mk({ dir: "in", name: "beach.mov and 1 more", count: 2, bytes: 1.4 * GB, device: "pixel", kind: "files", state: "asking", items: [] })); S.phoneClip = { device: "pixel", text: "https://maps.app.goo.gl/q8Rk2Tz5RzX" }; }, galPanel],
+    ["Panel · got photos", function () { S.xfers.unshift(mk({ dir: "in", name: "IMG_2041.HEIC and 2 more", count: 3, bytes: 7.9 * MB, done: 7.9 * MB, device: "pixel", kind: "files", state: "done", fresh: true, items: PHOTOS })); S.sentClip = { to: "Pixel 9 Pro" }; }, galPanel],
+    ["Phone picker", function () { S.picker = { files: [FILES.apk], to: ["pixel"], anchor: "mb", caret: 143 }; }, function () { return h("div", { class: "picker" }, pickerContent(S.picker)); }],
+    ["Finder · Quick Actions", null, function () { return galCtx("m-quick"); }],
+    ["Finder · Services", null, function () { return galCtx("m-services"); }],
+    ["Remote › Sharing", function () { S.rtab = "sharing"; S.xfers.unshift(trip({ done: 1.2 * GB })); }, galWindow],
+    ["Send Files sheet", function () { S.rtab = "sharing"; S.sheet = { type: "send", files: [FILES.trip, FILES.brand], to: ["pixel", "iphone"] }; }, galWindow],
+    ["Change folder sheet", function () { S.rtab = "sharing"; S.sheet = { type: "folder", pick: "~/Desktop" }; }, galWindow],
+    ["Remote › Devices", null, galWindow],
+    ["Settings › Shortcuts", function () { S.section = "settings"; }, galWindow],
+    ["Notice · got files", null, function () { return galNotif({ title: "Got 3 files from Pixel 9 Pro", body: "In Downloads › Vitals · 7.9 MB", actions: [{ label: "Show in Finder", fn: function () {} }] }); }],
+    ["Notice · wants to send", null, function () { return galNotif({ title: "Pixel 9 Pro wants to send 2 files (1.4 GB)", body: "beach.mov, IMG_2051.HEIC", actions: [{ label: "Accept", fn: function () {} }, { label: "Decline", fn: function () {} }] }); }],
+    ["Notice · sent", null, function () { return galNotif({ title: "Sent trip-video.mov to iPhone 17", body: "4.1 GB over Wi-Fi" }); }],
+    ["Notice · waiting", null, function () { return galNotif({ title: "Waiting for Pixel 9 Pro", body: "Open Vitals on the phone. brand-assets sends when it connects.", actions: [{ label: "Cancel", fn: function () {} }] }); }],
+    ["Notice · clipboard sent", null, function () { return galNotif({ title: "Sent your clipboard to Pixel 9 Pro", body: "“brew install --cask vitals”" }); }],
+    ["Recent · quarantined DMG", function () { S.rtab = "sharing"; }, function () { return h("div", { class: "card", style: "width:540px;background:#1c1c1e" }, h("div", null, S.xfers.slice(0, 2).map(recentRow))); }]
+  ];
+  var grid = $("#gallery"), live = S;
+  GALLERY.forEach(function (g) {
+    S = initial();
+    if (g[1]) g[1]();
+    var node = g[2]();
+    node.querySelectorAll("button").forEach(function (b) { b.setAttribute("tabindex", "-1"); });
+    var inner = h("div", { class: "gin" }, node), box = h("div", { class: "gbox", "aria-hidden": "true" }, inner);
+    grid.append(h("figure", { class: "gcell" }, box, h("figcaption", null, g[0])));
+  });
+  S = live; XID = 50;
+  function fitGallery() {
+    grid.querySelectorAll(".gbox").forEach(function (box) {
+      var inner = box.firstChild, w = inner.scrollWidth, ht = inner.scrollHeight;
+      var k = Math.min(1, (box.clientWidth - 24) / w, (box.clientHeight - 24) / ht);
+      inner.style.transform = "translate(" + Math.round((box.clientWidth - w * k) / 2) + "px," + Math.round((box.clientHeight - ht * k) / 2) + "px) scale(" + k.toFixed(3) + ")";
+    });
+  }
+  fitGallery(); window.addEventListener("resize", fitGallery);
+
+  reset();
+})();
+</script>
+</body>
+</html>
