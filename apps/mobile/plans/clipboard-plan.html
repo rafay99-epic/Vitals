@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Clipboard v2: Mac, Android, iOS and web</title>
+<style>
+  :root { --ink:#fff; --ink2:#c9c9c9; --dim:#8a8a8a; --line:#222; --acc:#4da3ff; --ok:#3ecf72; --warn:#ffb340; --bad:#ff5a52; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  main { max-width:1080px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:28px; margin:0 0 6px; letter-spacing:-.01em; }
+  h2 { font-size:18px; margin:40px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--ink); }
+  p, li { color:var(--ink2); }
+  p { margin:6px 0 10px; }
+  ul, ol { margin:6px 0 10px; padding-left:20px; }
+  li { margin:3px 0; }
+  b, strong { color:var(--ink); }
+  code { font:12.5px ui-monospace, "SF Mono", Menlo, monospace; color:#e6e6e6; background:#111; padding:1px 4px; border-radius:3px; }
+  pre { font:12.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background:#0b0b0b; border:1px solid var(--line); padding:12px 14px; overflow:auto; color:#e6e6e6; border-radius:6px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:13px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  td { color:var(--ink2); }
+  td:first-child { color:var(--ink); white-space:nowrap; }
+  .lead { font-size:15px; color:var(--ink2); max-width:780px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media (max-width:760px) { .grid2 { grid-template-columns:1fr; } }
+  .tag { font:600 11px ui-monospace, Menlo, monospace; padding:1px 6px; border-radius:3px; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .acc { color:var(--acc); }
+  svg text { font-family:-apple-system, system-ui, sans-serif; }
+  .src a { color:var(--acc); }
+  a { color:var(--acc); }
+  .phase { display:grid; grid-template-columns:120px 1fr; gap:4px 18px; margin:10px 0 18px; }
+  .phase .k { color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Clipboard and Drop: Mac, Android, iOS and web</h1>
+<p class="lead">Goal: see the Mac's clipboard history on the phone, and move text, links, images, files and folders in either direction without LocalSend. Android, iOS and the web client. Works over Wi-Fi and over Tailscale with the connection we already have. <b>v2 of this plan (2026-10-24): auto-copy, pins, folders, the iOS share extension and the web client are all in v1.</b> Clickable demo: <a href="https://pagepilot.rafay99.com/p/ee110689660f471a8a2f98d351a3be67">Clipboard prototype</a>. Branch <code>feat/clipboard</code> from <code>nightly @ 16187b8</code>.</p>
+
+<h2>What exists today</h2>
+<table>
+  <tr><th>Piece</th><th>Today</th><th>Limit</th></tr>
+  <tr><td>Phone to Mac</td><td>Command <code>ClipboardSet</code> (text) through <code>command.run</code></td><td>Plain text, 100 KB, one shot</td></tr>
+  <tr><td>Mac to phone</td><td>RPC <code>clipboard.get</code> to bridge query <code>Clipboard</code> to <code>SystemControl.clipboard()</code></td><td>Current text only, on demand, no history</td></tr>
+  <tr><td>Permission</td><td>Scope <code>clipboard</code> gates reading. Not in <code>DEFAULT_PAIRED_SCOPES</code>, so it is granted per phone on the Mac</td><td>Good as is. Reuse it.</td></tr>
+  <tr><td>Phone UI</td><td><code>ClipboardSheet</code> in <code>SendSheets.tsx</code>, opened from the Control tab tile</td><td>A sheet, not a list</td></tr>
+</table>
+
+<h2>Key findings</h2>
+
+<h3>1. The transport is already solved. Add RPCs, get both routes free.</h3>
+<p>Wi-Fi: phone opens a Noise-encrypted WebSocket to <code>Lan.ts</code>, which proxies decrypted text frames to the gateway's loopback <code>/ws</code>. Tailscale: Serve terminates HTTPS and forwards to the same <code>/ws</code>. Both end in one Effect RPC server (<code>VitalsRpc</code>). <b>Any new RPC works on both routes with zero transport code.</b></p>
+<p>Three limits shape the design:</p>
+<ul>
+  <li><code>MAX_FRAME_BYTES</code> = 1 MB per WebSocket frame (gateway and LAN listener).</li>
+  <li>RPC serialization is JSON (<code>RpcSerialization.layerJson</code>), and the LAN proxy only forwards string frames. So binary data travels as <b>base64 in chunks</b>. 512 KB raw per chunk is about 683 KB encoded, safely under 1 MB.</li>
+  <li>The Mac bridge (stdio NDJSON) caps lines at 1 MB. <b>Blobs must not cross the bridge.</b></li>
+</ul>
+
+<h3>2. The Mac app and the gateway share a disk. Use it as the blob channel.</h3>
+<p>The gateway's data dir is <code>RemoteModel.dataDirectory</code> = <code>~/.vitals*/remote</code>. The Swift app writes image/file bytes to <code>remote/clips/</code> and sends only metadata over the bridge. The gateway streams those files to phones in chunks. Uploads from the phone land in the same folder, and the Mac app is told "put clip X on the clipboard". The bridge stays small, and it is channel-isolated for free.</p>
+
+<h3>3. macOS: poll <code>changeCount</code>, respect secret markers, watch the privacy API.</h3>
+<ul>
+  <li>There is no pasteboard change notification. Clipboard managers poll <code>NSPasteboard.general.changeCount</code> (Maccy defaults to 0.5 s). Reading the counter is cheap; contents are read only when it changes.</li>
+  <li>macOS 15.4 added <code>NSPasteboard.accessBehavior</code> and a prompt for programmatic reads. Reports say it is still off by default on macOS 26 and only turns on through <code>defaults</code>. <span class="warn">Plan for it anyway:</span> check <code>accessBehavior</code> and show "Allow pasting in System Settings" instead of failing silently.</li>
+  <li>Password managers mark copies with <code>org.nspasteboard.ConcealedType</code>, <code>TransientType</code> and <code>AutoGeneratedType</code>. <b>Never record those.</b> Also skip copies made while an app on an ignore list is frontmost (1Password, Bitwarden, Passwords, Keychain Access).</li>
+  <li>Finder copies are file references, not bytes. Copy them into <code>clips/</code> with an APFS clone (<code>copyfile</code> with <code>COPYFILE_CLONE</code>), which costs no disk space and is instant. Folders are out of scope for v1.</li>
+</ul>
+
+<h3>4. Android blocks background clipboard reads. Phone to Mac is Share sheet + one tap.</h3>
+<ul>
+  <li>Since Android 10, an unfocused app reads an empty clipboard unless it holds <code>READ_CLIPBOARD_IN_BACKGROUND</code>, which only system apps get. So "auto-sync what I copy on the phone" is not possible in the background. It is possible when Vitals is open: a "Send what I copied" button reads the clipboard in the foreground.</li>
+  <li>The native way to send anything from the phone is the <b>Share sheet</b>. <code>expo-sharing</code> in SDK 58 can now receive shares (<code>android.enabled</code>, <code>singleShareMimeTypes</code>, <code>multipleShareMimeTypes</code>, <code>useIncomingShare()</code>), and it works with React Navigation's <code>linking</code> prop. It is marked experimental. One known bug: an <code>ACTION_SEND</code> with both text and an image loses one part (expo PR #51646, tagged for SDK 58).</li>
+  <li>Writing to the phone clipboard is fine in the foreground. <code>expo-clipboard</code> (already a dependency) does text and <code>setImageAsync</code> for images.</li>
+</ul>
+
+<h3>5. Live delivery only while the app is connected.</h3>
+<p>The phone has no push channel (alerts use a 15-minute background job). New Mac copies appear live while Vitals is open and connected, and the history list fills in on open. No fake "synced" state.</p>
+
+<h2>Architecture</h2>
+<svg viewBox="0 0 1030 330" width="100%" role="img" aria-label="Data flow between Mac app, gateway and phone">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8a8a8a"/></marker></defs>
+  <g fill="none" stroke="#333">
+    <rect x="10" y="20" width="300" height="230" rx="8"/>
+    <rect x="365" y="20" width="300" height="230" rx="8"/>
+    <rect x="720" y="20" width="300" height="230" rx="8"/>
+    <rect x="365" y="270" width="300" height="50" rx="8" stroke-dasharray="4 4"/>
+  </g>
+  <g fill="#fff" font-size="14" font-weight="600">
+    <text x="26" y="46">Mac app (Swift)</text><text x="381" y="46">Gateway (Bun)</text><text x="736" y="46">Phone (React Native)</text>
+  </g>
+  <g fill="#c9c9c9" font-size="12.5">
+    <text x="26" y="76">ClipWatcher (Service)</text>
+    <text x="26" y="94" fill="#8a8a8a">polls changeCount 2 Hz, only when on</text>
+    <text x="26" y="118">skips concealed / ignored apps</text>
+    <text x="26" y="142">writes bytes + thumb to clips/</text>
+    <text x="26" y="166">ClipPut command</text>
+    <text x="26" y="184" fill="#8a8a8a">clip to NSPasteboard or ~/Downloads</text>
+    <text x="26" y="208">echo guard: ignores its own writes</text>
+
+    <text x="381" y="76">ClipStore: SQLite table clips</text>
+    <text x="381" y="94" fill="#8a8a8a">retention, dedupe by sha256</text>
+    <text x="381" y="118">RPC clips.watch (stream)</text>
+    <text x="381" y="142">RPC clips.read (pull chunk)</text>
+    <text x="381" y="166">RPC clips.send.begin/chunk/finish</text>
+    <text x="381" y="190">Command ClipPut (via command.run)</text>
+    <text x="381" y="214" fill="#8a8a8a">scopes: clipboard to read, operate to put</text>
+
+    <text x="736" y="76">Clipboard screen: history list</text>
+    <text x="736" y="100">Copy, Open link, Save image, Share</text>
+    <text x="736" y="124">Send to Mac: paste, photo, file, text</text>
+    <text x="736" y="148">Share target: "Vitals" in share sheet</text>
+    <text x="736" y="172">Transfers: chunked, 4 in flight,</text>
+    <text x="736" y="190" fill="#8a8a8a">resumable, real byte progress</text>
+
+    <text x="381" y="292">~/.vitals*/remote/clips/  (shared disk)</text>
+    <text x="381" y="309" fill="#8a8a8a">blobs never cross the 1 MB bridge</text>
+  </g>
+  <g stroke="#8a8a8a" fill="none" marker-end="url(#a)">
+    <path d="M310 110 H362"/><path d="M365 180 H313"/>
+    <path d="M665 120 H717"/><path d="M720 160 H668"/>
+    <path d="M160 250 V295 H362"/><path d="M515 270 V253"/>
+  </g>
+  <g fill="#8a8a8a" font-size="11.5">
+    <text x="316" y="104">bridge: clip meta</text><text x="316" y="196">ClipPut id</text>
+    <text x="672" y="113">LAN Noise WS</text><text x="672" y="176">or Tailscale WS</text>
+  </g>
+</svg>
+
+<h2>Contracts (as built)</h2>
+<p><code>packages/contracts/src/clips.ts</code>. One <code>Clip</code> for every direction, so a phone send shows up in history like a Mac copy.</p>
+<pre>Clip = { id, kind: "text" | "link" | "image" | "file" | "folder", at,
+         deviceId (null = copied on the Mac), source (app or phone name),
+         text, truncated, name, mime, bytes, files (folders), thumb (base64 JPEG), pinned }
+
+ClipEvent = Snapshot { enabled, clips } | Added { clip } | Updated { clip } | Removed { ids }
+
+CLIP_LIMITS = { chunkBytes: 512 KB, inlineText: 256 KB, previewText: 4 KB,
+                thumbChars: 48 KB, itemBytes: 1 GB, batch: 50, snapshot: 200 }</pre>
+<table>
+  <tr><th>RPC</th><th>What it does</th><th>Scope</th></tr>
+  <tr><td><code>clips.watch</code></td><td>Snapshot, then live changes. Re-sends a Snapshot when history is turned on or off on the Mac</td><td>clipboard</td></tr>
+  <tr><td><code>clips.read</code></td><td><code>{ id, offset }</code> to 512 KB of base64 plus <code>total</code> and <code>done</code>. File and folder clips are cloned or zipped on the Mac on first read</td><td>clipboard</td></tr>
+  <tr><td><code>clips.pin</code>, <code>clips.remove</code></td><td>Pinned clips skip retention. Remove deletes the row and its file</td><td>clipboard</td></tr>
+  <tr><td><code>clips.send.begin / chunk / finish</code></td><td>Text and links finish in <code>begin</code>. Chunks are offset-aligned and written positionally, so up to 4 can be in flight in any order. Optional sha256 check at finish</td><td>operate</td></tr>
+  <tr><td><code>clips.put</code></td><td><code>{ ids, to: clipboard | downloads, folder }</code>. One call places up to 50 clips, so "2 photos" lands as one action and one Mac notification</td><td>operate</td></tr>
+</table>
+<p>Bridge, Mac app to gateway: <code>clip</code> (metadata only, plus <code>stored</code> file name or <code>origin</code> path), <code>clipPolicy</code> (enabled, keepDays), <code>clipClear</code>. Gateway to Mac: <code>clipStats</code>, and two queries, <code>ClipMaterialize</code> (clone a file or zip a folder into <code>clips/</code>) and <code>ClipPut</code> (place resolved items). <code>Hello.clips</code> tells a new phone the Mac supports all this; older Macs keep the old text-only sheet. <code>ClipboardSet</code> and <code>clipboard.get</code> stay for one release, then go.</p>
+
+<h2>Mac app (Swift)</h2>
+<ul>
+  <li><b><code>Services/ClipWatcher.swift</code></b>: UI-free. <code>DispatchSourceTimer</code> at 0.5 s with generous leeway so wakeups coalesce. It runs only when Remote is on <b>and</b> the new setting is on. Image encoding and thumbnailing (<code>CGImageSourceCreateThumbnailAtIndex</code>, 256 px JPEG) run off-main. TIFF screenshots are stored as PNG.</li>
+  <li>Reads in priority order: file URLs, image (<code>.png</code>, <code>.tiff</code>), URL, string. It skips the nspasteboard.org secret markers, the ignore list, empty strings, and strings over 10 MB.</li>
+  <li><b>Echo guard</b>: after <code>ClipPut</code> writes, store the resulting <code>changeCount</code> and skip it, so a phone-sent clip doesn't come back as a duplicate "Mac" clip.</li>
+  <li><b><code>ClipPut</code></b> in <code>CommandRouter</code>: resolves the file name strictly inside <code>clips/</code> (no <code>/</code>, no <code>..</code>, test-locked like the uninstaller paths). For <code>clipboard</code> it writes <code>NSImage</code>, a file URL, or a string by kind. For <code>downloads</code> it copies to <code>~/Downloads</code> with a unique name and reveals nothing.</li>
+  <li><b>Setting</b> in Settings, Remote: "Clipboard history for phones", <b>off by default</b>. Shows "macOS is blocking clipboard reads" when <code>accessBehavior</code> says so. The existing per-device "Read clipboard" toggle in <code>RemoteView</code> keeps gating who sees it.</li>
+  <li>Perf: measure idle CPU with the watcher on vs off before merging (PR #151 rule). Expected cost is one integer read per tick.</li>
+</ul>
+
+<h2>Gateway (Bun + Effect)</h2>
+<ul>
+  <li><b><code>src/clips/ClipStore.ts</code></b>: migration adds a <code>clips</code> table (<code>id, kind, at, origin, source_app, text, name, mime, bytes, sha256, thumb, file</code>). It is the only owner of deletion.</li>
+  <li><b>Retention</b> (defaults, open to change): newest 200 clips, 7 days, 1 GB of files, oldest first. Same sha256 as an existing clip bumps <code>at</code> instead of adding a row.</li>
+  <li><b>Uploads</b>: <code>clips/incoming/&lt;uploadId&gt;.part</code>, offsets must be contiguous, size capped at 100 MB per item in v1, abandoned parts swept after 10 minutes, sha256 checked at finish.</li>
+  <li><b>Activity log</b>: chunk RPCs log one summary line per transfer, not one <code>frames</code> row per chunk, so a 100 MB send doesn't write 200 rows.</li>
+  <li><b><code>scripts/fake-mac.ts</code></b>: emits a few text, link and image clips, and answers <code>ClipPut</code>, so the phone can be built without a Mac.</li>
+</ul>
+
+<h2>Phone (React Native, Android and iOS)</h2>
+<ul>
+  <li><b>Where it lives:</b> Control. "Send to Mac" becomes "Clipboard": one line with the Mac's latest copy (Copy is one tap), then the same three tiles. The Clipboard tile pushes a Clipboard screen in a new Control stack. No new tab, nothing on Home.</li>
+  <li><b>Clipboard screen:</b> compose field, Paste / Photos / Files tiles, a transfer card while sending, chips (All, Pinned, Text, Links, Images, Files), sections Pinned / Today / Earlier.</li>
+  <li><b>Clip sheet:</b> one sheet, actions by kind. Copy, Open on this phone, Open on Mac, Save to Photos, Save to this phone, Save as zip, Share, Put on the Mac clipboard again, Pin, Remove (tap with Undo).</li>
+  <li><b>Send sheet:</b> preview, "Put it on" Mac clipboard or Downloads, Send. The Photos tile, the Files tile and the share sheet all open it.</li>
+  <li><b>Transfers:</b> shared engine in <code>packages/app</code>, 4 chunks in flight, resumes after a reconnect, Cancel, real byte progress in a card and a toast. Files stream through <code>expo-file-system</code>, never whole in JS memory.</li>
+</ul>
+
+<h2>The five additions</h2>
+<table>
+  <tr><th>Feature</th><th>How</th><th>Honest limits</th></tr>
+  <tr><td>Auto-copy to phone</td><td>Switch "Copy Mac copies here" on the Clipboard screen, saved on the phone, off by default. Each <code>Added</code> Mac clip is written to the phone clipboard (images download first), with a toast</td><td>Only while Vitals is open. Neither Android nor iOS lets an app write the clipboard from the background</td></tr>
+  <tr><td>Pins</td><td><code>clips.pin</code>; retention never deletes pinned clips; Pinned chip and section</td><td>Pinned files still count toward disk use, shown on the Mac</td></tr>
+  <tr><td>Folders</td><td>Finder copies are recorded as references with a file count. The first download zips with <code>ditto -c -k --keepParent</code> into <code>clips/</code>, then serves the zip. Phone to Mac: pick several files and they land together in <code>~/Downloads/&lt;folder&gt;</code></td><td>Zipping a huge folder takes as long as it takes; the phone shows "Preparing on your Mac" first. Phones can't pick a whole folder in one go on both platforms, so v1 sends groups of files</td></tr>
+  <tr><td>iOS share extension</td><td><code>expo-sharing</code> plugin with <code>ios.enabled</code>. It adds a share extension that opens the app; same Send sheet as Android. Paste uses Apple's <code>ClipboardPasteButton</code>, so there's no "Allow Paste" prompt</td><td>The extension needs an App Group (<code>group.&lt;bundle id&gt;</code>), which needs an Apple developer team to sign. The simulator works without one</td></tr>
+  <tr><td>Web client</td><td>The Orders clipboard sheet becomes a compact history with Copy and Download, a drop zone, a file input and paste-to-send. Same shared engine</td><td>No auto-copy on web: browsers only allow clipboard writes during a click</td></tr>
+</table>
+
+<h2>Work split (running now on <code>feat/clipboard</code>)</h2>
+<div class="phase">
+  <div class="k">Demo</div><div>Done. Built on the A + B prototype, with 9 journeys, an Android/iOS switch, a gallery of every state, the Mac Settings card and the web view.</div>
+  <div class="k">Contracts</div><div>Done. <code>clips.ts</code>, 8 RPCs, bridge messages, scopes, <code>Hello.clips</code>.</div>
+  <div class="k">Gateway</div><div><code>ClipStore</code> (SQLite plus <code>clips/</code>), the RPCs, retention, materialize, transfer logging, fake Mac clips (<code>kill -WINCH</code> for a new Mac copy), tests.</div>
+  <div class="k">Mac app</div><div><code>ClipWatcher</code>, secret and app skipping, echo guard, <code>ClipMaterialize</code>, <code>ClipPut</code> with a notification, Settings card, tests.</div>
+  <div class="k">Phone + web</div><div>Shared clips state and transfer engine, Control and Clipboard screens, sheets, share target on both platforms, auto-copy, web sheet.</div>
+  <div class="k">Website</div><div>Done. Privacy policy covers clipboard history, files, and the new phone permissions.</div>
+  <div class="k">Verify</div><div>Gateway and Swift tests, typecheck, lint, React Doctor, a release APK on a leased emulator against the fake Mac, then Vitals Dev on a real Mac over Wi-Fi and Tailscale.</div>
+</div>
+
+<h2>Status on feat/clipboard (2026-10-24, not committed)</h2>
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td>Typecheck, oxlint, knip</td><td class="ok">Clean on all 8 TS projects</td></tr>
+  <tr><td>Tests</td><td class="ok">Gateway 34, app 23, contracts 8, client-runtime 6, shared 4, Swift 211 (19 new clip tests)</td></tr>
+  <tr><td>React Doctor</td><td class="ok">apps/mobile 100</td></tr>
+  <tr><td>Android release APK, emulator + fake Mac</td><td class="ok">History, live Mac copies, auto-copy (repeat copies too), pin, folder zipped on first download and shared, share-in from Google Photos and from another app, 2 photos via the picker (5 chunks, byte-exact), Save to Photos (byte-exact), Copy to phone then Paste back, typed text</td></tr>
+  <tr><td>Web client, headless Chrome</td><td class="ok">Pair, history, upload through Choose files, Download byte-exact</td></tr>
+  <tr><td>Vitals Dev on this Mac</td><td class="ok">Builds and runs; recorded real copies and showed stats (Mac agent)</td></tr>
+  <tr><td>iOS simulator</td><td class="warn">Release build with the share extension compiles, installs and launches. Not driven: no simulator input on this Xcode</td></tr>
+  <tr><td>Real phone to real Mac</td><td class="warn">Not run, to keep your own clipboard and Downloads untouched. Your phone is paired to Vitals Dev with Read clipboard on, so it is ready to try</td></tr>
+</table>
+
+<h2>Risks</h2>
+<table>
+  <tr><th>Risk</th><th>Mitigation</th></tr>
+  <tr><td>Clipboard holds secrets</td><td>Off by default, per-phone <code>clipboard</code> scope, secret markers and ignore list, 7-day retention, files stay in the channel's own data dir</td></tr>
+  <tr><td>macOS turns on paste prompts</td><td>Read contents only when <code>changeCount</code> changes, detect <code>accessBehavior</code>, explain the fix in Settings</td></tr>
+  <tr><td>Big files over Tailscale relay are slow</td><td>Honest byte progress, resumable chunks, 100 MB cap in v1. Measure real throughput in phase 4; quote no numbers before that</td></tr>
+  <tr><td>base64 + JSON overhead (about 33%)</td><td>Accepted for v1. Later: msgpack RPC serialization plus binary LAN frames, which touches the protocol for every RPC</td></tr>
+  <tr><td><code>expo-sharing</code> receive is experimental</td><td>Pin the SDK, test text, image, multi-image and PDF shares; the text-plus-image case is a known gap</td></tr>
+  <tr><td>Echo loops and duplicates</td><td>changeCount echo guard on the Mac, sha256 dedupe in the gateway</td></tr>
+</table>
+
+<h2>Not in v1</h2>
+<ul>
+  <li>Background delivery to the phone. There is no push channel by design, so Mac copies arrive while the app is open.</li>
+  <li>Picking a whole folder on the phone (Android SAF only). Groups of files cover it.</li>
+  <li>Binary frames (msgpack) to drop the base64 overhead. That changes the protocol for every RPC, so it gets its own PR.</li>
+</ul>
+
+<h2>Sources</h2>
+<ul class="src">
+  <li><a href="https://mjtsai.com/blog/2025/05/12/pasteboard-privacy-preview-in-macos-15-4/">Michael Tsai: Pasteboard privacy preview in macOS 15.4</a></li>
+  <li><a href="https://www.macrumors.com/2025/05/12/apple-mac-apps-clipboard-change/">MacRumors: Apple to block Mac apps from secretly reading the clipboard</a></li>
+  <li><a href="https://dev.to/jrw0ng/macos-tahoe-has-built-in-clipboard-history-heres-what-its-still-missing-for-developers-2026-4eko">DEV: macOS Tahoe clipboard history (2026)</a></li>
+  <li><a href="https://github.com/ryan-stoffel/quoth/issues/43">Concealed / Transient / AutoGenerated pasteboard markers</a></li>
+  <li><a href="https://docs.expo.dev/versions/latest/sdk/sharing/">Expo docs: Sharing (receive, SDK 58)</a></li>
+  <li><a href="https://github.com/expo/expo/pull/51646">expo PR #51646: text and attachment from one share intent</a></li>
+  <li><a href="https://android.googlesource.com/platform/cts/+/680b05b92af%5E%21/">AOSP CTS: READ_CLIPBOARD_IN_BACKGROUND</a></li>
+  <li><a href="https://developer.android.com/privacy-and-security/risks/secure-clipboard-handling">Android: secure clipboard handling</a></li>
+</ul>
+
+</main>
+</body>
+</html>

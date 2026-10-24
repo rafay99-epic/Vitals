@@ -35,14 +35,25 @@ final class RemoteModel {
     private(set) var adminError: String?
     /// Phones on the Wi-Fi waiting for Allow or Deny, oldest first.
     private(set) var pairPrompts: [PairPrompt] = []
+    /// What the gateway's clip history holds. nil until it reports.
+    private(set) var clipStats: ClipStats?
+    /// macOS denies Vitals pasteboard reads (Privacy & Security > Paste from Other Apps).
+    private(set) var clipReadsBlocked = false
     let lanAdvertiser = LanAdvertiser()
 
     var isEnabled: Bool { settings.remoteEnabled }
+    var clipHistoryEnabled: Bool { settings.clipHistoryEnabled }
+    var clipKeepDays: Int { settings.clipKeepDays }
 
     @ObservationIgnored private let vitals: VitalsModel
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let power = PowerControl()
     @ObservationIgnored private lazy var router = CommandRouter(executor: SystemCommandExecutor(model: self))
+    @ObservationIgnored private lazy var clipWatcher: ClipWatcher = {
+        let watcher = ClipWatcher(directory: Self.clipsDirectory)
+        watcher.onClips = { [weak self] clips in clips.forEach { self?.send(.clip($0)) } }
+        return watcher
+    }()
     @ObservationIgnored private var gateway: GatewayProcess?
     @ObservationIgnored private var restartTask: Task<Void, Never>?
     @ObservationIgnored private var restartAttempt = 0
@@ -129,6 +140,8 @@ final class RemoteModel {
     }
 
     nonisolated static var dataDirectory: URL { DataHome.directory.appendingPathComponent("remote", isDirectory: true) }
+    /// Clip bytes shared with the gateway, which serves and prunes them.
+    nonisolated static var clipsDirectory: URL { dataDirectory.appendingPathComponent("clips", isDirectory: true) }
 
     private func startGateway() {
         guard gateway == nil else { return }
@@ -178,6 +191,8 @@ final class RemoteModel {
         state = .off
         status = nil
         guardState = nil
+        clipStats = nil
+        updateClipWatcher()
         devices = []
         pairing = nil
         needs = .none
@@ -192,6 +207,7 @@ final class RemoteModel {
         gateway = nil
         guardState = nil
         needs = .none
+        updateClipWatcher()
         lanAdvertiser.update(nil)
         endAllPairPrompts()
         updateVitalsNeeds()
@@ -229,6 +245,8 @@ final class RemoteModel {
             lastGuardSent = nil
             send(.hello(mac: macInfo(), keepAwake: wireKeepAwake(keepAwake)))
             for alert in guardEngine.active { send(.event(.alertRaised(at: alert.raisedAt, alert: alert))) }
+            sendClipPolicy()
+            updateClipWatcher()
             Task { await refreshDevices() }
         case let .need(next):
             needs = next
@@ -251,6 +269,8 @@ final class RemoteModel {
         case let .pairPromptEnded(id):
             endPairPrompt(id)
             Task { await refreshDevices() }
+        case let .clipStats(stats):
+            clipStats = stats
         }
     }
 
@@ -273,7 +293,86 @@ final class RemoteModel {
         case let .setGuard(next):
             applyGuardSettings(next)
             send(.result(id: id, ok: .setGuard(next), error: nil))
+        case let .clipMaterialize(clipID, kind, origin):
+            let directory = Self.clipsDirectory
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try ClipDrop.materialize(id: clipID, kind: kind, origin: origin, into: directory) }
+            }.value
+            switch result {
+            case let .success(made):
+                send(.result(id: id, ok: .clipMaterialize(stored: made.stored, bytes: made.bytes, files: made.files), error: nil))
+            case let .failure(error):
+                send(.result(id: id, ok: nil, error: Self.clipMessage(error)))
+            }
+        case let .clipPut(items, to, folder, deviceName):
+            do {
+                let placed = try await placeClips(items, to: to, folder: folder, deviceName: deviceName)
+                send(.result(id: id, ok: .clipPut(placed: placed), error: nil))
+            } catch {
+                send(.result(id: id, ok: nil, error: Self.clipMessage(error)))
+            }
         }
+    }
+
+    // MARK: Clipboard history and drop
+
+    func setClipHistory(enabled: Bool) {
+        guard settings.clipHistoryEnabled != enabled else { return }
+        settings.clipHistoryEnabled = enabled
+        sendClipPolicy()
+        updateClipWatcher()
+    }
+
+    func setClipKeepDays(_ days: Int) {
+        guard settings.clipKeepDays != days else { return }
+        settings.clipKeepDays = days
+        sendClipPolicy()
+    }
+
+    /// Deletes unpinned history on the gateway; it answers with fresh `clipStats`.
+    func clearClipHistory() { send(.clipClear) }
+
+    func refreshClipAccess() { clipReadsBlocked = ClipWatcher.readsBlocked }
+
+    private func sendClipPolicy() {
+        send(.clipPolicy(ClipPolicy(enabled: settings.clipHistoryEnabled, keepDays: min(90, max(1, settings.clipKeepDays)))))
+    }
+
+    /// The pasteboard poll runs only while the gateway is up and history is on; otherwise no timer exists.
+    private func updateClipWatcher() {
+        if gateway != nil, state == .running, settings.clipHistoryEnabled {
+            clipWatcher.start()
+            refreshClipAccess()
+        } else {
+            clipWatcher.stop()
+        }
+    }
+
+    private func placeClips(_ items: [ClipPlacement], to destination: ClipDestination, folder: String?, deviceName: String) async throws -> Int {
+        guard !items.isEmpty else { return 0 }
+        let directory = Self.clipsDirectory
+        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+        switch destination {
+        case .downloads:
+            _ = try await Task.detached(priority: .userInitiated) {
+                try ClipDrop.save(try ClipDrop.resolve(items, in: directory), to: downloads, folder: folder, deviceName: deviceName)
+            }.value
+        case .clipboard:
+            let entries = try await Task.detached(priority: .userInitiated) {
+                try ClipDrop.clipboardEntries(try ClipDrop.resolve(items, in: directory), downloads: downloads, deviceName: deviceName)
+            }.value
+            let written = ClipDrop.write(entries)
+            clipWatcher.noteOwnWrite()
+            guard written else { throw ClipDrop.Failure("Clipboard write failed") }
+        }
+        let summary = ClipDrop.summary(items.map(\.kind), to: destination, folder: folder, deviceName: deviceName)
+        NotificationManager.shared.send(title: summary.title, body: summary.body, id: "vitals.remote.clip.\(UUID().uuidString)")
+        return items.count
+    }
+
+    private static func clipMessage(_ error: Error) -> String {
+        (error as? ClipDrop.Failure)?.message ?? error.localizedDescription
     }
 
     // MARK: Admin (desktop only)
@@ -534,6 +633,10 @@ final class RemoteModel {
             return calmDown()
         case .undoCalm:
             return undoCalm()
+        case let .clipboardSet(text):
+            let error = SystemControl.setClipboard(text)
+            clipWatcher.noteOwnWrite()
+            return error
         case .locate:
             SystemControl.locate()
             NotificationManager.shared.send(title: "Here I am", body: "Vitals Remote asked this Mac to identify itself.", id: "vitals.remote.locate")

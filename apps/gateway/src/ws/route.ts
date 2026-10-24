@@ -11,7 +11,7 @@ import type * as RpcMessage from "effect/rpc/RpcMessage";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as RpcServer from "effect/rpc/RpcServer";
 
-import { ActivityLog } from "../activity/ActivityLog.ts";
+import { ActivityLog, type FrameRecord } from "../activity/ActivityLog.ts";
 import { Auth, type Session } from "../auth/Auth.ts";
 import { Connections } from "./Connections.ts";
 import { handlersLayer } from "./handlers.ts";
@@ -19,6 +19,12 @@ import { handlersLayer } from "./handlers.ts";
 const isMethod = (tag: string): tag is VitalsMethod => Object.hasOwn(RPC_SCOPES, tag);
 
 const frameBytes = (value: unknown): number => JSON.stringify(value)?.length ?? 0;
+
+/**
+ * Clip chunk traffic: one call per 512 KB, so a big file is thousands of calls. These keep no frame or
+ * rpc.call rows; ClipStore writes one `clip.download` / `clip.upload` summary per transfer instead.
+ */
+const BULK_METHODS: ReadonlySet<string> = new Set(["clips.read", "clips.send.chunk"]);
 
 export const loginHeader = (request: HttpServerRequest.HttpServerRequest): string | null =>
   request.headers["tailscale-user-login"] ?? null;
@@ -45,7 +51,8 @@ const scopeLayer = (session: Session, connectionId: string, record: ActivityLog[
     const started = performance.now();
     return effect.pipe(
       Effect.onExit((exit) =>
-        Effect.sync(() =>
+        Effect.sync(() => {
+          if (exit._tag === "Success" && BULK_METHODS.has(method)) return;
           record({
             at: Date.now(),
             source: "gateway",
@@ -56,8 +63,8 @@ const scopeLayer = (session: Session, connectionId: string, record: ActivityLog[
             rpc: method,
             durationMs: performance.now() - started,
             data: { ok: exit._tag === "Success" },
-          }),
-        ),
+          });
+        }),
       ),
     );
   });
@@ -65,10 +72,12 @@ const scopeLayer = (session: Session, connectionId: string, record: ActivityLog[
 const instrument = (
   protocol: RpcServer.Protocol["Service"],
   connectionId: string,
-  frame: ActivityLog["Service"]["frame"],
+  activity: Pick<ActivityLog["Service"], "frame" | "tally">,
 ): RpcServer.Protocol["Service"] => {
   const methods = new Map<string, string>();
   const methodFor = (id: string | number) => methods.get(String(id)) ?? null;
+  const frame = (record: FrameRecord) =>
+    record.method !== null && BULK_METHODS.has(record.method) ? activity.tally(record) : activity.frame(record);
   return {
     ...protocol,
     run: (handle) =>
@@ -140,7 +149,7 @@ export const wsRoute = HttpRouter.add(
     const served = Effect.gen(function* () {
       const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
       yield* RpcServer.make(VitalsRpc, { disableTracing: true, disableFatalDefects: true }).pipe(
-        Effect.provideService(RpcServer.Protocol, instrument(protocol, connectionId, activity.frame)),
+        Effect.provideService(RpcServer.Protocol, instrument(protocol, connectionId, activity)),
         Effect.provide(Layer.merge(handlersLayer(session, connectionId), scopeLayer(session, connectionId, activity.record))),
         Effect.forkScoped,
       );

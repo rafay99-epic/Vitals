@@ -9,6 +9,7 @@ import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processe
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, Topic } from "./stats.ts";
 import { BRIDGE_VERSION, KeepAwakeState, MacInfo, SystemEvent } from "./system.ts";
 import { ActivityLevel } from "./activity.ts";
+import { ClipDestination, ClipFileName, ClipId, ClipPlacement, ClipPolicy, ClipStats, MacClip } from "./clips.ts";
 import { Device } from "./auth.ts";
 
 const RequestId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
@@ -18,6 +19,15 @@ export const Query = Schema.Union([
   Schema.TaggedStruct("Apps", {}),
   Schema.TaggedStruct("Clipboard", {}),
   Schema.TaggedStruct("SetGuard", { settings: GuardSettings }),
+  /** Clone a copied file, or zip a copied folder, into `clips/` so phones can download it. */
+  Schema.TaggedStruct("ClipMaterialize", { id: ClipId, kind: Schema.Literals(["file", "folder"]), origin: Schema.String }),
+  /** Put clips on the Mac clipboard or into Downloads. */
+  Schema.TaggedStruct("ClipPut", {
+    items: Schema.Array(ClipPlacement),
+    to: ClipDestination,
+    folder: Schema.NullOr(Schema.String),
+    deviceName: Schema.String,
+  }),
 ]);
 export type Query = typeof Query.Type;
 
@@ -26,6 +36,8 @@ export const QueryResult = Schema.Union([
   Schema.TaggedStruct("Apps", { result: AppsSnapshot }),
   Schema.TaggedStruct("Clipboard", { text: Schema.NullOr(Schema.String) }),
   Schema.TaggedStruct("SetGuard", { settings: GuardSettings }),
+  Schema.TaggedStruct("ClipMaterialize", { stored: ClipFileName, bytes: NonNegativeInt, files: Schema.NullOr(NonNegativeInt) }),
+  Schema.TaggedStruct("ClipPut", { placed: NonNegativeInt }),
 ]);
 export type QueryResult = typeof QueryResult.Type;
 
@@ -91,6 +103,7 @@ export const ToApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("status"), status: GatewayStatus }),
   Schema.Struct({ t: Schema.Literal("pairPrompt"), prompt: PairPrompt }),
   Schema.Struct({ t: Schema.Literal("pairPromptEnded"), id: Schema.String }),
+  Schema.Struct({ t: Schema.Literal("clipStats"), stats: ClipStats }),
 ]);
 export type ToApp = typeof ToApp.Type;
 
@@ -119,6 +132,9 @@ export const FromApp = Schema.Union([
     kind: Schema.String,
     data: Schema.Record(Schema.String, Schema.Unknown),
   }),
+  Schema.Struct({ t: Schema.Literal("clip"), clip: MacClip }),
+  Schema.Struct({ t: Schema.Literal("clipPolicy"), policy: ClipPolicy }),
+  Schema.Struct({ t: Schema.Literal("clipClear") }),
 ]);
 export type FromApp = typeof FromApp.Type;
 

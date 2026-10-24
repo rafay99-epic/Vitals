@@ -23,5 +23,12 @@
   { "t": "admin", "id": "a-1", "op": { "_tag": "CreatePairing" } },
   { "t": "admin", "id": "a-3", "op": { "_tag": "SetScopes", "deviceId": "dev-1", "scopes": ["read", "operate", "destructive"] } },
   { "t": "log", "level": "info", "kind": "desktop.remote.toggled", "data": { "enabled": true } },
-  { "t": "admin", "id": "a-9", "op": { "_tag": "ResolvePairPrompt", "id": "p-1", "allow": true } }
+  { "t": "admin", "id": "a-9", "op": { "_tag": "ResolvePairPrompt", "id": "p-1", "allow": true } },
+  { "t": "clipPolicy", "policy": { "enabled": true, "keepDays": 7 } },
+  { "t": "clip", "clip": { "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b", "kind": "text", "at": 1790000000000, "source": "Terminal", "text": "git status", "truncated": false, "name": null, "mime": null, "bytes": 0, "files": null, "thumb": null, "stored": null, "origin": null } },
+  { "t": "clip", "clip": { "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6c", "kind": "image", "at": 1790000001000, "source": "Preview", "text": null, "truncated": false, "name": "Screenshot.png", "mime": "image/png", "bytes": 48213, "files": null, "thumb": "/9j/4AAQSkZJRgABAQ==", "stored": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6c.png", "origin": null } },
+  { "t": "clip", "clip": { "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6d", "kind": "folder", "at": 1790000002000, "source": "Finder", "text": null, "truncated": false, "name": "Invoices", "mime": null, "bytes": 0, "files": 12, "thumb": null, "stored": null, "origin": "/Users/abdul/Documents/Invoices" } },
+  { "t": "result", "id": "q-4", "ok": { "_tag": "ClipMaterialize", "stored": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6d.zip", "bytes": 1048576, "files": 12 }, "error": null },
+  { "t": "result", "id": "q-5", "ok": { "_tag": "ClipPut", "placed": 2 }, "error": null },
+  { "t": "clipClear" }
 ]

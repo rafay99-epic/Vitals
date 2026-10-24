@@ -14,11 +14,13 @@ import {
 import { newId } from "@vitals/shared";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
+import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
@@ -45,8 +47,14 @@ export class Bridge extends Context.Service<
   {
     readonly send: (message: ToApp) => Effect.Effect<void>;
     readonly messages: Stream.Stream<FromApp>;
+    /**
+     * Subscribes now rather than when a stream starts. Use it in a layer that must not miss what the
+     * Mac sends right after hello (`messages` subscribes lazily, once its fiber runs).
+     */
+    readonly subscribe: Effect.Effect<PubSub.Subscription<FromApp>, never, Scope.Scope>;
     readonly identity: Effect.Effect<AppIdentity, Unavailable>;
-    readonly query: (q: Query) => Effect.Effect<QueryResult, Unavailable>;
+    /** Asks the Mac app something. Times out after 10 s unless a longer `timeout` is given. */
+    readonly query: (q: Query, timeout?: Duration.Input) => Effect.Effect<QueryResult, Unavailable>;
     readonly serveAdmin: (handler: AdminHandler) => Effect.Effect<never>;
   }
 >()("@vitals/gateway/Bridge") {}
@@ -134,7 +142,7 @@ export const layer = Layer.effect(
       Effect.forkScoped,
     );
 
-    const query = (q: Query) =>
+    const query = (q: Query, timeout: Duration.Input = QUERY_TIMEOUT) =>
       Effect.gen(function* () {
         const waiter = yield* Deferred.make<QueryResult, Unavailable>();
         const id = newId();
@@ -142,7 +150,7 @@ export const layer = Layer.effect(
         yield* send({ t: "query", id, q });
         return yield* Deferred.await(waiter).pipe(
           Effect.timeoutOrElse({
-            duration: QUERY_TIMEOUT,
+            duration: timeout,
             orElse: () => Effect.fail(new Unavailable({ message: "Vitals did not answer in time" })),
           }),
           Effect.ensuring(Effect.sync(() => pending.delete(id))),
@@ -167,6 +175,7 @@ export const layer = Layer.effect(
     return Bridge.of({
       send,
       messages: Stream.fromPubSub(hub),
+      subscribe: PubSub.subscribe(hub),
       identity: Ref.get(identity).pipe(
         Effect.flatMap((value) =>
           value === null ? Effect.fail(new Unavailable({ message: "Vitals is not connected" })) : Effect.succeed(value),
@@ -177,6 +186,19 @@ export const layer = Layer.effect(
     });
   }),
 );
+
+/** Runs a bridge query and narrows the reply to the matching result tag. */
+export const ask = <Tag extends QueryResult["_tag"]>(
+  bridge: Bridge["Service"],
+  q: Extract<Query, { readonly _tag: Tag }>,
+  timeout?: Duration.Input,
+) =>
+  bridge.query(q, timeout).pipe(
+    Effect.filterOrFail(
+      (result): result is Extract<QueryResult, { readonly _tag: Tag }> => result._tag === q._tag,
+      (result) => new Unavailable({ message: `Unexpected ${result._tag} reply from Vitals` }),
+    ),
+  );
 
 export const stdioTransport = Layer.sync(BridgeTransportService, () => ({
   lines: Stream.fromReadableStream({

@@ -142,6 +142,20 @@ export function Tile({ icon, label, onPress, danger = false, disabled = false, r
   );
 }
 
+/** Holds custom tile content (a native button) in the same slot a Tile takes. */
+export function TileSlot({ children }: { readonly children: ReactNode }) {
+  return <View style={styles.tileSlot}>{children}</View>;
+}
+
+/** Thin progress bar. It moves when the value changes (a chunk lands), never on its own. */
+export function Bar({ value, tint = color.yellow }: { readonly value: number; readonly tint?: string }) {
+  return (
+    <View style={styles.bar}>
+      <View style={[styles.barFill, { backgroundColor: tint, transform: [{ scaleX: Math.max(0, Math.min(1, value)) }] }]} />
+    </View>
+  );
+}
+
 /** Three tiles per row. */
 export function TileGrid({ children }: { readonly children: ReactNode }) {
   return <View style={styles.tiles}>{children}</View>;
@@ -220,6 +234,8 @@ const styles = StyleSheet.create({
   card: { marginHorizontal: space.edge, marginBottom: 12, borderRadius: 18, backgroundColor: color.s2, padding: 16, borderWidth: 1 },
   stats: { flexDirection: "row", marginHorizontal: space.edge, marginBottom: 12, backgroundColor: color.s2, borderRadius: 16, paddingVertical: 12 },
   stat: { flex: 1, paddingHorizontal: 14, gap: 3 },
+  bar: { height: 4, borderRadius: 2, backgroundColor: color.line2, overflow: "hidden" },
+  barFill: { width: "100%", height: "100%", transformOrigin: "left" },
   empty: { alignItems: "center", paddingVertical: 32, paddingHorizontal: 24 },
   emptyDetail: { textAlign: "center", marginTop: 4 },
 });

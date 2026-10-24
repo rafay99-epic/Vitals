@@ -6,5 +6,5 @@ export { Icon, type IconName } from "./Icon.tsx";
 export { sheet, SheetCancel, SheetHeader, SheetHost, SheetNote } from "./Sheet.tsx";
 export { Tap } from "./Tap.tsx";
 export { T, type Variant } from "./Text.tsx";
-export { toast, ToastHost } from "./Toast.tsx";
+export { Strip, toast, ToastHost } from "./Toast.tsx";
 export * from "./tokens.ts";

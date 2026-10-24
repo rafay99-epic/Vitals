@@ -6,6 +6,11 @@ export type HomeStackParams = {
   Channel: { readonly channel: Channel };
 };
 
+export type ControlStackParams = {
+  Control: undefined;
+  Clipboard: undefined;
+};
+
 export type SettingsStackParams = {
   Settings: undefined;
   Connection: undefined;
@@ -19,13 +24,18 @@ export type SettingsStackParams = {
 export type TabParams = {
   HomeTab: NavigatorScreenParams<HomeStackParams> | undefined;
   Apps: undefined;
-  Control: undefined;
+  Control: NavigatorScreenParams<ControlStackParams> | undefined;
   Alerts: undefined;
   SettingsTab: NavigatorScreenParams<SettingsStackParams> | undefined;
 };
 
 /** Lets code outside screens (toasts, notifications) move the user to a screen. */
 export const navigationRef = createNavigationContainerRef<TabParams>();
+
+/** Opens Control > Clipboard with Control underneath, e.g. after sharing something into Vitals. */
+export const openClipboard = (): void => {
+  if (navigationRef.isReady()) navigationRef.navigate("Control", { screen: "Clipboard", initial: false });
+};
 
 /** Opens Settings > Updates with Settings underneath, so Back works. */
 export const openUpdates = (): void => {

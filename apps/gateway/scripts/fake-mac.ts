@@ -8,13 +8,18 @@
  *
  * Then pair the emulator with address http://10.0.2.2:47910 and the printed code.
  * A tiny proxy adds the tailnet identity header Tailscale would normally add.
+ *
+ * Clipboard history is on and seeded with a text, a long command, two links, an image, a file, and
+ * a folder. `kill -WINCH <pid>` copies something new on the "Mac" (text, link, image in turn).
  */
-import { mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { deflateSync } from "node:zlib";
 
 import type { ToApp } from "@vitals/contracts";
 import { ToApp as ToAppSchema } from "@vitals/contracts";
+import { newId } from "@vitals/shared";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
@@ -263,6 +268,116 @@ const historyFor = (input: { readonly series: ReadonlyArray<string>; readonly fr
   })),
 });
 
+/* ---------- clipboard ---------- */
+
+const pngChunk = (type: string, data: Uint8Array): Buffer => {
+  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const head = Buffer.alloc(4);
+  head.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(Bun.hash.crc32(body) >>> 0);
+  return Buffer.concat([head, body, crc]);
+};
+
+/** A real RGB PNG: a diagonal gradient in the given tint, so each one hashes differently. */
+const gradientPng = (size: number, tint: readonly [number, number, number]): Buffer => {
+  const row = size * 3 + 1;
+  const raw = Buffer.alloc(row * size);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const shade = (x + y) / (2 * size);
+      tint.forEach((channel, index) => {
+        raw[y * row + 1 + x * 3 + index] = Math.round(channel * shade);
+      });
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", new Uint8Array(0)),
+  ]);
+};
+
+const clipsDir = (): string => join(dataDir(), "clips");
+
+/** Sample files the "Mac" copied in Finder, so downloads exercise ClipMaterialize. */
+const originDir = (): string => {
+  const dir = join(tmpdir(), "vitals-fake-mac-origin");
+  mkdirSync(join(dir, "Invoices"), { recursive: true });
+  writeFileSync(join(dir, "release-notes.md"), "# Vitals 0.214\n\n- Clipboard and Drop\n- Faster history\n");
+  for (const month of ["2026-07", "2026-08", "2026-09"]) writeFileSync(join(dir, "Invoices", `invoice-${month}.txt`), `Invoice ${month}\nTotal: 120.00\n`);
+  return dir;
+};
+
+const macClip = (fields: Record<string, unknown>) => ({
+  id: newId(),
+  at: Date.now(),
+  source: "Terminal",
+  text: null,
+  truncated: false,
+  name: null,
+  mime: null,
+  bytes: 0,
+  files: null,
+  thumb: null,
+  stored: null,
+  origin: null,
+  ...fields,
+});
+
+const textClip = (text: string, source: string, at = Date.now()) => macClip({ kind: "text", text, source, at });
+const linkClip = (url: string, source: string, at = Date.now()) => macClip({ kind: "link", text: url, source, at });
+
+const imageClip = (tint: readonly [number, number, number], at = Date.now()) => {
+  const id = newId();
+  const png = gradientPng(96, tint);
+  mkdirSync(clipsDir(), { recursive: true });
+  writeFileSync(join(clipsDir(), `${id}.png`), png);
+  return macClip({ id, kind: "image", at, source: "Preview", name: "Screenshot.png", mime: "image/png", bytes: png.length, thumb: gradientPng(32, tint).toString("base64"), stored: `${id}.png` });
+};
+
+const emitClip = (clip: object) => emit({ t: "clip", clip });
+
+const seedClips = () => {
+  const origin = originDir();
+  const minutesAgo = (minutes: number) => Date.now() - minutes * 60_000;
+  const notes = join(origin, "release-notes.md");
+  emit({ t: "clipPolicy", policy: { enabled: true, keepDays: 7 } });
+  emitClip(textClip("Meet at 6 at the usual place", "Messages", minutesAgo(90)));
+  emitClip(
+    textClip(
+      "xcodebuild -scheme Vitals -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData CODE_SIGN_IDENTITY='Vitals Local Signing' clean build | xcbeautify",
+      "Terminal",
+      minutesAgo(60),
+    ),
+  );
+  emitClip(linkClip("https://github.com/rafay99-epic/Vitals/releases", "Safari", minutesAgo(45)));
+  emitClip(linkClip("https://developer.apple.com/documentation/appkit/nspasteboard", "Safari", minutesAgo(30)));
+  emitClip(imageClip([255, 120, 40], minutesAgo(20)));
+  emitClip(macClip({ kind: "file", at: minutesAgo(10), source: "Finder", name: basename(notes), mime: "text/markdown", bytes: statSync(notes).size, origin: notes }));
+  emitClip(macClip({ kind: "folder", at: minutesAgo(5), source: "Finder", name: "Invoices", files: 3, origin: join(origin, "Invoices") }));
+};
+
+/** Clones a copied file, or zips a copied folder, into clips/ the way the Mac app does. */
+const materialize = async (q: { readonly id: string; readonly kind: "file" | "folder"; readonly origin: string }) => {
+  mkdirSync(clipsDir(), { recursive: true });
+  if (q.kind === "file") {
+    const ext = (q.origin.split(".").pop() ?? "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "bin";
+    const stored = `${q.id}.${ext}`;
+    copyFileSync(q.origin, join(clipsDir(), stored));
+    return { _tag: "ClipMaterialize", stored, bytes: statSync(join(clipsDir(), stored)).size, files: null };
+  }
+  const stored = `${q.id}.zip`;
+  const zipped = Bun.spawn(["ditto", "-c", "-k", "--norsrc", "--noextattr", "--noqtn", "--keepParent", q.origin, join(clipsDir(), stored)]);
+  if ((await zipped.exited) !== 0) throw new Error("ditto failed");
+  return { _tag: "ClipMaterialize", stored, bytes: statSync(join(clipsDir(), stored)).size, files: readdirSync(q.origin).length };
+};
+
 const write = (line: string): void => {
   const message = decodeToApp(line);
   switch (message.t) {
@@ -270,6 +385,7 @@ const write = (line: string): void => {
       emit({ t: "hello", v: 1, mac: MAC, keepAwake });
       // Give the gateway's event log a moment to subscribe before raising the alert.
       if (alertOpen) setTimeout(() => emit({ t: "event", event: { _tag: "AlertRaised", at: Date.now(), alert: agentAlert } }), 3_000);
+      seedClips();
       return;
     case "need":
       need = message;
@@ -294,6 +410,12 @@ const write = (line: string): void => {
           return reply({ _tag: "SetGuard", settings: guardSettings });
         case "History":
           return reply({ _tag: "History", result: historyFor(message.q.input) });
+        case "ClipMaterialize":
+          materialize(message.q).then(reply, (error: unknown) => emit({ t: "result", id: message.id, ok: null, error: String(error) }));
+          return;
+        case "ClipPut":
+          console.log(`ClipPut from ${message.q.deviceName}: ${String(message.q.items.length)} to ${message.q.to}`, message.q.items.map((item) => item.stored ?? item.text?.slice(0, 40)));
+          return reply({ _tag: "ClipPut", placed: message.q.items.length });
         default:
           return emit({ t: "result", id: message.id, ok: null, error: "not in fake" });
       }
@@ -325,7 +447,8 @@ const config = {
   port: GATEWAY_PORT,
   servePort: 7999,
   dataDir: dataDir(),
-  webDir: null,
+  // Point at `apps/web/dist` (after `pnpm --filter @vitals/web export`) to test the web client too.
+  webDir: process.env["VITALS_REMOTE_WEB_DIR"] ?? null,
   tailscaleBin: null,
   manageServe: false,
   ownerLogin: OWNER,
@@ -386,6 +509,19 @@ process.on("SIGUSR1", () => {
 process.on("SIGUSR2", () => {
   const alert = raised.pop();
   if (alert !== undefined) emit({ t: "event", event: { _tag: "AlertCleared", at: Date.now(), alert: { ...alert, clearedAt: Date.now() } } });
+});
+
+// `kill -WINCH <pid>` copies something new on the "Mac", rotating text, link, image, to test live arrival and auto-copy.
+let copies = 0;
+process.on("SIGWINCH", () => {
+  copies += 1;
+  const stamp = new Date().toLocaleTimeString();
+  const fresh = [
+    () => textClip(`Copied on the Mac at ${stamp}`, "Notes"),
+    () => linkClip(`https://vitals.rafay99.com/releases?copy=${String(copies)}`, "Safari"),
+    () => imageClip([40 + ((copies * 70) % 215), 160, 255 - ((copies * 50) % 200)]),
+  ][copies % 3];
+  if (fresh !== undefined) emitClip(fresh());
 });
 
 setTimeout(() => emit({ t: "admin", id: "pair-1", op: { _tag: "CreatePairing" } }), 1_000);
