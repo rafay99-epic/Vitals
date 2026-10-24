@@ -90,6 +90,46 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
     id: 5,
     sql: "ALTER TABLE clips ADD COLUMN pushed INTEGER NOT NULL DEFAULT 0;",
   },
+  {
+    id: 6,
+    sql: `
+      CREATE TABLE drops (
+        id TEXT PRIMARY KEY,
+        device_id TEXT NOT NULL,
+        incoming INTEGER NOT NULL,
+        from_json TEXT NOT NULL,
+        to_json TEXT NOT NULL,
+        state TEXT NOT NULL,
+        route TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        started_at INTEGER,
+        error TEXT
+      );
+      CREATE TABLE drop_files (
+        drop_id TEXT NOT NULL REFERENCES drops(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        ord INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        path TEXT,
+        size INTEGER NOT NULL,
+        mime TEXT,
+        sha256 TEXT,
+        done INTEGER NOT NULL DEFAULT 0,
+        complete INTEGER NOT NULL DEFAULT 0,
+        parts BLOB,
+        origin TEXT,
+        PRIMARY KEY (drop_id, id)
+      );
+      CREATE TABLE drop_tickets (
+        hash BLOB PRIMARY KEY,
+        drop_id TEXT NOT NULL REFERENCES drops(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX drop_tickets_drop ON drop_tickets(drop_id, expires_at);
+    `,
+  },
 ];
 
 export const ACTIVITY_MIGRATIONS: ReadonlyArray<Migration> = [

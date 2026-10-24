@@ -11,7 +11,6 @@ export const ClipRecord = Schema.Struct({
   origin: Schema.NullOr(Schema.String),
   /** Hex sha256 of `stored`, when hashed. Used to spot repeat copies of the same image. */
   sha256: Schema.NullOr(Schema.String),
-  /** Sent from the Mac on purpose, so phones see it even with history off. */
   pushed: Schema.Boolean,
 });
 export type ClipRecord = typeof ClipRecord.Type;

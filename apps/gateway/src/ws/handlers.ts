@@ -6,6 +6,7 @@ import { Auth, type Session } from "../auth/Auth.ts";
 import { Bridge, ask } from "../bridge/Bridge.ts";
 import { ClipStore } from "../clips/ClipStore.ts";
 import { CommandService } from "../commands/CommandService.ts";
+import { DropStore } from "../drop/DropStore.ts";
 import { EventLog } from "../events/EventLog.ts";
 import { Lan } from "../lan/Lan.ts";
 import { Hubs } from "../live/Hubs.ts";
@@ -32,8 +33,10 @@ export const handlersLayer = (session: Session, connectionId: string) =>
       const auth = yield* Auth;
       const serve = yield* Serve;
       const clips = yield* ClipStore;
+      const drops = yield* DropStore;
       const caller = { id: session.device.id, name: session.device.name };
       const clipCaller = { deviceId: session.device.id, name: session.device.name, connectionId };
+      const dropCaller = { ...clipCaller, platform: session.device.platform };
 
       return VitalsRpc.of({
         "server.hello": () =>
@@ -51,6 +54,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
               serverTime: Date.now(),
               scopes: session.device.scopes,
               clips: true,
+              drop: true,
             };
           }),
         "stats.live": ({ topics }) => hubs.live(topics),
@@ -75,6 +79,13 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "clips.send.chunk": (input) => clips.chunk(clipCaller, input),
         "clips.send.finish": (input) => clips.finish(clipCaller, input),
         "clips.put": (input) => clips.put(clipCaller, input),
+        "drop.watch": () => drops.watch(dropCaller),
+        "drop.offer": (input) => drops.offer(dropCaller, input),
+        "drop.accept": (input) => drops.accept(dropCaller, input),
+        "drop.decline": (input) => drops.decline(dropCaller, input),
+        "drop.cancel": (input) => drops.cancel(dropCaller, input),
+        "drop.ticket": (input) => drops.ticket(dropCaller, input),
+        "drop.received": (input) => drops.received(dropCaller, input),
         "activity.ingest": ({ events: batch }) =>
           Effect.sync(() => {
             for (const event of batch) {

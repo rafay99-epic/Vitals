@@ -10,6 +10,7 @@ import {
   type Query,
   type QueryResult,
   type ToApp,
+  DROP_LAN_TLS_OFFSET,
   FromApp as FromAppSchema,
   ToApp as ToAppSchema,
   VitalsRpc,
@@ -191,6 +192,7 @@ export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-
     app,
     base,
     lanBase: `http://127.0.0.1:${port + 2_000}`,
+    tlsBase: `https://127.0.0.1:${port + 2_000 + DROP_LAN_TLS_OFFSET}`,
     dataDir,
     stop: async (keepData = false) => {
       await Effect.runPromise(Fiber.interrupt(dispose));
