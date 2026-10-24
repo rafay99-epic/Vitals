@@ -137,20 +137,22 @@ func (m *fakeMac) count() int {
 }
 
 type result struct {
-	sum       string
-	message   string
-	retryable bool
-	failed    bool
+	sum     string
+	message string
+	failed  bool
 }
 
 type listener struct {
 	result   chan result
+	stalls   chan string
 	mu       sync.Mutex
 	progress []int64
 	routes   []string
 }
 
-func newListener() *listener { return &listener{result: make(chan result, 1)} }
+func newListener() *listener {
+	return &listener{result: make(chan result, 1), stalls: make(chan string, 16)}
+}
 
 func (l *listener) OnProgress(job string, done int64, total int64, route string) {
 	l.mu.Lock()
@@ -162,7 +164,11 @@ func (l *listener) OnProgress(job string, done int64, total int64, route string)
 func (l *listener) OnDone(job string, sum string) { l.result <- result{sum: sum} }
 
 func (l *listener) OnError(job string, message string, retryable bool) {
-	l.result <- result{message: message, retryable: retryable, failed: true}
+	if retryable {
+		l.stalls <- message
+		return
+	}
+	l.result <- result{message: message, failed: true}
 }
 
 func (l *listener) wait(t *testing.T) result {
@@ -256,7 +262,7 @@ func TestPinMismatchRefused(t *testing.T) {
 	l := newListener()
 	DropUpload("j", job(10, lan(url, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")), fd, l)
 	r := l.wait(t)
-	if !r.failed || r.retryable || m.count() != 0 {
+	if !r.failed || m.count() != 0 {
 		t.Fatalf("a wrong pin must be refused before any request: %+v, %d requests", r, m.count())
 	}
 }
@@ -351,6 +357,9 @@ func TestLockedBacksOffThenFinishes(t *testing.T) {
 	if r := l.wait(t); r.failed || !bytes.Equal(m.data, content) {
 		t.Fatalf("%+v", r)
 	}
+	if len(l.stalls) != 1 || <-l.stalls != "Paused" {
+		t.Fatal("a 423 must be reported once as a retryable pause")
+	}
 	if m.count() < 5 {
 		t.Fatalf("expected retries, got %d requests", m.count())
 	}
@@ -363,13 +372,13 @@ func TestFinalStatusesStopAtOnce(t *testing.T) {
 		fd, _ := fdFor(t, nil)
 		l := newListener()
 		DropDownload("j", job(10, lan(url, pin)), fd, l)
-		if r := l.wait(t); !r.failed || r.retryable || m.count() != 1 || r.message != fmt.Sprintf("server says %d", code) {
+		if r := l.wait(t); !r.failed || m.count() != 1 || r.message != fmt.Sprintf("server says %d", code) {
 			t.Fatalf("%d: %+v after %d requests", code, r, m.count())
 		}
 	}
 }
 
-func TestUnreachableIsRetryable(t *testing.T) {
+func TestUnreachableStallsAndKeepsTrying(t *testing.T) {
 	fast(t)
 	m := &fakeMac{data: make([]byte, 10), parts: map[int]bool{}}
 	s := httptest.NewTLSServer(m)
@@ -378,7 +387,32 @@ func TestUnreachableIsRetryable(t *testing.T) {
 	fd, _ := fdFor(t, random(10))
 	l := newListener()
 	DropUpload("j", job(10, lan(url, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")), fd, l)
-	if r := l.wait(t); !r.failed || !r.retryable {
+	select {
+	case message := <-l.stalls:
+		if message != "Can't reach your Mac" {
+			t.Fatal(message)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no stall reported")
+	}
+	select {
+	case r := <-l.result:
+		t.Fatalf("the job must keep trying after a stall: %+v", r)
+	case <-time.After(300 * time.Millisecond):
+	}
+	DropCancel("j")
+	if r := l.wait(t); r.message != "Cancelled" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestShortFileFailsUpload(t *testing.T) {
+	m := &fakeMac{data: make([]byte, 1000), parts: map[int]bool{}}
+	url, pin := serve(t, m)
+	fd, _ := fdFor(t, random(600))
+	l := newListener()
+	DropUpload("j", job(1000, lan(url, pin)), fd, l)
+	if r := l.wait(t); !r.failed || r.message != "Can't read the file" {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -393,7 +427,7 @@ func TestCancel(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	DropCancel("j")
 	r := l.wait(t)
-	if !r.failed || r.retryable || r.message != "Cancelled" {
+	if !r.failed || r.message != "Cancelled" {
 		t.Fatalf("%+v", r)
 	}
 	if err := DropDownload("j", job(len(content), lan(url, pin)), mustFd(t), newListener()); err != nil {

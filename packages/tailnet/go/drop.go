@@ -37,9 +37,10 @@ const (
 )
 
 var (
-	dropStall   = 60 * time.Second
+	dropStall   = 15 * time.Second
 	dropBackoff = 250 * time.Millisecond
 	dropMaxWait = 5 * time.Second
+	dropIdleMax = 15 * time.Second
 )
 
 type dropEndpoint struct {
@@ -62,6 +63,24 @@ var (
 	dropSlots = make(chan struct{}, dropFiles)
 	errPin    = errors.New("the Mac's certificate did not match")
 )
+
+type fileError struct{ message string }
+
+func (e *fileError) Error() string { return e.message }
+
+func describe(err error) (string, bool) {
+	var status *statusError
+	var local *fileError
+	switch {
+	case errors.Is(err, errPin):
+		return "The Mac's certificate did not match", false
+	case errors.As(err, &local):
+		return local.message, false
+	case errors.As(err, &status):
+		return status.Error(), !status.final()
+	}
+	return "Can't reach your Mac", true
+}
 
 type statusError struct {
 	code    int
@@ -111,6 +130,7 @@ type transfer struct {
 	current  int
 	route    atomic.Value
 	done     atomic.Int64
+	broken   atomic.Bool
 	moved    atomic.Int64
 	emitted  atomic.Int64
 }
@@ -171,18 +191,14 @@ func startDrop(job, configJSON string, fd int, listener DropListener, run func(*
 		dropMu.Lock()
 		delete(dropJobs, job)
 		dropMu.Unlock()
-		var status *statusError
 		switch {
 		case err == nil:
 			listener.OnDone(job, sum)
 		case cancelled:
 			listener.OnError(job, "Cancelled", false)
-		case errors.Is(err, errPin):
-			listener.OnError(job, "The Mac's certificate did not match", false)
-		case errors.As(err, &status):
-			listener.OnError(job, status.Error(), !status.final())
 		default:
-			listener.OnError(job, "Can't reach your Mac", true)
+			message, _ := describe(err)
+			listener.OnError(job, message, false)
 		}
 	}()
 	return nil
@@ -241,6 +257,7 @@ func (t *transfer) set(done int64) {
 
 func (t *transfer) retry(step func() error) error {
 	failures := 0
+	var stalledAt int64
 	for {
 		for t.skip[t.current] {
 			t.next()
@@ -254,10 +271,11 @@ func (t *transfer) retry(step func() error) error {
 		if t.ctx.Err() != nil {
 			return t.ctx.Err()
 		}
-		var status *statusError
-		if errors.As(err, &status) && status.final() {
+		if _, retryable := describe(err); !retryable && !errors.Is(err, errPin) {
 			return err
 		}
+		var status *statusError
+		errors.As(err, &status)
 		if errors.Is(err, errPin) {
 			t.skip[t.current] = true
 			if t.allSkipped() {
@@ -267,13 +285,24 @@ func (t *transfer) retry(step func() error) error {
 		if status == nil {
 			t.next()
 		}
-		if time.Since(time.Unix(0, t.moved.Load())) > dropStall {
-			return err
+		moved := t.moved.Load()
+		if stalledAt != 0 && moved > stalledAt {
+			stalledAt = 0
+			failures = 0
+		}
+		locked := status != nil && status.code == http.StatusLocked
+		if stalledAt == 0 && (locked || time.Since(time.Unix(0, moved)) > dropStall) {
+			stalledAt = moved
+			message, _ := describe(err)
+			t.listener.OnError(t.job, message, true)
 		}
 		failures++
-		wait := min(dropBackoff<<min(failures-1, 8), dropMaxWait)
+		limit := dropMaxWait
+		if stalledAt != 0 {
+			limit = dropIdleMax
+		}
 		select {
-		case <-time.After(wait):
+		case <-time.After(min(dropBackoff<<min(failures-1, 8), limit)):
 		case <-t.ctx.Done():
 			return t.ctx.Err()
 		}
@@ -323,7 +352,7 @@ func (t *transfer) upload() (string, error) {
 	}
 	sum := <-hashed
 	if sum == "" {
-		return "", errors.New("could not read the file")
+		return "", &fileError{"Can't read the file"}
 	}
 	return sum, nil
 }
@@ -371,6 +400,9 @@ func (t *transfer) uploadRound() error {
 		})
 	}
 	wg.Wait()
+	if t.broken.Load() {
+		return &fileError{"Can't read the file"}
+	}
 	return first
 }
 
@@ -399,7 +431,7 @@ func (t *transfer) head() (map[int]bool, error) {
 func (t *transfer) putPart(ctx context.Context, i int) error {
 	start := int64(i) * dropPart
 	n := partLen(i, t.cfg.Size)
-	req := t.request(ctx, http.MethodPut, &progressReader{t: t, r: io.NewSectionReader(t.file, start, n)})
+	req := t.request(ctx, http.MethodPut, &progressReader{t: t, r: io.NewSectionReader(t.file, start, n), left: n})
 	req.ContentLength = n
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, start+n-1, t.cfg.Size))
@@ -423,17 +455,17 @@ func (t *transfer) download() (string, error) {
 	buf := make([]byte, dropBuffer)
 	st, err := t.file.Stat()
 	if err != nil {
-		return "", err
+		return "", &fileError{"Can't save the file"}
 	}
 	off := min(st.Size(), size)
 	if st.Size() > size {
 		if err := t.file.Truncate(size); err != nil {
-			return "", err
+			return "", &fileError{"Can't save the file"}
 		}
 	}
 	if off > 0 {
 		if _, err := io.CopyBuffer(h, &ctxReader{t.ctx, io.NewSectionReader(t.file, 0, off)}, buf); err != nil {
-			return "", err
+			return "", &fileError{"Can't save the file"}
 		}
 		t.set(off)
 	}
@@ -454,6 +486,9 @@ func (t *transfer) download() (string, error) {
 			return err
 		}
 		if resp.StatusCode == http.StatusOK && off > 0 {
+			if err := t.file.Truncate(0); err != nil {
+				return &fileError{"Can't save the file"}
+			}
 			h.Reset()
 			off = 0
 			t.set(0)
@@ -465,7 +500,7 @@ func (t *transfer) download() (string, error) {
 			n, err := resp.Body.Read(buf[:min(int64(len(buf)), size-off)])
 			if n > 0 {
 				if _, werr := t.file.WriteAt(buf[:n], off); werr != nil {
-					return werr
+					return &fileError{"Can't save the file"}
 				}
 				h.Write(buf[:n])
 				off += int64(n)
@@ -486,18 +521,16 @@ func (t *transfer) download() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := t.file.Truncate(size); err != nil {
-		return "", err
-	}
-	if err := t.file.Sync(); err != nil {
-		return "", err
+	if t.file.Truncate(size) != nil || t.file.Sync() != nil {
+		return "", &fileError{"Can't save the file"}
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 type progressReader struct {
-	t *transfer
-	r io.Reader
+	t    *transfer
+	r    io.Reader
+	left int64
 }
 
 func (p *progressReader) Read(b []byte) (int, error) {
@@ -506,7 +539,12 @@ func (p *progressReader) Read(b []byte) (int, error) {
 	}
 	n, err := p.r.Read(b)
 	if n > 0 {
+		p.left -= int64(n)
 		p.t.add(int64(n))
+	}
+	if err != nil && (err != io.EOF || p.left > 0) {
+		p.t.broken.Store(true)
+		return n, &fileError{"Can't read the file"}
 	}
 	return n, err
 }
