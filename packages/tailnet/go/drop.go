@@ -497,7 +497,7 @@ func (t *transfer) download() (string, error) {
 			return &statusError{code: http.StatusRequestedRangeNotSatisfiable}
 		}
 		for off < size {
-			n, err := resp.Body.Read(buf[:min(int64(len(buf)), size-off)])
+			n, err := io.ReadFull(resp.Body, buf[:min(int64(len(buf)), size-off)])
 			if n > 0 {
 				if _, werr := t.file.WriteAt(buf[:n], off); werr != nil {
 					return &fileError{"Can't save the file"}
@@ -507,10 +507,7 @@ func (t *transfer) download() (string, error) {
 				t.set(off)
 			}
 			if err != nil {
-				if err == io.EOF && off == size {
-					break
-				}
-				if err == io.EOF {
+				if err == io.ErrUnexpectedEOF || err == io.EOF {
 					return io.ErrUnexpectedEOF
 				}
 				return err
