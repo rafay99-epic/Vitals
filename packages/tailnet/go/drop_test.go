@@ -49,7 +49,9 @@ func (m *fakeMac) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if m.status != 0 {
 		code := m.status
 		m.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(code)
+		fmt.Fprintf(w, `{"code":"x","message":"server says %d"}`, code)
 		return
 	}
 	if m.locked > 0 {
@@ -355,13 +357,13 @@ func TestLockedBacksOffThenFinishes(t *testing.T) {
 }
 
 func TestFinalStatusesStopAtOnce(t *testing.T) {
-	for _, code := range []int{401, 403, 404, 409, 416, 507} {
+	for _, code := range []int{401, 403, 404, 405, 409, 410, 416, 422, 507} {
 		m := &fakeMac{data: make([]byte, 10), parts: map[int]bool{}, status: code}
 		url, pin := serve(t, m)
-		fd, _ := fdFor(t, random(10))
+		fd, _ := fdFor(t, nil)
 		l := newListener()
-		DropUpload("j", job(10, lan(url, pin)), fd, l)
-		if r := l.wait(t); !r.failed || r.retryable || m.count() != 1 {
+		DropDownload("j", job(10, lan(url, pin)), fd, l)
+		if r := l.wait(t); !r.failed || r.retryable || m.count() != 1 || r.message != fmt.Sprintf("server says %d", code) {
 			t.Fatalf("%d: %+v after %d requests", code, r, m.count())
 		}
 	}

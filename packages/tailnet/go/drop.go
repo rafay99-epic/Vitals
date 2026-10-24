@@ -63,9 +63,15 @@ var (
 	errPin    = errors.New("the Mac's certificate did not match")
 )
 
-type statusError struct{ code int }
+type statusError struct {
+	code    int
+	message string
+}
 
 func (e *statusError) Error() string {
+	if e.message != "" {
+		return e.message
+	}
 	switch e.code {
 	case http.StatusUnauthorized:
 		return "The transfer pass expired"
@@ -87,7 +93,8 @@ func (e *statusError) Error() string {
 
 func (e *statusError) final() bool {
 	switch e.code {
-	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestedRangeNotSatisfiable, http.StatusInsufficientStorage:
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusConflict, http.StatusGone,
+		http.StatusRequestedRangeNotSatisfiable, http.StatusUnprocessableEntity, http.StatusInsufficientStorage:
 		return true
 	}
 	return false
@@ -292,7 +299,11 @@ func check(resp *http.Response, ok ...int) error {
 			return nil
 		}
 	}
-	return &statusError{resp.StatusCode}
+	var body struct {
+		Message string `json:"message"`
+	}
+	json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
+	return &statusError{resp.StatusCode, body.Message}
 }
 
 func (t *transfer) upload() (string, error) {
@@ -372,7 +383,7 @@ func (t *transfer) head() (map[int]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if err := check(resp, http.StatusOK); err != nil {
 		return nil, err
 	}
@@ -400,9 +411,10 @@ func (t *transfer) send(req *http.Request, ok int) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+	err = check(resp, ok)
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-	resp.Body.Close()
-	return check(resp, ok)
+	return err
 }
 
 func (t *transfer) download() (string, error) {
@@ -447,7 +459,7 @@ func (t *transfer) download() (string, error) {
 			t.set(0)
 		}
 		if resp.StatusCode == http.StatusPartialContent && !strings.HasPrefix(resp.Header.Get("Content-Range"), fmt.Sprintf("bytes %d-", off)) {
-			return &statusError{http.StatusRequestedRangeNotSatisfiable}
+			return &statusError{code: http.StatusRequestedRangeNotSatisfiable}
 		}
 		for off < size {
 			n, err := resp.Body.Read(buf[:min(int64(len(buf)), size-off)])
