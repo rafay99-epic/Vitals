@@ -21,6 +21,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ClipboardSync } from "./ClipboardSync.tsx";
+import { CopyStrip } from "./CopyStrip.tsx";
+import { DropStrips } from "./DropTransfers.tsx";
 import { checkForUpdate, launchedNewUpdate, updateState } from "./lib/updates.ts";
 import { type ControlStackParams, type HomeStackParams, navigationRef, openUpdates, type SettingsStackParams, type TabParams } from "./navigation.ts";
 import { PendingStrip } from "./PendingStrip.tsx";
@@ -29,6 +31,7 @@ import { AlertsScreen } from "./screens/AlertsScreen.tsx";
 import { AppsScreen } from "./screens/AppsScreen.tsx";
 import { ChannelScreen } from "./screens/ChannelScreen.tsx";
 import { ControlScreen } from "./screens/ControlScreen.tsx";
+import { FilesScreen } from "./screens/FilesScreen.tsx";
 import { HomeScreen } from "./screens/HomeScreen.tsx";
 import { ConnectionScreen, DiagnosticsRoute, HelpScreen, NotificationsScreen, PhoneScreen, SettingsScreen, UpdatesScreen } from "./screens/SettingsScreens.tsx";
 import { TransferStrip } from "./Transfers.tsx";
@@ -42,13 +45,13 @@ const theme: Theme = {
 const scheme = Constants.expoConfig?.scheme;
 const prefix = typeof scheme === "string" ? `${scheme}://` : null;
 
-/** Sharing into Vitals opens `<scheme>://expo-sharing`; that lands on Control > Clipboard, where the Send sheet opens. */
-const shareLanding = (url: string | null): string | null => (url !== null && prefix !== null && url.startsWith(`${prefix}expo-sharing`) ? `${prefix}control/clipboard` : url);
+/** Sharing into Vitals opens `<scheme>://expo-sharing`; that lands on Control, and the share inbox opens Clipboard or Files with the Send sheet. */
+const shareLanding = (url: string | null): string | null => (url !== null && prefix !== null && url.startsWith(`${prefix}expo-sharing`) ? `${prefix}control` : url);
 
 const linking: LinkingOptions<TabParams> = {
   enabled: prefix !== null,
   prefixes: prefix === null ? [] : [prefix],
-  filter: (url) => !/:\/\/pair\b/.test(url),
+  filter: (url) => !/:\/\/(pair\b|clipboard\/send\b)/.test(url),
   getInitialURL: async () => shareLanding((await Linking.getInitialURL()) ?? null),
   subscribe: (listener) => {
     const subscription = Linking.addEventListener("url", ({ url }) => listener(shareLanding(url) ?? url));
@@ -58,7 +61,7 @@ const linking: LinkingOptions<TabParams> = {
     screens: {
       HomeTab: { path: "home", screens: { Home: "", Channel: ":channel" } },
       Apps: "apps",
-      Control: { path: "control", screens: { Control: "", Clipboard: "clipboard" } },
+      Control: { path: "control", screens: { Control: "", Clipboard: "clipboard", Files: "files" } },
       Alerts: "alerts",
       SettingsTab: { path: "settings", screens: { Settings: "", Connection: "connection", Notifications: "notifications", Updates: "updates", Phone: "phone", Help: "help", ...(isStoreBuild ? {} : { Diagnostics: "diagnostics" }) } },
     },
@@ -87,6 +90,7 @@ function ControlNavigator() {
     <ControlStack.Navigator screenOptions={push}>
       <ControlStack.Screen name="Control" component={ControlScreen} />
       <ControlStack.Screen name="Clipboard" component={ClipboardScreen} />
+      <ControlStack.Screen name="Files" component={FilesScreen} />
     </ControlStack.Navigator>
   );
 }
@@ -168,6 +172,8 @@ function Shell() {
           <>
             <PendingStrip />
             <TransferStrip />
+            <DropStrips />
+            <CopyStrip />
           </>
         }
       />

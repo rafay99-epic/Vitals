@@ -9,6 +9,7 @@ export type HomeStackParams = {
 export type ControlStackParams = {
   Control: undefined;
   Clipboard: undefined;
+  Files: undefined;
 };
 
 export type SettingsStackParams = {
@@ -35,6 +36,10 @@ export const navigationRef = createNavigationContainerRef<TabParams>();
 /** Opens Control > Clipboard with Control underneath, e.g. after sharing something into Vitals. */
 export const openClipboard = (): void => {
   if (navigationRef.isReady()) navigationRef.navigate("Control", { screen: "Clipboard", initial: false });
+};
+
+export const openFiles = (): void => {
+  if (navigationRef.isReady()) navigationRef.navigate("Control", { screen: "Files", initial: false });
 };
 
 /** Opens Settings > Updates with Settings underneath, so Back works. */
