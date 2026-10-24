@@ -241,4 +241,19 @@ describe("MacDrops", () => {
     expect(transfers.started.map((job) => ("uri" in job ? job.uri : null))).toEqual(["file:///a.mov"]);
     after.dispose();
   });
+
+  test("after a restart, files already kept are confirmed again and the rest download, whatever the Mac counted as served", async () => {
+    const saved = shelf();
+    saved.write("received", JSON.stringify([{ id: "drop-0001/a", name: "a.mov", path: null, size: 10, mime: null, uri: "content://a", at: 1 }]));
+    const running = drop("running", [file("a", 10, { done: 10 }), file("b", 10, { done: 10 })]);
+    const { connection, calls } = fake((call) => (call.method === "drop.ticket" ? ticket : running));
+    const transfers = engine();
+    const drops = new MacDrops(connection, transfers.value, saved, me, () => [], () => {});
+    await drops.ready;
+    drops.apply({ _tag: "Snapshot", drops: [running] });
+    await settle();
+    expect(calls.find((call) => call.method === "drop.received")).toEqual({ method: "drop.received", payload: { id: running.id, fileId: "a", sha256: null } });
+    expect(transfers.started.map((job) => job.fileId)).toEqual(["b"]);
+    drops.dispose();
+  });
 });

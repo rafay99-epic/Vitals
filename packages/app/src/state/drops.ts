@@ -169,6 +169,7 @@ export class MacDrops {
   private readonly refreshTimers = new Map<DropId, ReturnType<typeof setTimeout>>();
   private readonly accepting = new Set<DropId>();
   private readonly unacked = new Map<string, () => Promise<boolean>>();
+  private readonly reacked = new Set<string>();
   private readonly finishes = new Set<(finish: DropFinish) => void>();
   private readonly stops: Array<() => void> = [];
   private publishTimer: ReturnType<typeof setTimeout> | null = null;
@@ -367,9 +368,17 @@ export class MacDrops {
     }
     if (drop.state !== "running") return;
     const uploads = new Map((this.uploads[drop.id] ?? []).map((upload) => [upload.fileId, upload.uri]));
+    const kept = new Set(incoming ? this.received.get().map((file) => file.id) : []);
     for (const file of drop.files) {
       const id = jobIdOf(drop.id, file.id);
-      if (this.jobs.has(id) || fileFinished(drop, file)) continue;
+      if (incoming && kept.has(id)) {
+        if (!this.jobs.has(id) && !this.unacked.has(id) && !this.reacked.has(id)) {
+          this.reacked.add(id);
+          this.confirm(id, drop.id, file.id, null);
+        }
+        continue;
+      }
+      if (this.jobs.has(id) || (outgoing && fileFinished(drop, file))) continue;
       const uri = outgoing ? (uploads.get(file.id) ?? null) : null;
       if (outgoing && uri === null) continue;
       this.jobs.set(id, { id, dropId: drop.id, file, direction: incoming ? "in" : "out", uri, state: "queued", done: 0, attempts: 0, stalled: false, route: null });
@@ -518,16 +527,20 @@ export class MacDrops {
     if (expected !== null && sha256 !== "" && expected !== sha256) return this.fail(job, `${job.file.name} arrived damaged. Send it again.`);
     const saved: SavedFile = { id: job.id, name: job.file.name, path: job.file.path, size: job.file.size, mime: job.file.mime, uri, at: Date.now() };
     this.setReceived([saved, ...this.received.get().filter((file) => file.id !== saved.id)]);
+    this.confirm(job.id, job.dropId, job.file.id, sha256 === "" ? null : sha256);
+  }
+
+  private confirm(id: string, dropId: DropId, fileId: DropFile["id"], sha256: string | null): void {
     const ack = async (): Promise<boolean> => {
-      const result = await this.connection.call((client) => client["drop.received"]({ id: job.dropId, fileId: job.file.id, sha256: sha256 === "" ? null : sha256 }));
+      const result = await this.connection.call((client) => client["drop.received"]({ id: dropId, fileId, sha256 }));
       if (!result.ok) return false;
       this.upsert(result.value);
       this.reconcile(result.value);
       this.publish(true);
       return true;
     };
-    this.unacked.set(job.id, ack);
-    void ack().then((ok) => ok && this.unacked.delete(job.id));
+    this.unacked.set(id, ack);
+    void ack().then((ok) => ok && this.unacked.delete(id));
   }
 
   private flushAcks(): void {
@@ -556,15 +569,18 @@ export class MacDrops {
 
   private measure(): ReadonlyMap<DropId, DropLive> {
     const live = new Map<DropId, DropLive>();
+    const kept = new Set(this.received.get().map((file) => file.id));
     for (const drop of this.drops.get()) {
-      if (isEnded(drop) || !(isIncoming(drop, this.me) || isOutgoing(drop, this.me))) continue;
+      const incoming = isIncoming(drop, this.me);
+      if (isEnded(drop) || !(incoming || isOutgoing(drop, this.me))) continue;
       let done = 0;
       let route: DropLive["route"] = null;
       let stalled = false;
       for (const file of drop.files) {
-        const job = this.jobs.get(jobIdOf(drop.id, file.id));
-        const server = Math.min(file.done, file.size);
-        if (job?.state === "done" || (job === undefined && fileFinished(drop, file))) done += file.size;
+        const id = jobIdOf(drop.id, file.id);
+        const job = this.jobs.get(id);
+        const server = incoming ? 0 : Math.min(file.done, file.size);
+        if (job?.state === "done" || (job === undefined && (incoming ? kept.has(id) : fileFinished(drop, file)))) done += file.size;
         else done += Math.max(job?.done ?? 0, server);
         route = job?.route ?? route;
         stalled ||= job?.stalled === true;
