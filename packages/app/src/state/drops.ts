@@ -131,6 +131,11 @@ export const dropEndpoints = (input: {
   return [...lan, ...(input.builtIn ? [{ url: tailnet, pin: null, tsnet: true }] : []), { url: tailnet, pin: null, tsnet: false }];
 };
 
+export const folderOf = (path: string | null): string | null => {
+  const folders = (path ?? "").split("/").slice(0, -1).filter((part) => part !== "");
+  return folders.length === 0 ? null : folders.join("/");
+};
+
 export const fileFinished = (drop: Drop, file: DropFile): boolean => file.done >= file.size && (file.size > 0 || drop.state === "done");
 
 export const dropLabel = (drop: Pick<Drop, "files">): string => {
@@ -421,7 +426,7 @@ export class MacDrops {
     job.state = "running";
     const base = { job: job.id, title: fileTitle(job), endpoints: this.endpoints(), ticket: ticket.ticket, dropId: job.dropId, fileId: job.file.id, size: job.file.size };
     try {
-      if (job.direction === "in") await this.engine.download({ ...base, name: job.file.name, path: job.file.path, mime: job.file.mime });
+      if (job.direction === "in") await this.engine.download({ ...base, name: job.file.name, path: folderOf(job.file.path), mime: job.file.mime });
       else if (job.uri !== null) await this.engine.upload({ ...base, uri: job.uri });
     } catch (error) {
       this.onTransfer({ type: "error", job: job.id, message: messageOf(error), retryable: false });

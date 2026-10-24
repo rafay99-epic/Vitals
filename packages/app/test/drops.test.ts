@@ -4,7 +4,7 @@ import { DeviceId, Drop, type DropFile } from "@vitals/contracts";
 import type { DownloadJob, TransferEvent, UploadJob } from "@vitals/tailnet/drop";
 import * as Schema from "effect/Schema";
 
-import { type DropEngine, dropEndpoints, dropLabel, MacDrops, nextJobs, REFRESH_EARLY_MS, refreshDelay, type Shelf, shouldAccept, ticketUsable } from "../src/state/drops.ts";
+import { type DropEngine, dropEndpoints, dropLabel, folderOf, MacDrops, nextJobs, REFRESH_EARLY_MS, refreshDelay, type Shelf, shouldAccept, ticketUsable } from "../src/state/drops.ts";
 
 const me = Schema.decodeUnknownSync(DeviceId)("phone-1");
 const decodeDrop = Schema.decodeUnknownSync(Drop);
@@ -115,6 +115,12 @@ describe("drop queue rules", () => {
     expect(shouldAccept(drop("asking", [file("a", 1)]), me, false)).toBe(false);
     expect(shouldAccept(drop("running", [file("a", 1)]), me, true)).toBe(false);
     expect(shouldAccept(drop("asking", [file("a", 1)], "out"), me, true)).toBe(false);
+  });
+
+  test("the engine gets the folder part of a file's path", () => {
+    expect(folderOf("Trip/day 2/b.mov")).toBe("Trip/day 2");
+    expect(folderOf("b.mov")).toBeNull();
+    expect(folderOf(null)).toBeNull();
   });
 
   test("labels name one file, a shared folder, or a count", () => {
