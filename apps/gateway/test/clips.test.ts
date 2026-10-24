@@ -205,6 +205,25 @@ describe("clips", () => {
     expect(error).toMatchObject({ _tag: "Unavailable", message: "Clipboard history is off on the Mac" });
   });
 
+  test("a pushed clip reaches phones with history off and still ages out", async () => {
+    const target = await started();
+    const { token } = await clipboardPhone(target);
+    target.app.emit({ t: "clipPolicy", policy: { enabled: false, keepDays: 1 } });
+    target.app.emit({ t: "clip", clip: macClip("mac-quiet-001", { text: "not for phones" }) });
+    target.app.emit({ t: "clip", clip: macClip("mac-pushed-01", { text: "for the phone", pushed: true }) });
+    target.app.emit({ t: "clip", clip: macClip("mac-pushed-02", { text: "stale push", pushed: true, at: Date.now() - 2 * DAY }) });
+    await Bun.sleep(100);
+    const { snapshot, chunk } = await withClient(target, token, (client) =>
+      Effect.gen(function* () {
+        const [snapshot] = yield* client["clips.watch"]({}).pipe(Stream.take(1), Stream.runCollect);
+        const chunk = yield* client["clips.read"]({ id: clipId("mac-pushed-01"), offset: 0 });
+        return { snapshot, chunk };
+      }),
+    );
+    expect(snapshot?._tag === "Snapshot" ? snapshot.clips.map((clip) => clip.id) : null).toEqual([clipId("mac-pushed-01")]);
+    expect(Buffer.from(chunk.data, "base64").toString()).toBe("for the phone");
+  });
+
   test("two readers of a copied file share one materialization", async () => {
     const target = await started();
     const { token } = await clipboardPhone(target);

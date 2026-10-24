@@ -86,6 +86,10 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
         AND NOT EXISTS (SELECT 1 FROM json_each(devices.scopes) WHERE value = 'files');
     `,
   },
+  {
+    id: 5,
+    sql: "ALTER TABLE clips ADD COLUMN pushed INTEGER NOT NULL DEFAULT 0;",
+  },
 ];
 
 export const ACTIVITY_MIGRATIONS: ReadonlyArray<Migration> = [
