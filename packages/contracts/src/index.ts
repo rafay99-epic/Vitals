@@ -2,6 +2,7 @@ export * from "./activity.ts";
 export * from "./auth.ts";
 export * from "./bridge.ts";
 export * from "./clips.ts";
+export * from "./drop.ts";
 export * from "./commands.ts";
 export * from "./guard.ts";
 export * from "./ids.ts";

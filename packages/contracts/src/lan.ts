@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { DeviceInfo, Scope } from "./auth.ts";
+import { LanTls } from "./drop.ts";
 import { DeviceId, EpochMs, LanKey, PositiveInt } from "./ids.ts";
 
 export const LAN_PORTS = { stable: 47810, nightly: 47811, dev: 47812 } as const;
@@ -22,6 +23,7 @@ export const MacRoutes = Schema.Struct({
   lan: Schema.Array(LanEndpoint),
   tailnet: Schema.NullOr(Schema.String),
   owner: Schema.optional(Schema.NullOr(Schema.String)),
+  tls: Schema.optional(LanTls),
 });
 export type MacRoutes = typeof MacRoutes.Type;
 

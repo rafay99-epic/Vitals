@@ -19,6 +19,7 @@ import {
   ClipsReadInput,
   ClipsRemoveInput,
 } from "./clips.ts";
+import { DropEvent, DropIdInput, DropOffered, DropOfferInput, DropReceivedInput, DropTicket, Drop } from "./drop.ts";
 import { CommandCancelInput, CommandReceipt, CommandRunInput } from "./commands.ts";
 import { GuardSettings, GuardState } from "./guard.ts";
 import { LanKey, NonNegativeInt } from "./ids.ts";
@@ -116,6 +117,16 @@ export const ClipsSendChunk = Rpc.make("clips.send.chunk", {
 export const ClipsSendFinish = Rpc.make("clips.send.finish", { payload: ClipSendFinish, success: Clip, error: ClipError });
 export const ClipsPut = Rpc.make("clips.put", { payload: ClipsPutInput, success: ClipsPutResult, error: ClipError });
 
+const DropError = Schema.Union([AuthError, Unavailable, CommandRejected]);
+
+export const DropWatch = Rpc.make("drop.watch", { payload: Empty, success: DropEvent, error: DropError, stream: true });
+export const DropOffer = Rpc.make("drop.offer", { payload: DropOfferInput, success: DropOffered, error: DropError });
+export const DropAccept = Rpc.make("drop.accept", { payload: DropIdInput, success: DropOffered, error: DropError });
+export const DropDecline = Rpc.make("drop.decline", { payload: DropIdInput, success: Drop, error: DropError });
+export const DropCancel = Rpc.make("drop.cancel", { payload: DropIdInput, success: Drop, error: DropError });
+export const DropTicketRefresh = Rpc.make("drop.ticket", { payload: DropIdInput, success: DropTicket, error: DropError });
+export const DropReceived = Rpc.make("drop.received", { payload: DropReceivedInput, success: Drop, error: DropError });
+
 export const ActivityIngest = Rpc.make("activity.ingest", {
   payload: ActivityIngestInput,
   success: ActivityIngestResult,
@@ -156,6 +167,13 @@ export const VitalsRpc = RpcGroup.make(
   ClipsSendChunk,
   ClipsSendFinish,
   ClipsPut,
+  DropWatch,
+  DropOffer,
+  DropAccept,
+  DropDecline,
+  DropCancel,
+  DropTicketRefresh,
+  DropReceived,
   ActivityIngest,
   DeviceLanKey,
   DeviceForget,
