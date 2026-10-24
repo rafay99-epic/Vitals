@@ -1,0 +1,1410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Remote · Share prototype (clipboard + files)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --s1:#0b0b0b; --s2:#131313; --s3:#1b1b1b; --line:#1c1c1c; --line2:#2a2a2a;
+  --mute:#6b6b6b; --dim:#9c9c9c; --ink2:#d4d4d4; --ink:#fff;
+  --yellow:#f2ec6b; --orange:#ffb45c; --red:#ff4d6d; --green:#5cf2a6; --blue:#74d4ff; --pink:#ff6b8b; --violet:#c8a8ff; --drip:#6f9bff; --tele:#b9c4d0;
+  --serif:"Instrument Serif",Georgia,serif; --sans:"Geist",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  --tray:cubic-bezier(.32,.72,0,1); --out:cubic-bezier(.23,1,.32,1);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.page{max-width:1500px;margin:0 auto;padding:36px 24px 80px}
+.kicker{font:500 10px var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+h1{font:italic 54px/1 var(--serif);margin:8px 0 10px}
+.lede{color:var(--ink2);max-width:760px;margin:0 0 28px}
+h2{font:italic 34px/1 var(--serif);margin:0 0 12px}
+.layout{display:grid;grid-template-columns:auto 1fr;gap:56px;align-items:start}
+.protocol{position:sticky;top:20px}
+.side h3{font:500 10px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);margin:28px 0 10px}
+.journeys{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0;border-top:1px solid var(--line2);border-left:1px solid var(--line2)}
+.jbtn{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;transition:background 160ms}
+.jbtn:hover{background:var(--s1)}
+.jbtn b{font:500 14px var(--sans);display:block}
+.jbtn small{font:11px var(--mono);color:var(--orange)}
+.jbtn .run{font:500 11px var(--mono);color:var(--yellow);white-space:nowrap}
+.caption{font:12px var(--mono);color:var(--ink2);min-height:20px;margin-top:12px}
+.caption b{color:var(--yellow);font-weight:500}
+.tools{display:flex;gap:16px;margin-top:10px;font:12px var(--mono)}
+.tools button{color:var(--dim)} .tools button:hover{color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:500 10px var(--mono);letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line2)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+td:first-child{color:var(--ink);white-space:nowrap}
+td code{font:11.5px var(--mono);color:var(--ink)}
+.perf{border-left:3px solid var(--yellow);padding:4px 0 4px 14px;color:var(--ink2);font-size:13px;margin-top:14px}
+.gallery-head{margin-top:72px;border-top:1px solid var(--line2);padding-top:22px}
+#gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:30px 22px;margin-top:20px}
+.gcell{margin:0}
+.gcell figcaption{font:500 10px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:8px}
+.gwrap{width:224px;height:483px;overflow:hidden;border-radius:31px}
+.gwrap .phone{transform:scale(.7);transform-origin:0 0;pointer-events:none}
+footer{margin-top:60px;font:11px var(--mono);color:var(--mute)}
+
+/* phone */
+.phone{width:320px;height:690px;border:1px solid var(--line2);border-radius:44px;background:#000;position:relative;overflow:hidden;contain:paint;font-size:13px;isolation:isolate;user-select:none}
+.gwrap .screen,.gwrap .sheet{will-change:auto}
+.sb{position:absolute;top:13px;left:28px;right:28px;display:flex;justify-content:space-between;font:500 11px var(--mono);color:var(--ink2);z-index:8;pointer-events:none}
+.stage{position:absolute;inset:0;z-index:1;overflow:hidden}
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:#000;scrollbar-width:none;transition:transform 300ms var(--tray),opacity 220ms var(--out);will-change:transform}
+.screen::-webkit-scrollbar{display:none}
+.pad{padding:44px 0 112px}
+.enter-right{transform:translateX(22px);opacity:0;transition:none}
+.enter-left{transform:translateX(-22px);opacity:0;transition:none}
+.leave-right,.leave-left{opacity:0;transition:opacity 120ms linear}
+.enter-push{transform:translateX(100%);transition:none;box-shadow:-12px 0 30px rgba(0,0,0,.6)}
+.leave-push{transform:translateX(-24%);opacity:.35}
+.enter-pop{transform:translateX(-24%);opacity:.35;transition:none}
+.leave-pop{transform:translateX(100%);z-index:3;box-shadow:-12px 0 30px rgba(0,0,0,.6)}
+.press{transition:transform 160ms var(--out)}
+.press:active{transform:scale(.97);transition-duration:100ms}
+
+/* dock */
+.dock{position:absolute;left:14px;right:14px;bottom:16px;height:62px;border-radius:31px;background:rgba(20,20,20,.94);border:1px solid var(--line2);display:flex;padding:0 6px;z-index:4;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.dock .ind{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/5);border-radius:25px;background:rgba(242,236,107,.13);transition:transform 320ms var(--tray)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:500 10px var(--sans);color:var(--mute);position:relative;z-index:1;transition:color 200ms,transform 160ms var(--out)}
+.tab:active{transform:scale(.92);transition-duration:100ms}
+.tab.on{color:var(--yellow)}
+.tab .badge{position:absolute;top:12px;left:calc(50% + 6px);width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid #141414}
+.ico{width:20px;height:20px;flex:none}
+.ico-s{width:15px;height:15px;flex:none}
+
+/* sheets */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.7);opacity:0;pointer-events:none;transition:opacity 200ms var(--tray);z-index:6}
+.phone.sheeted .scrim{opacity:1;pointer-events:auto;transition-duration:300ms}
+.layer{position:absolute;inset:0;z-index:7;pointer-events:none}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:90%;overflow-y:auto;scrollbar-width:none;background:var(--s2);border-top:1px solid var(--line2);border-radius:28px 28px 0 0;padding:0 0 28px;transform:translateY(105%);transition:transform 200ms var(--tray);pointer-events:auto;will-change:transform}
+.sheet.in{transform:translateY(0);transition-duration:300ms}
+.grabzone{padding:10px 0 4px;touch-action:none;cursor:grab}
+.grab{width:36px;height:5px;border-radius:3px;background:#3a3a3a;margin:0 auto 14px}
+.sh-title{font:700 20px/1.2 var(--sans);padding:0 20px}
+.sh-sub{font-size:12.5px;color:var(--dim);padding:5px 20px 14px}
+.sh-p{font-size:13px;color:var(--ink2);padding:0 20px;margin:0 0 14px}
+.sh-foot{font-size:12px;color:var(--dim);text-align:center;padding:10px 20px 0}
+.sh-cancel{display:block;width:100%;text-align:center;padding:14px;color:var(--dim);font-size:14px}
+.hold{position:relative;overflow:hidden;display:flex;justify-content:center;align-items:center;height:56px;margin:8px 16px 0;border:1.5px solid var(--red);color:var(--red);font:600 15px var(--sans);border-radius:16px;width:calc(100% - 32px)}
+.hold.small{height:46px;font-size:13px;border-width:1px;opacity:.85}
+.hold::before{content:"";position:absolute;inset:0;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform 180ms ease-out}
+.hold.holding::before{transform:scaleX(1);transition:transform 1.3s linear}
+.hold span{position:relative;z-index:1;transition:color 200ms}
+.hold.holding span{color:#000}
+.field{display:block;width:calc(100% - 32px);margin:0 16px 10px;background:#000;border:1px solid var(--line2);border-radius:14px;padding:12px 14px;font-size:14px;outline:none}
+.field:focus{border-color:var(--yellow)}
+.ta{height:90px;resize:none}
+
+/* toasts */
+.toasts{position:absolute;left:14px;right:14px;bottom:92px;z-index:9;pointer-events:none}
+.toast{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--ink);color:#000;border-radius:16px;padding:12px 14px;font:600 13px var(--sans);transform:translateY(12px);opacity:0;transition:transform 240ms var(--out),opacity 240ms var(--out);pointer-events:auto}
+.toast.in{transform:none;opacity:1}
+.toast button{font-weight:700;color:#000;text-decoration:underline;text-underline-offset:3px}
+#ring{position:absolute;width:44px;height:44px;border-radius:50%;border:2px solid var(--yellow);box-shadow:0 0 0 6px rgba(242,236,107,.18);transform:translate(-50%,-50%) scale(.6);opacity:0;transition:opacity 160ms,transform 260ms var(--out);z-index:20;pointer-events:none}
+#ring.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* ===== Home (B) ===== */
+.home .head{display:flex;justify-content:space-between;align-items:center;padding:6px 20px 0;font:12px var(--mono);color:var(--ink2)}
+.ok{color:var(--green);font-weight:400} .offdot{color:var(--mute);font-weight:400}
+.pw{width:38px;height:38px;border:1px solid var(--line2);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.home .word{font:italic 54px/1 var(--serif);padding:6px 20px 2px}
+.home .meta{font:11.5px var(--mono);color:var(--dim);padding:4px 20px 14px}
+.home .meta.awake{color:var(--orange)}
+.status{display:flex;justify-content:space-between;align-items:center;margin:0 20px 4px;padding:11px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);font:12px var(--mono);width:calc(100% - 40px)}
+.status.warn{color:var(--orange)} .status.calm{color:var(--dim)} .status.calm span:last-child{color:var(--yellow)} .status.off{color:var(--mute)}
+.ch{display:block;width:100%;padding:11px 20px 6px;border-bottom:1px solid var(--line)}
+.ch:active{background:var(--s1)}
+.ch .top{display:flex;justify-content:space-between;align-items:baseline}
+.ch .tag{font:500 10px var(--mono);letter-spacing:1px}
+.ch .val{font:30px/1 var(--serif)}
+.ch .val i{font:11px var(--mono);font-style:normal;color:var(--dim);margin-left:2px}
+.wave{display:block;width:100%}
+.mini{display:grid;grid-template-columns:1fr 1fr 1.5fr 1fr;gap:8px;padding:10px 20px 0}
+.mini small{display:block;font:500 9.5px var(--mono);letter-spacing:.8px}
+.mini b{font:500 13px var(--mono);white-space:nowrap}
+
+/* ===== Other screens (A) ===== */
+.title{font:italic 42px/1 var(--serif);padding:8px 20px 14px}
+.lbl{font:600 12px var(--sans);color:var(--dim);padding:6px 20px 8px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:0 16px 14px}
+.pgrid.three{grid-template-columns:1fr 1fr 1fr}
+.pbtn{background:var(--s2);border-radius:16px;height:70px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:6px;padding:0 13px;font:600 13px var(--sans)}
+.sheet .pbtn{background:var(--s3)}
+.pbtn.red{color:var(--red)}
+.search{display:flex;gap:9px;align-items:center;margin:0 16px 12px;background:var(--s2);border-radius:14px;padding:0 13px;color:var(--mute)}
+.search input{flex:1;background:none;border:0;outline:none;padding:12px 0;font-size:13.5px;color:var(--ink)}
+.chips{display:flex;gap:7px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none}
+.chip{background:var(--s2);border-radius:18px;padding:7px 12px;font:500 12px var(--sans);white-space:nowrap;color:var(--ink2);display:flex;gap:6px;align-items:center;transition:background 200ms,color 200ms}
+.chip i{font:500 11px var(--mono);font-style:normal;color:var(--dim)}
+.chip.on{background:var(--yellow);color:#000} .chip.on i{color:#000}
+.sec{font:600 12px var(--sans);color:var(--dim);padding:12px 20px 4px;display:flex;justify-content:space-between}
+.app{display:flex;align-items:center;gap:12px;padding:8px 20px;width:100%}
+.app:active{background:var(--s1)}
+.tile{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:700 14px var(--sans);color:#000;flex:none}
+.app .n{flex:1;font:500 14px var(--sans)}
+.app .n small{display:block;font:400 12px var(--sans);color:var(--dim)}
+.ptag{font:500 10px var(--mono);color:var(--orange);border:1px solid var(--orange);border-radius:8px;padding:2px 6px}
+.more{display:block;padding:8px 20px 6px 66px;color:var(--yellow);font:600 13px var(--sans);width:100%}
+.empty{padding:30px 20px;color:var(--dim);text-align:center}
+.actrow{display:flex;align-items:center;gap:13px;margin:0 16px 7px;background:var(--s3);border-radius:14px;padding:13px 14px;font:600 14px var(--sans);width:calc(100% - 32px)}
+.actrow small{display:block;font:400 12px var(--sans);color:var(--dim)}
+.seg{position:relative;display:flex;margin:0 16px 14px;background:var(--s2);border-radius:14px;padding:4px}
+.seg .sind{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/4);background:var(--yellow);border-radius:10px;transition:transform 300ms var(--tray)}
+.seg button{flex:1;text-align:center;padding:9px 0;font:600 13px var(--sans);color:var(--dim);position:relative;z-index:1;transition:color 250ms}
+.seg button.on{color:#000}
+.slider{display:flex;align-items:center;gap:12px;margin:0 16px 8px;background:var(--s2);border-radius:14px;padding:12px 14px}
+.slider input{flex:1;accent-color:var(--yellow)}
+.slider b{font:500 13px var(--mono);width:26px;text-align:right}
+.group{margin:0 16px 12px;background:var(--s2);border-radius:16px;overflow:hidden}
+.gi{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 14px;border-top:1px solid var(--line2);font:500 14px var(--sans);width:100%}
+.gi:first-child{border-top:0}
+button.gi:active{background:var(--s3)}
+.gi .v{color:var(--dim);font-weight:400;font-size:13px;display:flex;align-items:center;gap:4px}
+.gi.red{color:var(--red)}
+.gi .yes{color:var(--green)}
+.toggle{width:44px;height:26px;border-radius:13px;background:#333;position:relative;flex:none;transition:background 220ms}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#bbb;transition:transform 260ms var(--tray),background 220ms}
+.toggle.on{background:var(--yellow)} .toggle.on::after{transform:translateX(18px);background:#000}
+.card{margin:0 16px 12px;border-radius:18px;background:var(--s2);padding:16px;border:1px solid var(--orange)}
+.card.calm{border-color:var(--line2)}
+.card h4{margin:0;font:700 16px var(--sans);color:var(--orange)}
+.card.calm h4{color:var(--ink2)}
+.card p{margin:6px 0 12px;font-size:13px;color:var(--ink2)}
+.row2{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px;color:var(--dim);margin-top:4px}
+.undo{color:var(--yellow);font-weight:600}
+.big{display:block;width:calc(100% - 32px);margin:0 16px 8px;text-align:center;background:var(--yellow);color:#000;border-radius:14px;padding:14px;font:700 14px var(--sans)}
+.card .big{width:100%;margin:0}
+.big.ghost{background:none;border:1px solid var(--line2);color:var(--ink)}
+.maccard{margin:0 16px 12px;padding:16px;border-radius:18px;background:var(--s2)}
+.maccard b{font:700 17px var(--sans);display:block}
+.maccard span{font-size:12px;color:var(--dim)}
+.back{display:flex;align-items:center;gap:4px;padding:8px 16px 0;color:var(--yellow);font:500 14px var(--sans)}
+.note{font-size:12.5px;color:var(--dim);padding:2px 20px 12px;margin:0}
+.bigval{font:72px/1 var(--serif);padding:4px 20px 0}
+.bigval i{font:14px var(--mono);font-style:normal;color:var(--dim);margin-left:4px}
+.ctx{font:12px var(--mono);color:var(--dim);padding:4px 20px 14px}
+.bigwave{padding:0 20px 14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);margin:0 16px 12px;background:var(--s2);border-radius:16px;padding:12px 0}
+.stats div{padding:0 14px}
+.stats small{display:block;font:500 10px var(--mono);letter-spacing:.8px;color:var(--dim);text-transform:uppercase}
+.stats b{font:500 17px var(--mono)}
+
+/* ===== Clipboard ===== */
+.latest{display:flex;align-items:center;gap:12px;margin:0 16px 10px;background:var(--s2);border-radius:16px;padding:11px 14px;width:calc(100% - 32px)}
+.latest .n{flex:1;min-width:0;font:500 13.5px var(--sans)}
+.latest .n small{display:block;font:400 11.5px var(--mono);color:var(--dim)}
+.latest .n span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.latest .go{color:var(--yellow);font:600 13px var(--sans)}
+.compose{display:flex;gap:8px;align-items:center;margin:0 16px 10px;background:var(--s2);border-radius:14px;padding:0 6px 0 13px}
+.compose input{flex:1;min-width:0;background:none;border:0;outline:none;padding:12px 0;font-size:13.5px;color:var(--ink)}
+.compose .sendb{width:34px;height:34px;border-radius:10px;background:var(--yellow);color:#000;display:flex;align-items:center;justify-content:center;opacity:.35;transition:opacity 160ms}
+.compose .sendb.ready{opacity:1}
+.pgrid .pbtn small{font:400 11px var(--sans);color:var(--dim);margin-top:-4px}
+.pbtn.native{background:#1f1f22;border:1px solid #3a3a3f;align-items:center;flex-direction:row;justify-content:center;gap:7px;font:600 14px -apple-system,system-ui,sans-serif}
+.clip{display:flex;align-items:center;gap:12px;padding:8px 20px;width:100%;transition:background 160ms,transform 300ms var(--tray),opacity 300ms var(--out)}
+.clip:active{background:var(--s1)}
+.clip.fresh{transform:translateY(-10px);opacity:0}
+.clip .n{flex:1;min-width:0;font:500 14px var(--sans)}
+.clip .n span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip .n small{display:block;font:400 12px var(--sans);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip .n .mono{font:12.5px var(--mono)}
+.kt{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--s3)}
+.thumb{width:34px;height:34px;border-radius:10px;flex:none;overflow:hidden;position:relative}
+.ph1{background:linear-gradient(160deg,#ffb45c 0%,#ff6b8b 55%,#3b1d4a 100%)}
+.ph2{background:linear-gradient(200deg,#74d4ff 0%,#2f6f9f 50%,#0b1f2e 100%)}
+.ph3{background:linear-gradient(180deg,#1b1b1b 0%,#1b1b1b 18%,#2a2a2a 18%,#2a2a2a 100%)}
+.ph3::after{content:"";position:absolute;left:18%;right:18%;top:34%;height:8%;background:var(--green);box-shadow:0 7px 0 #555,0 14px 0 #555}
+.pinmark{color:var(--yellow);flex:none}
+.from{font:500 10px var(--mono);color:var(--blue);border:1px solid var(--blue);border-radius:8px;padding:2px 6px;flex:none}
+.xfer{margin:0 16px 10px;background:var(--s2);border-radius:16px;padding:12px 14px}
+.xfer .t{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font:600 13.5px var(--sans)}
+.xfer .t button{color:var(--dim);font:500 13px var(--sans)}
+.xfer small{display:block;font:12px var(--mono);color:var(--dim);margin:3px 0 9px}
+.bar{height:4px;border-radius:2px;background:var(--s3);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--yellow);transform-origin:left;transform:scaleX(0);transition:transform 380ms var(--out)}
+.preview{margin:0 16px 14px;border-radius:16px;height:150px;position:relative;overflow:hidden}
+.preview.two{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:none;height:120px}
+.preview.two div{border-radius:14px}
+.prevfile{display:flex;align-items:center;gap:12px;margin:0 16px 14px;background:var(--s3);border-radius:14px;padding:12px 14px;font:600 14px var(--sans)}
+.prevfile small{display:block;font:400 12px var(--mono);color:var(--dim)}
+.monobox{margin:0 16px 14px;background:#000;border:1px solid var(--line2);border-radius:14px;padding:12px 14px;font:12.5px/1.5 var(--mono);color:var(--ink);word-break:break-word;max-height:110px;overflow:auto;user-select:text}
+.seg.two .sind{width:calc((100% - 8px)/2)}
+/* other app + system share sheet (overlay above Vitals) */
+.ext{position:absolute;inset:0;z-index:5;background:#000;transform:translateY(100%);transition:transform 300ms var(--tray)}
+.ext.in{transform:none}
+.ext .gal{padding:44px 0 0}
+.ext .gal .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 18px 12px;font:600 17px system-ui,sans-serif}
+.ext .gal .hd button{font:500 14px system-ui,sans-serif;color:#8ab4ff}
+.ext .gal .big{margin:0 0 3px;width:100%;height:330px;border-radius:0}
+.ext .gal .bar2{display:flex;justify-content:space-around;padding:16px 0;color:#ddd;font:12px system-ui,sans-serif}
+.ext .gal .bar2 button{display:flex;flex-direction:column;align-items:center;gap:5px}
+.sys{position:absolute;left:0;right:0;bottom:0;z-index:6;transform:translateY(105%);transition:transform 260ms var(--tray);font-family:system-ui,sans-serif}
+.sys.in{transform:none}
+.sys.android{background:#1f1f23;border-radius:26px 26px 0 0;padding:14px 0 26px}
+.sys.ios{background:rgba(38,38,42,.98);border-radius:14px 14px 0 0;padding:12px 0 26px;font-family:-apple-system,system-ui,sans-serif}
+.sys .sg{width:32px;height:4px;border-radius:2px;background:#555;margin:0 auto 12px}
+.sys .sh{display:flex;gap:10px;align-items:center;padding:0 18px 14px;font:500 13px inherit;color:#ddd}
+.sys .sh i{width:38px;height:38px;border-radius:8px;flex:none}
+.sys .targets{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 0;padding:6px 8px 10px}
+.sys .targets button{display:flex;flex-direction:column;align-items:center;gap:6px;font:11.5px inherit;color:#ddd}
+.sys .targets b{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:italic 22px var(--serif);font-weight:400}
+.sys.ios .targets b{border-radius:13px}
+.sys .vit{background:#000;color:var(--ink);border:1px solid var(--line2)}
+.sys .rowx{padding:12px 20px;color:#ddd;font-size:14px;border-top:1px solid #333}
+/* side panels: Mac + web */
+.macwin{font:13px -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:#1e1e1e;border:1px solid #333;border-radius:12px;padding:14px;max-width:520px;color:#eee}
+.macwin h5{margin:0 0 10px;font:600 13px inherit;color:#eee}
+.mcard{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:4px 12px;margin-bottom:10px}
+.mrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+.mrow:first-child{border-top:0}
+.mrow small{display:block;color:#999;font-size:11.5px}
+.msw{width:26px;height:15px;border-radius:8px;background:#0a84ff;position:relative;flex:none}
+.msw::after{content:"";position:absolute;right:1.5px;top:1.5px;width:12px;height:12px;border-radius:50%;background:#fff}
+.msw.off{background:#444}.msw.off::after{right:auto;left:1.5px}
+.mpop{background:#333;border-radius:5px;padding:2px 8px;font-size:12px;color:#ddd}
+.mnote{display:flex;gap:10px;align-items:center;background:rgba(40,40,40,.96);border:1px solid #3a3a3a;border-radius:14px;padding:10px 12px;max-width:360px;margin-top:12px}
+.mnote i{width:30px;height:30px;border-radius:7px;background:linear-gradient(140deg,#7b4dff,#3a1d8f);flex:none}
+.mnote b{display:block;font-size:12.5px}.mnote span{font-size:12px;color:#bbb}
+.webwin{border:1px solid var(--line2);background:#000;max-width:520px;padding:16px 18px}
+.webwin .wt{font:italic 26px var(--serif);margin-bottom:8px}
+.drop{border:1px dashed var(--line2);padding:16px;text-align:center;font:12px var(--mono);color:var(--dim);margin-bottom:10px}
+.wrow{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2)}
+.wrow b{font-weight:500;color:var(--ink)} .wrow span{font:11.5px var(--mono);color:var(--dim);white-space:nowrap}
+.wrow a{color:var(--yellow);font:500 12px var(--mono);text-decoration:none}
+.pf{display:flex;gap:8px;margin-top:10px}
+.pf button{font:12px var(--mono);color:var(--dim);border:1px solid var(--line2);padding:4px 10px;border-radius:12px}
+.pf button.on{color:#000;background:var(--yellow);border-color:var(--yellow)}
+
+/* ===== Files ===== */
+.incoming{display:flex;align-items:center;gap:12px;margin:0 16px 10px;background:var(--s2);border-radius:16px;padding:11px 14px;width:calc(100% - 32px)}
+.incoming .n{flex:1;min-width:0;font:500 13.5px var(--sans)}
+.incoming .n small{display:block;font:400 11.5px var(--mono);color:var(--dim)}
+.incoming .bar{margin-top:7px}
+.where{font:12px var(--mono);color:var(--dim);padding:0 20px 12px}
+.warnbox{margin:0 16px 12px;border:1px solid var(--orange);border-radius:14px;padding:11px 14px;font-size:12.5px;color:var(--ink2)}
+.warnbox b{color:var(--orange);display:block;font-size:13px;margin-bottom:2px}
+.disabled-opt{opacity:.35;pointer-events:none}
+.copystrip{position:absolute;left:14px;right:14px;bottom:92px;z-index:8;display:flex;align-items:center;gap:10px;background:var(--s3);border:1px solid var(--line2);border-radius:16px;padding:10px 12px;transform:translateY(12px);opacity:0;transition:transform 240ms var(--out),opacity 240ms var(--out)}
+.copystrip.in{transform:none;opacity:1}
+.copystrip .n{flex:1;min-width:0;font:500 12.5px var(--sans)}
+.copystrip .n small{display:block;font:11px var(--mono);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copystrip .sendc{background:var(--yellow);color:#000;border-radius:10px;padding:7px 11px;font:700 12.5px var(--sans)}
+.copystrip .pastec{background:#1f1f22;border:1px solid #3a3a3f;color:#fff;border-radius:10px;padding:6px 10px;font:600 12.5px -apple-system,system-ui,sans-serif;display:flex;gap:5px;align-items:center}
+.copystrip .x{color:var(--dim);font-size:16px;padding:0 2px}
+.shade{position:absolute;inset:0;z-index:12;background:rgba(10,10,12,.97);transform:translateY(-100%);transition:transform 300ms var(--tray);padding:46px 12px 0;font-family:system-ui,sans-serif}
+.shade.in{transform:none}
+.shade .clock{font:300 40px system-ui,sans-serif;color:#eee;padding:0 6px 10px}
+.qs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.qs button{background:#2b2b31;border-radius:18px;padding:12px;color:#ddd;font:500 12.5px system-ui,sans-serif;display:flex;gap:8px;align-items:center}
+.qs button.vit{background:#d6e3ff;color:#0b1d3a}
+.notif{background:#222228;border-radius:20px;padding:12px 14px;margin-bottom:8px;color:#ddd;font-size:12.5px}
+.notif .top{display:flex;gap:7px;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px}
+.notif .top i{width:16px;height:16px;border-radius:50%;background:#000;border:1px solid #444;display:inline-block}
+.notif b{display:block;font-size:13.5px;color:#fff;font-weight:600}
+.notif .bar{margin:8px 0 6px;background:#3a3a40}
+.notif .acts{display:flex;gap:16px;margin-top:6px;color:#9ec1ff;font-weight:600}
+.shade .close{display:block;margin:16px auto 0;color:#aaa;font-size:12px}
+.ioslock{position:absolute;inset:0;z-index:12;background:linear-gradient(180deg,#1c2433,#05070c);transform:translateY(-100%);transition:transform 300ms var(--tray);padding:70px 14px 0;font-family:-apple-system,system-ui,sans-serif;text-align:center}
+.ioslock.in{transform:none}
+.ioslock .t{font:600 64px -apple-system,system-ui,sans-serif;color:#eee}
+.ioslock .notif{text-align:left;background:rgba(60,60,70,.75);margin-top:28px}
+.installer{position:absolute;left:18px;right:18px;top:38%;z-index:13;background:#2a2a30;border-radius:26px;padding:22px 20px 14px;font-family:system-ui,sans-serif;color:#eee;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+.installer b{display:block;font-size:17px;margin:8px 0 6px}
+.installer p{font-size:13px;color:#bbb;margin:0 0 16px}
+.installer .row{display:flex;justify-content:flex-end;gap:22px;color:#9ec1ff;font-weight:600;font-size:14px}
+.bseg{display:flex;margin:0 16px 14px;background:var(--s2);border-radius:14px;padding:4px}
+.bseg span{flex:1;text-align:center;padding:9px 0;font:600 13px var(--sans);color:var(--dim);border-radius:10px}
+.bseg span.on{background:var(--yellow);color:#000}
+
+@media (max-width:900px){ .layout{grid-template-columns:1fr} .protocol{position:static;justify-self:center} h1{font-size:40px} }
+@media (prefers-reduced-motion:reduce){ *{transition-duration:1ms !important} }
+@media print{ .protocol{position:static} }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8M6.4 6.6a8 8 0 1 0 11.2 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-control" viewBox="0 0 24 24"><path d="M5 7h14M5 17h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="7" r="2.5" fill="#141414" stroke="currentColor" stroke-width="2"/><circle cx="15" cy="17" r="2.5" fill="#141414" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-slow" viewBox="0 0 24 24"><path d="M4 18a8 8 0 0 1 16 0M12 18l-4-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 5V3h6v2" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-ping" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6h14M5 11h14M5 16h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 16l5-5 4 4 2-2 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="15.5" cy="9.5" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 5V3h6v2M12 9v7M9 13l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M6 12v7h12v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-mac" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 19h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 10l5-3v10l-5-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-android" viewBox="0 0 24 24"><path d="M5 17v-5a7 7 0 0 1 14 0v5zM8 6L6.5 3.5M16 6l1.5-2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="11.5" r="1" fill="currentColor"/><circle cx="14.5" cy="11.5" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M8 3h7l4 4v11H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5 7v14h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="page">
+  <div class="kicker">Vitals Remote · share · clipboard both ways + files both ways · built on the A + B prototype</div>
+  <h1>Share, clickable.</h1>
+  <p class="lede">One shared clipboard between your Mac and your phone, and LocalSend-style files in both directions: APKs, videos, photos, documents, whole folders. On the phone it is two tiles under Control, Clipboard and Files, plus Vitals in the share sheet. Home, Apps, Alerts and Settings don't change. Use the buttons under the phone to play the Mac's side, or run a journey. The Mac's own interactions are in the <a href="#mac" id="maclink" style="color:var(--yellow)">Mac prototype</a>.</p>
+
+  <div class="layout">
+    <div class="protocol">
+      <div class="phone" id="proto">
+        <div class="sb"><span>22:41</span><span>82%</span></div>
+        <div class="stage"></div>
+        <div class="scrim"></div>
+        <div class="layer"></div>
+        <div class="toasts" aria-live="polite"></div>
+        <div id="ring"></div>
+      </div>
+      <div class="caption" id="caption">Tap anything in the phone.</div>
+      <div class="tools"><button id="reset">Reset</button><button id="maccopy">Mac copies</button><button id="macsends">Mac sends files</button><button id="phonecopies">Copy on the phone</button><button id="lock">Lock the phone</button></div>
+      <div class="pf" id="platform"><button class="on" data-p="android">Android</button><button data-p="ios">iOS</button></div>
+    </div>
+
+    <div class="side">
+      <h2>Journeys</h2>
+      <div class="journeys" id="journeys"></div>
+
+      <h3>What changes, screen by screen</h3>
+      <table>
+        <thead><tr><th>Where</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td>Home, Apps, Alerts, Settings</td><td>Nothing. No new tab, no badge.</td></tr>
+          <tr><td>Control</td><td>The section is now <b>Share</b>: the Mac's latest copy, a line for files on their way, then four tiles: Clipboard, Files, Open link, Find Mac.</td></tr>
+          <tr><td>Control › Clipboard</td><td>As shipped, plus the phone-to-Mac half: "Send phone copies to Mac".</td></tr>
+          <tr><td>Control › Files</td><td>New. Send (Files, Photos, Folder), files on their way, From your Mac, Sent, and "Start without asking".</td></tr>
+          <tr><td>Share sheet</td><td>Text and links go to the Mac clipboard. Files of any size go to Downloads › Vitals on the Mac.</td></tr>
+          <tr><td>Outside the app</td><td>Android: a progress notification and a Quick Settings tile, "Send clipboard". iPhone: files in Files › On My iPhone › Vitals.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Android and iOS, one code path</h3>
+      <table>
+        <thead><tr><th>Moment</th><th>Android</th><th>iOS</th></tr></thead>
+        <tbody>
+          <tr><td>Phone copy to Mac</td><td>When you open Vitals, it sees the new copy and sends it, or offers to</td><td>It knows something was copied without reading it. One tap on Apple's Paste button sends it, with no "Allow Paste" prompt</td></tr>
+          <tr><td>Clipboard from anywhere</td><td>Quick Settings tile, "Send clipboard"</td><td>A Shortcuts action, "Send clipboard to Mac" (it can sit on Back Tap)</td></tr>
+          <tr><td>Files from the Mac</td><td>Saved to Downloads › Vitals. Keeps going in the background with a progress notification</td><td>Saved to Files › On My iPhone › Vitals. Keeps going for about 30 s in the background, then waits for you to open Vitals</td></tr>
+          <tr><td>APKs</td><td>Install button (Dev and Nightly now, Stable after Google's review)</td><td>Kept as a file. iPhone can't install Android apps</td></tr>
+        </tbody>
+      </table>
+
+      <h3>In the browser (web client)</h3>
+      <div class="webwin">
+        <div class="wt">Clipboard.</div>
+        <div class="drop">Drop files here, or paste, to send to the Mac</div>
+        <div class="wrow"><b>github.com/rafay99-epic/vitals/pull/165</b><span>Safari · 2 min</span><a href="#" onclick="return false">Copy</a></div>
+        <div class="wrow"><b>Screenshot 22.38.png</b><span>1.8 MB · 5 min</span><a href="#" onclick="return false">Download</a></div>
+        <div class="wrow"><b>brand-assets (zip)</b><span>23 files · 41 MB</span><a href="#" onclick="return false">Download</a></div>
+      </div>
+      <div class="perf">Motion stays the A + B system: transform and opacity only, nothing loops. Transfer bars move only when a chunk lands, not every frame.</div>
+    </div>
+  </div>
+
+  <div class="gallery-head">
+    <h2>Every screen and sheet</h2>
+    <p class="lede">The same components as the prototype, frozen in each state.</p>
+  </div>
+  <div id="gallery"></div>
+
+  <footer>Last updated 2026-10-24 · mockup, files, sizes and speeds are illustrative · Opus 5.5 via Claude Code in T3 Code</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var raf2 = function (fn) { requestAnimationFrame(function () { requestAnimationFrame(fn); }); };
+
+  function h(tag, props) {
+    var el = document.createElement(tag);
+    if (props) Object.keys(props).forEach(function (k) {
+      var v = props[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === "class") el.className = v;
+      else if (k === "style") el.style.cssText = v;
+      else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), v);
+      else if (k === "value") el.value = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    });
+    var kids = Array.prototype.slice.call(arguments, 2);
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c === null || c === undefined || c === false) return;
+        if (Array.isArray(c)) return add(c);
+        el.append(c instanceof Node ? c : String(c));
+      });
+    })(kids);
+    return el;
+  }
+  function icon(id, cls) {
+    var s = document.createElementNS(NS, "svg");
+    s.setAttribute("class", cls || "ico"); s.setAttribute("aria-hidden", "true");
+    var u = document.createElementNS(NS, "use"); u.setAttribute("href", "#" + id);
+    s.appendChild(u); return s;
+  }
+  var WAVES = {
+    ecg: "M0 14H40l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h29",
+    art: "M0 18L12 5 20 12 28 10 46 18 58 5 66 12 74 10 92 18 104 5 112 12 120 10 138 18 150 5 158 12 166 10 184 18 196 5 204 12 212 10 230 18",
+    wave: "M0 13C20 3 40 23 60 13S100 3 120 13 160 23 180 13 220 3 230 13",
+    wave2: "M0 13C12 6 24 20 36 13S60 6 72 13 96 20 108 13 132 6 144 13 168 20 180 13 204 6 216 13 230 13",
+    flat: "M0 13H230"
+  };
+  function wave(kind, color, height) {
+    var s = document.createElementNS(NS, "svg");
+    s.setAttribute("viewBox", "0 0 230 24"); s.setAttribute("preserveAspectRatio", "none");
+    s.setAttribute("class", "wave"); s.setAttribute("aria-hidden", "true");
+    s.style.height = height + "px"; s.style.color = color;
+    var p = document.createElementNS(NS, "path");
+    p.setAttribute("d", WAVES[kind]); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor");
+    p.setAttribute("stroke-width", "1.7"); p.setAttribute("vector-effect", "non-scaling-stroke"); p.setAttribute("stroke-linejoin", "round");
+    s.appendChild(p); return s;
+  }
+
+  /* ---------- data ---------- */
+  var fmtMem = function (gb) { return gb < 1 ? Math.round(gb * 1000) + " MB" : gb.toFixed(1) + " GB"; };
+  var AG = ["claude", "codex", "claude", "gemini", "claude", "codex", "opencode"];
+  var PROCS = [];
+  [["Xcode", 12, 3.1, "var(--blue)"], ["Safari", 4, 0.82, "var(--orange)"], ["Slack", 3, 0.61, "var(--violet)"], ["Figma", 2, 0.9, "var(--pink)"], ["Music", 1, 0.31, "var(--red)"], ["Notes", 0, 0.12, "var(--yellow)"], ["Finder", 0, 0.09, "var(--blue)"], ["Messages", 0, 0.14, "var(--green)"], ["Mail", 0, 0.2, "var(--blue)"]]
+    .forEach(function (a, i) { PROCS.push({ id: "o" + i, name: a[0], group: "Open", cpu: a[1], mem: fmtMem(a[2]), color: a[3] }); });
+  for (var i = 0; i < 25; i++) PROCS.push({ id: "a" + i, name: AG[i % AG.length], group: "Agents", cpu: Math.round(38 * Math.pow(0.82, i)), mem: fmtMem(1.2 * Math.pow(0.88, i)), color: "var(--yellow)" });
+  PROCS.push({ id: "e0", name: "Pixel 9 emulator", group: "Emulators", cpu: 61, mem: "4.0 GB", color: "var(--green)" });
+  PROCS.push({ id: "e1", name: "iPhone 17 Simulator", group: "Emulators", cpu: 3, mem: "1.1 GB", color: "var(--green)" });
+  [["WindowServer", 9, 0.41], ["kernel_task", 6, 0.05], ["mds_stores", 3, 0.18], ["Spotlight", 1, 0.09], ["bird", 0, 0.03], ["coreaudiod", 0, 0.02]]
+    .forEach(function (a, i) { PROCS.push({ id: "b" + i, name: a[0], group: "Background", cpu: a[1], mem: fmtMem(a[2]), color: "var(--tele)" }); });
+  var BY_ID = {}; PROCS.forEach(function (p) { BY_ID[p.id] = p; });
+  var GROUPS = ["Open", "Agents", "Emulators", "Background"];
+  var GROUP_LABEL = { Open: "Open apps", Agents: "Agents", Emulators: "Emulators", Background: "Background" };
+  var GROUP_ONE = { Open: "App", Agents: "Agent", Emulators: "Emulator", Background: "Background process" };
+  var count = function (g) { return PROCS.filter(function (p) { return p.group === g; }).length; };
+
+  var CH = {
+    cpu: { title: "CPU.", color: "var(--green)", wave: "ecg", unit: "%", val: function () { return S.agents === "open" ? "71" : "34"; }, ctx: "load across every core", stats: ["12%", "46%", "98%"] },
+    mem: { title: "Memory.", color: "var(--pink)", wave: "art", unit: "/36 GB", val: function () { return "29.4"; }, ctx: "memory in use · pressure normal", stats: ["21 GB", "27 GB", "33 GB"] },
+    temp: { title: "Temp.", color: "var(--orange)", wave: "wave", unit: "", val: function () { return S.agents === "open" ? "68°" : "55°"; }, ctx: "CPU die temperature", stats: ["41°", "58°", "79°"] },
+    fans: { title: "Fans.", color: "var(--blue)", wave: "wave2", unit: "rpm", val: function () { return S.agents === "open" ? "2,410" : "1,320"; }, ctx: "left fan · right fan within 40 rpm", stats: ["0", "1,180", "3,900"] }
+  };
+  var RULES = [["mem", "Memory is full"], ["cpu", "CPU is maxed out"], ["hot", "Mac is running hot"], ["agents", "Too many agents"], ["emu", "Emulators fighting"], ["swap", "Swap keeps growing"]];
+  var TABS = [["home", "Home", "i-home"], ["apps", "Apps", "i-apps"], ["control", "Control", "i-control"], ["alerts", "Alerts", "i-bell"], ["settings", "Settings", "i-gear"]];
+  var tabIndex = function (t) { return TABS.findIndex(function (x) { return x[0] === t; }); };
+
+  function initial() {
+    return { tab: "home", stacks: { home: [], apps: [], control: [], alerts: [], settings: [] }, channel: "cpu",
+      agents: "open", emus: "calmed", paused: {}, awake: "Off", volume: 55, muted: false,
+      filter: "All", query: "", expanded: {}, rules: { mem: true, cpu: true, hot: true, agents: true, emu: false, swap: true }, mac: "on",
+      clips: seedClips(), kind: "All", autoCopy: false, xfer: null, draft: "",
+      incoming: seedIncoming(), sent: seedSent(), autoAccept: true, xin: null, xout: null, sendCopies: false, rcv: 0 };
+  }
+  function seedClips() {
+    return [
+      { id: "c1", kind: "link", text: "https://github.com/rafay99-epic/vitals/pull/165", app: "Safari", at: "2 min", origin: "mac" },
+      { id: "c2", kind: "image", name: "Screenshot 2026-10-24 at 22.38.png", size: "1.8 MB", app: "Screenshot", at: "5 min", origin: "mac", ph: "ph3" },
+      { id: "c3", kind: "text", text: "pnpm --filter @vitals/mobile android:dev", app: "Ghostty", at: "12 min", origin: "mac", mono: true },
+      { id: "c4", kind: "file", name: "invoice-october.pdf", size: "412 KB", app: "Finder", at: "40 min", origin: "mac" },
+      { id: "c5", kind: "folder", name: "brand-assets", size: "23 files · 41 MB as zip", app: "Finder", at: "1 h", origin: "mac" },
+      { id: "c6", kind: "image", name: "IMG_2041.HEIC", size: "3.4 MB", app: null, at: "2 h", origin: "phone", ph: "ph1" },
+      { id: "c7", kind: "text", text: "Standup moved to 15:30, room 4B. Bring the release notes.", app: "Messages", at: "Yesterday", origin: "mac", pinned: true },
+      { id: "c8", kind: "link", text: "https://docs.expo.dev/versions/latest/sdk/sharing/", app: "Arc", at: "Yesterday", origin: "mac", pinned: true }
+    ];
+  }
+  var PLATFORM = "android";
+  function seedIncoming() {
+    return [
+      { id: "f1", kind: "apk", name: "vitals-dev.apk", size: "82 MB", at: "5 min" },
+      { id: "f2", kind: "doc", name: "invoice-october.pdf", size: "412 KB", at: "1 h" }
+    ];
+  }
+  function seedSent() {
+    return [
+      { id: "s1", kind: "image", name: "IMG_2041.HEIC", size: "3.4 MB", at: "2 h", ph: "ph1", state: "In Downloads › Vitals on your Mac" },
+      { id: "s2", kind: "folder", name: "Trip", size: "48 files · 3.2 GB", at: "Yesterday", state: "In Downloads › Vitals › Trip" }
+    ];
+  }
+  var S = initial();
+  var proto = $("#proto");
+  var route = function () { var st = S.stacks[S.tab]; return st.length ? st[st.length - 1] : S.tab; };
+
+  /* ---------- small components ---------- */
+  function toggle(on, label, onChange) {
+    var b = h("button", { class: "toggle" + (on ? " on" : ""), role: "switch", "aria-checked": String(on), "aria-label": label });
+    b.addEventListener("click", function () { var next = !b.classList.contains("on"); b.classList.toggle("on", next); b.setAttribute("aria-checked", String(next)); onChange(next); });
+    return b;
+  }
+  function holdBtn(label, onCommit, k, extra) {
+    var b = h("button", { class: "hold" + (extra ? " " + extra : ""), "data-k": k }, h("span", null, label));
+    var t = null;
+    var start = function () { if (t) return; b.classList.add("holding"); t = setTimeout(function () { t = null; b.classList.remove("holding"); onCommit(); }, 1300); };
+    var stop = function () { if (t) { clearTimeout(t); t = null; } b.classList.remove("holding"); };
+    b.addEventListener("pointerdown", start);
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) { b.addEventListener(ev, stop); });
+    b.addEventListener("keydown", function (e) { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); start(); } });
+    b.addEventListener("keyup", stop);
+    return b;
+  }
+  function tile(k, ic, label, fn, red) { return h("button", { class: "pbtn press" + (red ? " red" : ""), "data-k": k, onclick: fn }, icon(ic), label); }
+  function actRow(k, ic, label, detail, fn) { return h("button", { class: "actrow press", "data-k": k, onclick: fn }, icon(ic), h("span", null, label, detail ? h("small", null, detail) : null)); }
+  function gi(k, label, value, fn, cls) {
+    var tag = fn ? "button" : "div";
+    return h(tag, { class: "gi" + (cls ? " " + cls : ""), "data-k": k, onclick: fn }, h("span", null, label), value === null ? null : h("span", { class: "v" }, value, fn ? icon("i-chev", "ico-s") : null));
+  }
+  function screen(kind) { return h("div", { class: "screen " + kind }, h("div", { class: "pad" }, Array.prototype.slice.call(arguments, 1))); }
+  function sub(back, title) { return screen("sub", h("button", { class: "back", "data-k": "back", onclick: pop }, icon("i-back", "ico-s"), back), h("div", { class: "title" }, title), Array.prototype.slice.call(arguments, 2)); }
+  function sheet(title, subtitle) {
+    return h("div", { class: "sheet", role: "dialog", "aria-label": title },
+      h("div", { class: "grabzone" }, h("div", { class: "grab" }), h("div", { class: "sh-title" }, title), subtitle ? h("div", { class: "sh-sub" }, subtitle) : null),
+      Array.prototype.slice.call(arguments, 2));
+  }
+  var cancelRow = function (label) { return h("button", { class: "sh-cancel", onclick: function () { closeSheet(); } }, label || "Cancel"); };
+
+  /* ---------- actions ---------- */
+  function calm() { S.agents = "calmed"; closeSheet(); rerender(); updateDock(); toast("Calmed 25 agents", "Undo", undoCalm); }
+  function undoCalm() { S.agents = "open"; closeSheet(); rerender(); updateDock(); toast("Agents back to normal priority"); }
+  function togglePause(p) {
+    S.paused[p.id] = !S.paused[p.id]; closeSheet(); rerender();
+    toast(p.name + (S.paused[p.id] ? " paused" : " resumed"), "Undo", function () { S.paused[p.id] = !S.paused[p.id]; rerender(); });
+  }
+  var cd = null;
+  function countdown(kind) {
+    var L = { shutdown: ["Shutting down", "Your Mac is off."], restart: ["Restarting", "Restarting now. Back in a minute."], logout: ["Logging out", "Logged out."] }[kind];
+    var n = 10; clearInterval(cd);
+    var t = toast(L[0] + " in " + n + " s", "Cancel", function () { clearInterval(cd); toast(L[0].replace("ing", "") + " cancelled"); }, 0);
+    var msg = t.querySelector(".tmsg");
+    cd = setInterval(function () {
+      n--;
+      if (n > 0) { msg.textContent = L[0] + " in " + n + " s"; return; }
+      clearInterval(cd);
+      if (kind === "shutdown") { S.mac = "off"; rerender(); }
+      toast(L[1]);
+    }, 1000);
+  }
+
+  /* ---------- sheets ---------- */
+  function powerTiles(prefix) {
+    return h("div", { class: "pgrid three" },
+      tile(prefix + "sleep", "i-moon", "Sleep", function () { closeSheet(); toast("Your Mac is going to sleep"); }),
+      tile(prefix + "lock", "i-lock", "Lock", function () { closeSheet(); toast("Locked"); }),
+      tile(prefix + "screen", "i-screen", "Screen off", function () { closeSheet(); toast("Screen is off", "Undo", function () { toast("Screen is back on"); }); }),
+      tile(prefix + "restart", "i-restart", "Restart", function () { openSheet(function () { return confirmSheet("restart"); }); }),
+      tile(prefix + "logout", "i-out", "Log out", function () { openSheet(function () { return confirmSheet("logout"); }); }),
+      tile(prefix + "shutdown", "i-power", "Shut down", function () { openSheet(function () { return confirmSheet("shutdown"); }); }, true));
+  }
+  function powerSheet() { return sheet("Power", "Rafay's MacBook Pro", powerTiles("sh-"), cancelRow()); }
+  var CONF = { shutdown: ["Shut down your Mac?", "Hold to shut down"], restart: ["Restart your Mac?", "Hold to restart"], logout: ["Log out of your Mac?", "Hold to log out"] };
+  function confirmSheet(kind) {
+    return sheet(CONF[kind][0], "Safari, Xcode and Slack are open. They may ask to save first.",
+      holdBtn(CONF[kind][1], function () { closeSheet(); countdown(kind); }, "hold"),
+      h("div", { class: "sh-foot" }, "You get 10 seconds to cancel."), cancelRow());
+  }
+  function alertSheet() {
+    if (S.agents === "open") return sheet("Too many agents", "25 agents are using 140% CPU since 22:12.",
+      h("p", { class: "sh-p" }, "Calming lowers their priority so your apps stay fast. Nothing gets closed, and you can undo it any time."),
+      h("button", { class: "big press", "data-k": "sheet-calm", onclick: calm }, "Calm them down"), cancelRow("Not now"));
+    return sheet("Agents calmed", "25 agents at low priority since 22:44.",
+      h("button", { class: "big ghost press", onclick: undoCalm }, "Undo"), cancelRow("Close"));
+  }
+  function appSheet(p) {
+    var paused = !!S.paused[p.id];
+    return sheet(p.name, GROUP_ONE[p.group] + " · " + p.cpu + "% CPU · " + p.mem,
+      actRow("pause", paused ? "i-play" : "i-pause", paused ? "Resume" : "Pause", paused ? "Pick up where it stopped" : "Resume any time", function () { togglePause(p); }),
+      actRow("slow", "i-slow", "Slow it down", "Runs when the Mac is idle", function () { closeSheet(); toast(p.name + " slowed down", "Undo", function () { toast(p.name + " back to normal"); }); }),
+      actRow("awake-while", "i-sun", "Keep Mac awake until it ends", null, function () { closeSheet(); toast("Keeping awake until " + p.name + " ends"); }),
+      holdBtn("Hold to quit", function () { closeSheet(); toast("Asked " + p.name + " to quit"); }, "quit"),
+      holdBtn("Hold to force quit", function () { closeSheet(); toast(p.name + " force quit. Unsaved work is lost."); }, "force", "small"));
+  }
+  function clipboardSheet() {
+    return sheet("Clipboard", "Send text to your Mac, or grab what it copied.",
+      h("textarea", { class: "field ta", placeholder: "Type or paste here", "data-k": "clip-input", "aria-label": "Text to send" }),
+      h("button", { class: "big press", onclick: function () { closeSheet(); toast("Sent to your Mac"); } }, "Send to Mac"),
+      h("button", { class: "big ghost press", onclick: function () { closeSheet(); toast("Copied the Mac clipboard here"); } }, "Get the Mac's clipboard"));
+  }
+  function linkSheet() {
+    return sheet("Open a link", "Opens in your Mac's default browser.",
+      h("input", { class: "field", type: "url", placeholder: "https://", "data-k": "link-input", "aria-label": "Link" }),
+      h("button", { class: "big press", "data-k": "open-link", onclick: function () { closeSheet(); toast("Opened on your Mac"); } }, "Open on Mac"));
+  }
+  function unpairSheet() {
+    return sheet("Unpair this phone?", "You will need a new code from the Mac to connect again.",
+      holdBtn("Hold to unpair", function () { closeSheet(); toast("Unpaired. (Demo, nothing changed.)"); }, "hold"), cancelRow());
+  }
+
+  /* ---------- clipboard ---------- */
+  var KIND = {
+    text: ["Text", "i-text", "var(--ink2)"], link: ["Link", "i-link", "var(--blue)"], image: ["Image", "i-image", "var(--pink)"],
+    file: ["File", "i-file", "var(--orange)"], folder: ["Folder", "i-folder", "var(--green)"]
+  };
+  var KIND_CHIPS = [["All", null], ["Pinned", null], ["Text", "text"], ["Links", "link"], ["Images", "image"], ["Files", "file"]];
+  var clipTitle = function (c) { return c.kind === "text" || c.kind === "link" ? c.text.replace(/^https?:\/\//, "") : c.name; };
+  var clipMeta = function (c) {
+    var who = c.origin === "phone" ? "From this phone" : c.app;
+    return [who, c.size, c.at].filter(Boolean).join(" · ");
+  };
+  function clipIcon(c) {
+    if (c.kind === "image") return h("span", { class: "thumb " + c.ph });
+    var k = KIND[c.kind];
+    return h("span", { class: "kt", style: "color:" + k[2] }, icon(k[1], "ico-s"));
+  }
+  function clipRow(c) {
+    return h("button", { class: "clip" + (c.fresh ? " fresh" : ""), "data-k": "clip-" + c.id, onclick: function () { openSheet(function () { return clipSheet(c); }); } },
+      clipIcon(c),
+      h("span", { class: "n" }, h("span", { class: c.mono ? "mono" : "" }, clipTitle(c)), h("small", null, clipMeta(c))),
+      c.origin === "phone" ? h("span", { class: "from" }, "sent") : null,
+      c.pinned ? h("span", { class: "pinmark" }, icon("i-pin", "ico-s")) : null);
+  }
+  var byId = function (id) { return S.clips.find(function (c) { return c.id === id; }); };
+  function setPin(c, on) { c.pinned = on; closeSheet(); rerender(); toast(on ? "Pinned. History cleanup won't remove it." : "Unpinned"); }
+  function removeClip(c) {
+    var at = S.clips.indexOf(c); S.clips.splice(at, 1); closeSheet(); rerender();
+    toast("Removed from history", "Undo", function () { S.clips.splice(at, 0, c); rerender(); });
+  }
+  function clipSheet(c) {
+    var k = KIND[c.kind], mac = c.origin === "mac";
+    var acts = [];
+    var copyLabel = c.kind === "image" ? "Copy image" : "Copy to this phone";
+    if (c.kind !== "file" && c.kind !== "folder") acts.push(actRow("copy", "i-copy", copyLabel, null, function () { closeSheet(); toast(c.kind === "image" ? "Image copied to this phone" : "Copied to this phone"); }));
+    if (c.kind === "link") {
+      acts.push(actRow("open-phone", "i-link", "Open on this phone", null, function () { closeSheet(); toast("Opening in your browser"); }));
+      acts.push(actRow("open-mac", "i-mac", "Open on Mac", null, function () { closeSheet(); toast("Opened on your Mac"); }));
+    }
+    if (c.kind === "image") acts.push(actRow("save-photos", "i-down", "Save to Photos", c.size, function () { closeSheet(); download(c, "Saved to Photos"); }));
+    if (c.kind === "file") acts.push(actRow("save-file", "i-down", "Save to this phone", c.size + " · pick a folder", function () { closeSheet(); download(c, "Saved to Downloads"); }));
+    if (c.kind === "folder") acts.push(actRow("save-zip", "i-down", "Save as zip", c.size, function () { closeSheet(); download(c, "brand-assets.zip saved"); }));
+    if (c.kind !== "text" && c.kind !== "link") acts.push(actRow("share", "i-share", "Share", "to Drive, WhatsApp, any app", function () { closeSheet(); toast("Opening the share sheet"); }));
+    if (!mac) acts.push(actRow("put-mac", "i-mac", "Put on the Mac clipboard again", null, function () { closeSheet(); toast("On your Mac's clipboard"); }));
+    acts.push(actRow("pin", "i-pin", c.pinned ? "Unpin" : "Pin", c.pinned ? "History cleanup can remove it again" : "Kept until you unpin it", function () { setPin(c, !c.pinned); }));
+    acts.push(actRow("remove", "i-trash", "Remove from history", "Deletes it from the Mac's history too", function () { removeClip(c); }));
+    var head = null;
+    if (c.kind === "text" || c.kind === "link") head = h("div", { class: "monobox" }, c.text);
+    if (c.kind === "image") head = h("div", { class: "preview " + c.ph });
+    return sheet(k[0] + (mac ? " from your Mac" : " sent from this phone"), clipMeta(c), head, acts);
+  }
+  /* A real transfer moves in 512 KB chunks; the demo fakes the timing. */
+  function download(c, done) {
+    var total = parseFloat(c.size) || 2, n = 0;
+    var t = toast("Getting " + (c.name || "it") + " · 0%", "Cancel", function () { clearInterval(iv); toast("Stopped. Nothing was saved."); }, 0);
+    var msg = t.querySelector(".tmsg");
+    var iv = setInterval(function () {
+      n = Math.min(100, n + 100 / Math.max(3, Math.round(total * 1.2)));
+      if (n < 100) { msg.textContent = "Getting " + (c.name || "it") + " · " + Math.round(n) + "%"; return; }
+      clearInterval(iv); toast(done);
+    }, 380);
+  }
+  var SAMPLES = {
+    photos: { kind: "image", name: "2 photos", detail: "PXL_20261024_2231.jpg, PXL_20261024_2232.jpg", size: "7.9 MB", mb: 7.9, ph: "two", to: "clipboard" },
+    file: { kind: "file", name: "Q3-report.pdf", detail: "from Files", size: "2.1 MB", mb: 2.1, to: "downloads" },
+    shared: { kind: "image", name: "IMG_2077.jpg", detail: "shared from Gallery", size: "4.6 MB", mb: 4.6, ph: "ph2", to: "clipboard" }
+  };
+  function sendSheet(item) {
+    var to = item.to;
+    var seg = h("div", { class: "seg two" }, h("span", { class: "sind", style: "transform:translateX(" + (to === "clipboard" ? 0 : 100) + "%)" }));
+    [["clipboard", "Mac clipboard"], ["downloads", "Downloads"]].forEach(function (o, i) {
+      seg.append(h("button", { class: to === o[0] ? "on" : "", "data-k": "to-" + o[0], onclick: function (e) {
+        to = o[0];
+        seg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b === e.currentTarget); });
+        seg.querySelector(".sind").style.transform = "translateX(" + i * 100 + "%)";
+      } }, o[1]));
+    });
+    var prev = item.ph === "two" ? h("div", { class: "preview two" }, h("div", { class: "ph1" }), h("div", { class: "ph2" }))
+      : item.ph ? h("div", { class: "preview " + item.ph })
+      : h("div", { class: "prevfile" }, h("span", { class: "kt", style: "color:var(--orange)" }, icon("i-file", "ico-s")), h("span", null, item.name, h("small", null, item.size)));
+    return sheet("Send to your Mac", item.name + " · " + item.size, prev,
+      h("div", { class: "lbl" }, "Put it on"), seg,
+      h("button", { class: "big press", "data-k": "send", onclick: function () { closeSheet(); upload(item, to); } }, "Send to Mac"),
+      h("div", { class: "sh-foot" }, "Over Wi-Fi now. If Wi-Fi drops, it carries on over Tailscale."));
+  }
+  var xferTimer = null;
+  function upload(item, to) {
+    clearInterval(xferTimer);
+    S.xfer = { name: item.name, mb: item.mb, done: 0 };
+    rerender();
+    var where = to === "clipboard" ? "on your Mac's clipboard" : "in Downloads on your Mac";
+    var t = toast("Sending " + item.name + " · 0%", "Cancel", cancelXfer, 0), msg = t.querySelector(".tmsg");
+    xferTimer = setInterval(function () {
+      if (!S.xfer) return clearInterval(xferTimer);
+      S.xfer.done = Math.min(item.mb, S.xfer.done + 0.512 * 2);
+      var pct = Math.round(S.xfer.done / item.mb * 100);
+      msg.textContent = "Sending " + item.name + " · " + pct + "%";
+      paintXfer();
+      if (S.xfer.done < item.mb) return;
+      clearInterval(xferTimer); S.xfer = null;
+      S.clips.unshift({ id: "u" + Date.now(), kind: item.kind, name: item.name, size: item.size, at: "now", origin: "phone", ph: item.ph === "two" ? "ph1" : item.ph });
+      rerender(); toast(item.name + " " + (item.name.indexOf("2 ") === 0 ? "are " : "is ") + where);
+    }, 330);
+  }
+  function cancelXfer() { clearInterval(xferTimer); S.xfer = null; rerender(); toast("Stopped. Nothing was left on the Mac."); }
+  function xferRow() {
+    if (!S.xfer) return null;
+    var x = S.xfer;
+    return h("div", { class: "xfer", "data-k": "xfer" },
+      h("div", { class: "t" }, h("span", null, "Sending " + x.name), h("button", { onclick: cancelXfer }, "Cancel")),
+      h("small", { class: "xs" }, x.done.toFixed(1) + " of " + x.mb.toFixed(1) + " MB · Wi-Fi"),
+      h("div", { class: "bar" }, h("i", { style: "transform:scaleX(" + (x.done / x.mb) + ")" })));
+  }
+  function paintXfer() {
+    var row = liveScreen() && $(".xfer", liveScreen()); if (!row || !S.xfer) return;
+    $(".xs", row).textContent = S.xfer.done.toFixed(1) + " of " + S.xfer.mb.toFixed(1) + " MB · Wi-Fi";
+    $(".bar i", row).style.transform = "scaleX(" + (S.xfer.done / S.xfer.mb) + ")";
+  }
+  function pasteTile() {
+    var go = function () {
+      S.clips.unshift({ id: "p" + Date.now(), kind: "link", text: "https://maps.app.goo.gl/7Qx2", at: "now", origin: "phone" });
+      rerender(); toast("Sent what you copied. It's on your Mac's clipboard.");
+    };
+    if (PLATFORM === "ios") return h("button", { class: "pbtn native press", "data-k": "paste", "aria-label": "Paste", onclick: go }, icon("i-paste", "ico-s"), "Paste");
+    return h("button", { class: "pbtn press", "data-k": "paste", onclick: go }, icon("i-paste"), "Paste");
+  }
+  function clipboardScreen() {
+    var list = S.clips.filter(function (c) {
+      if (S.kind === "All") return true;
+      if (S.kind === "Pinned") return c.pinned;
+      var want = KIND_CHIPS.find(function (k) { return k[0] === S.kind; })[1];
+      return c.kind === want || (want === "file" && c.kind === "folder");
+    });
+    var pinned = list.filter(function (c) { return c.pinned; }), rest = list.filter(function (c) { return !c.pinned; });
+    var today = rest.filter(function (c) { return c.at !== "Yesterday"; }), older = rest.filter(function (c) { return c.at === "Yesterday"; });
+    var sendBtn = h("button", { class: "sendb" + (S.draft ? " ready" : ""), "data-k": "compose-send", "aria-label": "Send", onclick: function () {
+      if (!S.draft) return;
+      S.clips.unshift({ id: "t" + Date.now(), kind: /^https?:/.test(S.draft) ? "link" : "text", text: S.draft, at: "now", origin: "phone" });
+      S.draft = ""; rerender(); toast("On your Mac's clipboard");
+    } }, icon("i-send", "ico-s"));
+    var section = function (label, rows) { return rows.length ? [h("div", { class: "sec" }, h("span", null, label), h("span", null, String(rows.length))), rows.map(clipRow)] : null; };
+    return sub("Control", "Clipboard.",
+      h("label", { class: "compose" }, h("input", { placeholder: "Type something for the Mac", value: S.draft, "data-k": "compose", "aria-label": "Text for the Mac", oninput: function (e) { S.draft = e.target.value; sendBtn.classList.toggle("ready", !!S.draft); } }), sendBtn),
+      h("div", { class: "pgrid three" }, pasteTile(),
+        tile("pick-photo", "i-image", "Photos", function () { openSheet(function () { return sendSheet(SAMPLES.photos); }); }),
+        tile("pick-file", "i-file", "Files", function () { openSheet(function () { return sendSheet(SAMPLES.file); }); })),
+      xferRow(),
+      h("div", { class: "chips" }, KIND_CHIPS.map(function (k) {
+        var n = k[0] === "All" ? S.clips.length : k[0] === "Pinned" ? S.clips.filter(function (c) { return c.pinned; }).length : S.clips.filter(function (c) { return c.kind === k[1] || (k[1] === "file" && c.kind === "folder"); }).length;
+        return h("button", { class: "chip" + (S.kind === k[0] ? " on" : ""), "data-k": "kind-" + k[0], onclick: function () { S.kind = k[0]; rerender(); } }, k[0], h("i", null, String(n)));
+      })),
+      list.length ? [section("Pinned", pinned), section("Today", today), section("Yesterday", older)] : h("div", { class: "empty" }, "Nothing here yet"),
+      h("div", { class: "lbl", style: "padding-top:14px" }, "On this phone"),
+      h("div", { class: "group" }, h("div", { class: "gi" }, h("span", null, "Copy Mac copies here"), toggle(S.autoCopy, "Copy Mac copies to this phone", function (v) {
+        S.autoCopy = v; toast(v ? "New Mac copies will land on this phone" : "Mac copies stay on the Mac");
+      })), h("div", { class: "gi" }, h("span", null, "Send phone copies to Mac"), toggle(S.sendCopies, "Send phone copies to Mac", function (v) {
+        S.sendCopies = v; toast(v ? (PLATFORM === "ios" ? "Vitals will offer your copies with one tap" : "Your copies go to the Mac when you open Vitals") : "Phone copies stay on the phone");
+      }))),
+      h("p", { class: "note" }, "Only while Vitals is open. Your Mac keeps 7 days of history, and pinned clips stay until you unpin them."));
+  }
+  /* Simulates the Mac copying something; with auto-copy on it also lands on the phone clipboard. */
+  var MAC_COPIES = [
+    { kind: "text", text: "brew install --cask vitals-nightly", app: "Ghostty", mono: true },
+    { kind: "link", text: "https://pagepilot.rafay99.com/p/d0a5b29036de479caac43c1508028afd", app: "Safari" },
+    { kind: "image", name: "Screenshot 2026-10-24 at 22.51.png", size: "940 KB", app: "Screenshot", ph: "ph2" }
+  ];
+  var macCopyN = 0;
+  function macCopy() {
+    var base = MAC_COPIES[macCopyN++ % MAC_COPIES.length];
+    var c = Object.assign({ id: "m" + Date.now(), at: "now", origin: "mac", fresh: true }, base);
+    S.clips.unshift(c);
+    if (route() === "clipboard") { rerender(); raf2(function () { var el = find("clip-" + c.id); if (el) el.classList.remove("fresh"); c.fresh = false; }); }
+    else c.fresh = false;
+    if (route() === "control") rerender();
+    if (S.autoCopy) toast(c.kind === "image" ? "Mac screenshot is on this phone's clipboard" : "Mac copy is on this phone: " + clipTitle(c).slice(0, 26) + (clipTitle(c).length > 26 ? "…" : ""));
+  }
+  /* Another app (Gallery or Photos) and the system share sheet, drawn over Vitals. */
+  var ext = null;
+  var shareKind = "photo";
+  function openGallery(kind) {
+    shareKind = kind === "video" ? "video" : "photo";
+    closeExt();
+    ext = h("div", { class: "ext" }, h("div", { class: "gal" },
+      h("div", { class: "hd" }, h("span", null, PLATFORM === "ios" ? "Photos" : "Gallery"), h("button", { onclick: closeExt }, "Done")),
+      h("div", { class: "big ph2" }),
+      h("div", { class: "bar2" },
+        h("button", { "data-k": "gal-share", onclick: openSystemShare }, icon("i-share", "ico-s"), "Share"),
+        h("button", null, icon("i-pin", "ico-s"), "Favorite"), h("button", null, icon("i-trash", "ico-s"), "Delete"))));
+    proto.insertBefore(ext, $(".scrim", proto));
+    raf2(function () { ext.classList.add("in"); });
+  }
+  function openSystemShare() {
+    var ios = PLATFORM === "ios";
+    var targets = [["Vitals", "vit", "V"], ["Drive", "", ""], ["WhatsApp", "", ""], ["Gmail", "", ""], ["Nearby", "", ""], ["Messages", "", ""], ["Notes", "", ""], ["More", "", "…"]];
+    var colors = ["", "#2a6", "#2b5", "#d44", "#36c", "#4a4", "#cb3", "#444"];
+    var sys = h("div", { class: "sys " + (ios ? "ios" : "android") },
+      h("div", { class: "sg" }),
+      h("div", { class: "sh" }, h("i", { class: "ph2" }), h("span", null, "IMG_2077.jpg", h("br"), h("small", { style: "color:#999" }, "4.6 MB"))),
+      h("div", { class: "targets" }, targets.map(function (t, i) {
+        return h("button", { "data-k": t[1] ? "share-vitals" : null, onclick: t[1] ? shareToVitals : null },
+          h("b", { class: t[1], style: t[1] ? "" : "background:" + colors[i] }, t[2]), t[0]);
+      })),
+      ios ? h("div", { class: "rowx" }, "Copy") : null, ios ? h("div", { class: "rowx" }, "Save to Files") : null);
+    ext.append(sys); raf2(function () { sys.classList.add("in"); });
+  }
+  function closeExt() { if (!ext) return; var e = ext; ext = null; e.classList.remove("in"); setTimeout(function () { e.remove(); }, 320); }
+  function shareToVitals() { closeExt(); setTimeout(function () { openSheet(function () { return shareKind === "video" ? sendFilesSheet(OUT.bigvideo) : sendSheet(SAMPLES.shared); }); }, 260); }
+
+  /* ---------- files (Drop) ---------- */
+  var FKIND = {
+    apk: ["App", "i-android", "var(--green)"], video: ["Video", "i-video", "var(--blue)"], image: ["Photo", "i-image", "var(--pink)"],
+    doc: ["Document", "i-file", "var(--orange)"], folder: ["Folder", "i-folder", "var(--green)"]
+  };
+  var savedTo = function () { return PLATFORM === "ios" ? "Files › On My iPhone › Vitals" : "Downloads › Vitals"; };
+  function fileIcon(f) {
+    if (f.ph) return h("span", { class: "thumb " + f.ph });
+    var k = FKIND[f.kind];
+    return h("span", { class: "kt", style: "color:" + k[2] }, icon(k[1], "ico-s"));
+  }
+  function fileRow(f, dir) {
+    return h("button", { class: "clip", "data-k": "file-" + f.id, onclick: function () { openSheet(function () { return fileSheet(f, dir); }); } },
+      fileIcon(f),
+      h("span", { class: "n" }, h("span", null, f.name), h("small", null, [FKIND[f.kind][0], f.size, f.at].join(" · "))),
+      f.kind === "apk" ? h("span", { class: "from", style: "color:var(--orange);border-color:var(--orange)" }, "app") : null);
+  }
+  function removeFile(list, f) {
+    var at = list.indexOf(f); list.splice(at, 1); closeSheet(); rerender();
+    toast("Removed from the list. The file stays saved.", "Undo", function () { list.splice(at, 0, f); rerender(); });
+  }
+  function fileSheet(f, dir) {
+    var acts = [];
+    if (dir === "in") {
+      if (f.kind === "apk" && PLATFORM === "android") acts.push(actRow("install", "i-android", "Install", "Opens Android's installer", function () { closeSheet(); installer(); }));
+      if (f.kind === "video" || f.kind === "image") acts.push(actRow("save-photos", "i-down", "Save to Photos", null, function () { closeSheet(); toast("Saved to Photos"); }));
+      acts.push(actRow("open-file", "i-files", PLATFORM === "ios" ? "Show in Files" : "Open", savedTo(), function () { closeSheet(); toast(PLATFORM === "ios" ? "Opening Files" : "Opening " + f.name); }));
+      acts.push(actRow("share-file", "i-share", "Share", "to Drive, WhatsApp, any app", function () { closeSheet(); toast("Opening the share sheet"); }));
+      acts.push(actRow("remove-file", "i-trash", "Remove from this list", "The file stays saved", function () { removeFile(S.incoming, f); }));
+    } else {
+      acts.push(actRow("show-mac", "i-mac", "Show in Finder on the Mac", f.state, function () { closeSheet(); toast("Opened Finder on your Mac"); }));
+      acts.push(actRow("send-again", "i-send", "Send again", null, function () { closeSheet(); sendBatch({ label: f.name, mb: parseFloat(f.size) || 3, items: [f] }); }));
+      acts.push(actRow("remove-sent", "i-trash", "Remove from this list", "It stays on your Mac", function () { removeFile(S.sent, f); }));
+    }
+    var warn = f.kind === "apk" ? h("div", { class: "warnbox" }, h("b", null, "This is an app"), PLATFORM === "ios" ? "iPhone can't install Android apps. It's saved as a file." : "Only install apps you trust. It came from your Mac.") : null;
+    var head = f.ph ? h("div", { class: "preview " + f.ph }) : null;
+    return sheet(f.name, [FKIND[f.kind][0], f.size, dir === "in" ? "from your Mac" : "sent to your Mac", f.at].join(" · "), head, warn, acts);
+  }
+  function installer() {
+    var box = h("div", { class: "installer" }, icon("i-android"), h("b", null, "Vitals Nightly"), h("p", null, "Do you want to install this app?"),
+      h("div", { class: "row" }, h("button", { onclick: function () { box.remove(); } }, "Cancel"), h("button", { "data-k": "installer-ok", onclick: function () { box.remove(); toast("Vitals Nightly installed"); } }, "Install")));
+    proto.append(box);
+  }
+  /* One transfer per direction in this demo. A real drop moves 16 MB parts natively and can resume. */
+  var timers = { in: null, out: null };
+  var slot = function (dir) { return dir === "in" ? "xin" : "xout"; };
+  function stopTransfer(dir) { clearInterval(timers[dir]); S[slot(dir)] = null; rerender(); }
+  function runTransfer(dir, batch, label, done) {
+    clearInterval(timers[dir]);
+    var x = { label: batch.label, mb: batch.mb, done: 0, route: "Wi-Fi" };
+    S[slot(dir)] = x; rerender();
+    var t = toast(label + " · 0%", "Cancel", function () { stopTransfer(dir); toast("Stopped. Nothing half-done was kept."); }, 0);
+    var msg = t.querySelector(".tmsg");
+    timers[dir] = setInterval(function () {
+      x.done = Math.min(x.mb, x.done + Math.max(x.mb / 14, 0.5));
+      msg.textContent = label + " · " + Math.round(x.done / x.mb * 100) + "%";
+      paintTransfers();
+      if (x.done < x.mb) return;
+      clearInterval(timers[dir]); S[slot(dir)] = null;
+      done(); rerender();
+    }, 330);
+  }
+  var mbText = function (mb) { return mb >= 1000 ? (mb / 1000).toFixed(1) + " GB" : Math.round(mb) + " MB"; };
+  function xferCard(dir) {
+    var x = S[slot(dir)]; if (!x) return null;
+    return h("div", { class: "xfer", "data-x": dir },
+      h("div", { class: "t" }, h("span", null, (dir === "in" ? "Getting " : "Sending ") + x.label), h("button", { onclick: function () { stopTransfer(dir); hideToast(); toast("Stopped"); } }, "Cancel")),
+      h("small", { class: "xs" }, mbText(x.done) + " of " + mbText(x.mb) + " · " + x.route),
+      h("div", { class: "bar" }, h("i", { style: "transform:scaleX(" + (x.done / x.mb) + ")" })));
+  }
+  function paintTransfers() {
+    ["in", "out"].forEach(function (dir) {
+      var x = S[slot(dir)]; if (!x) return;
+      proto.querySelectorAll('[data-x="' + dir + '"]').forEach(function (row) {
+        var xs = row.querySelector(".xs"); if (xs) xs.textContent = mbText(x.done) + " of " + mbText(x.mb) + (row.classList.contains("notif") ? "" : " · " + x.route);
+        var bar = row.querySelector(".bar i"); if (bar) bar.style.transform = "scaleX(" + (x.done / x.mb) + ")";
+      });
+    });
+  }
+  var BATCHES = {
+    video: { label: "3 files", mb: 1430, items: [{ kind: "video", name: "trip-video.mov", size: "1.2 GB", ph: "ph2" }, { kind: "image", name: "DSC_0412.jpg", size: "11 MB", ph: "ph1" }, { kind: "image", name: "DSC_0413.jpg", size: "12 MB", ph: "ph1" }] },
+    apk: { label: "vitals-nightly.apk", mb: 84, items: [{ kind: "apk", name: "vitals-nightly.apk", size: "84 MB" }] }
+  };
+  var macSendN = 0;
+  function macSends(which) {
+    var b = BATCHES[which || (macSendN++ % 2 === 0 ? "video" : "apk")];
+    if (!S.autoAccept) return openSheet(function () { return askSheet(b); });
+    receive(b);
+  }
+  function receive(b) {
+    runTransfer("in", b, "Getting " + b.label + " from your Mac", function () {
+      var batch = S.rcv++;
+      b.items.slice().reverse().forEach(function (it, i) { S.incoming.unshift(Object.assign({ id: "r" + (b.items.length - 1 - i) + (batch ? "-" + batch : ""), at: "now" }, it)); });
+      toast(b.label + (b.items.length > 1 ? " are" : " is") + " in " + savedTo(), "Open", function () { if (route() !== "files") { if (S.tab !== "control") go("control"); push("files"); } });
+    });
+  }
+  function askSheet(b) {
+    return sheet("Your Mac wants to send " + b.label, mbText(b.mb) + " · " + b.items.map(function (i) { return i.name; }).join(", "),
+      h("button", { class: "big press", "data-k": "accept", onclick: function () { closeSheet(); receive(b); } }, "Accept"),
+      cancelRow("Not now"));
+  }
+  function sendBatch(b) {
+    runTransfer("out", b, "Sending " + b.label, function () {
+      S.sent.unshift({ id: "o" + Date.now(), kind: b.items[0].kind, name: b.label, size: mbText(b.mb), at: "now", ph: b.items[0].ph, state: "In Downloads › Vitals on your Mac" });
+      toast(b.label + " is in Downloads › Vitals on your Mac");
+    });
+  }
+  var OUT = {
+    files: { label: "2 files", mb: 46, items: [{ kind: "doc" }], detail: "lease.pdf, budget.xlsx" },
+    photos: { label: "5 photos and a video", mb: 820, items: [{ kind: "video", ph: "ph2" }], detail: "from Photos" },
+    folder: { label: "Camera folder", mb: 3200, items: [{ kind: "folder" }], detail: "48 files, keeps its folders" },
+    bigvideo: { label: "concert.mp4", mb: 4100, items: [{ kind: "video", ph: "ph2" }], detail: "shared from Gallery" }
+  };
+  function sendFilesSheet(b) {
+    var first = b.items[0];
+    var prev = first.ph ? h("div", { class: "preview " + first.ph }) : h("div", { class: "prevfile" }, h("span", { class: "kt", style: "color:var(--orange)" }, icon(first.kind === "folder" ? "i-folder" : "i-file", "ico-s")), h("span", null, b.label, h("small", null, mbText(b.mb))));
+    var big = b.mb > 50;
+    var seg = h("div", { class: "seg two" + (big ? " disabled-opt" : "") }, h("span", { class: "sind", style: "transform:translateX(100%)" }), h("button", null, "Mac clipboard"), h("button", { class: "on" }, "Downloads"));
+    return sheet("Send to your Mac", b.label + " · " + mbText(b.mb) + " · " + b.detail, prev,
+      h("div", { class: "lbl" }, "Put it on"), seg,
+      big ? h("p", { class: "note" }, "Too big for the clipboard. It goes to Downloads › Vitals on your Mac.") : null,
+      h("button", { class: "big press", "data-k": "send-files", onclick: function () { closeSheet(); sendBatch(b); } }, "Send to Mac"),
+      h("div", { class: "sh-foot" }, "Keeps going if you leave Vitals." + (PLATFORM === "ios" ? " On iPhone, for about 30 seconds." : "")));
+  }
+  function filesScreen() {
+    return sub("Control", "Files.",
+      h("div", { class: "where" }, "From your Mac → " + savedTo()),
+      h("div", { class: "pgrid three" },
+        tile("send-files", "i-files", "Files", function () { openSheet(function () { return sendFilesSheet(OUT.files); }); }),
+        tile("send-photos", "i-image", "Photos", function () { openSheet(function () { return sendFilesSheet(OUT.photos); }); }),
+        tile("send-folder", "i-folder", "Folder", function () { openSheet(function () { return sendFilesSheet(OUT.folder); }); })),
+      xferCard("in"), xferCard("out"),
+      h("div", { class: "sec" }, h("span", null, "From your Mac"), h("span", null, String(S.incoming.length))),
+      S.incoming.length ? S.incoming.map(function (f) { return fileRow(f, "in"); }) : h("div", { class: "empty" }, "Nothing yet. On the Mac, right-click a file › Send to Phone."),
+      h("div", { class: "sec" }, h("span", null, "Sent"), h("span", null, String(S.sent.length))),
+      S.sent.map(function (f) { return fileRow(f, "out"); }),
+      h("div", { class: "lbl", style: "padding-top:14px" }, "From your Mac"),
+      h("div", { class: "group" }, h("div", { class: "gi" }, h("span", null, "Start without asking"), toggle(S.autoAccept, "Start without asking", function (v) { S.autoAccept = v; toast(v ? "Files from your Mac start right away" : "Vitals asks before each transfer"); }))),
+      h("p", { class: "note" }, PLATFORM === "ios" ? "iPhone keeps going for about 30 seconds after you leave Vitals, then waits for you to come back." : "Keeps going when you leave Vitals, with a progress notification."));
+  }
+  /* Phone to Mac clipboard: Vitals notices a new copy when you open it. */
+  var copyEl = null;
+  function phoneCopies() {
+    S.phoneCopy = "https://maps.app.goo.gl/7Qx2";
+    if (S.sendCopies && PLATFORM === "android") { sendCopy(); return; }
+    hideCopy();
+    var ios = PLATFORM === "ios";
+    copyEl = h("div", { class: "copystrip" }, icon("i-clip", "ico-s"),
+      h("span", { class: "n" }, ios ? "You copied something" : "You copied a link", h("small", null, ios ? "Paste it to send it to your Mac" : "maps.app.goo.gl/7Qx2")),
+      ios ? h("button", { class: "pastec", "data-k": "copy-send", onclick: sendCopy }, icon("i-paste", "ico-s"), "Paste") : h("button", { class: "sendc", "data-k": "copy-send", onclick: sendCopy }, "Send to Mac"),
+      h("button", { class: "x", "aria-label": "Dismiss", onclick: hideCopy }, "×"));
+    var el = copyEl; proto.append(el); raf2(function () { el.classList.add("in"); });
+  }
+  function sendCopy() { hideCopy(); S.clips.unshift({ id: "pc" + Date.now(), kind: "link", text: S.phoneCopy, at: "now", origin: "phone" }); rerender(); toast("On your Mac's clipboard. Paste with ⌘V."); }
+  function hideCopy() { if (!copyEl) return; var e = copyEl; copyEl = null; e.classList.remove("in"); setTimeout(function () { e.remove(); }, 250); }
+  /* Leaving the app: Android's shade with the transfer notification and Quick Settings tile; iPhone's lock screen. */
+  var lockEl = null;
+  function lockPhone() {
+    unlock();
+    if (PLATFORM === "ios") {
+      lockEl = h("div", { class: "ioslock" }, h("div", { class: "t" }, "9:41"),
+        S.xin ? h("div", { class: "notif" }, h("div", { class: "top" }, h("i"), "VITALS DEV · now"), h("b", null, "Paused getting " + S.xin.label), "Open Vitals to finish. iPhone stops transfers about 30 seconds after you leave.")
+          : h("div", { class: "notif" }, h("div", { class: "top" }, h("i"), "VITALS DEV · 5 min"), h("b", null, "3 files are in Files › Vitals"), "From MacBook Pro"),
+        h("button", { class: "close", "data-k": "unlock", onclick: unlock, style: "color:#ccc;margin-top:30px" }, "Unlock"));
+    } else {
+      var n = S.xin
+        ? h("div", { class: "notif", "data-x": "in" }, h("div", { class: "top" }, h("i"), "Vitals Dev · now"), h("b", null, "Getting " + S.xin.label + " from your Mac"), h("small", { class: "xs" }, mbText(S.xin.done) + " of " + mbText(S.xin.mb)), h("div", { class: "bar" }, h("i", { style: "transform:scaleX(" + (S.xin.done / S.xin.mb) + ")" })), h("div", { class: "acts" }, h("span", null, "Cancel")))
+        : h("div", { class: "notif" }, h("div", { class: "top" }, h("i"), "Vitals Dev · 5 min"), h("b", null, "vitals-dev.apk is in Downloads › Vitals"), "From MacBook Pro", h("div", { class: "acts" }, h("span", null, "Install"), h("span", null, "Open")));
+      lockEl = h("div", { class: "shade" }, h("div", { class: "clock" }, "22:41"),
+        h("div", { class: "qs" }, h("button", null, "Wi-Fi"), h("button", null, "Bluetooth"),
+          h("button", { class: "vit", "data-k": "qs-send", onclick: function () { unlock(); toast("Sent your clipboard to the Mac"); } }, icon("i-clip", "ico-s"), "Send clipboard"), h("button", null, "Flashlight")),
+        n, h("button", { class: "close", "data-k": "unlock", onclick: unlock }, "Back to Vitals"));
+    }
+    var el = lockEl; proto.append(el); raf2(function () { el.classList.add("in"); });
+  }
+  function unlock() { if (!lockEl) return; var e = lockEl; lockEl = null; e.classList.remove("in"); setTimeout(function () { e.remove(); }, 320); }
+  /* Direction B, for comparison only: one Share screen with a Clipboard | Files switch. */
+  function shareB(which) {
+    return screen("sub", h("button", { class: "back" }, icon("i-back", "ico-s"), "Control"), h("div", { class: "title" }, "Share."),
+      h("div", { class: "bseg" }, h("span", { class: which === "clip" ? "on" : "" }, "Clipboard"), h("span", { class: which === "files" ? "on" : "" }, "Files")),
+      which === "clip" ? S.clips.slice(0, 6).map(clipRow) : [h("div", { class: "pgrid three" }, tile("b1", "i-files", "Files"), tile("b2", "i-image", "Photos"), tile("b3", "i-folder", "Folder")), S.incoming.map(function (f) { return fileRow(f, "in"); })]);
+  }
+
+  /* ---------- screens ---------- */
+  function home() {
+    var off = S.mac === "off", open = S.agents === "open";
+    var status = off ? h("div", { class: "status off" }, h("span", null, "○ Your Mac is off"), h("span", null, ""))
+      : h("button", { class: "status " + (open ? "warn" : "calm"), "data-k": "status", onclick: function () { openSheet(alertSheet); } },
+          h("span", null, open ? "▲ Too many agents · 25 running" : "✓ Agents calmed"), h("span", null, open ? "›" : "Undo ›"));
+    var ch = function (k, tag, color, w, unit) {
+      return h("button", { class: "ch", "data-k": "ch-" + k, onclick: function () { S.channel = k; push("channel"); } },
+        h("div", { class: "top" }, h("span", { class: "tag", style: "color:" + color }, tag), h("span", { class: "val" }, off ? "--" : CH[k].val(), off ? null : h("i", null, unit))),
+        wave(off ? "flat" : w, off ? "var(--mute)" : color, 28));
+    };
+    var meta = off ? "last reading 22:46" : S.awake !== "Off" ? "keeping awake · " + (S.awake === "Always" ? "until you stop it" : S.awake + " left") : "M3 Max · macOS 26.1";
+    return screen("home",
+      h("div", { class: "head" }, h("span", null, "Rafay's MacBook Pro ", h("b", { class: off ? "offdot" : "ok" }, off ? "○" : "●")),
+        h("button", { class: "pw press", "data-k": "power", "aria-label": "Power", onclick: function () { openSheet(powerSheet); } }, icon("i-power", "ico-s"))),
+      h("div", { class: "word" }, off ? "Off." : open ? "Busy." : "Steady."),
+      h("div", { class: "meta" + (S.awake !== "Off" && !off ? " awake" : "") }, meta),
+      status,
+      ch("cpu", "PULSE · CPU", "var(--green)", "ecg", "%"),
+      ch("mem", "PRESS · MEMORY", "var(--pink)", "art", "/36 GB"),
+      ch("temp", "TEMP", "var(--orange)", "wave", ""),
+      ch("fans", "RESP · FANS", "var(--blue)", "wave2", "rpm"),
+      h("div", { class: "mini" }, [["GPU", "18%", "var(--yellow)"], ["POWER", "23 W", "var(--drip)"], ["NET", "2.1 MB/s", "var(--tele)"], ["BATT", "82%", "var(--violet)"]]
+        .map(function (m) { return h("div", null, h("small", { style: "color:" + m[2] }, m[0]), h("b", null, off ? "--" : m[1])); })));
+  }
+  function channel() {
+    var c = CH[S.channel], off = S.mac === "off";
+    var range = h("div", { class: "seg" }, h("span", { class: "sind", style: "width:calc((100% - 8px)/3)" }));
+    ["1 h", "24 h", "7 d"].forEach(function (r, i) {
+      range.append(h("button", { class: i === 0 ? "on" : "", onclick: function (e) {
+        range.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b === e.currentTarget); });
+        range.querySelector(".sind").style.transform = "translateX(" + i * 100 + "%)";
+      } }, r));
+    });
+    var top = PROCS.slice().sort(function (a, b) { return b.cpu - a.cpu; }).slice(0, 4);
+    return sub("Home", c.title,
+      h("div", { class: "bigval", style: "color:" + c.color }, off ? "--" : c.val(), h("i", null, c.unit)),
+      h("div", { class: "ctx" }, c.ctx),
+      h("div", { class: "bigwave" }, wave(off ? "flat" : c.wave, c.color, 110)),
+      range,
+      h("div", { class: "stats" }, ["Low", "Average", "High"].map(function (l, i) { return h("div", null, h("small", null, l), h("b", null, c.stats[i])); })),
+      S.channel === "cpu" ? [h("div", { class: "lbl" }, "Using the most"), top.map(appRow)] : null);
+  }
+  function appRow(p) {
+    return h("button", { class: "app", "data-k": "row-" + p.id, onclick: function () { openSheet(function () { return appSheet(p); }); } },
+      h("span", { class: "tile", style: "background:" + p.color }, p.name.charAt(0).toUpperCase()),
+      h("span", { class: "n" }, p.name, h("small", null, p.cpu + "% CPU · " + p.mem)),
+      S.paused[p.id] ? h("span", { class: "ptag" }, "paused") : null);
+  }
+  function appsList() {
+    var q = S.query.trim().toLowerCase();
+    var wrap = h("div", { class: "applist" });
+    GROUPS.filter(function (g) { return S.filter === "All" || S.filter === g; }).forEach(function (g) {
+      var rows = PROCS.filter(function (p) { return p.group === g && (!q || p.name.toLowerCase().indexOf(q) >= 0); });
+      if (!rows.length) return;
+      var full = S.expanded[g] || S.filter === g || q;
+      wrap.append(h("div", { class: "sec" }, h("span", null, GROUP_LABEL[g]), h("span", null, String(rows.length))));
+      (full ? rows : rows.slice(0, 3)).forEach(function (p) { wrap.append(appRow(p)); });
+      if (!full && rows.length > 3) wrap.append(h("button", { class: "more", "data-k": "more-" + g, onclick: function () { S.expanded[g] = true; refreshList(); } }, "Show all " + rows.length));
+    });
+    if (!wrap.childNodes.length) wrap.append(h("div", { class: "empty" }, "Nothing found"));
+    return wrap;
+  }
+  function refreshList() { var cur = liveScreen(); var old = cur && $(".applist", cur); if (old) old.replaceWith(appsList()); }
+  function apps() {
+    return screen("apps", h("div", { class: "title" }, "Apps."),
+      h("label", { class: "search" }, icon("i-search", "ico-s"),
+        h("input", { placeholder: "Search apps and processes", value: S.query, "data-k": "search", "aria-label": "Search", oninput: function (e) { S.query = e.target.value; refreshList(); } })),
+      h("div", { class: "chips" }, ["All"].concat(GROUPS).map(function (g) {
+        return h("button", { class: "chip" + (S.filter === g ? " on" : ""), "data-k": "chip-" + g, onclick: function () { S.filter = g; rerender(); } }, g, g === "All" ? null : h("i", null, String(count(g))));
+      })),
+      appsList());
+  }
+  function control() {
+    var AW = ["Off", "1 h", "4 h", "Always"];
+    var seg = h("div", { class: "seg" }, h("span", { class: "sind", style: "transform:translateX(" + AW.indexOf(S.awake) * 100 + "%)" }));
+    AW.forEach(function (v, i) {
+      seg.append(h("button", { class: S.awake === v ? "on" : "", "data-k": "awake-" + v, onclick: function (e) {
+        S.awake = v;
+        seg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b === e.currentTarget); });
+        seg.querySelector(".sind").style.transform = "translateX(" + i * 100 + "%)";
+        toast(v === "Off" ? "Your Mac can sleep again" : "Keeping your Mac awake " + (v === "Always" ? "until you stop it" : "for " + v));
+      } }, v));
+    });
+    var num = h("b", null, String(S.volume));
+    return screen("control", h("div", { class: "title" }, "Control."),
+      h("div", { class: "lbl" }, "Power"), powerTiles("ctl-"),
+      h("div", { class: "lbl" }, "Keep awake"), seg,
+      h("div", { class: "lbl" }, "Sound"),
+      h("div", { class: "slider" }, icon("i-sound", "ico-s"), h("input", { type: "range", min: "0", max: "100", value: String(S.volume), "aria-label": "Volume", oninput: function (e) { S.volume = +e.target.value; num.textContent = String(S.volume); } }), num),
+      h("div", { class: "group" }, h("div", { class: "gi" }, h("span", null, "Mute"), toggle(S.muted, "Mute", function (v) { S.muted = v; toast(v ? "Mac muted" : "Mac unmuted"); }))),
+      h("div", { class: "sec", style: "padding:6px 20px 8px" }, h("span", null, "Share"), h("span", null, S.clips.length + " clips on the Mac")),
+      (function () {
+        var c = S.clips.find(function (x) { return x.origin === "mac"; });
+        if (!c) return h("p", { class: "note" }, "Nothing copied on the Mac yet.");
+        return h("button", { class: "latest press", "data-k": "latest", onclick: function () { push("clipboard"); } }, clipIcon(c),
+          h("span", { class: "n" }, h("span", null, clipTitle(c)), h("small", null, "Mac copied · " + c.at)),
+          h("span", { class: "go", "data-k": "latest-copy", onclick: function (e) { e.stopPropagation(); toast("Copied to this phone"); } }, "Copy"));
+      })(),
+      S.xin ? h("button", { class: "incoming press", "data-k": "incoming", "data-x": "in", onclick: function () { push("files"); } }, h("span", { class: "kt", style: "color:var(--blue)" }, icon("i-down", "ico-s")),
+        h("span", { class: "n" }, h("span", null, "Getting " + S.xin.label + " from your Mac"), h("small", { class: "xs" }, mbText(S.xin.done) + " of " + mbText(S.xin.mb) + " · Wi-Fi"), h("div", { class: "bar" }, h("i", { style: "transform:scaleX(" + (S.xin.done / S.xin.mb) + ")" })))) : null,
+      h("div", { class: "pgrid" },
+        tile("tile-clip", "i-clip", "Clipboard", function () { push("clipboard"); }),
+        tile("tile-files", "i-files", "Files", function () { push("files"); }),
+        tile("tile-link", "i-link", "Open link", function () { openSheet(linkSheet); }),
+        tile("tile-find", "i-ping", "Find Mac", function () { toast("Playing a sound on your Mac"); })));
+  }
+  function alerts() {
+    var agentCard = S.agents === "open"
+      ? h("div", { class: "card" }, h("h4", null, "▲ Too many agents"), h("p", null, "25 agents are using 140% CPU. Calming them lowers their priority so your apps stay fast."), h("button", { class: "big press", "data-k": "calm", onclick: calm }, "Calm them down"))
+      : h("div", { class: "card calm" }, h("h4", null, "✓ Agents calmed"), h("div", { class: "row2" }, h("span", null, "25 agents at low priority since 22:44"), h("button", { class: "undo", onclick: undoCalm }, "Undo")));
+    var emuCard = S.emus === "calmed"
+      ? h("div", { class: "card calm" }, h("h4", null, "✓ Emulators calmed"), h("div", { class: "row2" }, h("span", null, "1 idle emulator paused at 22:30"), h("button", { class: "undo", onclick: function () { S.emus = "open"; rerender(); toast("Emulator resumed"); } }, "Undo")))
+      : null;
+    return screen("alerts", h("div", { class: "title" }, "Alerts."), agentCard, emuCard,
+      h("div", { class: "lbl" }, "Tell me when"),
+      h("div", { class: "group" }, RULES.map(function (r) { return h("div", { class: "gi" }, h("span", null, r[1]), toggle(S.rules[r[0]], r[1], function (v) { S.rules[r[0]] = v; })); })),
+      h("div", { class: "lbl" }, "Earlier today"),
+      h("div", { class: "group" }, gi(null, "Memory was full", "14:02 to 14:09"), gi(null, "Running hot", "11:40 to 11:52")));
+  }
+  function settings() {
+    var go2 = function (r) { return function () { push(r); }; };
+    return screen("settings", h("div", { class: "title" }, "Settings."),
+      h("div", { class: "maccard" }, h("b", null, "Rafay's MacBook Pro"), h("span", null, "M3 Max · 36 GB · macOS 26.1 · Vitals 0.214")),
+      h("div", { class: "group" }, gi("set-connection", "Connection", "Wi-Fi", go2("connection")), gi("set-notif", "Notifications", "On", go2("notifications")), gi("set-updates", "Updates", "Up to date", go2("updates"))),
+      h("div", { class: "group" }, gi("set-phone", "This phone", "Pixel 9 Pro", go2("phone")), gi("set-scopes", "What it can do", "Full control", go2("scopes"))),
+      h("div", { class: "group" }, gi("set-help", "Help and diagnostics", "", go2("help"))),
+      h("div", { class: "group" }, h("button", { class: "gi red", "data-k": "unpair", onclick: function () { openSheet(unpairSheet); } }, h("span", null, "Unpair this phone"))));
+  }
+  var SUBS = {
+    connection: function () {
+      return sub("Settings", "Connection.",
+        h("div", { class: "group" }, gi(null, "Wi-Fi", h("span", { class: "yes" }, "● Connected")), gi(null, "Address", "192.168.1.24"), gi(null, "Tailscale", "Ready as backup"), gi(null, "Last reading", "just now")),
+        h("p", { class: "note" }, "If Wi-Fi drops, Vitals switches to Tailscale on its own."),
+        h("button", { class: "big ghost press", onclick: function () { toast("Reconnected over Wi-Fi"); } }, "Reconnect"));
+    },
+    notifications: function () {
+      return sub("Settings", "Notifications.",
+        h("div", { class: "group" }, [["Alerts from your Mac", true], ["When shut down or restart finishes", true], ["Quiet at night, 23:00 to 07:00", false]].map(function (r) { return h("div", { class: "gi" }, h("span", null, r[0]), toggle(r[1], r[0], function () {})); })));
+    },
+    updates: function () {
+      return sub("Settings", "Updates.",
+        h("div", { class: "group" }, gi(null, "Vitals Remote", "1.0 (214)"), gi(null, "Status", "Up to date"), gi(null, "Last checked", "22:40")),
+        h("p", { class: "note" }, "Updates download in the background and apply the next time you open the app. Nothing blocks you."));
+    },
+    phone: function () { return sub("Settings", "This phone.", h("div", { class: "group" }, gi(null, "Name", "Pixel 9 Pro"), gi(null, "Paired", "Oct 20, 2026"), gi(null, "Pairing key", "saved on this phone"))); },
+    scopes: function () {
+      return sub("Settings", "What it can do.",
+        h("div", { class: "group" }, ["See readings", "Control the Mac", "Shut down, restart, quit apps", "Read the clipboard"].map(function (l) { return gi(null, l, h("span", { class: "yes" }, "✓ Allowed")); })),
+        h("p", { class: "note" }, "Change this in Vitals on the Mac, under Remote."));
+    },
+    help: function () { return sub("Settings", "Help.", h("div", { class: "group" }, gi(null, "Frame rate", "120 fps"), gi(null, "Connection log", "12 events"), gi(null, "App version", "1.0 (214)"))); }
+  };
+  function build(r) {
+    if (r === "home") return home(); if (r === "channel") return channel(); if (r === "apps") return apps();
+    if (r === "control") return control(); if (r === "alerts") return alerts(); if (r === "settings") return settings();
+    if (r === "clipboard") return clipboardScreen();
+    if (r === "files") return filesScreen();
+    return SUBS[r]();
+  }
+
+  /* ---------- dock ---------- */
+  function dock(active, live) {
+    var ind = h("span", { class: "ind", style: "transform:translateX(" + tabIndex(active) * 100 + "%)" });
+    return h("nav", { class: "dock", "aria-label": "Tabs" }, ind, TABS.map(function (t) {
+      return h("button", { class: "tab" + (t[0] === active ? " on" : ""), "data-k": "tab-" + t[0], "aria-label": t[1], onclick: live ? function () { go(t[0]); } : null },
+        icon(t[2]), h("span", null, t[1]), t[0] === "alerts" ? h("i", { class: "badge", style: S.agents === "open" ? "" : "display:none" }) : null);
+    }));
+  }
+  function updateDock() {
+    var d = $(".dock", proto);
+    $(".ind", d).style.transform = "translateX(" + tabIndex(S.tab) * 100 + "%)";
+    d.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("on", b.dataset.k === "tab-" + S.tab); });
+    $(".badge", d).style.display = S.agents === "open" ? "" : "none";
+  }
+
+  /* ---------- navigation ---------- */
+  var stage = $(".stage", proto);
+  var liveScreen = function () { return stage.querySelector(".screen:not(.leaving)"); };
+  function swap(kind) {
+    var old = liveScreen(), el = build(route());
+    el.classList.add("enter-" + kind); stage.appendChild(el);
+    if (old) { old.classList.add("leaving", "leave-" + kind); setTimeout(function () { old.remove(); }, 340); }
+    raf2(function () { el.classList.remove("enter-" + kind); });
+  }
+  function go(tab) {
+    if (S.tab === tab) { if (S.stacks[tab].length) { S.stacks[tab] = []; swap("pop"); } return; }
+    var dir = tabIndex(tab) > tabIndex(S.tab) ? "right" : "left";
+    S.tab = tab; swap(dir); updateDock();
+  }
+  function push(r) { S.stacks[S.tab].push(r); swap("push"); }
+  function pop() { S.stacks[S.tab].pop(); swap("pop"); }
+  function rerender() {
+    var old = liveScreen(); if (!old) return;
+    var el = build(route()); el.scrollTop = 0; stage.replaceChild(el, old); el.scrollTop = old.scrollTop;
+  }
+
+  /* ---------- sheet host ---------- */
+  var layer = $(".layer", proto), scrim = $(".scrim", proto), current = null;
+  function openSheet(make) {
+    if (current) { closeSheet(function () { openSheet(make); }); return; }
+    var sh = make(); layer.appendChild(sh); current = sh;
+    proto.classList.add("sheeted"); scrim.style.opacity = "";
+    raf2(function () { sh.classList.add("in"); });
+    attachDrag(sh);
+  }
+  function closeSheet(after) {
+    var sh = current;
+    if (!sh) { if (typeof after === "function") after(); return; }
+    current = null;
+    sh.style.transition = ""; sh.style.transform = ""; sh.classList.remove("in");
+    proto.classList.remove("sheeted"); scrim.style.opacity = "";
+    setTimeout(function () { sh.remove(); if (typeof after === "function") after(); }, 210);
+  }
+  function attachDrag(sh) {
+    var zone = $(".grabzone", sh), y0 = 0, t0 = 0, dy = 0, dragging = false;
+    zone.addEventListener("pointerdown", function (e) { dragging = true; y0 = e.clientY; t0 = performance.now(); dy = 0; sh.style.transition = "none"; scrim.style.transition = "none"; zone.setPointerCapture(e.pointerId); });
+    zone.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      dy = Math.max(0, e.clientY - y0);
+      sh.style.transform = "translateY(" + dy + "px)";
+      scrim.style.opacity = String(Math.max(0, 1 - dy / 420));
+    });
+    var end = function () {
+      if (!dragging) return; dragging = false;
+      var v = dy / Math.max(1, performance.now() - t0);
+      sh.style.transition = ""; scrim.style.transition = "";
+      if (dy > 90 || v > 0.6) closeSheet(); else { sh.style.transform = ""; scrim.style.opacity = ""; }
+    };
+    zone.addEventListener("pointerup", end); zone.addEventListener("pointercancel", end);
+  }
+  scrim.addEventListener("click", function () { closeSheet(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+  /* ---------- toast ---------- */
+  var toastHost = $(".toasts", proto), toastT = null;
+  function toast(msg, action, onAction, ms) {
+    toastHost.textContent = "";
+    var t = h("div", { class: "toast" }, h("span", { class: "tmsg" }, msg),
+      action ? h("button", { onclick: function () { hideToast(); onAction(); } }, action) : null);
+    toastHost.append(t); raf2(function () { t.classList.add("in"); });
+    clearTimeout(toastT); if (ms !== 0) toastT = setTimeout(hideToast, ms || 4000);
+    return t;
+  }
+  function hideToast() { var t = $(".toast", toastHost); if (!t) return; t.classList.remove("in"); setTimeout(function () { t.remove(); }, 180); }
+
+  /* ---------- mount ---------- */
+  function mount() {
+    stage.textContent = ""; layer.textContent = ""; toastHost.textContent = ""; current = null;
+    proto.classList.remove("sheeted"); clearInterval(cd);
+    var old = $(".dock", proto); if (old) old.remove();
+    proto.insertBefore(dock(S.tab, true), scrim);
+    stage.append(build(route()));
+  }
+  function reset() { S = initial(); closeExt(); clearInterval(xferTimer); clearInterval(timers.in); clearInterval(timers.out); unlock(); hideCopy(); proto.querySelectorAll(".installer").forEach(function (e) { e.remove(); }); mount(); }
+  mount();
+  $("#reset").addEventListener("click", function () { if (!running) { reset(); caption.textContent = "Tap anything in the phone."; } });
+  $("#macsends").addEventListener("click", function () { if (running) return; macSends(); caption.textContent = "The Mac sent files to this phone. With Start without asking on, they just arrive."; });
+  $("#phonecopies").addEventListener("click", function () { if (running) return; phoneCopies(); caption.textContent = "You copied something in another app and came back to Vitals."; });
+  $("#lock").addEventListener("click", function () { if (running) return; lockPhone(); caption.textContent = PLATFORM === "ios" ? "iPhone lock screen: transfers pause about 30 s after you leave." : "Android: the transfer keeps going with a notification. The tile sends your clipboard."; });
+  $("#maccopy").addEventListener("click", function () { macCopy(); caption.textContent = "The Mac copied something. It shows up live while Vitals is open."; });
+  $("#platform").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b || running) return;
+    PLATFORM = b.dataset.p;
+    $("#platform").querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+    $(".sb span", proto).textContent = PLATFORM === "ios" ? "9:41" : "22:41";
+    rerender();
+  });
+
+  /* ---------- journeys ---------- */
+  var caption = $("#caption"), ring = $("#ring"), running = false;
+  var JOURNEYS = [
+    { name: "Mac sends 3 files, you open one", cost: "0 taps to receive", done: "Saved to Downloads › Vitals (Files › Vitals on iPhone).", steps: [["custom", function () { macSends("video"); }, "Mac: right-click › Send to Phone"], ["tap", "tab-control", "Go to Control"], ["wait", null, "It shows on Control while it arrives"], ["tap", "tile-files", "Open Files"], ["wait", null, ""], ["wait", null, ""], ["tap", "file-r0", "Tap the new video"]] },
+    { name: "Mac sends an APK, install it", cost: "3 taps", done: "Android's own installer does the install. iPhone keeps it as a file.", steps: [["custom", function () { macSends("apk"); }, "Mac: drag the APK onto the menu bar icon"], ["wait", null, ""], ["wait", null, ""], ["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["tap", "file-r0", "Tap the APK"], ["tap", "install", "Tap Install"], ["tap", "installer-ok", "Android asks, tap Install"]] },
+    { name: "Leave the app mid-transfer", cost: "0 taps", done: "Android keeps going with a notification. iPhone pauses and says so.", steps: [["custom", function () { macSends("video"); }, "The Mac starts sending"], ["custom", lockPhone, "Lock the phone"], ["wait", null, "Watch the notification"], ["wait", null, ""], ["tap", "unlock", "Come back"]] },
+    { name: "Share a 4 GB video from Gallery", cost: "3 taps", done: "Too big for the clipboard, so it goes to Downloads › Vitals on the Mac.", steps: [["custom", function () { openGallery("video"); }, "Open a video in Gallery"], ["tap", "gal-share", "Tap Share"], ["tap", "share-vitals", "Pick Vitals"], ["tap", "send-files", "Send to Mac"], ["wait", null, "Sending"], ["wait", null, ""]] },
+    { name: "Send a whole folder", cost: "3 taps", done: "The Mac keeps the folder structure.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["tap", "send-folder", "Tap Folder"], ["tap", "send-files", "Send to Mac"], ["wait", null, ""], ["wait", null, ""]] },
+    { name: "Copy on the phone, paste on the Mac", cost: "1 tap", done: "It's on the Mac's clipboard. On iPhone the tap is Apple's Paste button.", steps: [["custom", phoneCopies, "Copy a link in Maps, come back to Vitals"], ["tap", "copy-send", "Tap Send to Mac"]] },
+    { name: "Send clipboard from anywhere (Android)", cost: "1 tap", done: "The Quick Settings tile sends without opening Vitals.", steps: [["custom", function () { PLATFORM = "android"; lockPhone(); }, "Pull down Quick Settings"], ["tap", "qs-send", "Tap Send clipboard"]] },
+    { name: "Grab what the Mac copied", cost: "1 tap", done: "The latest Mac copy is one tap away on Control.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "latest-copy", "Tap Copy on the latest line"]] },
+    { name: "Ask before receiving", cost: "1 toggle + 1 tap", done: "Files only start after you accept.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["custom", function () { var t = proto.querySelector('[aria-label="Start without asking"]'); if (t) { t.scrollIntoView({ block: "center" }); t.click(); } }, "Turn off Start without asking"], ["custom", function () { macSends("apk"); }, "The Mac sends an APK"], ["tap", "accept", "Tap Accept"]] }
+  ];
+
+  function find(k) {
+    var list = Array.prototype.slice.call(proto.querySelectorAll('[data-k="' + k + '"]')).filter(function (e) { return !e.closest(".leaving"); });
+    return list[list.length - 1];
+  }
+  async function showRing(el) {
+    var r = el.getBoundingClientRect(), p = proto.getBoundingClientRect();
+    ring.style.left = (r.left - p.left + Math.min(r.width / 2, 60)) + "px";
+    ring.style.top = (r.top - p.top + r.height / 2) + "px";
+    ring.classList.add("show"); await sleep(500);
+  }
+  async function run(j) {
+    if (running) return; running = true; reset(); await sleep(350);
+    for (var i = 0; i < j.steps.length; i++) {
+      var s = j.steps[i];
+      caption.textContent = ""; caption.append(h("b", null, j.name), " · step " + (i + 1) + " of " + j.steps.length + ": " + s[2]);
+      if (s[0] === "wait") { await sleep(1100); continue; }
+      if (s[0] === "custom") { s[1](); await sleep(900); continue; }
+      var el = find(s[1]);
+      if (!el) { caption.textContent = "Could not find " + s[1]; break; }
+      await showRing(el);
+      if (s[0] === "tap") el.click();
+      if (s[0] === "type") { el.focus(); el.value = ""; for (var c of s[3]) { el.value += c; el.dispatchEvent(new Event("input")); await sleep(45); } }
+      if (s[0] === "hold") { el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })); await sleep(1450); el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true })); }
+      ring.classList.remove("show");
+      await sleep(s[0] === "tap" ? 700 : 450);
+    }
+    caption.textContent = ""; caption.append(h("b", null, j.name), " · " + j.done);
+    running = false;
+  }
+  var jl = $("#journeys");
+  JOURNEYS.forEach(function (j) {
+    jl.append(h("button", { class: "jbtn", onclick: function () { run(j); } }, h("span", null, h("b", null, j.name), h("small", null, j.cost)), h("span", { class: "run" }, "Run ›")));
+  });
+
+  /* ---------- gallery ---------- */
+  var XIN = { label: "3 files", mb: 1430, done: 610, route: "Wi-Fi" };
+  var GALLERY = [
+    ["Control · Share section", "control", {}, null],
+    ["Control · files arriving", "control", { xin: XIN }, null],
+    ["Files", "control", { stack: ["files"] }, null],
+    ["Files · receiving", "control", { stack: ["files"], xin: XIN }, null],
+    ["Files · iPhone", "control", { stack: ["files"], platform: "ios" }, null],
+    ["APK · Android", "control", { stack: ["files"] }, function () { return fileSheet(S.incoming[0], "in"); }],
+    ["APK · iPhone", "control", { stack: ["files"], platform: "ios" }, function () { return fileSheet(S.incoming[0], "in"); }],
+    ["Video from the Mac", "control", { stack: ["files"] }, function () { return fileSheet(BATCHES.video.items[0], "in"); }],
+    ["Ask before receiving", "control", { stack: ["files"] }, function () { return askSheet(BATCHES.video); }],
+    ["Send · 4 GB video", "home", {}, function () { return sendFilesSheet(OUT.bigvideo); }],
+    ["Send · folder", "control", { stack: ["files"] }, function () { return sendFilesSheet(OUT.folder); }],
+    ["Android · leaving mid-transfer", "control", { xin: XIN }, null, lockPhone],
+    ["iPhone · leaving mid-transfer", "control", { xin: XIN, platform: "ios" }, null, lockPhone],
+    ["Phone copy · Android", "home", {}, null, phoneCopies],
+    ["Phone copy · iPhone", "home", { platform: "ios" }, null, phoneCopies],
+    ["APK installer", "control", { stack: ["files"] }, null, installer],
+    ["Clipboard, both ways", "control", { stack: ["clipboard"] }, null],
+    ["Direction B · Share › Clipboard", "control", { screen: function () { return shareB("clip"); } }, null],
+    ["Direction B · Share › Files", "control", { screen: function () { return shareB("files"); } }, null]
+  ];
+
+  var saved = S, grid = $("#gallery");
+  GALLERY.forEach(function (g) {
+    S = initial(); S.tab = g[1];
+    var savedPlatform = PLATFORM; if (g[2].platform) PLATFORM = g[2].platform;
+    Object.keys(g[2]).forEach(function (k) { if (k !== "stack" && k !== "platform" && k !== "screen") S[k] = g[2][k]; });
+    if (g[2].stack) S.stacks[g[1]] = g[2].stack;
+    var layerEl = h("div", { class: "layer" });
+    var ph = h("div", { class: "phone", "aria-hidden": "true" }, h("div", { class: "sb" }, h("span", null, "22:41"), h("span", null, "82%")),
+      h("div", { class: "stage" }, g[2].screen ? g[2].screen() : build(route())), dock(g[1], false), h("div", { class: "scrim" }), layerEl);
+    if (g[3]) { var s = g[3](); s.classList.add("in"); layerEl.append(s); ph.classList.add("sheeted"); }
+    if (g[4]) { var liveProto = proto; proto = ph; g[4](); proto = liveProto; ph.querySelectorAll(".shade,.ioslock,.copystrip").forEach(function (e) { e.classList.add("in"); }); lockEl = null; copyEl = null; }
+    PLATFORM = savedPlatform;
+    ph.querySelectorAll("button,input,textarea").forEach(function (b) { b.setAttribute("tabindex", "-1"); });
+    grid.append(h("figure", { class: "gcell" }, h("div", { class: "gwrap" }, ph), h("figcaption", null, g[0])));
+  });
+  S = saved;
+})();
+</script>
+</body>
+</html>
