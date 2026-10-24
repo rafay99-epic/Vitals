@@ -362,6 +362,9 @@ enum ToApp: Equatable, Sendable {
     case pairPrompt(PairPrompt)
     case pairPromptEnded(id: String)
     case clipStats(ClipStats)
+    case drop(Drop)
+    case dropRemoved(id: String)
+    case dropReceived(id: String, from: DropPeer, files: [ReceivedDropFile])
 }
 
 /// What the gateway's clip history holds right now, for Settings.
@@ -372,7 +375,7 @@ struct ClipStats: Codable, Equatable, Sendable {
 }
 
 extension ToApp: Decodable {
-    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt, stats }
+    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt, stats, drop, from, files }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -398,6 +401,14 @@ extension ToApp: Decodable {
         case "pairPrompt": self = .pairPrompt(try c.decode(PairPrompt.self, forKey: .prompt))
         case "pairPromptEnded": self = .pairPromptEnded(id: try c.decode(String.self, forKey: .id))
         case "clipStats": self = .clipStats(try c.decode(ClipStats.self, forKey: .stats))
+        case "drop": self = .drop(try c.decode(Drop.self, forKey: .drop))
+        case "dropRemoved": self = .dropRemoved(id: try c.decode(String.self, forKey: .id))
+        case "dropReceived":
+            self = .dropReceived(
+                id: try c.decode(String.self, forKey: .id),
+                from: try c.decode(DropPeer.self, forKey: .from),
+                files: try c.decode([ReceivedDropFile].self, forKey: .files)
+            )
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .t, in: c, debugDescription: "unknown message \(other)")
         }

@@ -102,6 +102,17 @@ final class AppSettings {
     var clipHistoryEnabled: Bool { didSet { defaults.set(clipHistoryEnabled, forKey: "clipHistoryEnabled") } }
     /// Days the gateway keeps unpinned clips: 1, 7 or 30.
     var clipKeepDays: Int { didSet { defaults.set(clipKeepDays, forKey: "clipKeepDays") } }
+    var shareFolder: String { didSet { defaults.set(shareFolder, forKey: "shareFolder") } }
+    var shareAutoAccept: Bool { didSet { defaults.set(shareAutoAccept, forKey: "shareAutoAccept") } }
+    var shareAskWeb: Bool { didSet { defaults.set(shareAskWeb, forKey: "shareAskWeb") } }
+    var shareMaxGB: Int { didSet { defaults.set(shareMaxGB, forKey: "shareMaxGB") } }
+    var shareLastPhone: String { didSet { defaults.set(shareLastPhone, forKey: "shareLastPhone") } }
+    var clipShortcut: Shortcut? {
+        didSet {
+            defaults.set(clipShortcut?.keyCode ?? -1, forKey: "clipShortcutKey")
+            defaults.set(clipShortcut?.modifiers ?? 0, forKey: "clipShortcutModifiers")
+        }
+    }
     var guardSettings: GuardSettings {
         didSet { defaults.set(try? JSONEncoder().encode(guardSettings), forKey: "guardSettings") }
     }
@@ -182,7 +193,14 @@ final class AppSettings {
             "hideDockIcon": false,
             "autoScanCleanup": false,
             "clipHistoryEnabled": false,
-            "clipKeepDays": 7
+            "clipKeepDays": 7,
+            "shareFolder": "",
+            "shareAutoAccept": true,
+            "shareAskWeb": true,
+            "shareMaxGB": 50,
+            "shareLastPhone": "",
+            "clipShortcutKey": Shortcut.sendClipboard.keyCode,
+            "clipShortcutModifiers": Shortcut.sendClipboard.modifiers
     ]
 
     init(defaults: UserDefaults = .standard) {
@@ -209,6 +227,13 @@ final class AppSettings {
         remoteEnabled = defaults.bool(forKey: "remoteEnabled")
         clipHistoryEnabled = defaults.bool(forKey: "clipHistoryEnabled")
         clipKeepDays = defaults.integer(forKey: "clipKeepDays")
+        shareFolder = defaults.string(forKey: "shareFolder") ?? ""
+        shareAutoAccept = defaults.bool(forKey: "shareAutoAccept")
+        shareAskWeb = defaults.bool(forKey: "shareAskWeb")
+        shareMaxGB = defaults.integer(forKey: "shareMaxGB")
+        shareLastPhone = defaults.string(forKey: "shareLastPhone") ?? ""
+        let shortcutKey = defaults.integer(forKey: "clipShortcutKey")
+        clipShortcut = shortcutKey < 0 ? nil : Shortcut(keyCode: shortcutKey, modifiers: defaults.integer(forKey: "clipShortcutModifiers"))
         guardSettings = defaults.data(forKey: "guardSettings")
             .flatMap { try? JSONDecoder().decode(GuardSettings.self, from: $0) } ?? PressureGuard.defaultSettings
 

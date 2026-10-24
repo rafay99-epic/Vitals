@@ -40,6 +40,7 @@ final class RemoteModel {
     /// macOS denies Vitals pasteboard reads (Privacy & Security > Paste from Other Apps).
     private(set) var clipReadsBlocked = false
     let lanAdvertiser = LanAdvertiser()
+    let share: ShareModel
 
     var isEnabled: Bool { settings.remoteEnabled }
     var clipHistoryEnabled: Bool { settings.clipHistoryEnabled }
@@ -79,6 +80,7 @@ final class RemoteModel {
     init(vitals: VitalsModel, settings: AppSettings) {
         self.vitals = vitals
         self.settings = settings
+        share = ShareModel(settings: settings)
         guardEngine = PressureGuard(settings: settings.guardSettings)
         power.onKeepAwakeChange = { [weak self] state in self?.keepAwakeChanged(state) }
         vitals.onSampled = { [weak self] table in self?.sampled(table) }
@@ -97,6 +99,7 @@ final class RemoteModel {
                 MainActor.assumeIsolated { self?.shutdown() }
             }
         ]
+        share.remote = self
         if settings.remoteEnabled { startGateway() }
     }
 
@@ -193,6 +196,7 @@ final class RemoteModel {
         guardState = nil
         clipStats = nil
         updateClipWatcher()
+        share.disconnected()
         devices = []
         pairing = nil
         needs = .none
@@ -208,6 +212,7 @@ final class RemoteModel {
         guardState = nil
         needs = .none
         updateClipWatcher()
+        share.disconnected()
         lanAdvertiser.update(nil)
         endAllPairPrompts()
         updateVitalsNeeds()
@@ -232,6 +237,12 @@ final class RemoteModel {
         gateway?.send(message)
     }
 
+    func bridge(_ message: FromApp) -> Bool {
+        guard gateway != nil, state == .running else { return false }
+        send(message)
+        return true
+    }
+
     private func log(_ level: String, _ kind: String, _ data: [String: JSONValue]) {
         send(.log(level: level, kind: kind, data: data))
     }
@@ -246,6 +257,7 @@ final class RemoteModel {
             send(.hello(mac: macInfo(), keepAwake: wireKeepAwake(keepAwake)))
             for alert in guardEngine.active { send(.event(.alertRaised(at: alert.raisedAt, alert: alert))) }
             sendClipPolicy()
+            share.connected()
             updateClipWatcher()
             Task { await refreshDevices() }
         case let .need(next):
@@ -271,6 +283,12 @@ final class RemoteModel {
             Task { await refreshDevices() }
         case let .clipStats(stats):
             clipStats = stats
+        case let .drop(drop):
+            share.update(drop)
+        case let .dropRemoved(id):
+            share.remove(id)
+        case let .dropReceived(id, from, files):
+            share.receivedFiles(id: id, from: from, files: files)
         }
     }
 
@@ -334,6 +352,19 @@ final class RemoteModel {
 
     func refreshClipAccess() { clipReadsBlocked = ClipWatcher.readsBlocked }
 
+    func pushClipboard() async -> MacClip? {
+        let clips = await clipWatcher.push()
+        guard gateway != nil, state == .running else { return nil }
+        clips.forEach { send(.clip($0)) }
+        return clips.first
+    }
+
+    func writeClipboard(_ entries: [ClipDrop.Entry]) -> Int? {
+        guard ClipDrop.write(entries) else { return nil }
+        clipWatcher.noteOwnWrite()
+        return NSPasteboard.general.changeCount
+    }
+
     private func sendClipPolicy() {
         send(.clipPolicy(ClipPolicy(enabled: settings.clipHistoryEnabled, keepDays: min(90, max(1, settings.clipKeepDays)))))
     }
@@ -359,15 +390,15 @@ final class RemoteModel {
                 try ClipDrop.save(try ClipDrop.resolve(items, in: directory), to: downloads, folder: folder, deviceName: deviceName)
             }.value
         case .clipboard:
-            let entries = try await Task.detached(priority: .userInitiated) {
-                try ClipDrop.clipboardEntries(try ClipDrop.resolve(items, in: directory), downloads: downloads, deviceName: deviceName)
+            let (sources, entries) = try await Task.detached(priority: .userInitiated) {
+                let sources = try ClipDrop.resolve(items, in: directory)
+                return (sources, try ClipDrop.clipboardEntries(sources, downloads: downloads, deviceName: deviceName))
             }.value
-            let written = ClipDrop.write(entries)
-            clipWatcher.noteOwnWrite()
-            guard written else { throw ClipDrop.Failure("Clipboard write failed") }
+            guard let count = writeClipboard(entries) else { throw ClipDrop.Failure("Clipboard write failed") }
+            share.phoneCopied(device: deviceName, sources: sources, entries: entries, changeCount: count)
         }
         let summary = ClipDrop.summary(items.map(\.kind), to: destination, folder: folder, deviceName: deviceName)
-        NotificationManager.shared.send(title: summary.title, body: summary.body, id: "vitals.remote.clip.\(UUID().uuidString)")
+        NotificationManager.shared.send(title: summary.title, body: summary.body, id: "vitals.remote.clip.\(UUID().uuidString)", quiet: share.panelOpen)
         return items.count
     }
 
