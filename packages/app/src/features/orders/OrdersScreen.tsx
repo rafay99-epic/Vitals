@@ -3,7 +3,8 @@ import { formatClock } from "@vitals/shared";
 import { AlarmBanner, Columns, Screen } from "@vitals/ui";
 import { useState } from "react";
 
-import { isPending, PendingOrder } from "../../components/PendingOrder.tsx";
+import { PendingOrder } from "../../components/PendingOrder.tsx";
+import { isPending } from "../../state/countdown.ts";
 import { TabHeader } from "../../components/TabHeader.tsx";
 import { useRemote } from "../../connection/useRemote.ts";
 import { useScopes } from "../../state/useScopes.ts";

@@ -1,4 +1,4 @@
-import { isPending, type Pending, secondsLeft } from "@vitals/app/components/PendingOrder.tsx";
+import { isOverdue, isPending, type Pending, secondsLeft } from "@vitals/app/state/countdown.ts";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { orderLabel } from "@vitals/app/state/commands.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
@@ -18,6 +18,7 @@ function Countdown({ receipt }: { readonly receipt: Pending }) {
   const remote = useRemote();
   const access = useAccess();
   const now = useNow(1000);
+  if (isOverdue(receipt, now)) return null;
   const text = `${VERB[receipt.kind] ?? orderLabel(receipt.kind)} in ${secondsLeft(receipt.deadlineAt, now)}`;
   return access.operate ? (
     <Strip tone="warn" text={text} action="Cancel" onAction={() => void remote.cancel(receipt).then((ok) => ok && toast.show("Cancelled"))} />
