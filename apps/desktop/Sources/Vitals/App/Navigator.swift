@@ -54,6 +54,7 @@ enum NavSection: String, CaseIterable, Identifiable {
 @Observable
 final class Navigator {
     var section: NavSection = LaunchOverrides.section ?? .overview
+    var remoteTab: RemoteView.Tab = LaunchOverrides.value(for: "--remote-tab").flatMap(RemoteView.Tab.init(rawValue:)) ?? .devices
 }
 
 /// Launch-argument deep links, e.g. `--section history --history-metric network`

@@ -2,25 +2,34 @@ import SwiftUI
 
 struct RemoteView: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case devices = "Devices"
-        case activity = "Activity"
-        case pressure = "Pressure Guard"
+        case devices, sharing, activity, pressure
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .devices: return "Devices"
+            case .sharing: return "Sharing"
+            case .activity: return "Activity"
+            case .pressure: return "Pressure Guard"
+            }
+        }
     }
 
-    @State private var tab: Tab = .devices
+    @Environment(Navigator.self) private var navigator
 
     var body: some View {
+        @Bindable var navigator = navigator
         VStack(spacing: 0) {
-            Picker("Remote", selection: $tab) {
-                ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+            Picker("Remote", selection: $navigator.remoteTab) {
+                ForEach(Tab.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(maxWidth: 420)
             .padding(.top, 16)
-            switch tab {
+            switch navigator.remoteTab {
             case .devices: RemoteDevicesTab()
+            case .sharing: SharingTab()
             case .activity: ActivityView()
             case .pressure: GuardView()
             }
@@ -58,7 +67,6 @@ private struct RemoteDevicesTab: View {
                 }
                 .disabled(remote.state != .running)
             }
-            ClipboardCard()
         }
         .sheet(isPresented: $showingPairing, onDismiss: { remote.clearPairing() }, content: {
             PairingSheet(isPresented: $showingPairing)
@@ -287,6 +295,7 @@ private struct DeviceRow: View {
                     scopeToggle("operate", title: "Control")
                     scopeToggle("destructive", title: "Shut down, kill, force quit")
                     scopeToggle("clipboard", title: "Read clipboard")
+                    scopeToggle("files", title: "Files")
                 }
                 .font(.callout)
             }

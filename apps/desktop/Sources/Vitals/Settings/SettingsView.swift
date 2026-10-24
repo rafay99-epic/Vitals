@@ -68,7 +68,7 @@ struct SettingsView: View {
     private var rightSections: [SettingsSectionModel] {
         Self.sections.filter { Self.rightColumnTitles.contains($0.title) }
     }
-    private static let rightColumnTitles: Set<String> = ["Menu bar", "Alerts", "Updates"]
+    private static let rightColumnTitles: Set<String> = ["Menu bar", "Shortcuts", "Alerts", "Updates"]
 
     private var anyMatch: Bool {
         query.isEmpty || Self.sections.contains { $0.cards.contains { $0.matches(query) } }
@@ -101,6 +101,9 @@ struct SettingsView: View {
         SettingsSectionModel(title: "Menu bar", cards: [
             .init(.menuBar, title: "Menu bar", keywords: "status item readings icons text menubar"),
         ]),
+        SettingsSectionModel(title: "Shortcuts", cards: [
+            .init(.shortcuts, title: "Shortcuts", keywords: "keyboard hotkey send clipboard phone share")
+        ]),
         SettingsSectionModel(title: "Alerts", cards: [
             .init(.overheating, title: "Overheating", keywords: "hot threshold cpu temperature flame"),
             .init(.notifications, title: "Notifications", keywords: "notify overheat thermal pressure"),
@@ -127,7 +130,7 @@ struct SettingsView: View {
 // MARK: - Section model + layout
 
 enum SettingsCardKind: Hashable {
-    case readings, power, appearance, applications, menuBar, overheating, notifications
+    case readings, power, appearance, applications, menuBar, shortcuts, overheating, notifications
     case softwareUpdates, logging, cleanup, diagnosticLogging, reportProblem
     case company, license, acknowledgements
 
@@ -139,6 +142,7 @@ enum SettingsCardKind: Hashable {
         case .appearance: AppearanceCard()
         case .applications: ApplicationCard()
         case .menuBar: MenuBarCard()
+        case .shortcuts: ShortcutsCard()
         case .overheating: OverheatingCard()
         case .notifications: NotificationsCard()
         case .softwareUpdates: SoftwareUpdatesCard()

@@ -6,11 +6,13 @@ struct MenuBarPanel: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
     @Environment(Navigator.self) private var navigator
+    @Environment(ShareModel.self) private var share
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            ShareSection()
             sparklines
             memoryRow
             Divider()
@@ -193,6 +195,15 @@ struct MenuBarPanel: View {
             .controlSize(.small)
             Spacer()
             Button {
+                share.sendClipboard()
+            } label: {
+                Label(share.shortcut?.display ?? "Send clipboard", systemImage: "doc.on.clipboard")
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+            }
+            .controlSize(.small)
+            .help(clipHelp)
+            Button {
                 navigator.section = .settings
                 openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
@@ -211,5 +222,10 @@ struct MenuBarPanel: View {
             .controlSize(.small)
             .help("Quit Vitals")
         }
+    }
+
+    private var clipHelp: String {
+        let phones = share.clipPhones.map(\.name)
+        return phones.isEmpty || phones.count > 3 ? "Send clipboard to your phones" : "Send clipboard to \(ShareFormat.names(phones))"
     }
 }
