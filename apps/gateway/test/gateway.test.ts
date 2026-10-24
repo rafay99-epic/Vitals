@@ -38,7 +38,7 @@ describe("pairing and auth", () => {
     const first = await fetch(`${gateway.base}/api/pair`, { method: "POST", headers: ownerHeaders, body });
     expect(first.status).toBe(200);
     const paired = (await first.json()) as { scopes: Array<string> };
-    expect(paired.scopes).toEqual(["read", "operate"]);
+    expect(paired.scopes).toEqual(["read", "operate", "files"]);
     const second = await fetch(`${gateway.base}/api/pair`, { method: "POST", headers: ownerHeaders, body });
     expect(second.status).toBe(401);
   });
@@ -64,7 +64,7 @@ describe("pairing and auth", () => {
 
     const session = await fetch(`${gateway.base}/api/session`, { headers: cookie });
     expect(session.status).toBe(200);
-    expect(((await session.json()) as { scopes: Array<string> }).scopes).toEqual(["read", "operate"]);
+    expect(((await session.json()) as { scopes: Array<string> }).scopes).toEqual(["read", "operate", "files"]);
     const crossSite = await fetch(`${gateway.base}/api/ws-ticket`, { method: "POST", headers: { ...cookie, "sec-fetch-site": "cross-site" } });
     expect(crossSite.status).toBe(403);
     const ticket = await fetch(`${gateway.base}/api/ws-ticket`, { method: "POST", headers: { ...cookie, "sec-fetch-site": "same-origin" } });

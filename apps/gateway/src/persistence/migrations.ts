@@ -78,6 +78,14 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
       CREATE INDEX clips_at ON clips(at);
     `,
   },
+  {
+    id: 4,
+    sql: `
+      UPDATE devices SET scopes = json_insert(scopes, '$[#]', 'files')
+      WHERE EXISTS (SELECT 1 FROM json_each(devices.scopes) WHERE value = 'operate')
+        AND NOT EXISTS (SELECT 1 FROM json_each(devices.scopes) WHERE value = 'files');
+    `,
+  },
 ];
 
 export const ACTIVITY_MIGRATIONS: ReadonlyArray<Migration> = [
