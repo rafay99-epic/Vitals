@@ -16,9 +16,12 @@ import * as Schema from "effect/Schema";
 
 import { localNetwork, nearby, nearbyEndpoints } from "../connection/nearby.ts";
 import { tunnel } from "../connection/tunnel.ts";
+import { openShelf } from "../persistence/dropShelf";
 import { openOutbox } from "../persistence/outbox";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { MacClips } from "./clips.ts";
+import { dropEngine } from "./dropEngine";
+import { dropEndpoints, MacDrops } from "./drops.ts";
 import { diagnostics, instrumentConnection } from "./diagnostics.ts";
 import { MacEvents } from "./events.ts";
 import { LiveData } from "./live.ts";
@@ -65,14 +68,19 @@ const learnRoutes = (credentials: Credentials, routes: MacRoutes, via: RouteKind
     lan: routes.lan,
     baseUrl: routes.tailnet ?? credentials.baseUrl,
     owner: routes.owner ?? credentials.owner ?? null,
+    ...(routes.tls === undefined ? {} : { tls: routes.tls }),
   };
 };
+
+export const dropEndpointsOf = (credentials: Credentials) =>
+  dropEndpoints({ hosts: lanEndpointsOf(credentials).map((endpoint) => endpoint.host), tls: credentials.tls, tailnet: credentials.baseUrl, builtIn: credentials.builtInTailscale === true });
 
 export class Remote {
   readonly connection: Connection;
   readonly live: LiveData;
   readonly events: MacEvents;
   readonly clips: MacClips;
+  readonly drops: MacDrops;
   readonly toast = new Store<Toast | null>(null);
   readonly link: Store<Credentials>;
   private disposed = false;
@@ -121,6 +129,7 @@ export class Remote {
     this.stopSampleClock = diagnostics.enabled ? this.live.latest.subscribe(() => diagnostics.sample(Date.now())) : null;
     this.events = new MacEvents(this.connection);
     this.clips = new MacClips(this.connection, (message) => this.show(message, "bad"));
+    this.drops = new MacDrops(this.connection, dropEngine, openShelf(), credentials.deviceId, () => dropEndpointsOf(this.link.get()), (message) => this.show(message, "bad"));
     this.flushTimer = setInterval(() => void this.flush(), FLUSH_MS);
     this.stopTunnelWatch = tunnel.subscribe(() => {
       if (tunnel.get()._tag === "Ready") this.connection.wake("network");
@@ -215,6 +224,7 @@ export class Remote {
     this.live.dispose();
     this.events.dispose();
     this.clips.dispose();
+    this.drops.dispose();
     this.connection.dispose();
   }
 }
