@@ -2,6 +2,7 @@ import { DROP_LIMITS } from "@vitals/contracts";
 import type { TransferEvent, UploadJob } from "@vitals/tailnet/drop";
 
 import type { DropEngine } from "./drops.ts";
+import { heldBlob } from "./heldBlobs.ts";
 
 const IN_FLIGHT = 4;
 const BACKOFF_MS: ReadonlyArray<number> = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000];
@@ -47,7 +48,8 @@ const attempt = async (run: () => Promise<Response>, signal: AbortSignal, tries 
 };
 
 const send = async (job: UploadJob, base: string, signal: AbortSignal): Promise<void> => {
-  const blob = await (await fetch(job.uri, { signal })).blob();
+  const blob = heldBlob(job.uri);
+  if (blob === undefined) throw new Error("This browser no longer has that file. Choose it again.");
   const url = `${base}/api/drop/${encodeURIComponent(job.dropId)}/${encodeURIComponent(job.fileId)}`;
   const auth = { Authorization: `Drop ${job.ticket}` };
   const size = blob.size;
