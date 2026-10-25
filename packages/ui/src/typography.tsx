@@ -22,6 +22,7 @@ const TONE: Record<Tone, string> = {
   oxy: "text-oxy",
   drip: "text-drip",
   tele: "text-tele",
+  disk: "text-disk",
 };
 
 export type SerifSize = "hero" | "xl2" | "state" | "l" | "m" | "s";

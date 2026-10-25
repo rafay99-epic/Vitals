@@ -41,6 +41,7 @@ function LiveChannel({ channel, size, memoryMax, order, onOpen }: { readonly cha
     <ChannelRow
       channel={channel}
       source={remote.live.series(def.series)}
+      pair={def.pair === undefined ? undefined : remote.live.series(def.pair.series)}
       value={<LiveText select={def.reading} />}
       min={def.min}
       max={channel === "press" ? memoryMax : def.max}

@@ -5,12 +5,27 @@ import { type Channel, type ChannelState, channels } from "@vitals/ui";
 import type { SeriesKey } from "../../state/live.ts";
 import { bytes, fanLoad, fixed, type Reading } from "../../state/vitals.ts";
 
-export const LIVE_TOPICS: ReadonlyArray<Topic> = ["cpu", "gpu", "thermal", "fans", "memory", "battery", "power", "network"];
+export const LIVE_TOPICS: ReadonlyArray<Topic> = ["cpu", "gpu", "thermal", "fans", "memory", "battery", "power", "network", "disk"];
 
 const GB = 1024 ** 3;
 
+const FULL_BYTES = 10 * GB;
+
+export const diskFull = (sample: LiveSample | null): boolean => {
+  const disk = sample?.disk;
+  if (disk?.freeBytes === undefined || disk.totalBytes === undefined) return false;
+  return disk.freeBytes < Math.min(FULL_BYTES, disk.totalBytes * 0.05);
+};
+
 const socWatts = (sample: LiveSample | null): number | null =>
   sample?.power === undefined || sample.power === null ? null : sample.power.cpuWatts + sample.power.gpuWatts + sample.power.aneWatts;
+
+export interface PairDef {
+  readonly series: SeriesKey;
+  readonly history: HistorySeries;
+  readonly reading: (sample: LiveSample | null) => Reading;
+  readonly label: string;
+}
 
 export interface ChannelDef {
   readonly series: SeriesKey;
@@ -25,7 +40,13 @@ export interface ChannelDef {
   readonly elevated: (sample: LiveSample | null) => boolean;
   readonly rules: ReadonlyArray<GuardRuleKind>;
   readonly context: string;
+  readonly pair?: PairDef;
 }
+
+const rate = (value: number | null | undefined): Reading => {
+  const parts = bytes(value);
+  return { value: parts.value, unit: parts.unit === "" ? "" : `${parts.unit}/s` };
+};
 
 const percent = (value: number | null | undefined): Reading => ({ value: fixed(value), unit: value === null || value === undefined ? "" : "%" });
 
@@ -130,11 +151,8 @@ export const CHANNELS: Record<Channel, ChannelDef> = {
   },
   tele: {
     series: "netIn",
-    topics: ["network", "disk"],
-    reading: (sample) => {
-      const down = bytes(sample?.network?.inBytesPerSec);
-      return { value: down.value, unit: down.unit === "" ? "" : `${down.unit}/s` };
-    },
+    topics: ["network"],
+    reading: (sample) => rate(sample?.network?.inBytesPerSec),
     min: 0,
     max: null,
     history: "networkIn",
@@ -143,12 +161,28 @@ export const CHANNELS: Record<Channel, ChannelDef> = {
     ceiling: undefined,
     elevated: () => false,
     rules: [],
-    context: "download rate",
+    context: "down and up",
+    pair: { series: "netOut", history: "networkOut", reading: (sample) => rate(sample?.network?.outBytesPerSec), label: "up" },
+  },
+  disk: {
+    series: "diskRead",
+    topics: ["disk"],
+    reading: (sample) => rate(sample?.disk?.readBytesPerSec),
+    min: 0,
+    max: null,
+    history: "diskRead",
+    historyFormat: (value) => formatRate(value),
+    floor: 0,
+    ceiling: undefined,
+    elevated: (sample) => diskFull(sample),
+    rules: [],
+    context: "read and write",
+    pair: { series: "diskWrite", history: "diskWrite", reading: (sample) => rate(sample?.disk?.writeBytesPerSec), label: "write" },
   },
 };
 
 export const CHART_FULL: ReadonlyArray<Channel> = ["pulse", "press", "temp", "resp", "oxy"];
-export const CHART_COMPACT: ReadonlyArray<Channel> = ["eeg", "drip", "tele"];
+export const CHART_COMPACT: ReadonlyArray<Channel> = ["eeg", "drip", "tele", "disk"];
 
 export const isChannel = (value: string): value is Channel => Object.hasOwn(channels, value);
 
@@ -173,6 +207,7 @@ export const LIVE_STATE: Record<Channel, (sample: LiveSample | null) => LiveStat
   eeg: liveStateOf("eeg"),
   drip: liveStateOf("drip"),
   tele: liveStateOf("tele"),
+  disk: liveStateOf("disk"),
 };
 
 export const rowState = (live: LiveState, alarmed: boolean, signal: boolean): ChannelState => {

@@ -39,6 +39,9 @@ struct WireGPU: Codable, Equatable, Sendable {
     @Nullable var utilization: Double?
     @Nullable var memoryUsedBytes: Double?
     @Nullable var coreCount: Int?
+    var rendererUtilization: Double?
+    var tilerUtilization: Double?
+    var memoryTotalBytes: Double?
 }
 
 struct WireSensor: Codable, Equatable, Sendable {
@@ -87,6 +90,21 @@ struct WireBattery: Codable, Equatable, Sendable {
     @Nullable var healthPercent: Double?
     @Nullable var temperatureC: Double?
     let condition: String
+    var fullyCharged: Bool?
+    var designCapacityMah: Int?
+    var maxCapacityMah: Int?
+    var voltage: Double?
+    var amperage: Double?
+    var adapter: WireAdapter?
+}
+
+struct WireAdapter: Codable, Equatable, Sendable {
+    var watts: Double?
+    var name: String?
+    let wireless: Bool
+    var deliveredWatts: Double?
+    var voltage: Double?
+    var amperage: Double?
 }
 
 struct WirePower: Codable, Equatable, Sendable {
@@ -100,11 +118,49 @@ struct WireNetwork: Codable, Equatable, Sendable {
     let outBytesPerSec: Double
     @Nullable var wifiRssi: Int?
     @Nullable var primaryInterface: String?
+    var totalInBytes: Double?
+    var totalOutBytes: Double?
+    var links: [WireLink]?
+    var wifi: WireWifi?
+}
+
+struct WireLink: Codable, Equatable, Sendable {
+    let name: String
+    let label: String
+    let kind: String
+    let inBytesPerSec: Double
+    let outBytesPerSec: Double
+    let active: Bool
+}
+
+struct WireWifi: Codable, Equatable, Sendable {
+    var ssid: String?
+    var rssi: Int?
+    var noise: Int?
+    var txRateMbps: Double?
+    var channel: Int?
+    var band: String?
 }
 
 struct WireDisk: Codable, Equatable, Sendable {
     let readBytesPerSec: Double
     let writeBytesPerSec: Double
+    var freeBytes: Double?
+    var totalBytes: Double?
+    var volume: String?
+    var health: WireDriveHealth?
+}
+
+struct WireDriveHealth: Codable, Equatable, Sendable {
+    var model: String?
+    let wearPercent: Int
+    let readBytes: Double
+    let writtenBytes: Double
+    let powerOnHours: Int
+    let unsafeShutdowns: Int
+    let sparePercent: Int
+    var celsius: Double?
+    let warning: Bool
 }
 
 struct WireSample: Codable, Equatable, Sendable {

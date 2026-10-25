@@ -6,10 +6,11 @@ import { useLiveTopics } from "@vitals/app/features/chart/hooks.ts";
 import { isBroken, LinkState } from "@vitals/app/features/chart/LinkState.tsx";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { useLatest, useLink, useNow, useSignal, useWord } from "@vitals/app/state/useVitals.ts";
+import { bytes, fixed, type Reading } from "@vitals/app/state/vitals.ts";
 import type { ConnectionState } from "@vitals/client-runtime";
 import type { KeepAwakeState, LiveSample, MacInfo } from "@vitals/contracts";
 import { formatClock } from "@vitals/shared";
-import { type Channel, channels, Trace } from "@vitals/ui";
+import { type Channel, type ChannelSpec, channels, Trace } from "@vitals/ui";
 import { StyleSheet, View } from "react-native";
 
 import { ALERT_TITLE, LINK_COLOR, TONE_COLOR, useMac } from "../lib/remote.ts";
@@ -23,20 +24,33 @@ type Props = NativeStackScreenProps<HomeStackParams, "Home">;
 const fansOf = (sample: LiveSample | null): boolean | null => (sample?.fans === undefined ? null : sample.fans.length > 0);
 const batteryOf = (sample: LiveSample | null): boolean | null => (sample?.battery === undefined ? null : sample.battery !== null);
 
-/** Waveform rows, in order. Fans hide on Macs without them. */
+/** Waveform rows, in order. Fans and Battery hide on Macs without them. */
 const WAVES: ReadonlyArray<{ readonly channel: Channel; readonly name: string }> = [
   { channel: "pulse", name: "CPU" },
+  { channel: "eeg", name: "GPU" },
   { channel: "press", name: "Memory" },
+  { channel: "tele", name: "Network" },
+  { channel: "disk", name: "Disk" },
   { channel: "temp", name: "Temp" },
   { channel: "resp", name: "Fans" },
+  { channel: "oxy", name: "Battery" },
 ];
 
-const MINIS: ReadonlyArray<{ readonly channel: Channel; readonly name: string }> = [
-  { channel: "eeg", name: "GPU" },
-  { channel: "drip", name: "Power" },
-  { channel: "tele", name: "Net" },
-  { channel: "oxy", name: "Batt" },
+interface MiniDef {
+  readonly name: string;
+  readonly channel: Channel;
+  readonly tint: string;
+  readonly reading: (sample: LiveSample | null) => Reading;
+}
+
+const MINIS: ReadonlyArray<MiniDef> = [
+  { name: "Power", channel: "drip", tint: color.drip, reading: CHANNELS.drip.reading },
+  { name: "Swap", channel: "press", tint: color.pink, reading: (sample) => bytes(sample?.memory?.swapUsedBytes) },
+  { name: "Wi-Fi", channel: "tele", tint: color.blue, reading: (sample) => ({ value: fixed(sample?.network?.wifiRssi), unit: sample?.network?.wifiRssi === null || sample?.network?.wifiRssi === undefined ? "" : "dBm" }) },
+  { name: "Free", channel: "disk", tint: color.mint, reading: (sample) => bytes(sample?.disk?.freeBytes, 0) },
 ];
+
+const hidden = (channel: Channel, fans: boolean, battery: boolean): boolean => (channel === "resp" && !fans) || (channel === "oxy" && !battery);
 
 const keepAwakeLine = (state: KeepAwakeState): string => (state.until === null ? "keeping awake · until you stop it" : `keeping awake · until ${formatClock(state.until)}`);
 
@@ -134,34 +148,45 @@ function Attention() {
 const readingLabel = (name: string, reading: { readonly value: string; readonly unit: string }, signal: boolean) =>
   signal ? `${name}, ${reading.value} ${reading.unit}` : `${name}, no signal`;
 
+const NO_PAIR = (): Reading => ({ value: "", unit: "" });
+
 function Wave({ channel, name, max, onOpen }: { readonly channel: Channel; readonly name: string; readonly max: number | null; readonly onOpen: (channel: Channel) => void }) {
   const remote = useRemote();
   const def = CHANNELS[channel];
   const reading = useLatest(def.reading);
+  const pair = useLatest(def.pair?.reading ?? NO_PAIR);
   const signal = useSignal();
-  const spec = channels[channel];
+  const spec: ChannelSpec = channels[channel];
   const tint = signal ? spec.color : color.mute;
+  const showPair = signal && def.pair !== undefined && pair.value !== "--";
   return (
     <Tap onPress={() => onOpen(channel)} accessibilityRole="button" accessibilityLabel={readingLabel(name, reading, signal)} accessibilityHint={`Opens ${name} details`} scale={0.99} style={styles.wave}>
       <View style={styles.waveTop}>
         <T v="tag" color={tint}>{spec.tag === name.toUpperCase() ? spec.tag : `${spec.tag} · ${name.toUpperCase()}`}</T>
-        <T v="value" color={signal ? color.ink : color.mute}>
-          {signal ? reading.value : "--"}
-          {signal && reading.unit !== "" ? <T v="mono">{` ${reading.unit}`}</T> : null}
-        </T>
+        <View style={styles.values}>
+          <T v="value" color={signal ? color.ink : color.mute}>
+            {signal ? reading.value : "--"}
+            {signal && reading.unit !== "" ? <T v="mono">{` ${reading.unit}`}</T> : null}
+          </T>
+          {showPair ? (
+            <T v="mono" color={spec.pair}>
+              {`${def.pair?.label ?? ""} ${pair.value} ${pair.unit}`}
+            </T>
+          ) : null}
+        </View>
       </View>
-      <Trace channel={channel} source={remote.live.series(def.series)} height={28} min={def.min} max={max ?? def.max} flat={!signal} />
+      <Trace channel={channel} source={remote.live.series(def.series)} pair={def.pair === undefined ? undefined : remote.live.series(def.pair.series)} height={28} min={def.min} max={max ?? def.max} flat={!signal} />
     </Tap>
   );
 }
 
-function Mini({ channel, name, onOpen }: { readonly channel: Channel; readonly name: string; readonly onOpen: (channel: Channel) => void }) {
-  const reading = useLatest(CHANNELS[channel].reading);
+function Mini({ mini, onOpen }: { readonly mini: MiniDef; readonly onOpen: (channel: Channel) => void }) {
+  const reading = useLatest(mini.reading);
   const signal = useSignal();
   return (
-    <Tap onPress={() => onOpen(channel)} accessibilityRole="button" accessibilityLabel={readingLabel(name, reading, signal)} layout={styles.miniSlot}>
-      <T v="tag" color={channels[channel].color}>
-        {name.toUpperCase()}
+    <Tap onPress={() => onOpen(mini.channel)} accessibilityRole="button" accessibilityLabel={readingLabel(mini.name, reading, signal)} layout={styles.miniSlot}>
+      <T v="tag" color={mini.tint}>
+        {mini.name.toUpperCase()}
       </T>
       <T v="monoStrong" numberOfLines={1}>
         {signal ? `${reading.value}${reading.unit === "" ? "" : ` ${reading.unit}`}` : "--"}
@@ -189,12 +214,12 @@ export function HomeScreen({ navigation }: Props) {
       </T>
       <Meta mac={mac} />
       <Attention />
-      {WAVES.filter((wave) => wave.channel !== "resp" || fans).map((wave) => (
+      {WAVES.filter((wave) => !hidden(wave.channel, fans, battery)).map((wave) => (
         <Wave key={wave.channel} channel={wave.channel} name={wave.name} max={wave.channel === "press" ? memoryMax : null} onOpen={open} />
       ))}
       <View style={styles.minis}>
-        {MINIS.filter((mini) => mini.channel !== "oxy" || battery).map((mini) => (
-          <Mini key={mini.channel} channel={mini.channel} name={mini.name} onOpen={open} />
+        {MINIS.map((mini) => (
+          <Mini key={mini.name} mini={mini} onOpen={open} />
         ))}
       </View>
     </Page>
@@ -211,6 +236,7 @@ const styles = StyleSheet.create({
   statusText: { flex: 1 },
   wave: { paddingHorizontal: 20, paddingTop: 11, paddingBottom: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.line },
   waveTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 },
+  values: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   minis: { flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingTop: 12 },
   miniSlot: { flex: 1, gap: 2 },
 });

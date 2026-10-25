@@ -36,5 +36,15 @@
   { "t": "dropSend", "to": ["dev-1"], "files": [{ "name": "IMG_0042.HEIC", "path": "Trip/IMG_0042.HEIC", "size": 2483021, "mime": "image/heic", "origin": "/Users/abdul/Pictures/Trip/IMG_0042.HEIC" }, { "name": "notes.txt", "path": null, "size": 0, "mime": "text/plain", "origin": "/Users/abdul/Desktop/notes.txt" }] },
   { "t": "dropDecision", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01", "accept": true },
   { "t": "dropPause", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01", "paused": true },
-  { "t": "dropCancel", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01" }
+  { "t": "dropCancel", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01" },
+  { "t": "sample", "data": { "seq": 9, "at": 1790000002000,
+    "gpu": { "utilization": 18, "memoryUsedBytes": 6200000000, "coreCount": 40, "rendererUtilization": 16, "tilerUtilization": 9, "memoryTotalBytes": 27000000000 },
+    "battery": { "percent": 82, "charging": true, "externalPower": true, "watts": 36.1, "timeRemainingMinutes": 38, "cycleCount": 214, "healthPercent": 91, "temperatureC": 31, "condition": "Normal",
+      "fullyCharged": false, "designCapacityMah": 7594, "maxCapacityMah": 6912, "voltage": 12.71, "amperage": 2.84,
+      "adapter": { "watts": 96, "name": "96W USB-C Power Adapter", "wireless": false, "deliveredWatts": 41.2, "voltage": 20, "amperage": 2.06 } },
+    "network": { "inBytesPerSec": 2100000, "outBytesPerSec": 340000, "wifiRssi": -54, "primaryInterface": "en0", "totalInBytes": 48200000000, "totalOutBytes": 6100000000,
+      "links": [{ "name": "en0", "label": "Wi-Fi", "kind": "wifi", "inBytesPerSec": 2100000, "outBytesPerSec": 340000, "active": true }],
+      "wifi": { "ssid": "Home-5G", "rssi": -54, "noise": -92, "txRateMbps": 1201, "channel": 149, "band": "5 GHz" } },
+    "disk": { "readBytesPerSec": 84000000, "writeBytesPerSec": 12000000, "freeBytes": 412000000000, "totalBytes": 994000000000, "volume": "Macintosh HD",
+      "health": { "model": "APPLE SSD AP1024Z", "wearPercent": 3, "readBytes": 61200000000000, "writtenBytes": 38400000000000, "powerOnHours": 2140, "unsafeShutdowns": 6, "sparePercent": 100, "celsius": 41, "warning": false } } } }
 ]

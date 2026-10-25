@@ -102,6 +102,8 @@ const bytesText = (value: number): string => {
   return `${parts.value} ${parts.unit}`;
 };
 
+const rateText = (value: number): string => `${bytesText(value)}/s`;
+
 function TempDetail() {
   const thermal = useLatest(thermalOf);
   return (
@@ -138,8 +140,9 @@ function RespDetail() {
   );
 }
 
-const batteryState = (charging: boolean, externalPower: boolean): string => {
+const batteryState = (charging: boolean, externalPower: boolean, full: boolean): string => {
   if (charging) return "Charging";
+  if (full && externalPower) return "Charged";
   return externalPower ? "On power" : "On battery";
 };
 
@@ -153,19 +156,43 @@ const timeLeft = (minutes: number | null): string => (minutes === null ? "--" : 
 function OxyDetail() {
   const battery = useLatest(batteryOf);
   if (battery === null) return <EmptyState title="This Mac runs on wall power only." detail="OXY is hidden on its Chart." />;
+  const adapter = battery?.adapter;
   return (
-    <KeyValueGrid
-      items={[
-        reading("Charge", battery?.percent, 0, "%"),
-        { key: "State", value: battery === undefined ? "--" : batteryState(battery.charging, battery.externalPower) },
-        reading("Cycles", battery?.cycleCount),
-        reading("Health", battery?.healthPercent, 0, "%"),
-        { key: "Condition", value: battery?.condition ?? "--", tone: battery === undefined || battery.condition === "Normal" ? "ink" : "temp" },
-        batteryFlow(battery?.watts),
-        { key: "Time left", value: battery === undefined ? "--" : timeLeft(battery.timeRemainingMinutes) },
-        reading("Temperature", battery?.temperatureC, 0, "°C"),
-      ]}
-    />
+    <>
+      <KeyValueGrid
+        items={[
+          reading("Charge", battery?.percent, 0, "%"),
+          { key: "State", value: battery === undefined ? "--" : batteryState(battery.charging, battery.externalPower, battery.fullyCharged === true) },
+          batteryFlow(battery?.watts),
+          { key: battery?.charging === true ? "Full in" : "Time left", value: battery === undefined ? "--" : timeLeft(battery.timeRemainingMinutes) },
+          reading("Voltage", battery?.voltage, 2, "V"),
+          reading("Current", battery?.amperage, 2, "A"),
+          reading("Temperature", battery?.temperatureC, 0, "°C"),
+        ]}
+      />
+      <Section title="Health" trailing={battery?.healthPercent === null || battery?.healthPercent === undefined ? undefined : `${fixed(battery.healthPercent)}% of new`}>
+        <KeyValueGrid
+          items={[
+            reading("Max capacity", battery?.maxCapacityMah, 0, "mAh"),
+            reading("Design capacity", battery?.designCapacityMah, 0, "mAh"),
+            reading("Cycles", battery?.cycleCount),
+            { key: "Condition", value: battery?.condition ?? "--", tone: battery === undefined || battery.condition === "Normal" ? "ink" : "temp" },
+          ]}
+        />
+      </Section>
+      {adapter === undefined ? null : (
+        <Section title="Adapter" trailing={adapter.wireless ? "wireless" : undefined}>
+          <KeyValueGrid
+            items={[
+              { key: "Adapter", value: adapter.name ?? "--" },
+              reading("Rated", adapter.watts, 0, "W"),
+              reading("Delivering", adapter.deliveredWatts, 1, "W"),
+              { key: "Negotiated", value: adapter.voltage === undefined || adapter.amperage === undefined ? "--" : `${fixed(adapter.voltage, 1)} V · ${fixed(adapter.amperage, 2)} A` },
+            ]}
+          />
+        </Section>
+      )}
+    </>
   );
 }
 
@@ -173,17 +200,34 @@ function EegDetail() {
   const gpu = useLatest(gpuOf);
   const power = useLatest(powerOf);
   const thermal = useLatest(thermalOf);
+  const total = gpu?.memoryTotalBytes;
   return (
-    <KeyValueGrid
-      items={[
-        reading("Busy", gpu?.utilization, 0, "%"),
-        reading("GPU cores", gpu?.coreCount),
-        byteItem("Memory in use", gpu?.memoryUsedBytes),
-        reading("GPU power", power?.gpuWatts, 1, "W"),
-        reading("Neural Engine", power?.aneWatts, 1, "W"),
-        reading("GPU temperature", thermal?.gpuC, 0, "°C"),
-      ]}
-    />
+    <>
+      <KeyValueGrid
+        items={[
+          reading("Busy", gpu?.utilization, 0, "%"),
+          reading("Renderer", gpu?.rendererUtilization, 0, "%"),
+          reading("Tiler", gpu?.tilerUtilization, 0, "%"),
+          reading("GPU cores", gpu?.coreCount),
+          reading("GPU power", power?.gpuWatts, 1, "W"),
+          reading("Neural Engine", power?.aneWatts, 1, "W"),
+          reading("GPU temperature", thermal?.gpuC, 0, "°C"),
+        ]}
+      />
+      {gpu === null || gpu.memoryUsedBytes === null ? null : (
+        <Section title="GPU memory" trailing={total === undefined ? bytesText(gpu.memoryUsedBytes) : `${bytesText(gpu.memoryUsedBytes)} of ${bytesText(total)}`}>
+          {total === undefined ? null : (
+            <StackBar
+              parts={[
+                { key: "used", label: "In use", value: gpu.memoryUsedBytes, color: channels.eeg.color, display: bytesText(gpu.memoryUsedBytes) },
+                { key: "free", label: "Available", value: Math.max(0, total - gpu.memoryUsedBytes), color: colors.line3, display: bytesText(Math.max(0, total - gpu.memoryUsedBytes)) },
+              ]}
+              total={total}
+            />
+          )}
+        </Section>
+      )}
+    </>
   );
 }
 
@@ -204,18 +248,77 @@ function DripDetail() {
 
 function TeleDetail() {
   const network = useLatest(networkOf);
-  const disk = useLatest(diskOf);
+  const wifi = network?.wifi;
+  const links = network?.links ?? [];
   return (
-    <KeyValueGrid
-      items={[
-        rateItem("Down", network?.inBytesPerSec),
-        rateItem("Up", network?.outBytesPerSec),
-        { key: "Interface", value: network?.primaryInterface ?? "--" },
-        reading("Wi-Fi signal", network?.wifiRssi, 0, "dBm"),
-        rateItem("Disk read", disk?.readBytesPerSec),
-        rateItem("Disk write", disk?.writeBytesPerSec),
-      ]}
-    />
+    <>
+      <KeyValueGrid
+        items={[
+          rateItem("Down", network?.inBytesPerSec),
+          rateItem("Up", network?.outBytesPerSec),
+          { key: "Interface", value: network?.primaryInterface ?? "--" },
+          byteItem("Down since start", network?.totalInBytes),
+          byteItem("Up since start", network?.totalOutBytes),
+        ]}
+      />
+      {wifi === undefined ? null : (
+        <Section title="Wi-Fi" trailing={wifi.ssid}>
+          <KeyValueGrid
+            items={[
+              reading("Signal", wifi.rssi, 0, "dBm"),
+              reading("Noise", wifi.noise, 0, "dBm"),
+              reading("Link speed", wifi.txRateMbps, 0, "Mbps"),
+              { key: "Band", value: wifi.band === undefined ? "--" : wifi.channel === undefined ? wifi.band : `${wifi.band} · ch ${String(wifi.channel)}` },
+            ]}
+          />
+        </Section>
+      )}
+      {links.length === 0 ? null : (
+        <Section title="Links" trailing={`${String(links.filter((link) => link.active).length)} active`}>
+          {links.map((link) => (
+            <Row key={link.name} label={link.label} value={link.active ? `↓ ${rateText(link.inBytesPerSec)}` : "idle"} detail={link.active ? `${link.name} · ↑ ${rateText(link.outBytesPerSec)}` : link.name} plain />
+          ))}
+        </Section>
+      )}
+    </>
+  );
+}
+
+function DiskDetail() {
+  const disk = useLatest(diskOf);
+  const health = disk?.health;
+  const free = disk?.freeBytes;
+  const total = disk?.totalBytes;
+  return (
+    <>
+      <KeyValueGrid items={[rateItem("Read", disk?.readBytesPerSec), rateItem("Write", disk?.writeBytesPerSec), byteItem("Free", free), byteItem("Size", total)]} />
+      {free === undefined || total === undefined ? null : (
+        <Section title={disk?.volume ?? "Startup disk"} trailing={`${bytesText(free)} free`}>
+          <StackBar
+            parts={[
+              { key: "used", label: "Used", value: total - free, color: channels.disk.color, display: bytesText(total - free) },
+              { key: "free", label: "Free", value: free, color: colors.line3, display: bytesText(free) },
+            ]}
+            total={total}
+          />
+        </Section>
+      )}
+      {health === undefined ? null : (
+        <Section title="Drive health" trailing={health.model}>
+          <KeyValueGrid
+            items={[
+              { key: "Worn", value: `${String(health.wearPercent)}`, unit: "%", tone: health.warning || health.wearPercent >= 80 ? "temp" : "ink" },
+              { key: "Spare", value: `${String(health.sparePercent)}`, unit: "%" },
+              byteItem("Written", health.writtenBytes),
+              byteItem("Read", health.readBytes),
+              reading("Powered on", health.powerOnHours, 0, "h"),
+              reading("Unsafe shutdowns", health.unsafeShutdowns),
+              reading("Temperature", health.celsius, 0, "°C"),
+            ]}
+          />
+        </Section>
+      )}
+    </>
   );
 }
 
@@ -228,4 +331,5 @@ export const CHANNEL_DETAILS: Record<Channel, () => ReactNode> = {
   eeg: EegDetail,
   drip: DripDetail,
   tele: TeleDetail,
+  disk: DiskDetail,
 };

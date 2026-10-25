@@ -85,6 +85,7 @@ export const TONE_COLOR: Record<Tone, string> = {
   oxy: color.violet,
   drip: color.drip,
   tele: color.tele,
+  disk: color.mint,
 };
 
 export const LINK_COLOR: Record<LinkTone, string> = {

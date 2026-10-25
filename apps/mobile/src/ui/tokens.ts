@@ -21,6 +21,7 @@ export const color = {
   violet: "#c8a8ff",
   drip: "#6f9bff",
   tele: "#b9c4d0",
+  mint: "#63e6e2",
   scrim: "rgba(0,0,0,0.7)",
 } as const;
 

@@ -51,6 +51,41 @@ struct BridgeFixtureTests {
         #expect(try encoded(.admin(id: "a-3", op: .setScopes(deviceId: "dev-1", scopes: ["read", "operate", "destructive"]))) == expected[13])
     }
 
+    @Test func fullSampleMatchesTheContractFixture() throws {
+        let expected = try #require(try fixture("from-app.json").compactMap { $0 as? NSDictionary }.last)
+        var sample = WireSample(seq: 9, at: 1_790_000_002_000)
+        sample.gpu = WireGPU(utilization: 18, memoryUsedBytes: 6_200_000_000, coreCount: 40,
+                             rendererUtilization: 16, tilerUtilization: 9, memoryTotalBytes: 27_000_000_000)
+        sample.battery = Nullable(wrappedValue: WireBattery(
+            percent: 82, charging: true, externalPower: true, watts: 36.1, timeRemainingMinutes: 38, cycleCount: 214,
+            healthPercent: 91, temperatureC: 31, condition: "Normal", fullyCharged: false, designCapacityMah: 7594,
+            maxCapacityMah: 6912, voltage: 12.71, amperage: 2.84,
+            adapter: WireAdapter(watts: 96, name: "96W USB-C Power Adapter", wireless: false, deliveredWatts: 41.2, voltage: 20, amperage: 2.06)
+        ))
+        sample.network = WireNetwork(
+            inBytesPerSec: 2_100_000, outBytesPerSec: 340_000, wifiRssi: -54, primaryInterface: "en0",
+            totalInBytes: 48_200_000_000, totalOutBytes: 6_100_000_000,
+            links: [WireLink(name: "en0", label: "Wi-Fi", kind: "wifi", inBytesPerSec: 2_100_000, outBytesPerSec: 340_000, active: true)],
+            wifi: WireWifi(ssid: "Home-5G", rssi: -54, noise: -92, txRateMbps: 1201, channel: 149, band: "5 GHz")
+        )
+        sample.disk = WireDisk(
+            readBytesPerSec: 84_000_000, writeBytesPerSec: 12_000_000, freeBytes: 412_000_000_000, totalBytes: 994_000_000_000,
+            volume: "Macintosh HD",
+            health: WireDriveHealth(model: "APPLE SSD AP1024Z", wearPercent: 3, readBytes: 61_200_000_000_000,
+                                    writtenBytes: 38_400_000_000_000, powerOnHours: 2140, unsafeShutdowns: 6,
+                                    sparePercent: 100, celsius: 41, warning: false)
+        )
+        #expect(try encoded(.sample(sample)) == expected)
+    }
+
+    @Test func unreadExtrasAreOmitted() throws {
+        var sample = WireSample(seq: 1, at: 5)
+        sample.disk = WireDisk(readBytesPerSec: 0, writeBytesPerSec: 0)
+        let json = try encoded(.sample(sample))
+        let disk = try #require((json["data"] as? NSDictionary)?["disk"] as? NSDictionary)
+        #expect(disk.allKeys.count == 2)
+    }
+
     @Test func missingReadingsEncodeAsNullNotZero() throws {
         var sample = WireSample(seq: 1, at: 5)
         sample.cpu = WireCPU(overall: nil, performance: nil, efficiency: nil, perCore: [])

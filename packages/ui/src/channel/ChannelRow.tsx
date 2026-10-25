@@ -29,6 +29,7 @@ const FLAG: Record<ChannelState, { readonly text: string; readonly className: st
 export interface ChannelRowProps {
   readonly channel: Channel;
   readonly source: SeriesSource;
+  readonly pair?: SeriesSource | undefined;
   readonly value: ReactNode;
   readonly unit?: string | undefined;
   readonly min?: number | undefined;
@@ -40,7 +41,7 @@ export interface ChannelRowProps {
   readonly order?: number | undefined;
 }
 
-export function ChannelRow({ channel, source, value, unit, min, max, state = "normal", size = "full", onPress, accessibilityHint, order = 0 }: ChannelRowProps) {
+export function ChannelRow({ channel, source, pair, value, unit, min, max, state = "normal", size = "full", onPress, accessibilityHint, order = 0 }: ChannelRowProps) {
   const spec = channels[channel];
   const layout = SIZE[size];
   const quiet = state === "flat" || state === "waiting";
@@ -67,7 +68,7 @@ export function ChannelRow({ channel, source, value, unit, min, max, state = "no
           )}
         </View>
         <View className="flex-1">
-          <Trace channel={channel} source={source} height={layout.trace} min={min} max={max} flat={quiet} beats={layout.lane ? spec.wideBeats : undefined} />
+          <Trace channel={channel} source={source} pair={pair} height={layout.trace} min={min} max={max} flat={quiet} beats={layout.lane ? spec.wideBeats : undefined} />
         </View>
         <View className={`flex-row items-baseline justify-end ${layout.lane ? "min-w-36" : "min-w-[74px]"}`}>
           <Serif size={layout.value} tone={tone}>

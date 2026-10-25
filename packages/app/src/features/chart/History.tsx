@@ -1,4 +1,4 @@
-import type { HistoryBucket } from "@vitals/contracts";
+import type { HistoryBucket, HistorySeries } from "@vitals/contracts";
 import { type Channel, EmptyState, HistoryChart, Mono, type Option, Segmented } from "@vitals/ui";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
@@ -31,6 +31,7 @@ const OFFLINE: Status = { _tag: "offline" };
 
 interface Loaded {
   readonly buckets: ReadonlyArray<HistoryBucket>;
+  readonly pair: ReadonlyArray<HistoryBucket>;
   readonly from: number;
   readonly to: number;
 }
@@ -39,7 +40,8 @@ type Status = { readonly _tag: "loading" } | { readonly _tag: "offline" } | { re
 
 export function History({ channel }: { readonly channel: Channel }) {
   const remote = useRemote();
-  const def = CHANNELS[channel];
+  const { history, pair } = CHANNELS[channel];
+  const pairHistory = pair?.history;
   const ready = hasSignal(useStore(remote.connection.state));
   const [range, setRange] = useState<Range>("1h");
   const [result, setResult] = useState<{ readonly range: Range; readonly status: Status } | null>(null);
@@ -49,14 +51,20 @@ export function History({ channel }: { readonly channel: Channel }) {
     let cancelled = false;
     const to = Date.now();
     const from = to - SPAN[range];
-    void remote.connection.call((client) => client["history.range"]({ series: [def.history], from, to, points: 120 })).then((outcome) => {
+    const series = pairHistory === undefined ? [history] : [history, pairHistory];
+    void remote.connection.call((client) => client["history.range"]({ series, from, to, points: 120 })).then((outcome) => {
       if (cancelled) return;
-      setResult({ range, status: outcome.ok ? { _tag: "loaded", data: { buckets: outcome.value.series[0]?.buckets ?? [], from, to } } : { _tag: "failed", message: outcome.error.message } });
+      if (!outcome.ok) {
+        setResult({ range, status: { _tag: "failed", message: outcome.error.message } });
+        return;
+      }
+      const of = (key: HistorySeries | undefined) => outcome.value.series.find((entry) => entry.name === key)?.buckets ?? [];
+      setResult({ range, status: { _tag: "loaded", data: { buckets: of(history), pair: of(pairHistory), from, to } } });
     });
     return () => {
       cancelled = true;
     };
-  }, [remote, ready, range, def.history]);
+  }, [remote, ready, range, history, pairHistory]);
 
   const current = result !== null && result.range === range ? result.status : LOADING;
   const status = ready ? current : OFFLINE;
@@ -80,6 +88,7 @@ function HistoryBody({ channel, status, range }: { readonly channel: Channel; re
       <HistoryChart
         channel={channel}
         buckets={status.data.buckets}
+        pair={status.data.pair}
         from={status.data.from}
         to={status.data.to}
         labels={LABELS[range](status.data.from)}
