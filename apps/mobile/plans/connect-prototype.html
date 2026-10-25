@@ -1,0 +1,1336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Remote · Connect prototype (vitals, files, terminal)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --s1:#0b0b0b; --s2:#131313; --s3:#1b1b1b; --line:#1c1c1c; --line2:#2a2a2a;
+  --mute:#6b6b6b; --dim:#9c9c9c; --ink2:#d4d4d4; --ink:#fff;
+  --yellow:#f2ec6b; --orange:#ffb45c; --red:#ff4d6d; --green:#5cf2a6; --blue:#74d4ff; --pink:#ff6b8b; --violet:#c8a8ff; --drip:#6f9bff; --tele:#b9c4d0;
+  --serif:"Instrument Serif",Georgia,serif; --sans:"Geist",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  --tray:cubic-bezier(.32,.72,0,1); --out:cubic-bezier(.23,1,.32,1);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.page{max-width:1500px;margin:0 auto;padding:36px 24px 80px}
+.kicker{font:500 10px var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+h1{font:italic 54px/1 var(--serif);margin:8px 0 10px}
+.lede{color:var(--ink2);max-width:760px;margin:0 0 28px}
+h2{font:italic 34px/1 var(--serif);margin:0 0 12px}
+.layout{display:grid;grid-template-columns:auto 1fr;gap:56px;align-items:start}
+.protocol{position:sticky;top:20px}
+.side h3{font:500 10px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);margin:28px 0 10px}
+.journeys{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0;border-top:1px solid var(--line2);border-left:1px solid var(--line2)}
+.jbtn{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;transition:background 160ms}
+.jbtn:hover{background:var(--s1)}
+.jbtn b{font:500 14px var(--sans);display:block}
+.jbtn small{font:11px var(--mono);color:var(--orange)}
+.jbtn .run{font:500 11px var(--mono);color:var(--yellow);white-space:nowrap}
+.caption{font:12px var(--mono);color:var(--ink2);min-height:20px;margin-top:12px}
+.caption b{color:var(--yellow);font-weight:500}
+.tools{display:flex;gap:16px;margin-top:10px;font:12px var(--mono)}
+.tools button{color:var(--dim)} .tools button:hover{color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:500 10px var(--mono);letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line2)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+td:first-child{color:var(--ink);white-space:nowrap}
+td code{font:11.5px var(--mono);color:var(--ink)}
+.perf{border-left:3px solid var(--yellow);padding:4px 0 4px 14px;color:var(--ink2);font-size:13px;margin-top:14px}
+.gallery-head{margin-top:72px;border-top:1px solid var(--line2);padding-top:22px}
+#gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:30px 22px;margin-top:20px}
+.gcell{margin:0}
+.gcell figcaption{font:500 10px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:8px}
+.gwrap{width:224px;height:483px;overflow:hidden;border-radius:31px}
+.gwrap .phone{transform:scale(.7);transform-origin:0 0;pointer-events:none}
+footer{margin-top:60px;font:11px var(--mono);color:var(--mute)}
+
+/* phone */
+.phone{width:320px;height:690px;border:1px solid var(--line2);border-radius:44px;background:#000;position:relative;overflow:hidden;contain:paint;font-size:13px;isolation:isolate;user-select:none}
+.gwrap .screen,.gwrap .sheet{will-change:auto}
+.sb{position:absolute;top:13px;left:28px;right:28px;display:flex;justify-content:space-between;font:500 11px var(--mono);color:var(--ink2);z-index:8;pointer-events:none}
+.stage{position:absolute;inset:0;z-index:1;overflow:hidden}
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;background:#000;scrollbar-width:none;transition:transform 300ms var(--tray),opacity 220ms var(--out);will-change:transform}
+.screen::-webkit-scrollbar{display:none}
+.pad{padding:44px 0 112px}
+.enter-right{transform:translateX(22px);opacity:0;transition:none}
+.enter-left{transform:translateX(-22px);opacity:0;transition:none}
+.leave-right,.leave-left{opacity:0;transition:opacity 120ms linear}
+.enter-push{transform:translateX(100%);transition:none;box-shadow:-12px 0 30px rgba(0,0,0,.6)}
+.leave-push{transform:translateX(-24%);opacity:.35}
+.enter-pop{transform:translateX(-24%);opacity:.35;transition:none}
+.leave-pop{transform:translateX(100%);z-index:3;box-shadow:-12px 0 30px rgba(0,0,0,.6)}
+.press{transition:transform 160ms var(--out)}
+.press:active{transform:scale(.97);transition-duration:100ms}
+
+/* dock */
+.dock{position:absolute;left:14px;right:14px;bottom:16px;height:62px;border-radius:31px;background:rgba(20,20,20,.94);border:1px solid var(--line2);display:flex;padding:0 6px;z-index:4;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.dock .ind{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/5);border-radius:25px;background:rgba(242,236,107,.13);transition:transform 320ms var(--tray)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:500 10px var(--sans);color:var(--mute);position:relative;z-index:1;transition:color 200ms,transform 160ms var(--out)}
+.tab:active{transform:scale(.92);transition-duration:100ms}
+.tab.on{color:var(--yellow)}
+.tab .badge{position:absolute;top:12px;left:calc(50% + 6px);width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid #141414}
+.ico{width:20px;height:20px;flex:none}
+.ico-s{width:15px;height:15px;flex:none}
+
+/* sheets */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.7);opacity:0;pointer-events:none;transition:opacity 200ms var(--tray);z-index:6}
+.phone.sheeted .scrim{opacity:1;pointer-events:auto;transition-duration:300ms}
+.layer{position:absolute;inset:0;z-index:7;pointer-events:none}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:90%;overflow-y:auto;scrollbar-width:none;background:var(--s2);border-top:1px solid var(--line2);border-radius:28px 28px 0 0;padding:0 0 28px;transform:translateY(105%);transition:transform 200ms var(--tray);pointer-events:auto;will-change:transform}
+.sheet.in{transform:translateY(0);transition-duration:300ms}
+.grabzone{padding:10px 0 4px;touch-action:none;cursor:grab}
+.grab{width:36px;height:5px;border-radius:3px;background:#3a3a3a;margin:0 auto 14px}
+.sh-title{font:700 20px/1.2 var(--sans);padding:0 20px}
+.sh-sub{font-size:12.5px;color:var(--dim);padding:5px 20px 14px}
+.sh-p{font-size:13px;color:var(--ink2);padding:0 20px;margin:0 0 14px}
+.sh-foot{font-size:12px;color:var(--dim);text-align:center;padding:10px 20px 0}
+.sh-cancel{display:block;width:100%;text-align:center;padding:14px;color:var(--dim);font-size:14px}
+.hold{position:relative;overflow:hidden;display:flex;justify-content:center;align-items:center;height:56px;margin:8px 16px 0;border:1.5px solid var(--red);color:var(--red);font:600 15px var(--sans);border-radius:16px;width:calc(100% - 32px)}
+.hold.small{height:46px;font-size:13px;border-width:1px;opacity:.85}
+.hold::before{content:"";position:absolute;inset:0;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform 180ms ease-out}
+.hold.holding::before{transform:scaleX(1);transition:transform 1.3s linear}
+.hold span{position:relative;z-index:1;transition:color 200ms}
+.hold.holding span{color:#000}
+.field{display:block;width:calc(100% - 32px);margin:0 16px 10px;background:#000;border:1px solid var(--line2);border-radius:14px;padding:12px 14px;font-size:14px;outline:none}
+.field:focus{border-color:var(--yellow)}
+.ta{height:90px;resize:none}
+
+/* toasts */
+.toasts{position:absolute;left:14px;right:14px;bottom:92px;z-index:9;pointer-events:none}
+.toast{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--ink);color:#000;border-radius:16px;padding:12px 14px;font:600 13px var(--sans);transform:translateY(12px);opacity:0;transition:transform 240ms var(--out),opacity 240ms var(--out);pointer-events:auto}
+.toast.in{transform:none;opacity:1}
+.toast button{font-weight:700;color:#000;text-decoration:underline;text-underline-offset:3px}
+#ring{position:absolute;width:44px;height:44px;border-radius:50%;border:2px solid var(--yellow);box-shadow:0 0 0 6px rgba(242,236,107,.18);transform:translate(-50%,-50%) scale(.6);opacity:0;transition:opacity 160ms,transform 260ms var(--out);z-index:20;pointer-events:none}
+#ring.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* ===== Home (B) ===== */
+.home .head{display:flex;justify-content:space-between;align-items:center;padding:6px 20px 0;font:12px var(--mono);color:var(--ink2)}
+.ok{color:var(--green);font-weight:400} .offdot{color:var(--mute);font-weight:400}
+.pw{width:38px;height:38px;border:1px solid var(--line2);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.home .word{font:italic 54px/1 var(--serif);padding:6px 20px 2px}
+.home .meta{font:11.5px var(--mono);color:var(--dim);padding:4px 20px 14px}
+.home .meta.awake{color:var(--orange)}
+.status{display:flex;justify-content:space-between;align-items:center;margin:0 20px 4px;padding:11px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);font:12px var(--mono);width:calc(100% - 40px)}
+.status.warn{color:var(--orange)} .status.calm{color:var(--dim)} .status.calm span:last-child{color:var(--yellow)} .status.off{color:var(--mute)}
+.ch{display:block;width:100%;padding:11px 20px 6px;border-bottom:1px solid var(--line)}
+.ch:active{background:var(--s1)}
+.ch .top{display:flex;justify-content:space-between;align-items:baseline}
+.ch .tag{font:500 10px var(--mono);letter-spacing:1px}
+.ch .val{font:30px/1 var(--serif)}
+.ch .val i{font:11px var(--mono);font-style:normal;color:var(--dim);margin-left:2px}
+.wave{display:block;width:100%}
+.mini{display:grid;grid-template-columns:1fr 1fr 1.5fr 1fr;gap:8px;padding:10px 20px 0}
+.mini small{display:block;font:500 9.5px var(--mono);letter-spacing:.8px}
+.mini b{font:500 13px var(--mono);white-space:nowrap}
+
+/* ===== Other screens (A) ===== */
+.title{font:italic 42px/1 var(--serif);padding:8px 20px 14px}
+.lbl{font:600 12px var(--sans);color:var(--dim);padding:6px 20px 8px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:0 16px 14px}
+.pgrid.three{grid-template-columns:1fr 1fr 1fr}
+.pbtn{background:var(--s2);border-radius:16px;height:70px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:6px;padding:0 13px;font:600 13px var(--sans)}
+.sheet .pbtn{background:var(--s3)}
+.pbtn.red{color:var(--red)}
+.search{display:flex;gap:9px;align-items:center;margin:0 16px 12px;background:var(--s2);border-radius:14px;padding:0 13px;color:var(--mute)}
+.search input{flex:1;background:none;border:0;outline:none;padding:12px 0;font-size:13.5px;color:var(--ink)}
+.chips{display:flex;gap:7px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none}
+.chip{background:var(--s2);border-radius:18px;padding:7px 12px;font:500 12px var(--sans);white-space:nowrap;color:var(--ink2);display:flex;gap:6px;align-items:center;transition:background 200ms,color 200ms}
+.chip i{font:500 11px var(--mono);font-style:normal;color:var(--dim)}
+.chip.on{background:var(--yellow);color:#000} .chip.on i{color:#000}
+.sec{font:600 12px var(--sans);color:var(--dim);padding:12px 20px 4px;display:flex;justify-content:space-between}
+.app{display:flex;align-items:center;gap:12px;padding:8px 20px;width:100%}
+.app:active{background:var(--s1)}
+.tile{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:700 14px var(--sans);color:#000;flex:none}
+.app .n{flex:1;font:500 14px var(--sans)}
+.app .n small{display:block;font:400 12px var(--sans);color:var(--dim)}
+.ptag{font:500 10px var(--mono);color:var(--orange);border:1px solid var(--orange);border-radius:8px;padding:2px 6px}
+.more{display:block;padding:8px 20px 6px 66px;color:var(--yellow);font:600 13px var(--sans);width:100%}
+.empty{padding:30px 20px;color:var(--dim);text-align:center}
+.actrow{display:flex;align-items:center;gap:13px;margin:0 16px 7px;background:var(--s3);border-radius:14px;padding:13px 14px;font:600 14px var(--sans);width:calc(100% - 32px)}
+.actrow small{display:block;font:400 12px var(--sans);color:var(--dim)}
+.seg{position:relative;display:flex;margin:0 16px 14px;background:var(--s2);border-radius:14px;padding:4px}
+.seg .sind{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/4);background:var(--yellow);border-radius:10px;transition:transform 300ms var(--tray)}
+.seg button{flex:1;text-align:center;padding:9px 0;font:600 13px var(--sans);color:var(--dim);position:relative;z-index:1;transition:color 250ms}
+.seg button.on{color:#000}
+.slider{display:flex;align-items:center;gap:12px;margin:0 16px 8px;background:var(--s2);border-radius:14px;padding:12px 14px}
+.slider input{flex:1;accent-color:var(--yellow)}
+.slider b{font:500 13px var(--mono);width:26px;text-align:right}
+.group{margin:0 16px 12px;background:var(--s2);border-radius:16px;overflow:hidden}
+.gi{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 14px;border-top:1px solid var(--line2);font:500 14px var(--sans);width:100%}
+.gi:first-child{border-top:0}
+button.gi:active{background:var(--s3)}
+.gi .v{color:var(--dim);font-weight:400;font-size:13px;display:flex;align-items:center;gap:4px}
+.gi.red{color:var(--red)}
+.gi .yes{color:var(--green)}
+.toggle{width:44px;height:26px;border-radius:13px;background:#333;position:relative;flex:none;transition:background 220ms}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#bbb;transition:transform 260ms var(--tray),background 220ms}
+.toggle.on{background:var(--yellow)} .toggle.on::after{transform:translateX(18px);background:#000}
+.card{margin:0 16px 12px;border-radius:18px;background:var(--s2);padding:16px;border:1px solid var(--orange)}
+.card.calm{border-color:var(--line2)}
+.card h4{margin:0;font:700 16px var(--sans);color:var(--orange)}
+.card.calm h4{color:var(--ink2)}
+.card p{margin:6px 0 12px;font-size:13px;color:var(--ink2)}
+.row2{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px;color:var(--dim);margin-top:4px}
+.undo{color:var(--yellow);font-weight:600}
+.big{display:block;width:calc(100% - 32px);margin:0 16px 8px;text-align:center;background:var(--yellow);color:#000;border-radius:14px;padding:14px;font:700 14px var(--sans)}
+.card .big{width:100%;margin:0}
+.big.ghost{background:none;border:1px solid var(--line2);color:var(--ink)}
+.maccard{margin:0 16px 12px;padding:16px;border-radius:18px;background:var(--s2)}
+.maccard b{font:700 17px var(--sans);display:block}
+.maccard span{font-size:12px;color:var(--dim)}
+.back{display:flex;align-items:center;gap:4px;padding:8px 16px 0;color:var(--yellow);font:500 14px var(--sans)}
+.note{font-size:12.5px;color:var(--dim);padding:2px 20px 12px;margin:0}
+.bigval{font:72px/1 var(--serif);padding:4px 20px 0}
+.bigval i{font:14px var(--mono);font-style:normal;color:var(--dim);margin-left:4px}
+.ctx{font:12px var(--mono);color:var(--dim);padding:4px 20px 14px}
+.bigwave{padding:0 20px 14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);margin:0 16px 12px;background:var(--s2);border-radius:16px;padding:12px 0}
+.stats div{padding:0 14px}
+.stats small{display:block;font:500 10px var(--mono);letter-spacing:.8px;color:var(--dim);text-transform:uppercase}
+.stats b{font:500 17px var(--mono)}
+
+/* ===== Clipboard ===== */
+.latest{display:flex;align-items:center;gap:12px;margin:0 16px 10px;background:var(--s2);border-radius:16px;padding:11px 14px;width:calc(100% - 32px)}
+.latest .n{flex:1;min-width:0;font:500 13.5px var(--sans)}
+.latest .n small{display:block;font:400 11.5px var(--mono);color:var(--dim)}
+.latest .n span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.latest .go{color:var(--yellow);font:600 13px var(--sans)}
+.compose{display:flex;gap:8px;align-items:center;margin:0 16px 10px;background:var(--s2);border-radius:14px;padding:0 6px 0 13px}
+.compose input{flex:1;min-width:0;background:none;border:0;outline:none;padding:12px 0;font-size:13.5px;color:var(--ink)}
+.compose .sendb{width:34px;height:34px;border-radius:10px;background:var(--yellow);color:#000;display:flex;align-items:center;justify-content:center;opacity:.35;transition:opacity 160ms}
+.compose .sendb.ready{opacity:1}
+.pgrid .pbtn small{font:400 11px var(--sans);color:var(--dim);margin-top:-4px}
+.pbtn.native{background:#1f1f22;border:1px solid #3a3a3f;align-items:center;flex-direction:row;justify-content:center;gap:7px;font:600 14px -apple-system,system-ui,sans-serif}
+.clip{display:flex;align-items:center;gap:12px;padding:8px 20px;width:100%;transition:background 160ms,transform 300ms var(--tray),opacity 300ms var(--out)}
+.clip:active{background:var(--s1)}
+.clip.fresh{transform:translateY(-10px);opacity:0}
+.clip .n{flex:1;min-width:0;font:500 14px var(--sans)}
+.clip .n span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip .n small{display:block;font:400 12px var(--sans);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip .n .mono{font:12.5px var(--mono)}
+.kt{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--s3)}
+.thumb{width:34px;height:34px;border-radius:10px;flex:none;overflow:hidden;position:relative}
+.ph1{background:linear-gradient(160deg,#ffb45c 0%,#ff6b8b 55%,#3b1d4a 100%)}
+.ph2{background:linear-gradient(200deg,#74d4ff 0%,#2f6f9f 50%,#0b1f2e 100%)}
+.ph3{background:linear-gradient(180deg,#1b1b1b 0%,#1b1b1b 18%,#2a2a2a 18%,#2a2a2a 100%)}
+.ph3::after{content:"";position:absolute;left:18%;right:18%;top:34%;height:8%;background:var(--green);box-shadow:0 7px 0 #555,0 14px 0 #555}
+.pinmark{color:var(--yellow);flex:none}
+.from{font:500 10px var(--mono);color:var(--blue);border:1px solid var(--blue);border-radius:8px;padding:2px 6px;flex:none}
+.xfer{margin:0 16px 10px;background:var(--s2);border-radius:16px;padding:12px 14px}
+.xfer .t{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font:600 13.5px var(--sans)}
+.xfer .t button{color:var(--dim);font:500 13px var(--sans)}
+.xfer small{display:block;font:12px var(--mono);color:var(--dim);margin:3px 0 9px}
+.bar{height:4px;border-radius:2px;background:var(--s3);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--yellow);transform-origin:left;transform:scaleX(0);transition:transform 380ms var(--out)}
+.preview{margin:0 16px 14px;border-radius:16px;height:150px;position:relative;overflow:hidden}
+.preview.two{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:none;height:120px}
+.preview.two div{border-radius:14px}
+.prevfile{display:flex;align-items:center;gap:12px;margin:0 16px 14px;background:var(--s3);border-radius:14px;padding:12px 14px;font:600 14px var(--sans)}
+.prevfile small{display:block;font:400 12px var(--mono);color:var(--dim)}
+.monobox{margin:0 16px 14px;background:#000;border:1px solid var(--line2);border-radius:14px;padding:12px 14px;font:12.5px/1.5 var(--mono);color:var(--ink);word-break:break-word;max-height:110px;overflow:auto;user-select:text}
+.seg.two .sind{width:calc((100% - 8px)/2)}
+/* other app + system share sheet (overlay above Vitals) */
+.ext{position:absolute;inset:0;z-index:5;background:#000;transform:translateY(100%);transition:transform 300ms var(--tray)}
+.ext.in{transform:none}
+.ext .gal{padding:44px 0 0}
+.ext .gal .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 18px 12px;font:600 17px system-ui,sans-serif}
+.ext .gal .hd button{font:500 14px system-ui,sans-serif;color:#8ab4ff}
+.ext .gal .big{margin:0 0 3px;width:100%;height:330px;border-radius:0}
+.ext .gal .bar2{display:flex;justify-content:space-around;padding:16px 0;color:#ddd;font:12px system-ui,sans-serif}
+.ext .gal .bar2 button{display:flex;flex-direction:column;align-items:center;gap:5px}
+.sys{position:absolute;left:0;right:0;bottom:0;z-index:6;transform:translateY(105%);transition:transform 260ms var(--tray);font-family:system-ui,sans-serif}
+.sys.in{transform:none}
+.sys.android{background:#1f1f23;border-radius:26px 26px 0 0;padding:14px 0 26px}
+.sys.ios{background:rgba(38,38,42,.98);border-radius:14px 14px 0 0;padding:12px 0 26px;font-family:-apple-system,system-ui,sans-serif}
+.sys .sg{width:32px;height:4px;border-radius:2px;background:#555;margin:0 auto 12px}
+.sys .sh{display:flex;gap:10px;align-items:center;padding:0 18px 14px;font:500 13px inherit;color:#ddd}
+.sys .sh i{width:38px;height:38px;border-radius:8px;flex:none}
+.sys .targets{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 0;padding:6px 8px 10px}
+.sys .targets button{display:flex;flex-direction:column;align-items:center;gap:6px;font:11.5px inherit;color:#ddd}
+.sys .targets b{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:italic 22px var(--serif);font-weight:400}
+.sys.ios .targets b{border-radius:13px}
+.sys .vit{background:#000;color:var(--ink);border:1px solid var(--line2)}
+.sys .rowx{padding:12px 20px;color:#ddd;font-size:14px;border-top:1px solid #333}
+/* side panels: Mac + web */
+.macwin{font:13px -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:#1e1e1e;border:1px solid #333;border-radius:12px;padding:14px;max-width:520px;color:#eee}
+.macwin h5{margin:0 0 10px;font:600 13px inherit;color:#eee}
+.mcard{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:4px 12px;margin-bottom:10px}
+.mrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+.mrow:first-child{border-top:0}
+.mrow small{display:block;color:#999;font-size:11.5px}
+.msw{width:26px;height:15px;border-radius:8px;background:#0a84ff;position:relative;flex:none}
+.msw::after{content:"";position:absolute;right:1.5px;top:1.5px;width:12px;height:12px;border-radius:50%;background:#fff}
+.msw.off{background:#444}.msw.off::after{right:auto;left:1.5px}
+.mpop{background:#333;border-radius:5px;padding:2px 8px;font-size:12px;color:#ddd}
+.mnote{display:flex;gap:10px;align-items:center;background:rgba(40,40,40,.96);border:1px solid #3a3a3a;border-radius:14px;padding:10px 12px;max-width:360px;margin-top:12px}
+.mnote i{width:30px;height:30px;border-radius:7px;background:linear-gradient(140deg,#7b4dff,#3a1d8f);flex:none}
+.mnote b{display:block;font-size:12.5px}.mnote span{font-size:12px;color:#bbb}
+.webwin{border:1px solid var(--line2);background:#000;max-width:520px;padding:16px 18px}
+.webwin .wt{font:italic 26px var(--serif);margin-bottom:8px}
+.drop{border:1px dashed var(--line2);padding:16px;text-align:center;font:12px var(--mono);color:var(--dim);margin-bottom:10px}
+.wrow{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2)}
+.wrow b{font-weight:500;color:var(--ink)} .wrow span{font:11.5px var(--mono);color:var(--dim);white-space:nowrap}
+.wrow a{color:var(--yellow);font:500 12px var(--mono);text-decoration:none}
+.pf{display:flex;gap:8px;margin-top:10px}
+.pf button{font:12px var(--mono);color:var(--dim);border:1px solid var(--line2);padding:4px 10px;border-radius:12px}
+.pf button.on{color:#000;background:var(--yellow);border-color:var(--yellow)}
+
+/* ===== Files ===== */
+.incoming{display:flex;align-items:center;gap:12px;margin:0 16px 10px;background:var(--s2);border-radius:16px;padding:11px 14px;width:calc(100% - 32px)}
+.incoming .n{flex:1;min-width:0;font:500 13.5px var(--sans)}
+.incoming .n small{display:block;font:400 11.5px var(--mono);color:var(--dim)}
+.incoming .bar{margin-top:7px}
+.where{font:12px var(--mono);color:var(--dim);padding:0 20px 12px}
+.warnbox{margin:0 16px 12px;border:1px solid var(--orange);border-radius:14px;padding:11px 14px;font-size:12.5px;color:var(--ink2)}
+.warnbox b{color:var(--orange);display:block;font-size:13px;margin-bottom:2px}
+.disabled-opt{opacity:.35;pointer-events:none}
+.copystrip{position:absolute;left:14px;right:14px;bottom:92px;z-index:8;display:flex;align-items:center;gap:10px;background:var(--s3);border:1px solid var(--line2);border-radius:16px;padding:10px 12px;transform:translateY(12px);opacity:0;transition:transform 240ms var(--out),opacity 240ms var(--out)}
+.copystrip.in{transform:none;opacity:1}
+.copystrip .n{flex:1;min-width:0;font:500 12.5px var(--sans)}
+.copystrip .n small{display:block;font:11px var(--mono);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copystrip .sendc{background:var(--yellow);color:#000;border-radius:10px;padding:7px 11px;font:700 12.5px var(--sans)}
+.copystrip .pastec{background:#1f1f22;border:1px solid #3a3a3f;color:#fff;border-radius:10px;padding:6px 10px;font:600 12.5px -apple-system,system-ui,sans-serif;display:flex;gap:5px;align-items:center}
+.copystrip .x{color:var(--dim);font-size:16px;padding:0 2px}
+.shade{position:absolute;inset:0;z-index:12;background:rgba(10,10,12,.97);transform:translateY(-100%);transition:transform 300ms var(--tray);padding:46px 12px 0;font-family:system-ui,sans-serif}
+.shade.in{transform:none}
+.shade .clock{font:300 40px system-ui,sans-serif;color:#eee;padding:0 6px 10px}
+.qs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.qs button{background:#2b2b31;border-radius:18px;padding:12px;color:#ddd;font:500 12.5px system-ui,sans-serif;display:flex;gap:8px;align-items:center}
+.qs button.vit{background:#d6e3ff;color:#0b1d3a}
+.notif{background:#222228;border-radius:20px;padding:12px 14px;margin-bottom:8px;color:#ddd;font-size:12.5px}
+.notif .top{display:flex;gap:7px;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px}
+.notif .top i{width:16px;height:16px;border-radius:50%;background:#000;border:1px solid #444;display:inline-block}
+.notif b{display:block;font-size:13.5px;color:#fff;font-weight:600}
+.notif .bar{margin:8px 0 6px;background:#3a3a40}
+.notif .acts{display:flex;gap:16px;margin-top:6px;color:#9ec1ff;font-weight:600}
+.shade .close{display:block;margin:16px auto 0;color:#aaa;font-size:12px}
+.ioslock{position:absolute;inset:0;z-index:12;background:linear-gradient(180deg,#1c2433,#05070c);transform:translateY(-100%);transition:transform 300ms var(--tray);padding:70px 14px 0;font-family:-apple-system,system-ui,sans-serif;text-align:center}
+.ioslock.in{transform:none}
+.ioslock .t{font:600 64px -apple-system,system-ui,sans-serif;color:#eee}
+.ioslock .notif{text-align:left;background:rgba(60,60,70,.75);margin-top:28px}
+.installer{position:absolute;left:18px;right:18px;top:38%;z-index:13;background:#2a2a30;border-radius:26px;padding:22px 20px 14px;font-family:system-ui,sans-serif;color:#eee;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+.installer b{display:block;font-size:17px;margin:8px 0 6px}
+.installer p{font-size:13px;color:#bbb;margin:0 0 16px}
+.installer .row{display:flex;justify-content:flex-end;gap:22px;color:#9ec1ff;font-weight:600;font-size:14px}
+.bseg{display:flex;margin:0 16px 14px;background:var(--s2);border-radius:14px;padding:4px}
+.bseg span{flex:1;text-align:center;padding:9px 0;font:600 13px var(--sans);color:var(--dim);border-radius:10px}
+.bseg span.on{background:var(--yellow);color:#000}
+
+
+/* ===== Connect additions ===== */
+.ch .val small{font:500 12px var(--mono);color:var(--dim);margin-left:8px}
+.ch .val small b{font-weight:500}
+.mini.four{grid-template-columns:repeat(4,1fr)}
+.legend{display:flex;gap:14px;padding:0 20px 10px;font:11.5px var(--mono);color:var(--dim)}
+.legend i{display:inline-block;width:10px;height:2px;vertical-align:middle;margin-right:6px}
+.kv{margin:0 16px 12px;background:var(--s2);border-radius:16px;overflow:hidden}
+.kv .r{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 14px;border-top:1px solid var(--line2);font-size:13px;color:var(--ink2)}
+.kv .r:first-child{border-top:0}
+.kv .r b{font:500 13px var(--mono);color:var(--ink);text-align:right}
+.kv .r small{display:block;font:11px var(--mono);color:var(--dim)}
+.cap{margin:0 16px 12px;background:var(--s2);border-radius:16px;padding:12px 14px}
+.cap .t{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--dim);margin-bottom:8px}
+.cap .t b{color:var(--ink);font-weight:500}
+.cap .track{height:8px;border-radius:4px;background:var(--s3);overflow:hidden;display:flex}
+.cap .track i{display:block;height:100%}
+.hero2{display:flex;align-items:baseline;gap:16px;padding:4px 20px 0}
+.hero2 .bigval{padding:0}
+.hero2 .side2{font:13px var(--mono);color:var(--dim)}
+.hero2 .side2 b{display:block;font:500 22px var(--mono);color:var(--ink)}
+.stateline{font:12px var(--mono);padding:2px 20px 14px}
+/* devices + browse */
+.devs{display:flex;gap:8px;padding:0 16px 14px;overflow-x:auto;scrollbar-width:none}
+.dev{display:flex;align-items:center;gap:8px;background:var(--s2);border-radius:14px;padding:9px 12px;font:600 13px var(--sans);white-space:nowrap;color:var(--ink2);transition:background 200ms,color 200ms}
+.dev small{display:block;font:400 10.5px var(--mono);color:var(--dim)}
+.dev.on{background:var(--yellow);color:#000}.dev.on small{color:#000;opacity:.7}
+.dev.away{opacity:.55}
+.crumb{display:flex;align-items:center;gap:4px;padding:0 20px 10px;font:12px var(--mono);color:var(--dim);white-space:nowrap;overflow:hidden}
+.crumb b{color:var(--ink);font-weight:500}
+.frow{display:flex;align-items:center;gap:12px;padding:8px 20px;width:100%}
+.frow:active{background:var(--s1)}
+.frow .n{flex:1;min-width:0;font:500 14px var(--sans)}
+.frow .n span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .n small{display:block;font:400 11.5px var(--mono);color:var(--dim)}
+.frow .cb{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line2);flex:none;display:flex;align-items:center;justify-content:center;color:#000}
+.frow .cb.on{background:var(--yellow);border-color:var(--yellow)}
+.frow.sel{background:rgba(242,236,107,.06)}
+.headrow{display:flex;justify-content:space-between;align-items:center;padding:0 20px 10px}
+.headrow .title{padding:0}
+.headrow button{color:var(--yellow);font:600 13px var(--sans)}
+.pgrid.photos{grid-template-columns:repeat(3,1fr);gap:4px;padding:0 16px 14px}
+.pgrid.photos button{aspect-ratio:1;border-radius:8px;position:relative}
+.pgrid.photos button.on::after{content:"✓";position:absolute;right:5px;top:5px;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:#000;font:700 11px/18px var(--sans);text-align:center}
+.pgrid.photos small{position:absolute;left:5px;bottom:4px;font:500 9.5px var(--mono);color:#fff;text-shadow:0 1px 3px #000}
+.ph4{background:linear-gradient(140deg,#5cf2a6 0%,#1f6b54 60%,#08221b 100%)}
+.ph5{background:linear-gradient(20deg,#c8a8ff 0%,#5a3b9a 55%,#140b26 100%)}
+.ph6{background:linear-gradient(180deg,#f2ec6b 0%,#a58a2b 60%,#2a2208 100%)}
+.selbar{position:absolute;left:14px;right:14px;bottom:88px;z-index:5;display:flex;align-items:center;gap:10px;background:var(--ink);color:#000;border-radius:18px;padding:10px 10px 10px 16px;font:600 13px var(--sans);transform:translateY(16px);opacity:0;transition:transform 240ms var(--out),opacity 240ms var(--out);pointer-events:none}
+.selbar.in{transform:none;opacity:1;pointer-events:auto}
+.selbar span{flex:1}
+.selbar button{background:#000;color:var(--yellow);border-radius:12px;padding:9px 14px;font:700 13px var(--sans)}
+.seen{display:flex;gap:10px;align-items:center;margin:0 16px 12px;border:1px solid var(--line2);border-radius:14px;padding:10px 12px;font-size:12.5px;color:var(--ink2)}
+.seen b{color:var(--ink)}
+.seen button{margin-left:auto;color:var(--yellow);font:600 12.5px var(--sans)}
+.empty b{display:block;color:var(--ink);font:600 15px var(--sans);margin-bottom:4px}
+/* terminal */
+.screen.term{background:#000}
+.tbar{display:flex;align-items:center;gap:8px;padding:44px 12px 8px;border-bottom:1px solid var(--line)}
+.tbar .back{padding:0}
+.tbar .sess{display:flex;gap:6px;flex:1;overflow-x:auto;scrollbar-width:none;margin-left:6px}
+.tbar .sess button{font:500 11px var(--mono);color:var(--dim);border:1px solid var(--line2);border-radius:10px;padding:5px 9px;white-space:nowrap}
+.tbar .sess button.on{color:#000;background:var(--yellow);border-color:var(--yellow)}
+.tbar .tico{color:var(--dim);padding:4px}
+.tout{position:absolute;top:84px;left:0;right:0;bottom:204px;overflow-y:auto;padding:8px 12px 4px;font:11.5px/1.5 var(--mono);color:#e6e6e6;user-select:text;scrollbar-width:none;white-space:pre-wrap;word-break:break-all}
+.tout::-webkit-scrollbar{display:none}
+.tout .p{color:var(--green)} .tout .d{color:var(--blue)} .tout .m{color:var(--dim)} .tout .w{color:var(--orange)} .tout .e{color:var(--red)} .tout .y{color:var(--yellow)}
+.tline{display:flex;align-items:baseline}
+.tline input{flex:0 1 auto;field-sizing:content;min-width:1ch;max-width:100%;background:none;border:0;outline:none;font:11.5px/1.5 var(--mono);color:#fff;padding:0;caret-color:var(--yellow)}
+.cursor{display:inline-block;width:7px;height:13px;background:var(--yellow);vertical-align:-2px}
+.keys{position:absolute;left:0;right:0;bottom:162px;display:flex;gap:5px;padding:6px 8px;background:#0b0b0b;border-top:1px solid var(--line2);overflow-x:auto;scrollbar-width:none}
+.keys button{flex:none;min-width:34px;height:32px;padding:0 9px;border-radius:8px;background:var(--s3);font:500 11.5px var(--mono);color:var(--ink2);text-align:center}
+.keys button.latched{background:var(--yellow);color:#000}
+.keys button.red{color:var(--red)}
+.kbd{position:absolute;left:0;right:0;bottom:0;height:162px;background:#1a1a1c;padding:8px 4px 0;display:grid;grid-template-rows:repeat(4,1fr);gap:6px}
+.kbd div{display:flex;gap:4px;justify-content:center}
+.kbd span{flex:1;max-width:28px;background:#3a3a3e;border-radius:5px;display:flex;align-items:center;justify-content:center;font:13px system-ui,sans-serif;color:#eee;height:32px}
+.kbd span.w{max-width:150px;flex:4}
+.kbd span.s{max-width:44px;flex:1.4;background:#2a2a2e;font-size:11px}
+.tlock{position:absolute;inset:84px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:0 30px}
+.tlock .fp{width:64px;height:64px;border-radius:50%;border:1.5px solid var(--yellow);display:flex;align-items:center;justify-content:center;color:var(--yellow)}
+.tlock b{font:700 17px var(--sans)}
+.tlock p{margin:0;font-size:13px;color:var(--dim)}
+.tlock .big{width:100%;margin:6px 0 0}
+.cmd{display:flex;align-items:center;gap:12px;margin:0 16px 7px;background:var(--s3);border-radius:14px;padding:11px 14px;width:calc(100% - 32px)}
+.cmd .n{flex:1;min-width:0}
+.cmd .n b{display:block;font:600 13.5px var(--sans)}
+.cmd .n code{display:block;font:11.5px var(--mono);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmd .go{color:var(--yellow);font:600 12.5px var(--sans)}
+.livepill{display:inline-flex;align-items:center;gap:6px;font:500 10.5px var(--mono);color:var(--green)}
+.livepill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green)}
+/* system file managers */
+.sysfiles{position:absolute;inset:0;z-index:11;background:#000;transform:translateY(100%);transition:transform 300ms var(--tray);font-family:system-ui,sans-serif;overflow-y:auto;padding:44px 0 20px}
+.sysfiles.in{transform:none}
+.sysfiles.ios{background:#000;font-family:-apple-system,system-ui,sans-serif}
+.sysfiles .sh1{font:700 28px inherit;padding:8px 18px 12px;color:#fff}
+.sysfiles .grp{margin:0 14px 14px;background:#1c1c1e;border-radius:12px;overflow:hidden}
+.sysfiles .gr{display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid #2c2c2e;color:#fff;font-size:15px;width:100%}
+.sysfiles .gr:first-child{border-top:0}
+.sysfiles .gr small{margin-left:auto;color:#8e8e93;font-size:13px}
+.sysfiles .gr i{width:28px;height:28px;border-radius:7px;flex:none;display:flex;align-items:center;justify-content:center;font-style:normal}
+.sysfiles .lbl2{font:600 13px inherit;color:#8e8e93;padding:4px 30px 6px;text-transform:uppercase;letter-spacing:.4px}
+.sysfiles.android{background:#121316}
+.sysfiles.android .sh1{font:400 24px inherit}
+.sysfiles.android .grp{background:none;border-radius:0;margin:0}
+.sysfiles.android .gr{border-top:0;padding:12px 20px;font-size:15px}
+.sysfiles.android .gr.on{background:#1f3a5c;border-radius:0 24px 24px 0;margin-right:16px;width:calc(100% - 16px)}
+.sysfiles .closex{display:block;margin:14px auto 0;color:#9ec1ff;font-size:13px}
+.sysfiles .note2{font-size:12px;color:#8e8e93;padding:0 30px 12px}
+/* direction thumbnails */
+.dirs{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:30px 22px;margin-top:16px}
+.dirs figcaption b{display:block;color:var(--ink);font:600 13px var(--sans);text-transform:none;letter-spacing:0;margin-bottom:2px}
+.dirs figcaption{font:12px var(--sans);color:var(--dim);text-transform:none;letter-spacing:0}
+.rec{color:var(--yellow)}
+.tabtag{display:inline-block;font:500 10px var(--mono);color:var(--yellow);border:1px solid var(--yellow);border-radius:8px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.dock{transition:transform 300ms var(--tray)}
+.phone.full .dock{transform:translateY(110px)}
+.results{min-height:0}
+@media (max-width:900px){ .layout{grid-template-columns:1fr} .protocol{position:static;justify-self:center} h1{font-size:40px} }
+@media (prefers-reduced-motion:reduce){ *{transition-duration:1ms !important} }
+@media print{ .protocol{position:static} }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8M6.4 6.6a8 8 0 1 0 11.2 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-control" viewBox="0 0 24 24"><path d="M5 7h14M5 17h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="7" r="2.5" fill="#141414" stroke="currentColor" stroke-width="2"/><circle cx="15" cy="17" r="2.5" fill="#141414" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-slow" viewBox="0 0 24 24"><path d="M4 18a8 8 0 0 1 16 0M12 18l-4-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 5V3h6v2" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-ping" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6h14M5 11h14M5 16h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 16l5-5 4 4 2-2 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="15.5" cy="9.5" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 5V3h6v2M12 9v7M9 13l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M6 12v7h12v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-mac" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 19h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 10l5-3v10l-5-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-android" viewBox="0 0 24 24"><path d="M5 17v-5a7 7 0 0 1 14 0v5zM8 6L6.5 3.5M16 6l1.5-2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="11.5" r="1" fill="currentColor"/><circle cx="14.5" cy="11.5" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M8 3h7l4 4v11H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5 7v14h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 9l3 3-3 3M12 15h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><path d="M8 4v15M4 15l4 4 4-4M16 20V5M12 9l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="12" r="1.3" fill="currentColor"/><path d="M6 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-batt" viewBox="0 0 24 24"><rect x="3" y="7" width="16" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M21 10.5v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M11.5 8.8L9 12.3h3l-2.4 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-finger" viewBox="0 0 24 24"><path d="M12 4a7 7 0 0 0-7 7v2M19 11a7 7 0 0 0-3-5.7M12 8a3 3 0 0 0-3 3v3a8 8 0 0 0 1 4M15 11v2a11 11 0 0 1-1 5M12 11v3a14 14 0 0 1-1.2 6M18.6 14a15 15 0 0 1-1 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 13h6l-1 8 8-10h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 9a13 13 0 0 1 18 0M6 12.5a8.5 8.5 0 0 1 12 0M9 16a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="19" r="1.3" fill="currentColor"/></symbol>
+</svg>
+
+<div class="page">
+  <div class="kicker">Vitals Remote · Connect · full vitals, your Mac's files, your phones' files, a terminal · built on the Share prototype</div>
+  <h1>Connect, clickable.</h1>
+  <p class="lede">Everything the Mac measures, on the phone. Your Mac's folders, one tap away. Your other phone's photos, through your Mac. A real terminal on your Mac, behind your fingerprint. Home gets four more rows. Control gets one more tile, Terminal. Files grows a device switcher and folders. No new tab. Use the buttons under the phone to play the Mac's side, or run a journey. The Mac side is in the <a href="https://pagepilot.rafay99.com/p/4c37ee5df3a74f30b4469db47524914d" style="color:var(--yellow)">Mac prototype</a>, the plan and specs are in the <a href="https://pagepilot.rafay99.com/p/b706c9f39f784a33921acedfd008e298" style="color:var(--yellow)">plan</a>.</p>
+
+  <div class="layout">
+    <div class="protocol">
+      <div class="phone" id="proto">
+        <div class="sb"><span>22:41</span><span>82%</span></div>
+        <div class="stage"></div>
+        <div class="scrim"></div>
+        <div class="layer"></div>
+        <div class="toasts" aria-live="polite"></div>
+        <div id="ring"></div>
+      </div>
+      <div class="caption" id="caption">Tap anything in the phone.</div>
+      <div class="tools"><button id="reset">Reset</button><button id="unplug">Unplug the Mac</button><button id="other">Other phone opens Vitals</button><button id="termoff">Terminal off on Mac</button></div>
+      <div class="tools"><button id="sysandroid">Android Files app</button><button id="sysios">iOS Files app</button></div>
+      <div class="pf" id="platform"><button class="on" data-p="android">Android</button><button data-p="ios">iOS</button></div>
+    </div>
+
+    <div class="side">
+      <h2>Journeys</h2>
+      <div class="journeys" id="journeys"></div>
+
+      <h3>What changes, screen by screen</h3>
+      <table>
+        <thead><tr><th>Where</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td>Home</td><td>Eight live rows instead of four: CPU, GPU, Memory, Network, Disk, Temp, Fans, Battery. Network and Disk show both directions. The mini line becomes Power, Swap, Wi-Fi, Free disk.</td></tr>
+          <tr><td>Home › row</td><td>Same detail screen as today, plus a details block per row: links and Wi-Fi for Network, free space and drive health for Disk, renderer and memory for GPU, everything the Mac's Battery panel shows for Battery.</td></tr>
+          <tr><td>Control</td><td>Share tiles become Clipboard, Files, Terminal, then Open link and Find Mac.</td></tr>
+          <tr><td>Control › Files</td><td>Device chips on top (your Mac, your other phone). Places, search, folders, select many, Get, Put files here. Send and transfers stay as shipped.</td></tr>
+          <tr><td>Control › Terminal</td><td>New. Full screen, fingerprint or Face ID to open, sessions that keep running, a key row (esc, tab, ctrl, arrows, ^C), saved commands.</td></tr>
+          <tr><td>Settings › This phone</td><td>What the Mac lets this phone do, and what this phone lets others see (Photos, Downloads › Vitals, folders you add).</td></tr>
+          <tr><td>Outside the app</td><td>Android: your Mac appears in the Files app. iPhone: files you get land in Files › On My iPhone › Vitals. A Files app location for the Mac on iPhone comes later (needs a paid Apple team).</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Android and iOS, one code path</h3>
+      <table>
+        <thead><tr><th>Moment</th><th>Android</th><th>iOS</th></tr></thead>
+        <tbody>
+          <tr><td>Open Terminal</td><td>Fingerprint (BiometricPrompt)</td><td>Face ID (LocalAuthentication)</td></tr>
+          <tr><td>Others browse this phone</td><td>Works while Vitals is open, and in the background with the transfer service</td><td>Only while Vitals is open. The Mac says "Open Vitals on the iPhone"</td></tr>
+          <tr><td>What this phone shares</td><td>Photos and videos (MediaStore), Downloads › Vitals, folders you pick (Storage Access Framework)</td><td>Photos (PhotoKit), Files › Vitals, folders you pick (security-scoped bookmarks)</td></tr>
+          <tr><td>Your Mac in the system Files app</td><td>Yes, a Documents provider in the app</td><td>Later. Needs a File Provider extension and a paid team</td></tr>
+        </tbody>
+      </table>
+      <div class="perf">Motion stays the A + B system: transform and opacity only, nothing loops. The terminal cursor does not blink. Traces redraw only when a new sample lands, once a second.</div>
+    </div>
+  </div>
+
+  <div class="gallery-head">
+    <h2>Directions</h2>
+    <p class="lede">Two calls that are yours to make. The yellow one is what I recommend and what the prototype above uses.</p>
+  </div>
+  <div class="dirs" id="dirs"></div>
+
+  <div class="gallery-head">
+    <h2>Every screen and sheet</h2>
+    <p class="lede">The same components as the prototype, frozen in each state.</p>
+  </div>
+  <div id="gallery"></div>
+
+  <footer>Last updated 2026-10-25 · mockup, readings, files and sizes are illustrative · Opus 5.5 via Claude Code in T3 Code</footer>
+</div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var raf2 = function (fn) { requestAnimationFrame(function () { requestAnimationFrame(fn); }); };
+
+  function h(tag, props) {
+    var el = document.createElement(tag);
+    if (props) Object.keys(props).forEach(function (k) {
+      var v = props[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === "class") el.className = v;
+      else if (k === "style") el.style.cssText = v;
+      else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), v);
+      else if (k === "value") el.value = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    });
+    var kids = Array.prototype.slice.call(arguments, 2);
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c === null || c === undefined || c === false) return;
+        if (Array.isArray(c)) return add(c);
+        el.append(c instanceof Node ? c : String(c));
+      });
+    })(kids);
+    return el;
+  }
+  function icon(id, cls) {
+    var s = document.createElementNS(NS, "svg");
+    s.setAttribute("class", cls || "ico"); s.setAttribute("aria-hidden", "true");
+    var u = document.createElementNS(NS, "use"); u.setAttribute("href", "#" + id);
+    s.appendChild(u); return s;
+  }
+  var WAVES = {
+    ecg: "M0 14H40l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h29",
+    art: "M0 18L12 5 20 12 28 10 46 18 58 5 66 12 74 10 92 18 104 5 112 12 120 10 138 18 150 5 158 12 166 10 184 18 196 5 204 12 212 10 230 18",
+    wave: "M0 13C20 3 40 23 60 13S100 3 120 13 160 23 180 13 220 3 230 13",
+    wave2: "M0 13C12 6 24 20 36 13S60 6 72 13 96 20 108 13 132 6 144 13 168 20 180 13 204 6 216 13 230 13",
+    gpu: "M0 18L20 17 30 8 40 16 60 18 80 18 90 6 100 15 120 17 140 18 150 10 160 16 180 18 200 12 230 17",
+    down: "M0 16C20 15 25 6 35 10S55 18 70 14 90 4 110 12 130 16 150 9 170 13 190 7 210 12 230 10",
+    up: "M0 21L30 20 40 18 60 21 90 19 110 20 130 17 150 21 180 19 200 20 230 19",
+    read: "M0 20L20 20 25 6 32 18 60 20 80 19 86 9 92 19 130 20 150 14 160 20 200 20 210 11 218 20 230 20",
+    write: "M0 22L40 22 45 16 50 22 100 22 110 18 116 22 170 22 176 17 182 22 230 22",
+    charge: "M0 20C60 18 120 13 230 7",
+    drain: "M0 6C60 8 120 12 230 15",
+    flat: "M0 13H230"
+  };
+  function wave(kinds, colors, height) {
+    var s = document.createElementNS(NS, "svg");
+    s.setAttribute("viewBox", "0 0 230 24"); s.setAttribute("preserveAspectRatio", "none");
+    s.setAttribute("class", "wave"); s.setAttribute("aria-hidden", "true"); s.style.height = height + "px";
+    [].concat(kinds).forEach(function (k, i) {
+      var p = document.createElementNS(NS, "path");
+      p.setAttribute("d", WAVES[k]); p.setAttribute("fill", "none"); p.setAttribute("stroke", [].concat(colors)[i]);
+      p.setAttribute("stroke-width", i ? "1.3" : "1.7"); p.setAttribute("vector-effect", "non-scaling-stroke"); p.setAttribute("stroke-linejoin", "round");
+      if (i) p.setAttribute("opacity", ".85");
+      s.appendChild(p);
+    });
+    return s;
+  }
+
+  /* ---------- data ---------- */
+  var PLATFORM = "android";
+  var ios = function () { return PLATFORM === "ios"; };
+  var other = function () { return ios() ? { id: "phone2", name: "Pixel 9", os: "Android" } : { id: "phone2", name: "iPhone 17", os: "iOS" }; };
+  var me = function () { return ios() ? "iPhone 17" : "Pixel 9"; };
+  var savedTo = function () { return ios() ? "Files › On My iPhone › Vitals" : "Downloads › Vitals"; };
+
+  var CH = {
+    cpu: { tag: "PULSE · CPU", title: "CPU.", color: "var(--green)", wave: "ecg", val: "34", unit: "%", ctx: "load across every core", stats: ["12%", "31%", "98%"] },
+    gpu: { tag: "GPU", title: "GPU.", color: "var(--yellow)", wave: "gpu", val: "18", unit: "%", ctx: "GPU busy · 40 cores", stats: ["2%", "14%", "87%"] },
+    mem: { tag: "PRESS · MEMORY", title: "Memory.", color: "var(--pink)", wave: "art", val: "29.4", unit: "/36 GB", ctx: "unified memory in use · pressure normal", stats: ["21 GB", "27 GB", "33 GB"] },
+    net: { tag: "NETWORK", title: "Network.", color: "var(--blue)", wave: ["down", "up"], colors: ["var(--blue)", "var(--violet)"], val: "2.1", unit: "MB/s", second: "↑ 340 KB/s", ctx: "down and up · Wi-Fi", stats: ["0 KB/s", "1.4 MB/s", "48 MB/s"] },
+    disk: { tag: "DISK", title: "Disk.", color: "var(--drip)", wave: ["read", "write"], colors: ["var(--drip)", "var(--orange)"], val: "84", unit: "MB/s", second: "W 12 MB/s", ctx: "read and write · Macintosh HD", stats: ["0 MB/s", "22 MB/s", "2.9 GB/s"] },
+    temp: { tag: "TEMP", title: "Temp.", color: "var(--orange)", wave: "wave", val: "55°", unit: "", ctx: "CPU die temperature", stats: ["41°", "58°", "79°"] },
+    fans: { tag: "RESP · FANS", title: "Fans.", color: "var(--blue)", wave: "wave2", val: "1,320", unit: "rpm", ctx: "left fan · right fan within 40 rpm", stats: ["0", "1,180", "3,900"] },
+    batt: { tag: "BATTERY", title: "Battery.", color: "var(--violet)", wave: "charge", val: "82", unit: "%", second: "⚡ 36 W", ctx: "charge", stats: ["41%", "77%", "100%"] }
+  };
+  var ROWS = ["cpu", "gpu", "mem", "net", "disk", "temp", "fans", "batt"];
+  var TABS = [["home", "Home", "i-home"], ["apps", "Apps", "i-apps"], ["control", "Control", "i-control"], ["alerts", "Alerts", "i-bell"], ["settings", "Settings", "i-gear"]];
+  var TABS_B = [["home", "Home", "i-home"], ["apps", "Apps", "i-apps"], ["files", "Files", "i-files"], ["control", "Control", "i-control"], ["settings", "Settings", "i-gear"]];
+  var tabIndex = function (t, list) { return (list || TABS).findIndex(function (x) { return x[0] === t; }); };
+
+  var MB = 1e6, GB = 1e9;
+  var size = function (b) { return b >= GB ? (b / GB).toFixed(1) + " GB" : b >= MB ? (b / MB).toFixed(b >= 100 * MB ? 0 : 1) + " MB" : Math.max(1, Math.round(b / 1e3)) + " KB"; };
+  var f = function (name, kind, bytes, at, extra) { var o = { name: name, kind: kind, bytes: bytes, at: at }; if (extra) Object.keys(extra).forEach(function (k) { o[k] = extra[k]; }); return o; };
+  var FS = {
+    Desktop: [f("Screenshots", "folder", 0, "Today", { count: 42 }), f("mockup-final.png", "image", 2.4 * MB, "Today 14:02", { ph: "ph2" }), f("Q4 roadmap.key", "doc", 18.2 * MB, "Yesterday"), f("notes.md", "code", 4e3, "Mon")],
+    Downloads: [f("Vitals", "folder", 0, "Today", { count: 3 }), f("demo-recording.mov", "video", 1.43 * GB, "Today 21:58", { ph: "ph1" }), f("invoice-october.pdf", "doc", 412e3, "Today 18:20"), f("vitals-nightly.apk", "apk", 82 * MB, "Today 11:04"), f("brand-assets.zip", "zip", 41 * MB, "Yesterday"), f("IMG_2041.HEIC", "image", 3.4 * MB, "Yesterday", { ph: "ph4" }), f("Xcode_27.xip", "zip", 9.8 * GB, "Oct 20")],
+    "Downloads/Vitals": [f("IMG_2088.HEIC", "image", 3.1 * MB, "Today 20:11", { ph: "ph5" }), f("boarding-pass.pdf", "doc", 220e3, "Today 09:40"), f("Trip", "folder", 0, "Yesterday", { count: 48 })],
+    Documents: [f("Contracts", "folder", 0, "Oct 18", { count: 9 }), f("Taxes 2026", "folder", 0, "Oct 2", { count: 31 }), f("Lumo pitch.pdf", "doc", 6.1 * MB, "Oct 22"), f("resume-2026.pdf", "doc", 180e3, "Sep 30")],
+    Movies: [f("Trip to Hunza.mp4", "video", 3.2 * GB, "Oct 12", { ph: "ph2" }), f("standup-clip.mov", "video", 220 * MB, "Oct 21", { ph: "ph6" })],
+    Pictures: [f("Wallpapers", "folder", 0, "Aug 3", { count: 64 }), f("logo-final@3x.png", "image", 880e3, "Oct 19", { ph: "ph5" }), f("team-offsite.jpg", "image", 5.6 * MB, "Oct 2", { ph: "ph1" })]
+  };
+  var ROOTS = [["Desktop", "i-screen"], ["Downloads", "i-down"], ["Documents", "i-file"], ["Movies", "i-video"], ["Pictures", "i-image"]];
+  var PHOTOS = ["ph1", "ph2", "ph4", "ph5", "ph6", "ph3", "ph2", "ph1", "ph5", "ph4", "ph6", "ph2"].map(function (ph, i) { return { id: "p" + i, ph: ph, video: i % 4 === 1 ? "0:" + (14 + i * 3) : null, bytes: i % 4 === 1 ? 180 * MB : 3.2 * MB, name: (i % 4 === 1 ? "VID_2026102" : "IMG_2026102") + i + (i % 4 === 1 ? ".mp4" : ".jpg") }; });
+  var KIND = { folder: ["i-folder", "var(--blue)"], video: ["i-video", "var(--pink)"], image: ["i-image", "var(--green)"], apk: ["i-android", "var(--green)"], doc: ["i-file", "var(--ink2)"], zip: ["i-files", "var(--orange)"], code: ["i-text", "var(--violet)"] };
+
+  var CMDS = [
+    { k: "brew", name: "Update Homebrew apps", cmd: "brew upgrade" },
+    { k: "pull", name: "Pull Vitals", cmd: "git -C ~/Code/Vitals pull" },
+    { k: "ts", name: "Tailscale status", cmd: "tailscale status" },
+    { k: "test", name: "Run the gateway tests", cmd: "pnpm --filter @vitals/gateway test" }
+  ];
+  var OUT = {
+    "git status": [["On branch nightly"], ["Your branch is up to date with 'origin/nightly'."], [""], ["Untracked files:"], ["  apps/website/", "e"], [""], ["nothing added to commit but untracked files present"]],
+    "ls": [["AGENTS.md   apps   convex   docs   packages   README.md   turbo.json", "d"]],
+    "uptime": [["22:41  up 6 days,  3:12, 2 users, load averages: 3.42 2.97 2.80"]],
+    "tailscale status": [["100.101.12.4   rafays-mbp      rafay99@  macOS   -"], ["100.88.41.17   pixel-9         rafay99@  android active; direct 192.168.1.23:41641"], ["100.77.3.90    iphone-17       rafay99@  iOS     idle"]],
+    "git -C ~/Code/Vitals pull": [["Already up to date."]],
+    "whoami": [["rafay"]]
+  };
+  var SLOW = {
+    "brew upgrade": [["==> Upgrading 3 outdated packages:", "y"], ["node 24.9.0 -> 24.10.1"], ["gh 2.81.0 -> 2.82.1"], ["ripgrep 15.0.0 -> 15.1.0"], ["==> Pouring node--24.10.1.arm64_tahoe.bottle.tar.gz", "y"], ["/opt/homebrew/Cellar/node/24.10.1: 2,412 files, 98.6MB", "m"], ["==> Pouring gh--2.82.1.arm64_tahoe.bottle.tar.gz", "y"], ["==> Pouring ripgrep--15.1.0.arm64_tahoe.bottle.tar.gz", "y"], ["==> Upgraded 3 packages", "p"]],
+    "pnpm --filter @vitals/gateway test": [["> @vitals/gateway test", "m"], ["> bun test", "m"], [""], ["test/drop.test.ts:", "d"], ["(pass) offers a drop and waits for the Mac [3.1ms]", "p"], ["(pass) resumes a half-sent part [12.4ms]", "p"], ["test/terminal.test.ts:", "d"], ["(pass) replays scrollback on attach [4.0ms]", "p"], ["(pass) refuses without the terminal scope [0.9ms]", "p"], [""], [" 142 pass", "p"], [" 0 fail"], ["Ran 142 tests across 31 files. [2.84s]"]]
+  };
+
+  function initial() {
+    return {
+      tab: "home", stacks: { home: [], apps: [], control: [], alerts: [], settings: [] }, channel: "cpu",
+      plugged: true, otherOn: false, termOn: true, unlocked: false, query: "", selecting: false, sel: {}, canEdit: false,
+      lines: [["Last login: Sat Oct 25 22:12:04 on ttys004", "m"]], hist: [], running: null, sess: 2, ctrl: false,
+      shareOthers: true, sharePhotos: true, extraFolder: true, filesApp: true, got: []
+    };
+  }
+  var S = initial();
+  var proto = $("#proto");
+  var route = function () { var st = S.stacks[S.tab]; return st.length ? st[st.length - 1] : S.tab; };
+
+  /* ---------- small components ---------- */
+  function toggle(on, label, onChange) {
+    var b = h("button", { class: "toggle" + (on ? " on" : ""), role: "switch", "aria-checked": String(on), "aria-label": label });
+    b.addEventListener("click", function () { var next = !b.classList.contains("on"); b.classList.toggle("on", next); b.setAttribute("aria-checked", String(next)); onChange(next); });
+    return b;
+  }
+  function holdBtn(label, onCommit, k, extra) {
+    var b = h("button", { class: "hold" + (extra ? " " + extra : ""), "data-k": k }, h("span", null, label));
+    var t = null;
+    var start = function () { if (t) return; b.classList.add("holding"); t = setTimeout(function () { t = null; b.classList.remove("holding"); onCommit(); }, 1300); };
+    var stop = function () { if (t) { clearTimeout(t); t = null; } b.classList.remove("holding"); };
+    b.addEventListener("pointerdown", start);
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) { b.addEventListener(ev, stop); });
+    return b;
+  }
+  function tile(k, ic, label, fn, red) { return h("button", { class: "pbtn press" + (red ? " red" : ""), "data-k": k, onclick: fn }, icon(ic), label); }
+  function actRow(k, ic, label, detail, fn) { return h("button", { class: "actrow press", "data-k": k, onclick: fn }, icon(ic), h("span", null, label, detail ? h("small", null, detail) : null)); }
+  function gi(k, label, value, fn, cls) {
+    var right = value instanceof Node ? value : h("span", { class: "v" }, value || "", fn ? icon("i-chev", "ico-s") : null);
+    return h(fn ? "button" : "div", { class: "gi" + (cls ? " " + cls : ""), "data-k": k, onclick: fn }, h("span", null, label), right);
+  }
+  function screen(kind) { return h("div", { class: "screen " + kind }, h("div", { class: "pad" }, Array.prototype.slice.call(arguments, 1))); }
+  function sub(back, title) { return screen("sub", h("button", { class: "back", "data-k": "back", onclick: pop }, icon("i-back", "ico-s"), back), h("div", { class: "title" }, title), Array.prototype.slice.call(arguments, 2)); }
+  function sheet(title, subtitle) {
+    return h("div", { class: "sheet", role: "dialog", "aria-label": title }, h("div", { class: "grabzone" }, h("div", { class: "grab" })),
+      h("div", { class: "sh-title" }, title), subtitle ? h("div", { class: "sh-sub" }, subtitle) : null, Array.prototype.slice.call(arguments, 2));
+  }
+  var cancelRow = function (label) { return h("button", { class: "sh-cancel", onclick: function () { closeSheet(); } }, label || "Cancel"); };
+  function kv(rows) { return h("div", { class: "kv" }, rows.map(function (r) { return h("div", { class: "r" }, h("span", null, r[0], r[2] ? h("small", null, r[2]) : null), h("b", null, r[1])); })); }
+  function capBar(left, right, parts) {
+    return h("div", { class: "cap" }, h("div", { class: "t" }, h("span", null, left), h("b", null, right)),
+      h("div", { class: "track" }, parts.map(function (p) { return h("i", { style: "width:" + p[0] + "%;background:" + p[1] }); })));
+  }
+  function fileIcon(it) {
+    if (it.ph) return h("span", { class: "thumb " + it.ph });
+    var k = KIND[it.kind] || KIND.doc;
+    return h("span", { class: "kt", style: "color:" + k[1] }, icon(k[0], "ico-s"));
+  }
+  function meta(it) { return it.kind === "folder" ? it.count + " items · " + it.at : size(it.bytes) + " · " + it.at; }
+
+  /* ---------- Home ---------- */
+  function battVal() { return S.plugged ? { v: "82", second: "⚡ 36 W" } : { v: "79", second: "4 h 12 min left" }; }
+  function homeRow(k) {
+    var c = CH[k], b = k === "batt" ? battVal() : null;
+    var colors = c.colors || [c.color];
+    var kinds = k === "batt" ? (S.plugged ? "charge" : "drain") : c.wave;
+    return h("button", { class: "ch", "data-k": "ch-" + k, onclick: function () { S.channel = k; push("channel"); } },
+      h("div", { class: "top" }, h("span", { class: "tag", style: "color:" + c.color }, c.tag),
+        h("span", { class: "val" }, b ? b.v : c.val, c.unit ? h("i", null, c.unit) : null, (b ? b.second : c.second) ? h("small", { style: "color:" + (colors[1] || "var(--dim)") }, b ? b.second : c.second) : null)),
+      wave(kinds, colors, 26));
+  }
+  function homeHead(word) {
+    return [h("div", { class: "head" }, h("span", null, "Rafay's MacBook Pro ", h("b", { class: "ok" }, "●")),
+        h("button", { class: "pw press", "data-k": "power", "aria-label": "Power", onclick: function () { toast("Power sheet, as shipped"); } }, icon("i-power", "ico-s"))),
+      h("div", { class: "word" }, word),
+      h("div", { class: "meta" }, "M3 Max · macOS 26.1 · Wi-Fi")];
+  }
+  function home() {
+    return screen("home", homeHead("Steady."),
+      ROWS.map(homeRow),
+      h("div", { class: "mini four" }, [["POWER", "23 W", "var(--drip)"], ["SWAP", "1.2 GB", "var(--pink)"], ["WI-FI", "-54 dBm", "var(--blue)"], ["FREE", "412 GB", "var(--drip)"]]
+        .map(function (m) { return h("div", null, h("small", { style: "color:" + m[2] }, m[0]), h("b", null, m[1])); })));
+  }
+  function homeB() {
+    var tiny = function (k) { var c = CH[k]; return h("div", { style: "background:var(--s2);border-radius:14px;padding:9px 10px 4px" }, h("small", { style: "display:block;font:500 9.5px var(--mono);letter-spacing:.8px;color:" + c.color }, c.tag.replace(/^.* · /, "")), h("b", { style: "font:500 15px var(--mono)" }, c.val, h("i", { style: "font:10px var(--mono);font-style:normal;color:var(--dim);margin-left:3px" }, c.unit)), wave(c.wave, c.colors || [c.color], 18)); };
+    return screen("home", homeHead("Steady."), ["cpu", "mem", "temp", "fans"].map(homeRow),
+      h("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 16px 0" }, ["gpu", "net", "disk", "batt"].map(tiny)));
+  }
+
+  /* ---------- Channel detail ---------- */
+  function rangeSeg() {
+    var range = h("div", { class: "seg" }, h("span", { class: "sind", style: "width:calc((100% - 8px)/3)" }));
+    ["1 h", "24 h", "7 d"].forEach(function (r, i) {
+      range.append(h("button", { class: i === 0 ? "on" : "", onclick: function (e) {
+        range.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b === e.currentTarget); });
+        range.querySelector(".sind").style.transform = "translateX(" + i * 100 + "%)";
+      } }, r));
+    });
+    return range;
+  }
+  var DETAILS = {
+    gpu: function () {
+      return [h("div", { class: "lbl" }, "Inside the GPU"),
+        kv([["Renderer", "16%"], ["Tiler", "9%"], ["Cores", "40"], ["GPU temperature", "52°"], ["GPU power", "4.1 W"], ["Neural Engine power", "0.3 W"]]),
+        capBar("GPU memory", "6.2 of 36 GB unified", [[17, "var(--yellow)"]])];
+    },
+    net: function () {
+      return [h("div", { class: "legend" }, h("span", null, h("i", { style: "background:var(--blue)" }), "↓ 2.1 MB/s"), h("span", null, h("i", { style: "background:var(--violet)" }), "↑ 340 KB/s")),
+        h("div", { class: "lbl" }, "Wi-Fi"),
+        kv([["Network", "Home-5G", "needs Location on the Mac"], ["Band", "5 GHz · channel 149"], ["Signal", "-54 dBm · good"], ["Link speed", "1,201 Mbps"]]),
+        h("div", { class: "lbl" }, "Links"),
+        kv([["Wi-Fi", "↓ 2.1 MB/s", "en0 · primary"], ["Tailscale", "↓ 12 KB/s", "utun4"], ["Thunderbolt Bridge", "idle", "bridge0"]]),
+        h("div", { class: "lbl" }, "Since the Mac started"),
+        kv([["Down", "48.2 GB"], ["Up", "6.1 GB"]])];
+    },
+    disk: function () {
+      return [h("div", { class: "legend" }, h("span", null, h("i", { style: "background:var(--drip)" }), "read 84 MB/s"), h("span", null, h("i", { style: "background:var(--orange)" }), "write 12 MB/s")),
+        capBar("Macintosh HD", "412 GB free of 994 GB", [[52, "var(--ink2)"], [7, "var(--line2)"]]),
+        h("div", { class: "lbl" }, "Drive health"),
+        kv([["Health", "Good · 3% worn", "the drive's own SMART report"], ["Written", "38.4 TB"], ["Read", "61.2 TB"], ["Powered on", "2,140 h"], ["Temperature", "41°"], ["Unsafe shutdowns", "6"]])];
+    },
+    batt: function () {
+      var p = S.plugged;
+      return [
+        h("div", { class: "stateline", style: "color:" + (p ? "var(--green)" : "var(--orange)") }, p ? "⚡ Charging from 96W USB-C Power Adapter" : "On battery · draining 11.4 W"),
+        capBar("Health", "91% of when it was new", [[91, "var(--violet)"]]),
+        kv([["Max capacity", "6,912 mAh", "design 7,594 mAh"], ["Cycles", "214"], ["Condition", "Normal"]]),
+        h("div", { class: "lbl" }, "Right now"),
+        kv(p ? [["Power in", "36.1 W"], ["Voltage", "12.71 V"], ["Current", "+2.84 A"], ["Temperature", "31°"], ["Full in", "38 min"]]
+          : [["Power out", "11.4 W"], ["Voltage", "12.38 V"], ["Current", "-0.92 A"], ["Temperature", "29°"], ["Empty in", "4 h 12 min"]]),
+        p ? h("div", { class: "lbl" }, "Adapter") : null,
+        p ? kv([["Adapter", "96 W USB-C"], ["Delivering", "41.2 W", "20.0 V · 2.06 A"]]) : null,
+        h("p", { class: "note" }, "Read from the battery's own controller, the same numbers as the Battery panel on the Mac.")];
+    }
+  };
+  function channel() {
+    var k = S.channel, c = CH[k], b = k === "batt" ? battVal() : null;
+    var colors = c.colors || [c.color];
+    var kinds = k === "batt" ? (S.plugged ? "charge" : "drain") : c.wave;
+    var hero = c.second && k !== "batt"
+      ? h("div", { class: "hero2" }, h("div", { class: "bigval", style: "color:" + c.color }, c.val, h("i", null, c.unit)), h("div", { class: "side2" }, h("b", { style: "color:" + colors[1] }, c.second.replace(/^[↑W] /, "")), k === "net" ? "up" : "write"))
+      : h("div", { class: "bigval", style: "color:" + c.color }, b ? b.v : c.val, h("i", null, c.unit));
+    return sub("Home", c.title, hero,
+      h("div", { class: "ctx" }, k === "batt" ? (S.plugged ? "charging · full in 38 min" : "on battery · 4 h 12 min left") : c.ctx),
+      h("div", { class: "bigwave" }, wave(kinds, colors, 110)),
+      rangeSeg(),
+      h("div", { class: "stats" }, ["Low", "Average", "High"].map(function (l, i) { return h("div", null, h("small", null, l), h("b", null, c.stats[i])); })),
+      DETAILS[k] ? DETAILS[k]() : null);
+  }
+
+  /* ---------- Apps, Alerts ---------- */
+  function apps() {
+    var rows = [["Xcode", 12, "3.1 GB", "var(--blue)"], ["Safari", 4, "820 MB", "var(--orange)"], ["claude", 38, "1.2 GB", "var(--yellow)"], ["Pixel 9 emulator", 61, "4.0 GB", "var(--green)"], ["Slack", 3, "610 MB", "var(--violet)"], ["WindowServer", 9, "410 MB", "var(--tele)"]];
+    return screen("apps", h("div", { class: "title" }, "Apps."), h("div", { class: "sec" }, h("span", null, "Using the most"), h("span", null, "6")),
+      rows.map(function (a) { return h("div", { class: "app" }, h("span", { class: "tile", style: "background:" + a[3] }, a[0].charAt(0).toUpperCase()), h("span", { class: "n" }, a[0], h("small", null, a[1] + "% CPU · " + a[2]))); }),
+      h("p", { class: "note" }, "As shipped. No change in this plan."));
+  }
+  function alerts() {
+    return screen("alerts", h("div", { class: "title" }, "Alerts."), h("div", { class: "card calm" }, h("h4", null, "✓ Nothing needs you"), h("div", { class: "row2" }, h("span", null, "Last alert 2 days ago"))),
+      h("div", { class: "lbl" }, "Tell me when"),
+      h("div", { class: "group" }, [["Memory is full", true], ["Mac is running hot", true], ["Battery is low", true], ["Disk is almost full", true]].map(function (r) { return h("div", { class: "gi" }, h("span", null, r[0]), toggle(r[1], r[0], function () {})); })),
+      h("p", { class: "note" }, "Disk is almost full is new. It uses the free space reading Disk now sends."));
+  }
+
+  /* ---------- Control ---------- */
+  function control() {
+    return screen("control", h("div", { class: "title" }, "Control."),
+      h("div", { class: "lbl" }, "Power"),
+      h("div", { class: "pgrid three" }, tile("c-sleep", "i-moon", "Sleep", function () { toast("Your Mac is going to sleep"); }), tile("c-lock", "i-lock", "Lock", function () { toast("Locked"); }), tile("c-shut", "i-power", "Shut down", function () { toast("Hold to shut down, as shipped"); }, true)),
+      h("div", { class: "sec", style: "padding:6px 20px 8px" }, h("span", null, "Share"), S.running ? h("span", { class: "livepill" }, "terminal running") : h("span", null, "")),
+      h("div", { class: "pgrid three" },
+        tile("tile-clip", "i-clip", "Clipboard", function () { toast("Clipboard, as shipped"); }),
+        tile("tile-files", "i-files", "Files", function () { push("files"); }),
+        tile("tile-term", "i-term", "Terminal", function () { push("terminal"); })),
+      h("div", { class: "pgrid" },
+        tile("tile-link", "i-link", "Open link", function () { toast("Open link, as shipped"); }),
+        tile("tile-find", "i-ping", "Find Mac", function () { toast("Playing a sound on your Mac"); })),
+      h("p", { class: "note" }, "Keep awake and Sound stay below, as shipped."));
+  }
+
+  /* ---------- Files ---------- */
+  function devChips(active) {
+    var o = other();
+    return h("div", { class: "devs" },
+      h("button", { class: "dev press" + (active === "mac" ? " on" : ""), "data-k": "dev-mac", onclick: function () { S.dev = "mac"; rerender(); } }, icon("i-mac", "ico-s"), h("span", null, "MacBook Pro", h("small", null, "Wi-Fi"))),
+      h("button", { class: "dev press" + (active === "phone2" ? " on" : "") + (S.otherOn ? "" : " away"), "data-k": "dev-other", onclick: function () { S.dev = "phone2"; rerender(); } }, icon("i-phone", "ico-s"), h("span", null, o.name, h("small", null, S.otherOn ? "through your Mac" : "not open"))));
+  }
+  function placeRow(name, ic, count, k, fn) {
+    return h("button", { class: "frow", "data-k": k, onclick: fn }, h("span", { class: "kt", style: "color:var(--blue)" }, icon(ic, "ico-s")), h("span", { class: "n" }, h("span", null, name), h("small", null, count)), icon("i-chev", "ico-s"));
+  }
+  function searchResults(q) {
+    var out = [];
+    Object.keys(FS).forEach(function (dir) { FS[dir].forEach(function (it) { if (it.name.toLowerCase().indexOf(q) >= 0) out.push({ it: it, dir: dir }); }); });
+    return out;
+  }
+  function filesScreen() {
+    var dev = S.dev || "mac", o = other();
+    var body;
+    if (dev === "mac") {
+      var q = S.query.trim().toLowerCase();
+      var results = h("div", { class: "results" });
+      var fill = function () {
+        results.textContent = "";
+        var qq = S.query.trim().toLowerCase();
+        if (!qq) return;
+        var r = searchResults(qq);
+        results.append(h("div", { class: "sec" }, h("span", null, "On your Mac"), h("span", null, String(r.length))));
+        if (!r.length) results.append(h("div", { class: "empty" }, "Nothing found"));
+        r.forEach(function (x) { results.append(itemRow(x.it, x.dir, "mac")); });
+      };
+      fill();
+      body = [
+        h("label", { class: "search" }, icon("i-search", "ico-s"), h("input", { placeholder: "Search your Mac", value: S.query, "data-k": "fsearch", "aria-label": "Search your Mac", oninput: function (e) { S.query = e.target.value; fill(); $(".places", liveScreen()).style.display = S.query.trim() ? "none" : ""; } })),
+        results,
+        h("div", { class: "places", style: q ? "display:none" : "" },
+          h("div", { class: "lbl" }, "Places"),
+          ROOTS.map(function (r) { return placeRow(r[0], r[1], FS[r[0]].length + " items", "place-" + r[0], function () { push("folder:mac:" + r[0]); }); }),
+          h("div", { class: "lbl", style: "padding-top:14px" }, "Send to your Mac"),
+          h("div", { class: "pgrid three" }, tile("send-files", "i-files", "Files", function () { toast("Pick files, as shipped"); }), tile("send-photos", "i-image", "Photos", function () { toast("Pick photos, as shipped"); }), tile("send-folder", "i-folder", "Folder", function () { toast("Pick a folder, as shipped"); })),
+          S.got.length ? [h("div", { class: "sec" }, h("span", null, "Got from your Mac"), h("span", null, String(S.got.length))), S.got.map(function (it) { return h("div", { class: "frow" }, fileIcon(it), h("span", { class: "n" }, h("span", null, it.name), h("small", null, "In " + savedTo()))); })] : null,
+          h("p", { class: "note" }, "You see the folders your Mac shares. Change them on the Mac, in Settings › Remote."))];
+    } else if (!S.otherOn) {
+      body = h("div", { class: "empty" }, h("b", null, o.name + " isn't open"), o.os === "iOS" ? "Open Vitals on it to browse. iPhone only shares while Vitals is on screen." : "Open Vitals on it once. After that it shares in the background.",
+        h("button", { class: "big ghost press", style: "margin-top:16px;width:100%", onclick: function () { toast("Files you send wait on your Mac until " + o.name + " is back"); } }, "Send it files instead"));
+    } else {
+      body = [h("div", { class: "lbl" }, "On " + o.name),
+        placeRow(o.os === "iOS" ? "Photos" : "Photos and videos", "i-image", PHOTOS.length + " items", "place-photos", function () { push("photos"); }),
+        placeRow(o.os === "iOS" ? "Files › Vitals" : "Downloads › Vitals", "i-down", "3 items", "place-pdl", function () { push("folder:phone2:Downloads/Vitals"); }),
+        placeRow("Documents", "i-file", "4 items · a folder you added", "place-pdocs", function () { push("folder:phone2:Documents"); }),
+        h("p", { class: "note" }, "Goes through your Mac, encrypted on both legs. " + o.name + " chose what to share in its Settings › This phone.")];
+    }
+    return sub("Control", "Files.", devChips(dev), body);
+  }
+  function itemRow(it, dir, dev) {
+    var on = !!S.sel[it.name];
+    return h("button", { class: "frow" + (on ? " sel" : ""), "data-k": "file-" + it.name, onclick: function () {
+      if (it.kind === "folder") { push("folder:" + dev + ":" + dir + "/" + it.name); return; }
+      if (S.selecting) { if (on) delete S.sel[it.name]; else S.sel[it.name] = it; rerender(); syncSelbar(); return; }
+      openSheet(function () { return fileSheet(it, dir, dev); });
+    } }, fileIcon(it), h("span", { class: "n" }, h("span", null, it.name), h("small", null, meta(it))),
+      S.selecting && it.kind !== "folder" ? h("span", { class: "cb" + (on ? " on" : "") }, on ? icon("i-check", "ico-s") : null) : it.kind === "folder" ? icon("i-chev", "ico-s") : null);
+  }
+  function folderScreen(spec) {
+    var parts = spec.split(":"), dev = parts[1], dir = parts[2];
+    var name = dir.split("/").pop();
+    var items = FS[dir] || [];
+    var devName = dev === "mac" ? "MacBook Pro" : other().name;
+    return sub("Files", name + ".",
+      h("div", { class: "crumb" }, devName, dir.split("/").map(function (p, i, a) { return [" › ", i === a.length - 1 ? h("b", null, p) : p]; })),
+      h("div", { class: "headrow" }, h("button", { "data-k": "select", onclick: function () { S.selecting = !S.selecting; S.sel = {}; rerender(); syncSelbar(); } }, S.selecting ? "Done" : "Select"),
+        dev === "mac" ? h("button", { "data-k": "put-here", onclick: function () { putHere(name); } }, "Put files here") : h("span")),
+      items.length ? items.map(function (it) { return itemRow(it, dir, dev); }) : h("div", { class: "empty" }, "Empty"));
+  }
+  function photosScreen() {
+    var o = other();
+    return sub("Files", o.os === "iOS" ? "Photos." : "Photos.",
+      h("div", { class: "crumb" }, o.name, " › ", h("b", null, o.os === "iOS" ? "Photos" : "Photos and videos")),
+      h("div", { class: "headrow" }, h("span", { class: "note", style: "padding:0" }, "Tap to pick"), h("span")),
+      h("div", { class: "pgrid photos" }, PHOTOS.map(function (p, i) {
+        var on = !!S.sel[p.name];
+        return h("button", { class: p.ph + (on ? " on" : ""), "data-k": "photo-" + i, "aria-label": p.name, onclick: function () { S.selecting = true; if (on) delete S.sel[p.name]; else S.sel[p.name] = p; rerender(); syncSelbar(); } }, p.video ? h("small", null, "▶ " + p.video) : null);
+      })));
+  }
+  var selbarEl = null;
+  function syncSelbar() {
+    var list = Object.keys(S.sel).map(function (k) { return S.sel[k]; });
+    var bytes = list.reduce(function (a, x) { return a + x.bytes; }, 0);
+    if (!list.length) { if (selbarEl) selbarEl.classList.remove("in"); return; }
+    if (!selbarEl) { selbarEl = h("div", { class: "selbar" }); proto.append(selbarEl); }
+    var bar = selbarEl;
+    bar.textContent = "";
+    bar.append(h("span", null, list.length + " picked · " + size(bytes)), h("button", { "data-k": "selget", onclick: function () { var l = list.slice(); S.sel = {}; S.selecting = false; syncSelbar(); rerender(); getFiles(l); } }, "Get"));
+    raf2(function () { bar.classList.add("in"); });
+  }
+  function fileSheet(it, dir, dev) {
+    var big = it.ph ? h("div", { class: "preview " + it.ph }) : h("div", { class: "prevfile" }, fileIcon(it), h("span", null, it.name, h("small", null, size(it.bytes))));
+    var mac = dev === "mac";
+    var o = other();
+    var acts = [
+      actRow("get", "i-down", "Get it", size(it.bytes) + " · to " + savedTo(), function () { closeSheet(); getFiles([it]); }),
+      it.kind === "video" || it.kind === "image" ? actRow("look", "i-image", "Look at it", "Streams, nothing saved", function () { closeSheet(); toast("Opening a preview"); }) : null,
+      mac ? actRow("open-mac", "i-mac", "Open on the Mac", null, function () { closeSheet(); toast("Opened on your Mac"); }) : null,
+      mac ? actRow("to-other", "i-phone", "Send to " + o.name, S.otherOn ? "Now, through your Mac" : "Waits until " + o.name + " opens Vitals", function () { closeSheet(); toast("On its way to " + o.name); }) : null,
+      actRow("share", "i-share", "Share", "Gets it, then opens the share sheet", function () { closeSheet(); toast("Getting it, then the share sheet"); })
+    ];
+    var edit = mac ? (S.canEdit ? holdBtn("Hold to move to the Mac's Trash", function () { closeSheet(); toast("In the Trash on your Mac", "Undo", function () { toast("Put back"); }); }, "trash", "small")
+      : h("p", { class: "sh-foot" }, "Moving to the Trash needs Change my files. Your Mac turns it on.")) : null;
+    return sheet(it.name, meta(it) + " · " + (mac ? "MacBook Pro" : o.name) + " › " + dir, big, acts, edit, cancelRow());
+  }
+  function getFiles(list) {
+    var total = list.reduce(function (a, x) { return a + x.bytes; }, 0), done = 0;
+    var label = list.length === 1 ? list[0].name : list.length + " files";
+    var t = toast("Getting " + label + " · 0%", "Cancel", function () { clearInterval(iv); toast("Stopped. Nothing was saved."); }, 0);
+    var iv = setInterval(function () {
+      done = Math.min(total, done + total / 6);
+      var m = $(".tmsg", t); if (m) m.textContent = "Getting " + label + " · " + Math.round(done / total * 100) + "%";
+      if (done >= total) { clearInterval(iv); S.got = list.concat(S.got).slice(0, 4); toast(label + " is in " + savedTo(), "Open", function () { toast("Opening " + label); }); }
+    }, 380);
+  }
+  function putHere(folder) {
+    toast("Pick files on this phone. They go into " + folder + " on your Mac.");
+    setTimeout(function () {
+      var t = toast("Sending 2 photos to " + folder + " · 0%", null, null, 0), n = 0;
+      var iv = setInterval(function () { n += 25; var m = $(".tmsg", t); if (m) m.textContent = "Sending 2 photos to " + folder + " · " + n + "%"; if (n >= 100) { clearInterval(iv); toast("2 photos are in " + folder + " on your Mac"); } }, 380);
+    }, 1400);
+  }
+
+  /* ---------- Terminal ---------- */
+  function tbar() {
+    var s = h("div", { class: "sess" });
+    for (var i = 0; i < S.sess; i++) s.append(h("button", { class: i === 0 ? "on" : "", "data-k": "sess-" + i }, i === 0 ? "zsh · ~/Code/Vitals" : "zsh · ~"));
+    return h("div", { class: "tbar" }, h("button", { class: "back", "data-k": "back", onclick: function () { pop(); } }, icon("i-back", "ico-s")), s,
+      S.unlocked ? h("button", { class: "tico", "data-k": "saved", "aria-label": "Saved commands", onclick: function () { openSheet(savedSheet); } }, icon("i-pin", "ico-s")) : null,
+      S.unlocked ? h("button", { class: "tico", "data-k": "sessions", "aria-label": "Sessions", onclick: function () { openSheet(sessionsSheet); } }, icon("i-term", "ico-s")) : null);
+  }
+  function terminal() {
+    var el = h("div", { class: "screen term" });
+    if (!S.termOn) {
+      el.append(tbar(), h("div", { class: "tlock" }, h("div", { class: "fp", style: "border-color:var(--line2);color:var(--dim)" }, icon("i-term")), h("b", null, "Terminal is off for this phone"),
+        h("p", null, "It runs commands on your Mac as you. Turn it on in Vitals on the Mac: Settings › Remote › " + me() + " › Terminal."),
+        h("button", { class: "big ghost press", "data-k": "ask", onclick: function () { toast("Asked. Allow it on your Mac."); } }, "Ask my Mac")));
+      return el;
+    }
+    if (!S.unlocked) {
+      el.append(tbar(), h("div", { class: "tlock" }, h("div", { class: "fp" }, icon("i-finger")), h("b", null, "Unlock Terminal"),
+        h("p", null, "Asked every time you come back after 5 minutes away."),
+        h("button", { class: "big press", "data-k": "unlock-term", onclick: function () { S.unlocked = true; rerender(); toast(ios() ? "Face ID OK" : "Fingerprint OK"); } }, ios() ? "Use Face ID" : "Use fingerprint")));
+      return el;
+    }
+    var out = h("div", { class: "tout" });
+    S.lines.forEach(function (l) { out.append(h("div", { class: l[1] || "" }, l[0])); });
+    var input = h("input", { class: "tin", "data-k": "tin", "aria-label": "Command", autocomplete: "off", spellcheck: "false", onkeydown: function (e) {
+      if (e.key === "Enter") { e.preventDefault(); runCmd(input.value); }
+      if (e.key === "ArrowUp") { e.preventDefault(); input.value = S.hist[S.hist.length - 1] || ""; }
+    } });
+    if (!S.running) out.append(h("div", { class: "tline" }, h("span", { class: "p" }, "rafay@mbp "), h("span", { class: "d" }, "~/Code/Vitals"), h("span", null, " % "), input, h("span", { class: "cursor" })));
+    var key = function (label, fn, cls) { return h("button", { class: cls || "", "data-k": "key-" + label, onclick: fn }, label); };
+    var keys = h("div", { class: "keys" },
+      key("esc", function () {}), key("tab", function () {}), key("ctrl", function (e) { S.ctrl = !S.ctrl; e.currentTarget.classList.toggle("latched", S.ctrl); }, S.ctrl ? "latched" : ""),
+      key("↑", function () { var i = $(".tin", proto); if (i) i.value = S.hist[S.hist.length - 1] || ""; }), key("↓", function () {}), key("←", function () {}), key("→", function () {}),
+      key("^C", function () { interrupt(); }, "red"), key("|", function () { typeKey("|"); }), key("~", function () { typeKey("~"); }), key("/", function () { typeKey("/"); }), key("paste", function () { typeKey("git status"); }));
+    var rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+    var kbd = h("div", { class: "kbd", "aria-hidden": "true" }, rows.map(function (r) { return h("div", null, r.split("").map(function (c) { return h("span", null, c); })); }),
+      h("div", null, h("span", { class: "s" }, "123"), h("span", { class: "w" }, "space"), h("span", { class: "s" }, "return")));
+    el.append(tbar(), out, keys, kbd);
+    raf2(function () { out.scrollTop = out.scrollHeight; });
+    return el;
+  }
+  function typeKey(s) { var i = $(".tin", proto); if (i) { i.value += s; i.focus(); } }
+  var runT = null;
+  function println(text, cls) { S.lines.push([text, cls]); var out = $(".screen.term .tout", proto); if (out && !out.closest(".leaving")) { var line = $(".tline", out); var d = h("div", { class: cls || "" }, text); if (line) out.insertBefore(d, line); else out.append(d); out.scrollTop = out.scrollHeight; } }
+  function runCmd(raw) {
+    var cmd = raw.trim(); if (!cmd) return;
+    S.hist.push(cmd);
+    S.lines.push(["rafay@mbp ~/Code/Vitals % " + cmd, "p"]);
+    if (cmd === "clear") { S.lines = []; rerender(); return; }
+    if (SLOW[cmd]) {
+      S.running = cmd; rerender();
+      var list = SLOW[cmd], i = 0;
+      runT = setInterval(function () {
+        if (i >= list.length) { clearInterval(runT); runT = null; S.running = null; rerender(); return; }
+        println(list[i][0], list[i][1]); i++;
+      }, 420);
+      return;
+    }
+    (OUT[cmd] || [["zsh: command not found: " + cmd.split(" ")[0], "e"], ["(this prototype knows: ls, git status, uptime, whoami, tailscale status, brew upgrade, clear)", "m"]]).forEach(function (l) { S.lines.push(l); });
+    rerender(); setTimeout(function () { var i = $(".tin", proto); if (i) i.focus(); }, 50);
+  }
+  function interrupt() {
+    if (!S.running) { S.lines.push(["rafay@mbp ~/Code/Vitals % ^C", "p"]); rerender(); return; }
+    clearInterval(runT); runT = null; S.lines.push(["^C", "y"]); S.running = null; rerender();
+  }
+  function savedSheet() {
+    return sheet("Saved commands", "Tap to run in this session",
+      CMDS.map(function (c) { return h("button", { class: "cmd press", "data-k": "cmd-" + c.k, onclick: function () { closeSheet(); setTimeout(function () { runCmd(c.cmd); }, 220); } }, h("span", { class: "n" }, h("b", null, c.name), h("code", null, c.cmd)), h("span", { class: "go" }, "Run")); }),
+      h("button", { class: "big ghost press", onclick: function () { closeSheet(); toast("Type it once, then Save from the session menu"); } }, "Save a command"),
+      h("p", { class: "sh-foot" }, "Saved on your Mac, so every phone sees the same list."));
+  }
+  function sessionsSheet() {
+    var row = function (title, detail, k) { return h("div", { class: "gi" }, h("span", null, title, h("small", { style: "display:block;color:var(--dim);font:11.5px var(--mono)" }, detail)), h("button", { class: "undo", "data-k": k, onclick: function () { S.sess = Math.max(1, S.sess - 1); closeSheet(); rerender(); toast("Session ended"); } }, "End")); };
+    return sheet("Sessions", "They keep running on your Mac when you leave",
+      h("div", { class: "group" }, row("zsh · ~/Code/Vitals", (S.running ? "running " + S.running.split(" ")[0] : "idle") + " · started 22:12", "end-0"), S.sess > 1 ? row("zsh · ~", "idle · started 21:40", "end-1") : null),
+      h("button", { class: "big press", "data-k": "new-sess", onclick: function () { S.sess++; closeSheet(); rerender(); toast("New session"); } }, "New session"),
+      holdBtn("Hold to end all", function () { S.sess = 1; S.lines = []; closeSheet(); rerender(); toast("All sessions ended"); }, "end-all", "small"),
+      h("p", { class: "sh-foot" }, "Your Mac shows these in its menu bar and can end them too. Idle sessions end after 12 hours."));
+  }
+
+  /* ---------- Settings ---------- */
+  function settings() {
+    return screen("settings", h("div", { class: "title" }, "Settings."),
+      h("div", { class: "group" }, gi("s-conn", "Connection", "Wi-Fi", function () { toast("As shipped"); }), gi("s-notif", "Notifications", "On", function () { toast("As shipped"); }), gi("s-phone", "This phone", me(), function () { push("phone"); }), gi("s-help", "Help", "", function () { toast("As shipped"); })));
+  }
+  function phoneScreen() {
+    var o = other();
+    var yes = function () { return h("span", { class: "yes" }, "✓ Allowed"); };
+    var no = function () { return h("span", { class: "v" }, "Off"); };
+    return sub("Settings", "This phone.",
+      h("div", { class: "lbl" }, "What your Mac lets it do"),
+      h("div", { class: "group" }, gi(null, "See readings", yes()), gi(null, "Control the Mac", yes()), gi(null, "Shut down, restart, quit apps", yes()), gi(null, "Clipboard and files", yes()), gi(null, "Browse the Mac's folders", yes()), gi(null, "Change the Mac's files", S.canEdit ? yes() : no()), gi(null, "Terminal", S.termOn ? yes() : no())),
+      h("p", { class: "note" }, "Your Mac decides these, in Vitals › Settings › Remote."),
+      h("div", { class: "lbl" }, "What others can see on this phone"),
+      h("div", { class: "group" },
+        h("div", { class: "gi" }, h("span", null, "Let your Mac and " + o.name + " browse"), toggle(S.shareOthers, "Let others browse", function (v) { S.shareOthers = v; toast(v ? "Others can browse what you share" : "Nobody can browse this phone"); })),
+        h("div", { class: "gi" }, h("span", null, ios() ? "Photos" : "Photos and videos"), toggle(S.sharePhotos, "Photos", function (v) { S.sharePhotos = v; })),
+        gi(null, ios() ? "Files › Vitals" : "Downloads › Vitals", h("span", { class: "v" }, "Always")),
+        S.extraFolder ? gi("rm-folder", "Documents", "Remove", function () { S.extraFolder = false; rerender(); toast("Documents is private again"); }) : null,
+        gi("add-folder", "Add a folder", "", function () { toast(ios() ? "Pick a folder in Files" : "Pick a folder (Android asks once)"); })),
+      h("p", { class: "note" }, ios() ? "iPhone shares only while Vitals is on screen." : "Shares in the background while the transfer service runs."),
+      h("div", { class: "lbl" }, "Files app"),
+      h("div", { class: "group" }, ios() ? gi(null, "Your Mac in the Files app", h("span", { class: "v" }, "Later"))
+        : h("div", { class: "gi" }, h("span", null, "Show your Mac in Files"), toggle(S.filesApp, "Show your Mac in Files", function (v) { S.filesApp = v; }))),
+      h("p", { class: "note" }, ios() ? "Needs a Files extension, which needs a paid Apple team. What you get from the Mac is already in Files › On My iPhone › Vitals." : "Your Mac's shared folders show up in the Files app and in every file picker."));
+  }
+
+  /* ---------- system file managers ---------- */
+  var sysEl = null;
+  function openSysFiles(kind) {
+    closeSys();
+    if (kind === "android") {
+      var mac = false;
+      var draw = function () {
+        sysEl.textContent = "";
+        sysEl.append(h("div", { class: "sh1" }, mac ? "MacBook Pro" : "Files"));
+        if (!mac) {
+          sysEl.append(h("div", { class: "grp" }, ["Recent", "Images", "Videos", "Audio", "Documents", "Downloads"].map(function (n) { return h("div", { class: "gr" }, h("i", { style: "color:#9ec1ff" }, "▪"), n); })),
+            h("div", { class: "lbl2" }, "Other storage"),
+            h("div", { class: "grp" }, h("button", { class: "gr on", "data-k": "sys-mac", onclick: function () { mac = true; draw(); } }, h("i", { style: "background:#000;border:1px solid #333;color:var(--yellow);font:italic 15px var(--serif)" }, "V"), "Vitals · MacBook Pro", h("small", null, "Wi-Fi")), h("div", { class: "gr" }, h("i", { style: "color:#9ec1ff" }, "▪"), "Google Drive")));
+        } else {
+          sysEl.append(h("div", { class: "note2" }, "Vitals › MacBook Pro"), h("div", { class: "grp" }, ROOTS.map(function (r) { return h("div", { class: "gr" }, h("i", { style: "color:#9ec1ff" }, "▰"), r[0], h("small", null, FS[r[0]].length + " items")); })),
+            h("div", { class: "note2" }, "Any app's file picker can open these. Files come over Wi-Fi or Tailscale when you open them."));
+        }
+        sysEl.append(h("button", { class: "closex", "data-k": "sys-close", onclick: closeSys }, "Back to Vitals"));
+      };
+      sysEl = h("div", { class: "sysfiles android" }); draw();
+    } else {
+      sysEl = h("div", { class: "sysfiles ios" }, h("div", { class: "sh1" }, "Browse"),
+        h("div", { class: "lbl2" }, "Locations"),
+        h("div", { class: "grp" }, h("div", { class: "gr" }, h("i", { style: "background:#0a84ff" }, "☁"), "iCloud Drive"), h("div", { class: "gr" }, h("i", { style: "background:#3a3a3c" }, "▯"), "On My iPhone"),
+          h("div", { class: "gr", style: "opacity:.55" }, h("i", { style: "background:#000;border:1px solid #333;color:var(--yellow);font:italic 15px var(--serif)" }, "V"), "Vitals · MacBook Pro", h("small", null, "later"))),
+        h("div", { class: "note2" }, "Today: what you get from the Mac is in On My iPhone › Vitals. A live Mac location needs a File Provider extension, which needs a paid Apple developer team."),
+        h("div", { class: "lbl2" }, "On My iPhone › Vitals"),
+        h("div", { class: "grp" }, FS["Downloads/Vitals"].map(function (it) { return h("div", { class: "gr" }, h("i", { style: "background:#2c2c2e" }, "▪"), it.name, h("small", null, it.kind === "folder" ? it.count + " items" : size(it.bytes))); })),
+        h("button", { class: "closex", "data-k": "sys-close", onclick: closeSys }, "Back to Vitals"));
+    }
+    var el = sysEl; proto.append(el); raf2(function () { el.classList.add("in"); });
+  }
+  function closeSys() { if (!sysEl) return; var e = sysEl; sysEl = null; e.classList.remove("in"); setTimeout(function () { e.remove(); }, 320); }
+
+  /* ---------- router ---------- */
+  var SUBS = { files: filesScreen, terminal: terminal, photos: photosScreen, phone: phoneScreen, channel: channel };
+  function build(r) {
+    if (r === "home") return home(); if (r === "apps") return apps(); if (r === "control") return control();
+    if (r === "alerts") return alerts(); if (r === "settings") return settings();
+    if (r.indexOf("folder:") === 0) return folderScreen(r);
+    return SUBS[r]();
+  }
+  function dock(active, live, tabs) {
+    tabs = tabs || TABS;
+    var ind = h("span", { class: "ind", style: "transform:translateX(" + Math.max(0, tabIndex(active, tabs)) * 100 + "%)" });
+    return h("nav", { class: "dock", "aria-label": "Tabs" }, ind, tabs.map(function (t) {
+      return h("button", { class: "tab" + (t[0] === active ? " on" : ""), "data-k": "tab-" + t[0], "aria-label": t[1], onclick: live ? function () { go(t[0]); } : null }, icon(t[2]), h("span", null, t[1]));
+    }));
+  }
+  function updateDock() {
+    var d = $(".dock", proto);
+    $(".ind", d).style.transform = "translateX(" + tabIndex(S.tab) * 100 + "%)";
+    d.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("on", b.dataset.k === "tab-" + S.tab); });
+  }
+  var stage = $(".stage", proto);
+  var liveScreen = function () { return stage.querySelector(".screen:not(.leaving)"); };
+  function syncFull() { proto.classList.toggle("full", route() === "terminal"); }
+  function swap(kind) {
+    var old = liveScreen(), el = build(route());
+    el.classList.add("enter-" + kind); stage.appendChild(el);
+    if (old) { old.classList.add("leaving", "leave-" + kind); setTimeout(function () { old.remove(); }, 340); }
+    raf2(function () { el.classList.remove("enter-" + kind); });
+    syncFull();
+    if (route().indexOf("folder:") !== 0 && route() !== "photos") { S.selecting = false; S.sel = {}; syncSelbar(); }
+  }
+  function go(tab) {
+    if (S.tab === tab) { if (S.stacks[tab].length) { S.stacks[tab] = []; swap("pop"); } return; }
+    var dir = tabIndex(tab) > tabIndex(S.tab) ? "right" : "left";
+    S.tab = tab; swap(dir); updateDock();
+  }
+  function push(r) { S.stacks[S.tab].push(r); swap("push"); }
+  function pop() { S.stacks[S.tab].pop(); swap("pop"); }
+  function rerender() {
+    var old = liveScreen(); if (!old) return;
+    var el = build(route()); stage.replaceChild(el, old); el.scrollTop = old.scrollTop; syncFull();
+  }
+
+  /* ---------- sheet host ---------- */
+  var layer = $(".layer", proto), scrim = $(".scrim", proto), current = null;
+  function openSheet(make) {
+    if (current) { closeSheet(function () { openSheet(make); }); return; }
+    var sh = make(); layer.appendChild(sh); current = sh;
+    proto.classList.add("sheeted"); raf2(function () { sh.classList.add("in"); });
+  }
+  function closeSheet(after) {
+    var sh = current;
+    if (!sh) { if (typeof after === "function") after(); return; }
+    current = null; sh.classList.remove("in"); proto.classList.remove("sheeted");
+    setTimeout(function () { sh.remove(); if (typeof after === "function") after(); }, 210);
+  }
+  scrim.addEventListener("click", function () { closeSheet(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+  /* ---------- toast ---------- */
+  var toastHost = $(".toasts", proto), toastT = null;
+  function toast(msg, action, onAction, ms) {
+    toastHost.textContent = "";
+    var t = h("div", { class: "toast" }, h("span", { class: "tmsg" }, msg), action ? h("button", { onclick: function () { hideToast(); onAction(); } }, action) : null);
+    toastHost.append(t); raf2(function () { t.classList.add("in"); });
+    clearTimeout(toastT); if (ms !== 0) toastT = setTimeout(hideToast, ms || 4000);
+    return t;
+  }
+  function hideToast() { var t = $(".toast", toastHost); if (!t) return; t.classList.remove("in"); setTimeout(function () { t.remove(); }, 180); }
+
+  /* ---------- mount ---------- */
+  function mount() {
+    stage.textContent = ""; layer.textContent = ""; toastHost.textContent = ""; current = null; proto.classList.remove("sheeted");
+    var old = $(".dock", proto); if (old) old.remove();
+    proto.insertBefore(dock(S.tab, true), scrim);
+    stage.append(build(route())); syncFull();
+  }
+  function reset() { clearInterval(runT); runT = null; S = initial(); closeSys(); if (selbarEl) { selbarEl.remove(); selbarEl = null; } mount(); }
+  mount();
+  var caption = $("#caption"), ring = $("#ring"), running = false;
+  var cap = function (t) { caption.textContent = t; };
+  $("#reset").addEventListener("click", function () { if (!running) { reset(); cap("Tap anything in the phone."); } });
+  $("#unplug").addEventListener("click", function () { S.plugged = !S.plugged; $("#unplug").textContent = S.plugged ? "Unplug the Mac" : "Plug the Mac in"; rerender(); cap(S.plugged ? "The Mac is charging again." : "The Mac is on battery. Battery rows switch to time left and power out."); });
+  $("#other").addEventListener("click", function () { S.otherOn = !S.otherOn; $("#other").textContent = S.otherOn ? "Other phone leaves Vitals" : "Other phone opens Vitals"; rerender(); cap(S.otherOn ? other().name + " opened Vitals. You can browse what it shares." : other().name + " left Vitals."); });
+  $("#termoff").addEventListener("click", function () { S.termOn = !S.termOn; $("#termoff").textContent = S.termOn ? "Terminal off on Mac" : "Terminal on on Mac"; rerender(); cap(S.termOn ? "The Mac allowed Terminal for this phone." : "The Mac turned Terminal off for this phone. Live sessions end at once."); });
+  $("#sysandroid").addEventListener("click", function () { if (PLATFORM !== "android") setPlatform("android"); openSysFiles("android"); cap("Android's own Files app. Vitals adds your Mac under Other storage."); });
+  $("#sysios").addEventListener("click", function () { if (PLATFORM !== "ios") setPlatform("ios"); openSysFiles("ios"); cap("iPhone's Files app, today and later."); });
+  function setPlatform(p) {
+    PLATFORM = p;
+    $("#platform").querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
+    $(".sb span", proto).textContent = p === "ios" ? "9:41" : "22:41";
+    rerender();
+  }
+  $("#platform").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b || running) return; setPlatform(b.dataset.p); });
+
+  /* ---------- journeys ---------- */
+  var JOURNEYS = [
+    { name: "See network and disk speed", cost: "2 taps", done: "Both directions, live, with the links and the drive's health underneath.", steps: [["tap", "ch-net", "Tap Network"], ["wait", null, "Down and up, plus Wi-Fi and links"], ["tap", "back", "Back"], ["tap", "ch-disk", "Tap Disk"], ["wait", null, "Read and write, free space, drive health"]] },
+    { name: "Check battery health", cost: "1 tap", done: "Health, cycles, capacity, adapter: the Mac's Battery panel on the phone.", steps: [["tap", "ch-batt", "Tap Battery"], ["wait", null, ""], ["custom", function () { var s = liveScreen(); s.scrollTo({ top: 420, behavior: "smooth" }); }, "Scroll to the adapter"]] },
+    { name: "Get a video from the Mac's Downloads", cost: "4 taps", done: "It is in " + "Downloads › Vitals on this phone.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["tap", "place-Downloads", "Open Downloads"], ["tap", "file-demo-recording.mov", "Tap the video"], ["tap", "get", "Get it"], ["wait", null, ""], ["wait", null, ""]] },
+    { name: "Get several files at once", cost: "6 taps", done: "One transfer, resumes if Wi-Fi drops.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["tap", "place-Downloads", "Open Downloads"], ["tap", "select", "Tap Select"], ["tap", "file-invoice-october.pdf", "Pick the invoice"], ["tap", "file-vitals-nightly.apk", "Pick the APK"], ["tap", "file-brand-assets.zip", "Pick the zip"], ["tap", "selget", "Tap Get"], ["wait", null, ""], ["wait", null, ""]] },
+    { name: "Find a file by name", cost: "type + 1 tap", done: "Search covers every folder your Mac shares.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["type", "fsearch", "Search", "invoice"], ["tap", "file-invoice-october.pdf", "Tap the result"]] },
+    { name: "Put photos into a Mac folder", cost: "3 taps + pick", done: "They land in Documents, not Downloads, because you were in Documents.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["tap", "place-Documents", "Open Documents"], ["tap", "put-here", "Put files here"], ["wait", null, "Pick on the phone"], ["wait", null, ""], ["wait", null, ""]] },
+    { name: "Run a saved command", cost: "4 taps + fingerprint", done: "Output streams in. Leave and it keeps running on the Mac.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-term", "Open Terminal"], ["tap", "unlock-term", "Unlock"], ["tap", "saved", "Open saved commands"], ["tap", "cmd-brew", "Run Update Homebrew apps"], ["wait", null, ""], ["wait", null, ""], ["wait", null, ""], ["wait", null, ""]] },
+    { name: "Type a command", cost: "type + return", done: "A real shell on your Mac, as you.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-term", "Open Terminal"], ["tap", "unlock-term", "Unlock"], ["type", "tin", "Type", "git status"], ["custom", function () { runCmd("git status"); }, "Return"], ["wait", null, ""]] },
+    { name: "Stop a long command", cost: "1 tap", done: "^C goes straight to the Mac's shell.", steps: [["tap", "tab-control", "Go to Control"], ["tap", "tile-term", "Open Terminal"], ["tap", "unlock-term", "Unlock"], ["tap", "saved", "Saved"], ["tap", "cmd-test", "Run the tests"], ["wait", null, ""], ["tap", "key-^C", "Tap ^C"]] },
+    { name: "Grab photos from the other phone", cost: "5 taps", done: "Phone to phone, through your Mac.", steps: [["custom", function () { S.otherOn = true; rerender(); }, "The other phone opens Vitals"], ["tap", "tab-control", "Go to Control"], ["tap", "tile-files", "Open Files"], ["tap", "dev-other", "Pick the other phone"], ["tap", "place-photos", "Open Photos"], ["tap", "photo-0", "Pick one"], ["tap", "photo-1", "And a video"], ["tap", "selget", "Get"], ["wait", null, ""], ["wait", null, ""]] },
+    { name: "Your Mac in Android's Files app", cost: "1 tap", done: "Any app's file picker can open files on your Mac.", steps: [["custom", function () { setPlatform("android"); openSysFiles("android"); }, "Open Android's Files app"], ["tap", "sys-mac", "Tap Vitals · MacBook Pro"], ["wait", null, ""]] }
+  ];
+  function find(k) {
+    var list = Array.prototype.slice.call(proto.querySelectorAll('[data-k="' + k + '"]')).filter(function (e) { return !e.closest(".leaving"); });
+    return list[list.length - 1];
+  }
+  async function showRing(el) {
+    var r = el.getBoundingClientRect(), p = proto.getBoundingClientRect();
+    ring.style.left = (r.left - p.left + Math.min(r.width / 2, 60)) + "px";
+    ring.style.top = (r.top - p.top + r.height / 2) + "px";
+    ring.classList.add("show"); await sleep(500);
+  }
+  async function run(j) {
+    if (running) return; running = true; reset(); await sleep(350);
+    for (var i = 0; i < j.steps.length; i++) {
+      var s = j.steps[i];
+      caption.textContent = ""; caption.append(h("b", null, j.name), " · step " + (i + 1) + " of " + j.steps.length + (s[2] ? ": " + s[2] : ""));
+      if (s[0] === "wait") { await sleep(1000); continue; }
+      if (s[0] === "custom") { s[1](); await sleep(900); continue; }
+      var el = find(s[1]);
+      if (!el) { caption.textContent = "Could not find " + s[1]; break; }
+      var scr = el.closest(".screen");
+      if (scr && !scr.classList.contains("term")) {
+        var er = el.getBoundingClientRect(), sr = scr.getBoundingClientRect();
+        if (er.bottom > sr.bottom - 100 || er.top < sr.top + 40) { scr.scrollTop += er.top - sr.top - sr.height / 2; await sleep(250); }
+      }
+      await showRing(el);
+      if (s[0] === "tap") el.click();
+      if (s[0] === "type") { el.focus(); el.value = ""; for (var c of s[3]) { el.value += c; el.dispatchEvent(new Event("input")); await sleep(55); } }
+      ring.classList.remove("show");
+      await sleep(s[0] === "tap" ? 700 : 450);
+    }
+    caption.textContent = ""; caption.append(h("b", null, j.name), " · " + j.done);
+    running = false;
+  }
+  var jl = $("#journeys");
+  JOURNEYS.forEach(function (j) { jl.append(h("button", { class: "jbtn", onclick: function () { run(j); } }, h("span", null, h("b", null, j.name), h("small", null, j.cost)), h("span", { class: "run" }, "Run ›"))); });
+
+  /* ---------- gallery ---------- */
+  function frozen(tab, setup, sheetFn, after, tabs, screenFn) {
+    var saved = S, savedP = PLATFORM, savedProto = proto;
+    S = initial(); S.tab = tab;
+    if (setup) setup();
+    var layerEl = h("div", { class: "layer" });
+    var ph = h("div", { class: "phone", "aria-hidden": "true" }, h("div", { class: "sb" }, h("span", null, PLATFORM === "ios" ? "9:41" : "22:41"), h("span", null, "82%")),
+      h("div", { class: "stage" }, screenFn ? screenFn() : build(route())), dock(tab, false, tabs), h("div", { class: "scrim" }), layerEl, h("div", { class: "toasts" }));
+    if (route() === "terminal") ph.classList.add("full");
+    if (sheetFn) { var s = sheetFn(); s.classList.add("in"); layerEl.append(s); ph.classList.add("sheeted"); }
+    if (after) { proto = ph; var sv = sysEl, sb = selbarEl; sysEl = null; selbarEl = null; after(); ph.querySelectorAll(".sysfiles,.selbar").forEach(function (e) { e.classList.add("in"); }); sysEl = sv; selbarEl = sb; proto = savedProto; }
+    S = saved; PLATFORM = savedP;
+    ph.querySelectorAll("button,input,textarea").forEach(function (b) { b.setAttribute("tabindex", "-1"); });
+    return ph;
+  }
+  function cell(label, ph, note) { return h("figure", { class: "gcell" }, h("div", { class: "gwrap" }, ph), h("figcaption", null, label, note || null)); }
+  var andr = function () { PLATFORM = "android"; }, iosP = function () { PLATFORM = "ios"; };
+  var GALLERY = [
+    ["Home · eight rows", "home", null],
+    ["Home · Mac on battery, scrolled", "home", function () { S.plugged = false; }, null, null, 330],
+    ["Network", "home", function () { S.channel = "net"; S.stacks.home = ["channel"]; }],
+    ["Disk", "home", function () { S.channel = "disk"; S.stacks.home = ["channel"]; }],
+    ["GPU", "home", function () { S.channel = "gpu"; S.stacks.home = ["channel"]; }],
+    ["Battery · charging", "home", function () { S.channel = "batt"; S.stacks.home = ["channel"]; }],
+    ["Battery · on battery", "home", function () { S.plugged = false; S.channel = "batt"; S.stacks.home = ["channel"]; }],
+    ["Control", "control", null],
+    ["Files · your Mac", "control", function () { S.stacks.control = ["files"]; S.got = [FS.Downloads[1]]; }],
+    ["Files · search", "control", function () { S.stacks.control = ["files"]; S.query = "pdf"; }],
+    ["Files › Downloads", "control", function () { S.stacks.control = ["files", "folder:mac:Downloads"]; }],
+    ["Files › selecting", "control", function () { S.stacks.control = ["files", "folder:mac:Downloads"]; S.selecting = true; S.sel = { "invoice-october.pdf": FS.Downloads[2], "brand-assets.zip": FS.Downloads[4] }; }, null, syncSelbar],
+    ["File sheet · video", "control", function () { S.stacks.control = ["files", "folder:mac:Downloads"]; }, function () { return fileSheet(FS.Downloads[1], "Downloads", "mac"); }],
+    ["File sheet · with Trash", "control", function () { S.canEdit = true; S.stacks.control = ["files", "folder:mac:Desktop"]; }, function () { return fileSheet(FS.Desktop[2], "Desktop", "mac"); }],
+    ["Other phone · not open", "control", function () { S.stacks.control = ["files"]; S.dev = "phone2"; }],
+    ["Other phone · iPhone sees Pixel", "control", function () { iosP(); S.stacks.control = ["files"]; S.dev = "phone2"; S.otherOn = true; }],
+    ["Other phone · photos", "control", function () { S.otherOn = true; S.stacks.control = ["files", "photos"]; S.selecting = true; S.sel = {}; S.sel[PHOTOS[0].name] = PHOTOS[0]; S.sel[PHOTOS[1].name] = PHOTOS[1]; }, null, syncSelbar],
+    ["Terminal · locked", "control", function () { S.stacks.control = ["terminal"]; }],
+    ["Terminal · Face ID", "control", function () { iosP(); S.stacks.control = ["terminal"]; }],
+    ["Terminal · live", "control", function () { S.stacks.control = ["terminal"]; S.unlocked = true; S.lines = S.lines.concat([["rafay@mbp ~/Code/Vitals % git status", "p"]], OUT["git status"]); }],
+    ["Terminal · running", "control", function () { S.stacks.control = ["terminal"]; S.unlocked = true; S.running = "brew upgrade"; S.lines = S.lines.concat([["rafay@mbp ~/Code/Vitals % brew upgrade", "p"]], SLOW["brew upgrade"].slice(0, 6)); }],
+    ["Terminal · off on the Mac", "control", function () { S.stacks.control = ["terminal"]; S.termOn = false; }],
+    ["Saved commands", "control", function () { S.stacks.control = ["terminal"]; S.unlocked = true; }, savedSheet],
+    ["Sessions", "control", function () { S.stacks.control = ["terminal"]; S.unlocked = true; }, sessionsSheet],
+    ["Settings › This phone", "settings", function () { S.stacks.settings = ["phone"]; }],
+    ["Settings › This phone · iPhone", "settings", function () { iosP(); S.stacks.settings = ["phone"]; }],
+    ["Android Files app", "home", andr, null, function () { openSysFiles("android"); }],
+    ["iOS Files app", "home", iosP, null, function () { openSysFiles("ios"); }]
+  ];
+  var grid = $("#gallery");
+  GALLERY.forEach(function (g) {
+    var fig = cell(g[0], frozen(g[1], g[2], g[3], g[4]));
+    grid.append(fig);
+    if (g[5]) $(".screen", fig).scrollTop = g[5];
+  });
+  var dirs = $("#dirs");
+  dirs.append(
+    cell("", frozen("home", null), h("span", null, h("b", { class: "rec" }, "Home A · every row (recommended)"), "Eight live rows, scroll for Battery. Same row component as today.")),
+    cell("", frozen("home", null, null, null, null, homeB), h("span", null, h("b", null, "Home B · four rows + tiles"), "Fits one screen. The new four become small tiles with short traces.")),
+    cell("", frozen("control", function () { S.stacks.control = ["files"]; }), h("span", null, h("b", { class: "rec" }, "Files A · under Control (recommended)"), "No new tab. Files and Terminal are Control tiles, like Clipboard.")),
+    cell("", frozen("files", function () { S.stacks.files = []; S.tab = "files"; }, null, null, TABS_B, filesScreen), h("span", null, h("b", null, "Files B · its own tab"), "Files replaces Alerts in the dock. Alerts move to the Home status line and Settings."))
+  );
+})();
+</script>
+</body>
+</html>
