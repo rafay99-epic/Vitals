@@ -5,10 +5,11 @@ import { useNow } from "@vitals/app/state/useVitals.ts";
 import type { Clip, ClipKind } from "@vitals/contracts";
 import * as Clipboard from "expo-clipboard";
 import { type ReactNode, useState } from "react";
-import { Image, ScrollView, SectionList, StyleSheet, View } from "react-native";
+import { Image, Platform, ScrollView, SectionList, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { autoCopy, setAutoCopy } from "../lib/autoCopy.ts";
+import { sendCopies, setSendCopies } from "../lib/phoneCopies.ts";
 import { batchOf, imageUri, pastedImage, pickFiles, pickPhotos, sendBatch, textItem } from "../lib/clips.ts";
 import { useAccess } from "../lib/remote.ts";
 import { clipSheet, sendSheet } from "../sheets/ClipSheets.tsx";
@@ -168,6 +169,34 @@ const copyMacCopies = (on: boolean) => {
   toast.show(on ? "New Mac copies will land on this phone" : "Mac copies stay on the Mac");
 };
 
+const sendPhoneCopies = (on: boolean) => {
+  setSendCopies(on);
+  if (!on) return toast.show("Phone copies stay on the phone");
+  toast.show(Platform.OS === "ios" ? "Vitals will offer your copies with one tap" : "Your copies go to the Mac when you open Vitals");
+};
+
+/** "On this phone": copy Mac copies here, send phone copies there. */
+function PhoneSwitches({ readable, canSend, keepDays, bottom }: { readonly readable: boolean; readonly canSend: boolean; readonly keepDays: number | null; readonly bottom: number }) {
+  const copyHere = useStore(autoCopy);
+  const copiesThere = useStore(sendCopies);
+  const kept = keepDays === null || !readable ? null : `Your Mac keeps ${String(keepDays)} ${keepDays === 1 ? "day" : "days"} of history, and pinned clips stay until you unpin them.`;
+  return (
+    <View>
+      {readable || canSend ? (
+        <>
+          <Label>On this phone</Label>
+          <Group>
+            {readable ? <Row first label="Copy Mac copies here" control={<Toggle value={copyHere} label="Copy Mac copies to this phone" onChange={copyMacCopies} />} /> : null}
+            {canSend ? <Row first={!readable} label="Send phone copies to Mac" control={<Toggle value={copiesThere} label="Send phone copies to Mac" onChange={sendPhoneCopies} />} /> : null}
+          </Group>
+          <Note>{`Only while Vitals is open. ${kept ?? "Pinned clips stay on the Mac until you unpin them."}`}</Note>
+        </>
+      ) : null}
+      <View style={{ height: bottom }} />
+    </View>
+  );
+}
+
 /** Control > Clipboard: send to the Mac, browse what it copied, and auto-copy Mac copies here. */
 export function ClipboardScreen() {
   const remote = useRemote();
@@ -179,7 +208,6 @@ export function ClipboardScreen() {
   const enabled = useStore(remote.clips.enabled);
   const keepDays = useStore(remote.clips.keepDays);
   const supported = useStore(remote.clips.supported);
-  const copyHere = useStore(autoCopy);
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
   const me = remote.credentials.deviceId;
@@ -228,24 +256,7 @@ export function ClipboardScreen() {
     </View>
   );
 
-  const footer = (
-    <View>
-      {access.clipboard && supported !== false ? (
-        <>
-          <Label>On this phone</Label>
-          <Group>
-            <Row first label="Copy Mac copies here" control={<Toggle value={copyHere} label="Copy Mac copies to this phone" onChange={copyMacCopies} />} />
-          </Group>
-          <Note>
-            {keepDays === null
-              ? "Only while Vitals is open. Pinned clips stay on the Mac until you unpin them."
-              : `Only while Vitals is open. Your Mac keeps ${String(keepDays)} ${keepDays === 1 ? "day" : "days"} of history, and pinned clips stay until you unpin them.`}
-          </Note>
-        </>
-      ) : null}
-      <View style={{ height: bottom }} />
-    </View>
-  );
+  const footer = <PhoneSwitches readable={access.clipboard && supported !== false} canSend={canSend} keepDays={keepDays} bottom={bottom} />;
 
   return (
     <SectionList

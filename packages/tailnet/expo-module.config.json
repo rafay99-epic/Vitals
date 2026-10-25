@@ -1,5 +1,5 @@
 {
   "platforms": ["android", "apple"],
-  "android": { "modules": ["expo.modules.vitalstailnet.VitalsTailnetModule"] },
-  "apple": { "modules": ["VitalsTailnetModule"] }
+  "android": { "modules": ["expo.modules.vitalstailnet.VitalsTailnetModule", "expo.modules.vitalstailnet.VitalsDropModule"] },
+  "apple": { "modules": ["VitalsTailnetModule", "VitalsDropModule"] }
 }

@@ -11,14 +11,23 @@
  *
  * Clipboard history is on and seeded with a text, a long command, two links, an image, a file, and
  * a folder. `kill -WINCH <pid>` copies something new on the "Mac" (text, link, image in turn).
+ *
+ * Drop: files phones send are accepted and moved into `<data dir>/received/`. The drop control port
+ * (printed at start) sends real files to every paired phone and steers drops:
+ *
+ *   curl -X POST 'http://127.0.0.1:47940/send?path=/path/to/file-or-folder'
+ *   curl -X POST 'http://127.0.0.1:47940/pause?id=<dropId>'    # also resume, cancel, accept, decline
+ *   curl http://127.0.0.1:47940/drops
+ *
+ * FAKE_MAC_ASK=1 makes the "Mac" ask before taking files instead of accepting them.
  */
-import { copyFileSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, extname, join, relative } from "node:path";
 import { deflateSync } from "node:zlib";
 
-import type { ToApp } from "@vitals/contracts";
-import { ToApp as ToAppSchema } from "@vitals/contracts";
+import type { Device, Drop, MacDropFile, ToApp } from "@vitals/contracts";
+import { DROP_LAN_TLS_OFFSET, ToApp as ToAppSchema } from "@vitals/contracts";
 import { newId } from "@vitals/shared";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -28,10 +37,14 @@ import * as Stream from "effect/Stream";
 
 import { makeApp } from "../src/app.ts";
 import { BridgeTransportService } from "../src/bridge/Bridge.ts";
+import { spkiPin } from "../src/drop/tls.ts";
 
 const OWNER = "rafay@example.com";
 const GATEWAY_PORT = 47_900;
 const PROXY_PORT = 47_910;
+const LAN_PORT = 47_920;
+const DROP_CONTROL_PORT = 47_940;
+const ASK = process.env["FAKE_MAC_ASK"] === "1";
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 const HOUR = 3_600_000;
@@ -386,6 +399,7 @@ const write = (line: string): void => {
       // Give the gateway's event log a moment to subscribe before raising the alert.
       if (alertOpen) setTimeout(() => emit({ t: "event", event: { _tag: "AlertRaised", at: Date.now(), alert: agentAlert } }), 3_000);
       seedClips();
+      if (ASK) emit({ t: "dropPolicy", policy: { autoAccept: false, askWeb: true, maxBytes: 50 * GB } });
       return;
     case "need":
       need = message;
@@ -420,10 +434,18 @@ const write = (line: string): void => {
           return emit({ t: "result", id: message.id, ok: null, error: "not in fake" });
       }
     }
+    case "drop":
+      return onDrop(message.drop);
+    case "dropRemoved":
+      drops.delete(message.id);
+      return;
+    case "dropReceived":
+      return takeDrop(message);
     case "adminResult":
       if (message.ok?._tag === "ListDevices") {
+        phones = message.ok.devices.filter((device) => device.platform !== "web" && device.revokedAt === null);
         for (const device of message.ok.devices) {
-          if (device.scopes.length < 4) emit({ t: "admin", id: `scopes-${device.id}`, op: { _tag: "SetScopes", deviceId: device.id, scopes: ["read", "operate", "destructive", "clipboard"] } });
+          if (device.scopes.length < 5) emit({ t: "admin", id: `scopes-${device.id}`, op: { _tag: "SetScopes", deviceId: device.id, scopes: ["read", "operate", "destructive", "clipboard", "files"] } });
         }
       }
       if (message.ok?._tag === "CreatePairing") {
@@ -434,6 +456,97 @@ const write = (line: string): void => {
       return;
   }
 };
+
+/* ---------- drop ---------- */
+
+let phones: ReadonlyArray<Omit<Device, "connected">> = [];
+const drops = new Map<string, Drop>();
+
+const onDrop = (drop: Drop) => {
+  const previous = drops.get(drop.id);
+  drops.set(drop.id, drop);
+  if (previous?.state !== drop.state) {
+    const peer = drop.from._tag === "Device" ? `from ${drop.from.name}` : `to ${drop.to._tag === "Device" ? drop.to.name : "Mac"}`;
+    console.log(`Drop ${drop.id} ${peer}: ${drop.state}${drop.error === null ? "" : ` (${drop.error})`}, ${String(drop.files.length)} files, ${String(drop.bytes)} bytes`);
+  }
+  if (!ASK && drop.state === "asking" && drop.from._tag === "Device") emit({ t: "dropDecision", id: drop.id, accept: true });
+};
+
+const freeName = (path: string): string => {
+  if (!existsSync(path)) return path;
+  const extension = extname(path);
+  for (let copy = 2; ; copy += 1) {
+    const candidate = `${path.slice(0, path.length - extension.length)} ${String(copy)}${extension}`;
+    if (!existsSync(candidate)) return candidate;
+  }
+};
+
+const takeDrop = (message: Extract<ToApp, { t: "dropReceived" }>) => {
+  const inbox = join(dataDir(), "received");
+  for (const file of message.files) {
+    const staged = join(dataDir(), "drop", file.stored);
+    if (!existsSync(staged)) continue;
+    const target = freeName(join(inbox, file.path ?? file.name));
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(staged, target);
+    console.log(`Received ${target} (${String(file.size)} bytes) from ${message.from._tag === "Device" ? message.from.name : "Mac"}`);
+  }
+};
+
+const filesAt = (path: string): ReadonlyArray<MacDropFile> => {
+  const info = statSync(path);
+  const entry = (full: string, relativePath: string | null): MacDropFile => ({
+    name: basename(full),
+    path: relativePath,
+    size: statSync(full).size,
+    mime: Bun.file(full).type.split(";")[0] ?? null,
+    origin: full,
+  });
+  if (info.isFile()) return [entry(path, null)];
+  return readdirSync(path, { recursive: true, withFileTypes: true })
+    .filter((item) => item.isFile() && !item.name.startsWith("."))
+    .map((item) => join(item.parentPath, item.name))
+    .map((full) => entry(full, relative(dirname(path), full)));
+};
+
+const steer = (url: URL, act: (id: string) => object) => {
+  const id = url.searchParams.get("id");
+  if (id === null || !drops.has(id)) return Response.json({ error: "unknown drop id" }, { status: 404 });
+  emit(act(id));
+  return Response.json({ ok: true });
+};
+
+Bun.serve({
+  hostname: "127.0.0.1",
+  port: DROP_CONTROL_PORT,
+  fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/drops") return Response.json([...drops.values()]);
+    if (request.method !== "POST") return new Response(null, { status: 405 });
+    switch (url.pathname) {
+      case "/send": {
+        const paths = url.searchParams.getAll("path");
+        if (paths.length === 0 || !paths.every((path) => existsSync(path))) return Response.json({ error: "pass ?path= with a file or folder that exists" }, { status: 400 });
+        if (phones.length === 0) return Response.json({ error: "no paired phones yet" }, { status: 409 });
+        const files = paths.flatMap(filesAt);
+        emit({ t: "dropSend", to: phones.map((phone) => phone.id), files });
+        return Response.json({ to: phones.map((phone) => phone.name), files: files.length });
+      }
+      case "/pause":
+        return steer(url, (id) => ({ t: "dropPause", id, paused: true }));
+      case "/resume":
+        return steer(url, (id) => ({ t: "dropPause", id, paused: false }));
+      case "/cancel":
+        return steer(url, (id) => ({ t: "dropCancel", id }));
+      case "/accept":
+        return steer(url, (id) => ({ t: "dropDecision", id, accept: true }));
+      case "/decline":
+        return steer(url, (id) => ({ t: "dropDecision", id, accept: false }));
+      default:
+        return new Response(null, { status: 404 });
+    }
+  },
+});
 
 /** Kept between runs so a paired emulator stays paired after a restart. */
 const dataDir = (): string => {
@@ -452,7 +565,7 @@ const config = {
   tailscaleBin: null,
   manageServe: false,
   ownerLogin: OWNER,
-  lanPort: null,
+  lanPort: LAN_PORT,
 };
 
 const transport = Layer.succeed(BridgeTransportService, { lines: Stream.fromQueue(queue), write, onClose: () => {} });
@@ -528,3 +641,9 @@ setTimeout(() => emit({ t: "admin", id: "pair-1", op: { _tag: "CreatePairing" } 
 // Every paired test phone gets every permission, so destructive flows can be tested too.
 setInterval(() => emit({ t: "admin", id: `devices-${String(Date.now())}`, op: { _tag: "ListDevices" } }), 5_000);
 console.log(`Fake Mac running. Gateway on ${upstream}, phone proxy on 0.0.0.0:${String(PROXY_PORT)}.`);
+console.log(`Drop control on http://127.0.0.1:${String(DROP_CONTROL_PORT)} (POST /send?path=…). Received files land in ${join(dataDir(), "received")}.`);
+setTimeout(() => {
+  const cert = join(dataDir(), "drop-tls.crt");
+  if (!existsSync(cert)) return console.log("Wi-Fi TLS is off: no certificate was made.");
+  console.log(`Wi-Fi TLS on port ${String(LAN_PORT + DROP_LAN_TLS_OFFSET)}, pin ${spkiPin(readFileSync(cert))}`);
+}, 1_500);

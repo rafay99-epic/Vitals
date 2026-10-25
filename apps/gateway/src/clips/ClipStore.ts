@@ -42,7 +42,8 @@ import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Bridge, ask } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
 import { type ClipRecord, ClipDb, expired, isTextKind } from "./ClipDb.ts";
-import { clipFiles, extensionFor, hashFile } from "./ClipFiles.ts";
+import { hashFile } from "../hash.ts";
+import { clipFiles, extensionFor } from "./ClipFiles.ts";
 
 /** Who is calling, for ownership checks and the activity log. */
 export interface ClipCaller {
@@ -208,7 +209,7 @@ export const layer = (database: Database) =>
         });
 
       const historyOn = () => policy?.enabled === true;
-      const visible = (clip: ClipRecord) => clip.deviceId !== null || historyOn();
+      const visible = (clip: ClipRecord) => clip.deviceId !== null || clip.pushed || historyOn();
       const changed = () => Queue.offerUnsafe(statsDirty, undefined);
 
       const announce = (tag: "Added" | "Updated", clip: ClipRecord) =>
@@ -256,8 +257,9 @@ export const layer = (database: Database) =>
       /** A copy on the Mac. A repeat of an earlier clip bumps that one instead of adding a twin. */
       const addMacClip = (mac: MacClip) =>
         Effect.gen(function* () {
-          // History is off: keep nothing, but never delete a file an existing row still points at.
-          if (!historyOn()) return yield* discard(mac.stored !== null && db.storedNames().has(mac.stored) ? null : mac.stored);
+          const pushed = mac.pushed === true;
+          // History is off: keep only what was pushed, and never delete a file an existing row still points at.
+          if (!historyOn() && !pushed) return yield* discard(mac.stored !== null && db.storedNames().has(mac.stored) ? null : mac.stored);
           if (db.get(mac.id) !== null) return;
           const stored = mac.stored;
           const file = stored === null ? null : yield* Effect.promise(() => files.inspect(stored));
@@ -265,7 +267,7 @@ export const layer = (database: Database) =>
             activity.record({ at: Date.now(), source: "gateway", level: "warn", kind: "clip.missing", data: { kind: mac.kind } });
             return;
           }
-          const clip: ClipRecord = { ...mac, deviceId: null, pinned: false, bytes: file?.bytes ?? mac.bytes, sha256: file?.sha256 ?? null };
+          const clip: ClipRecord = { ...mac, deviceId: null, pinned: false, pushed, bytes: file?.bytes ?? mac.bytes, sha256: file?.sha256 ?? null };
           const twin = db.findDuplicate(clip);
           if (twin === null) return yield* store(clip);
           if (clip.stored !== twin.stored) yield* discard(clip.stored);
@@ -273,7 +275,8 @@ export const layer = (database: Database) =>
           const stale = twin.origin !== null && twin.stored !== null;
           if (stale) yield* discard(twin.stored);
           const at = Math.max(twin.at, clip.at);
-          const bumped: ClipRecord = stale ? { ...twin, at, stored: null, bytes: clip.bytes, files: clip.files } : { ...twin, at };
+          const kept: ClipRecord = { ...twin, at, pushed: twin.pushed || pushed };
+          const bumped: ClipRecord = stale ? { ...kept, stored: null, bytes: clip.bytes, files: clip.files } : kept;
           db.update(bumped);
           yield* announce("Updated", bumped);
           changed();
@@ -487,6 +490,7 @@ export const layer = (database: Database) =>
             stored: null,
             origin: null,
             sha256: null,
+            pushed: false,
           };
           yield* store(clip);
           transfer("clip.upload", { caller, startedAt: now }, { ok: true, bytes: Buffer.byteLength(text), kind, clipId: clip.id });
@@ -585,6 +589,7 @@ export const layer = (database: Database) =>
             stored,
             origin: null,
             sha256,
+            pushed: false,
           };
           yield* store(clip);
           transfer("clip.upload", upload, { ok: true, bytes: upload.received, kind: clip.kind, clipId: id });

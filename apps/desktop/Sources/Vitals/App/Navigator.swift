@@ -54,6 +54,7 @@ enum NavSection: String, CaseIterable, Identifiable {
 @Observable
 final class Navigator {
     var section: NavSection = LaunchOverrides.section ?? .overview
+    var remoteTab: RemoteView.Tab = LaunchOverrides.value(for: "--remote-tab").flatMap(RemoteView.Tab.init(rawValue:)) ?? .devices
 }
 
 /// Launch-argument deep links, e.g. `--section history --history-metric network`
@@ -66,6 +67,10 @@ enum LaunchOverrides {
 
     static var historyMetric: HistoryView.Metric? {
         value(for: "--history-metric").flatMap(HistoryView.Metric.init(rawValue:))
+    }
+
+    static func has(_ flag: String, in args: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        args.contains(flag)
     }
 
     /// The token following `flag`, or nil when the flag is absent or trailing.

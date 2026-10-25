@@ -11,6 +11,7 @@ export const ClipRecord = Schema.Struct({
   origin: Schema.NullOr(Schema.String),
   /** Hex sha256 of `stored`, when hashed. Used to spot repeat copies of the same image. */
   sha256: Schema.NullOr(Schema.String),
+  pushed: Schema.Boolean,
 });
 export type ClipRecord = typeof ClipRecord.Type;
 
@@ -31,6 +32,7 @@ interface ClipRow {
   readonly stored: string | null;
   readonly origin: string | null;
   readonly sha256: string | null;
+  readonly pushed: number;
 }
 
 const decodeRecord = Schema.decodeUnknownSync(ClipRecord);
@@ -53,6 +55,7 @@ const toRecord = (row: ClipRow): ClipRecord =>
     stored: row.stored,
     origin: row.origin,
     sha256: row.sha256,
+    pushed: row.pushed === 1,
   });
 
 /** Synchronous SQL for the `clips` table in remote.db. Knows nothing about files or events. */
@@ -68,11 +71,11 @@ export class ClipDb {
     return row === null ? null : toRecord(row);
   }
 
-  /** Newest first. With `includeMac` false, only clips phones sent. */
+  /** Newest first. With `includeMac` false, only clips phones sent and clips the Mac pushed. */
   recent(limit: number, includeMac: boolean): ReadonlyArray<ClipRecord> {
     const sql = includeMac
       ? "SELECT * FROM clips ORDER BY at DESC, id DESC LIMIT ?"
-      : "SELECT * FROM clips WHERE device_id IS NOT NULL ORDER BY at DESC, id DESC LIMIT ?";
+      : "SELECT * FROM clips WHERE device_id IS NOT NULL OR pushed = 1 ORDER BY at DESC, id DESC LIMIT ?";
     return this.db.query<ClipRow, [number]>(sql).all(limit).map(toRecord);
   }
 
@@ -92,8 +95,8 @@ export class ClipDb {
 
   insert(clip: ClipRecord): void {
     this.db.run(
-      `INSERT INTO clips (id, kind, at, device_id, source, text, truncated, name, mime, bytes, files, thumb, pinned, stored, origin, sha256)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO clips (id, kind, at, device_id, source, text, truncated, name, mime, bytes, files, thumb, pinned, stored, origin, sha256, pushed)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         clip.id,
         clip.kind,
@@ -111,15 +114,17 @@ export class ClipDb {
         clip.stored,
         clip.origin,
         clip.sha256,
+        clip.pushed ? 1 : 0,
       ],
     );
   }
 
   /** Writes back the fields that change after insert. */
   update(clip: ClipRecord): void {
-    this.db.run("UPDATE clips SET at = ?, pinned = ?, stored = ?, bytes = ?, files = ?, thumb = ?, name = ? WHERE id = ?", [
+    this.db.run("UPDATE clips SET at = ?, pinned = ?, pushed = ?, stored = ?, bytes = ?, files = ?, thumb = ?, name = ? WHERE id = ?", [
       clip.at,
       clip.pinned ? 1 : 0,
+      clip.pushed ? 1 : 0,
       clip.stored,
       clip.bytes,
       clip.files,

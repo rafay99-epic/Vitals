@@ -5,7 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./drop": "./src/drop.ts",
+    "./app.plugin.js": "./app.plugin.js"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

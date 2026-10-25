@@ -8,8 +8,10 @@ import {
   type LanAdvert,
   type LanEndpoint,
   type LanPairResult,
+  type LanTls,
   type MacRoutes,
   DEFAULT_PAIRED_SCOPES,
+  DROP_LAN_TLS_OFFSET,
   LAN_PROLOGUE,
   LanOpen,
   PAIR_REQUEST_TTL_MS,
@@ -29,6 +31,8 @@ import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Auth } from "../auth/Auth.ts";
 import { Bridge } from "../bridge/Bridge.ts";
 import { GatewayConfig, MAX_FRAME_BYTES } from "../config.ts";
+import { DropStore } from "../drop/DropStore.ts";
+import { loadTlsIdentity } from "../drop/tls.ts";
 import { Store } from "../persistence/Store.ts";
 import { LOOPBACK_HEADER } from "../ws/route.ts";
 
@@ -52,6 +56,7 @@ export class Lan extends Context.Service<
 const MAX_PENDING = 3;
 const PROMPTS_PER_MINUTE = 6;
 const IDLE_TIMEOUT_SECONDS = 150;
+const DROP_IDLE_TIMEOUT_SECONDS = 120;
 const RECHECK_BLOCKED = "10 seconds";
 const RECHECK_OPEN = "60 seconds";
 
@@ -111,6 +116,7 @@ export const layer = Layer.effect(
     const store = yield* Store;
     const bridge = yield* Bridge;
     const activity = yield* ActivityLog;
+    const drops = yield* DropStore;
     const port = config.lanPort;
     const reachability = yield* SubscriptionRef.make(false);
     const off = {
@@ -145,7 +151,15 @@ export const layer = Layer.effect(
 
     const endpoints = () => lanEndpoints(port);
 
-    const routes = (tailnet: string | null): MacRoutes => ({ key, lan: endpoints(), tailnet, owner: auth.ownerLogin() });
+    let tls: LanTls | null = null;
+
+    const routes = (tailnet: string | null): MacRoutes => ({
+      key,
+      lan: endpoints(),
+      tailnet,
+      owner: auth.ownerLogin(),
+      ...(tls === null ? {} : { tls }),
+    });
 
     const endPrompt = (id: string, result: LanPairResult | null) => {
       const prompt = prompts.get(id);
@@ -288,6 +302,42 @@ export const layer = Layer.effect(
 
     if (server === null) return Lan.of(off);
     log("info", "lan.listening", { port });
+
+    const tlsPort = port + DROP_LAN_TLS_OFFSET;
+    const secure = yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        const identity = loadTlsIdentity(config.dataDir);
+        if ("error" in identity) {
+          log("warn", "drop.tls.failed", { port: tlsPort, error: identity.error });
+          return null;
+        }
+        try {
+          const listener = Bun.serve({
+            hostname: "0.0.0.0",
+            port: tlsPort,
+            tls: { cert: identity.cert, key: identity.key },
+            idleTimeout: DROP_IDLE_TIMEOUT_SECONDS,
+            fetch: (request) => {
+              const { pathname } = new URL(request.url);
+              if (pathname === "/api/health" && request.method === "GET") {
+                return Response.json({ ok: true, protocol: PROTOCOL_VERSION }, { headers: { "cache-control": "no-store" } });
+              }
+              if (pathname.startsWith("/api/drop/")) return drops.handle(request, "lan");
+              return new Response(null, { status: 404 });
+            },
+          });
+          return { listener, pin: identity.pin };
+        } catch (error) {
+          log("warn", "drop.tls.failed", { port: tlsPort, error: String(error) });
+          return null;
+        }
+      }),
+      (running) => Effect.sync(() => running?.listener.stop(true)),
+    );
+    if (secure !== null) {
+      tls = { port: tlsPort, pin: secure.pin };
+      log("info", "drop.tls.listening", { port: tlsPort });
+    }
 
     const selfTest = Effect.promise(async () => {
       const first = endpoints()[0];

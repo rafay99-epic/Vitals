@@ -4,6 +4,8 @@ import { dirname, join, resolve } from "node:path";
 import { ClipFileName } from "@vitals/contracts";
 import * as Schema from "effect/Schema";
 
+import { hashFile } from "../hash.ts";
+
 const isClipFileName = Schema.is(ClipFileName);
 
 const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
@@ -34,12 +36,6 @@ export const extensionFor = (name: string | null, mime: string | null): string =
   if (known !== undefined) return known;
   const subtype = (lowered.split("/")[1] ?? "").replace(/[^a-z0-9]/g, "").slice(0, 8);
   return EXTENSION.test(subtype) ? subtype : "bin";
-};
-
-export const hashFile = async (path: string): Promise<string> => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  for await (const chunk of Bun.file(path).stream()) hasher.update(chunk);
-  return hasher.digest("hex");
 };
 
 /**

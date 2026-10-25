@@ -46,6 +46,9 @@ const PATHS = {
   trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
   mac: `${box(5, 5, 14, 10, 1.5)}M3 19h18`,
   down: "M12 4v12M7 11l5 5 5-5M5 20h14",
+  video: `${box(3, 6, 13, 12, 2)}M16 10.5l5-3v9l-5-3`,
+  android: `M6 18v-6a6 6 0 0 1 12 0v6zM8 5l1.6 2.4M16 5l-1.6 2.4${circle(9.5, 12, 0.4)}${circle(14.5, 12, 0.4)}`,
+  files: "M9 3h6l4 4v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM15 3v4h4M4 8v11a3 3 0 0 0 3 3h8",
 } as const;
 
 export type IconName = keyof typeof PATHS;

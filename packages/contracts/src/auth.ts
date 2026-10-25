@@ -2,10 +2,10 @@ import * as Schema from "effect/Schema";
 
 import { DeviceId, EpochMs, LanKey } from "./ids.ts";
 
-export const Scope = Schema.Literals(["read", "operate", "destructive", "clipboard"]);
+export const Scope = Schema.Literals(["read", "operate", "destructive", "clipboard", "files"]);
 export type Scope = typeof Scope.Type;
 
-export const DEFAULT_PAIRED_SCOPES: ReadonlyArray<Scope> = ["read", "operate"];
+export const DEFAULT_PAIRED_SCOPES: ReadonlyArray<Scope> = ["read", "operate", "files"];
 
 export const Platform = Schema.Literals(["android", "ios", "web"]);
 export type Platform = typeof Platform.Type;

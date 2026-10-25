@@ -28,8 +28,16 @@ struct VitalsApp: App {
         self.model = model
         self.updater = updater
         self.navigator = navigator
-        remote = RemoteModel(vitals: model, settings: settings)
-        menuBar = MenuBarController(model: model, settings: settings, navigator: navigator)
+        let remote = RemoteModel(vitals: model, settings: settings)
+        self.remote = remote
+        menuBar = MenuBarController(model: model, settings: settings, navigator: navigator, share: remote.share)
+        remote.share.openSharing = {
+            navigator.section = .remote
+            navigator.remoteTab = .sharing
+            MainWindow.open()
+        }
+        AppDelegate.openFiles = { urls in remote.share.offer(urls, from: .dock) }
+        AppDelegate.services = ShareServices(share: remote.share)
         Log.notice(.app, "Vitals \(Updater.currentVersion) launched (\(Channel.current.rawValue))")
         Task.detached(priority: .utility) {
             // Surface a crash / unclean exit from the previous run, off the launch path.
@@ -47,6 +55,7 @@ struct VitalsApp: App {
                 .environment(updater)
                 .environment(navigator)
                 .environment(remote)
+                .environment(remote.share)
         }
         .defaultSize(width: 1100, height: 760)
         // No system title bar: the sidebar carries branding and window dragging.
@@ -64,6 +73,7 @@ struct SettingsCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        MainWindow.keep(openWindow)
         CommandGroup(replacing: .appSettings) {
             Button("Settings…") {
                 navigator.section = .settings
@@ -72,5 +82,20 @@ struct SettingsCommands: Commands {
             }
             .keyboardShortcut(",", modifiers: .command)
         }
+    }
+}
+
+@MainActor
+enum MainWindow {
+    private static var action: OpenWindowAction?
+
+    static func keep(_ action: OpenWindowAction) -> EmptyCommands {
+        self.action = action
+        return EmptyCommands()
+    }
+
+    static func open() {
+        action?(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

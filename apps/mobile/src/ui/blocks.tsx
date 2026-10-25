@@ -129,11 +129,27 @@ export function BigButton({ label, onPress, ghost = false, disabled = false }: {
   );
 }
 
-/** Square-ish action tile used for power and send-to-Mac actions. */
-export function Tile({ icon, label, onPress, danger = false, disabled = false, raised = false }: { readonly icon: IconName; readonly label: string; readonly onPress: () => void; readonly danger?: boolean; readonly disabled?: boolean; readonly raised?: boolean }) {
+/** Square-ish action tile used for power and send-to-Mac actions. Three to a row, or two when `half`. */
+export function Tile({
+  icon,
+  label,
+  onPress,
+  danger = false,
+  disabled = false,
+  raised = false,
+  half = false,
+}: {
+  readonly icon: IconName;
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly danger?: boolean;
+  readonly disabled?: boolean;
+  readonly raised?: boolean;
+  readonly half?: boolean;
+}) {
   const tint = danger ? color.red : color.ink;
   return (
-    <Tap onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} layout={styles.tileSlot} style={[styles.tile, raised ? styles.raised : null]}>
+    <Tap onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} layout={half ? styles.tileHalf : styles.tileSlot} style={[styles.tile, raised ? styles.raised : null]}>
       <Icon name={icon} size={20} color={tint} />
       <T v="strong" color={tint} numberOfLines={2} style={styles.tileText}>
         {label}
@@ -227,6 +243,7 @@ const styles = StyleSheet.create({
   ghost: { backgroundColor: "transparent", borderWidth: 1, borderColor: color.line2 },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 9, paddingHorizontal: space.edge, paddingBottom: 14 },
   tileSlot: { width: "30%", flexGrow: 1 },
+  tileHalf: { width: "45%", flexGrow: 1 },
   tile: { height: 72, borderRadius: 16, backgroundColor: color.s2, justifyContent: "center", gap: 6, paddingHorizontal: 13 },
   raised: { backgroundColor: color.s3 },
   tileText: { fontSize: 13 },

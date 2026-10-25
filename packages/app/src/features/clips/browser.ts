@@ -1,6 +1,8 @@
 import type { Clip, ClipDestination } from "@vitals/contracts";
 
 import { fromBase64, toBase64 } from "../../lib/base64.ts";
+import { isEnded } from "../../state/drops.ts";
+import { holdBlob, releaseBlobs } from "../../state/heldBlobs.ts";
 import type { Remote } from "../../state/remote.ts";
 import type { ByteSink, ByteSource, Outgoing } from "../../state/transfer.ts";
 import { clipTitle, fileNameOf, isLink } from "./format.ts";
@@ -81,6 +83,26 @@ export const sendToMac = async (remote: Remote, files: ReadonlyArray<File>, text
   const clips = await remote.clips.send(`Sending ${label}`, items, to).result;
   if (clips === null) return false;
   remote.show(to === "clipboard" ? "On the Mac clipboard." : "In Downloads on the Mac.");
+  return true;
+};
+
+/** Dropped or chosen files go through Drop when the Mac has it, with the clipboard path as the fallback. */
+export const sendFiles = async (remote: Remote, files: ReadonlyArray<File>): Promise<boolean> => {
+  if (files.length === 0) return false;
+  if (remote.drops.supported.get() !== true) return sendToMac(remote, files, null);
+  const outgoing = files.map((file) => ({ uri: holdBlob(file), name: file.name || "Untitled", path: null, size: file.size, mime: file.type === "" ? null : file.type }));
+  const keys = outgoing.map((file) => file.uri);
+  const drop = await remote.drops.send(outgoing);
+  if (drop === null) {
+    releaseBlobs(keys);
+    return false;
+  }
+  const stop = remote.drops.drops.subscribe(() => {
+    const now = remote.drops.drops.get().find((item) => item.id === drop.id);
+    if (now !== undefined && !isEnded(now)) return;
+    stop();
+    releaseBlobs(keys);
+  });
   return true;
 };
 

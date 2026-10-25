@@ -279,11 +279,12 @@ struct MacClip: Codable, Equatable, Sendable {
     @Nullable var stored: String?
     /// Absolute path of a copied file or folder, materialized on first download.
     @Nullable var origin: String?
+    var pushed: Bool?
 
     init(
         id: String, kind: ClipKind, at: Int64, source: String?, text: String? = nil, truncated: Bool = false,
         name: String? = nil, mime: String? = nil, bytes: Int = 0, files: Int? = nil, thumb: String? = nil,
-        stored: String? = nil, origin: String? = nil
+        stored: String? = nil, origin: String? = nil, pushed: Bool? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -298,6 +299,7 @@ struct MacClip: Codable, Equatable, Sendable {
         self.thumb = thumb
         self.stored = stored
         self.origin = origin
+        self.pushed = pushed
     }
 }
 
@@ -420,10 +422,15 @@ enum FromApp: Equatable, Sendable {
     case clip(MacClip)
     case clipPolicy(ClipPolicy)
     case clipClear
+    case dropSend(to: [String], files: [MacDropFile])
+    case dropDecision(id: String, accept: Bool)
+    case dropCancel(id: String)
+    case dropPause(id: String, paused: Bool)
+    case dropPolicy(DropPolicy)
 }
 
 extension FromApp: Encodable {
-    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind, clip, policy }
+    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind, clip, policy, to, files, accept, paused }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -470,6 +477,24 @@ extension FromApp: Encodable {
             try c.encode(policy, forKey: .policy)
         case .clipClear:
             try c.encode("clipClear", forKey: .t)
+        case let .dropSend(to, files):
+            try c.encode("dropSend", forKey: .t)
+            try c.encode(to, forKey: .to)
+            try c.encode(files, forKey: .files)
+        case let .dropDecision(id, accept):
+            try c.encode("dropDecision", forKey: .t)
+            try c.encode(id, forKey: .id)
+            try c.encode(accept, forKey: .accept)
+        case let .dropCancel(id):
+            try c.encode("dropCancel", forKey: .t)
+            try c.encode(id, forKey: .id)
+        case let .dropPause(id, paused):
+            try c.encode("dropPause", forKey: .t)
+            try c.encode(id, forKey: .id)
+            try c.encode(paused, forKey: .paused)
+        case let .dropPolicy(policy):
+            try c.encode("dropPolicy", forKey: .t)
+            try c.encode(policy, forKey: .policy)
         }
     }
 }

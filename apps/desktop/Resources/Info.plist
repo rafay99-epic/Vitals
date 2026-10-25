@@ -32,6 +32,39 @@
 	<string>Lets your phone find this Mac on your Wi-Fi.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Syntax Lab Technology. Licensed under GPL-3.0.</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Files to send to a phone</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.item</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Send to Phone with Vitals</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>sendToPhone</string>
+			<key>NSRequiredContext</key>
+			<dict/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.item</string>
+			</array>
+		</dict>
+	</array>
 	<key>VitalsChannel</key>
 	<string>stable</string>
 </dict>

@@ -1,4 +1,4 @@
-import { DeviceId, LanEndpoint, LanKey, Scope } from "@vitals/contracts";
+import { DeviceId, LanEndpoint, LanKey, LanTls, Scope } from "@vitals/contracts";
 import * as Schema from "effect/Schema";
 
 export const Credentials = Schema.Struct({
@@ -12,6 +12,7 @@ export const Credentials = Schema.Struct({
   owner: Schema.optional(Schema.NullOr(Schema.String)),
   lanBound: Schema.optional(Schema.Boolean),
   builtInTailscale: Schema.optional(Schema.Boolean),
+  tls: Schema.optional(LanTls),
 });
 export type Credentials = typeof Credentials.Type;
 

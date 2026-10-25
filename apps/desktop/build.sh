@@ -86,6 +86,7 @@ fi
 "$PB" -c "Add :CFBundleDisplayName string $APP_NAME" "$APP/Contents/Info.plist" 2>/dev/null \
   || "$PB" -c "Set :CFBundleDisplayName $APP_NAME" "$APP/Contents/Info.plist"
 "$PB" -c "Set :VitalsChannel $CHANNEL" "$APP/Contents/Info.plist"
+"$PB" -c "Set :NSServices:0:NSMenuItem:default Send to Phone with $APP_NAME" "$APP/Contents/Info.plist"
 # Monotonic build number (CI run number) — orders Nightly pre-releases for the
 # updater. Absent/0 for local builds.
 if [ -n "${VITALS_BUILD:-}" ]; then

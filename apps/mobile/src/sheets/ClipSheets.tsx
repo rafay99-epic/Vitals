@@ -2,12 +2,13 @@ import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { clipMeta, clipSize, KIND_NAME } from "@vitals/app/features/clips/format.ts";
 import type { Remote } from "@vitals/app/state/remote.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
-import type { Clip, ClipDestination } from "@vitals/contracts";
+import { type Clip, type ClipDestination, DROP_LIMITS } from "@vitals/contracts";
 import { formatBytes } from "@vitals/shared";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { Image, Linking, StyleSheet, View } from "react-native";
 
 import { type Batch, copyToPhone, imageUri, isFile, saveToFolder, saveToPhotos, sendBatch, shareClip } from "../lib/clips.ts";
+import { keepsGoing, macFolder, sendDrop, useFilesBlock } from "../lib/drops.ts";
 import { send, useAccess } from "../lib/remote.ts";
 import { ActionRow, BigButton, color, Icon, type IconName, Label, Segmented, type SegmentOption, sheet, SheetHeader, SheetNote, T, toast } from "../ui/index.ts";
 
@@ -163,15 +164,19 @@ function BatchPreview({ batch }: { readonly batch: Batch }) {
 }
 
 /**
- * "Send to your Mac": a preview, where it goes, and one button. Opened by the Photos and Files
- * tiles and by sharing into Vitals. `onDone` runs once, after the send ends or the sheet closes.
+ * "Send to your Mac": a preview, where it goes, and one button. Opened by the Photos, Files and
+ * Folder tiles and by sharing into Vitals. Files for Downloads go through Drop when the Mac and
+ * this app support it; the Mac clipboard takes up to 50 MB. `onDone` runs once, after the send
+ * ends or the sheet closes.
  */
 export const sendSheet = (batch: Batch, onDone?: () => void): ComponentType =>
   function SendSheet() {
     const remote = useRemote();
     const access = useAccess();
     const state = useStore(remote.connection.state);
-    const [to, setTo] = useState<ClipDestination>(batch.to);
+    const block = useFilesBlock();
+    const fits = batch.bytes <= DROP_LIMITS.clipboardBytes;
+    const [to, setTo] = useState<ClipDestination>(fits ? batch.to : "downloads");
     const sending = useRef(false);
     useEffect(
       () => () => {
@@ -179,20 +184,23 @@ export const sendSheet = (batch: Batch, onDone?: () => void): ComponentType =>
       },
       [],
     );
+    const drop = to === "downloads" && block === null && batch.items.length > 0 && batch.items.every(isFile);
     const go = () => {
       sending.current = true;
       sheet.close();
-      void sendBatch(remote, batch, to).finally(() => onDone?.());
+      void (drop ? sendDrop(remote, batch) : sendBatch(remote, batch, to)).finally(() => onDone?.());
     };
     const route = state._tag === "Ready" ? (state.route === "lan" ? "Over Wi-Fi now." : "Over Tailscale now.") : "Waiting for your Mac.";
+    const foot = drop ? keepsGoing : `${route} If the connection drops, it picks up where it stopped.`;
     return (
       <>
         <SheetHeader title="Send to your Mac" detail={[batch.label, batch.bytes > 0 ? formatBytes(batch.bytes) : null, batch.from].filter((part) => part !== null).join(" · ")} />
         <BatchPreview batch={batch} />
         <Label>Put it on</Label>
-        <Segmented options={DESTINATIONS} value={to} onChange={setTo} disabled={!access.operate} />
+        <Segmented options={DESTINATIONS} value={to} onChange={setTo} disabled={!access.operate || !fits} />
+        {fits ? null : <SheetNote>{`Too big for the clipboard. It goes to ${macFolder} on your Mac.`}</SheetNote>}
         <BigButton label="Send to Mac" disabled={!access.operate} onPress={go} />
-        <SheetNote>{access.operate ? `${route} If the connection drops, it picks up where it stopped.` : "This phone can only watch. Turn on control for it in Vitals on the Mac."}</SheetNote>
+        <SheetNote>{access.operate ? foot : "This phone can only watch. Turn on control for it in Vitals on the Mac."}</SheetNote>
       </>
     );
   };

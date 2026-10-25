@@ -48,7 +48,7 @@ const commits = commitCount();
 const bundleId = `com.syntaxlabtechnology.vitals.remote${current.suffix}`;
 
 /** Everything people share into Vitals from other apps, sent on to the Mac. */
-const SHARE_TYPES = ["text/*", "image/*", "video/*", "application/*"];
+const SHARE_TYPES = ["text/*", "image/*", "video/*", "audio/*", "application/*"];
 
 const FONT_ROOT = "../../packages/ui/node_modules/@expo-google-fonts";
 
@@ -170,7 +170,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     ["expo-image-picker", { photosPermission: "Pick photos and videos to send to your Mac.", cameraPermission: false, microphonePermission: false }],
-    ["expo-media-library", { photosPermission: false, savePhotosPermission: "Save images from your Mac to Photos.", granularPermissions: ["photo"] }],
+    ["expo-media-library", { photosPermission: false, savePhotosPermission: "Save photos and videos from your Mac to Photos.", granularPermissions: ["photo", "video"] }],
     [
       "expo-sharing",
       {
@@ -186,6 +186,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-sqlite",
     "expo-updates",
+    "@vitals/tailnet/app.plugin.js",
   ],
   owner: "prometheus99",
   extra: {

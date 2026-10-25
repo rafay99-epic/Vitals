@@ -50,6 +50,23 @@ final class ClipWatcher {
         return false
     }
 
+    func push() async -> [MacClip] {
+        let board = NSPasteboard.general
+        let front = NSWorkspace.shared.frontmostApplication
+        let contents = PasteboardContents.read(board, frontmostBundleID: front?.bundleIdentifier)
+        guard let capture = ClipCapture.classify(contents) else { return [] }
+        let source = front?.localizedName
+        let at = Int64(Date().timeIntervalSince1970 * 1000)
+        let directory = directory
+        return await Task.detached(priority: .userInitiated) {
+            ClipCapture.clips(for: capture, at: at, source: source, directory: directory).map { clip in
+                var pushed = clip
+                pushed.pushed = true
+                return pushed
+            }
+        }.value
+    }
+
     private func poll() {
         let board = NSPasteboard.general
         let count = board.changeCount

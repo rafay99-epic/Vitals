@@ -11,6 +11,7 @@ import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 
 import { toast } from "../ui/Toast.tsx";
+import { markSeen } from "./seenCopy.ts";
 import { send } from "./remote.ts";
 
 /** Hashing happens on device, natively. Past this size it costs more than the check is worth. */
@@ -101,6 +102,7 @@ export const copyToPhone = async (remote: Remote, clip: Clip): Promise<boolean> 
   }
   const text = await fullText(remote, clip);
   if (text === null) return false;
+  markSeen(text);
   await Clipboard.setStringAsync(text);
   return true;
 };
@@ -149,6 +151,7 @@ export interface PickedFile {
   readonly name: string;
   readonly mime: string | null;
   readonly size: number;
+  readonly path?: string;
 }
 
 export const isFile = (item: Picked): item is PickedFile => "uri" in item;
@@ -219,8 +222,8 @@ const sendToOldMac = async (remote: Remote, batch: Batch): Promise<boolean> => {
   return send(remote, { _tag: "ClipboardSet", text: texts.map((item) => item.text).join("\n") }, "On your Mac's clipboard");
 };
 
-/** Sends a batch to the Mac and says where it landed. Progress shows in the transfer strip. */
-export const sendBatch = async (remote: Remote, batch: Batch, to: ClipDestination): Promise<boolean> => {
+/** Sends a batch to the Mac and says where it landed, or `done` when given. Progress shows in the transfer strip. */
+export const sendBatch = async (remote: Remote, batch: Batch, to: ClipDestination, done?: string): Promise<boolean> => {
   if (remote.clips.supported.get() === false) return sendToOldMac(remote, batch);
   let items: ReadonlyArray<Outgoing>;
   try {
@@ -236,7 +239,7 @@ export const sendBatch = async (remote: Remote, batch: Batch, to: ClipDestinatio
     const item = batch.items[index];
     if (clip.kind === "image" && item !== undefined && isFile(item)) localImages.set(clip.id, item.uri);
   });
-  toast.show(placedLine(batch, to));
+  toast.show(done ?? placedLine(batch, to));
   return true;
 };
 

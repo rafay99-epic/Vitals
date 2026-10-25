@@ -10,6 +10,7 @@ import { HistoryRangeInput, HistoryRangeResult, LiveSample, Topic } from "./stat
 import { BRIDGE_VERSION, KeepAwakeState, MacInfo, SystemEvent } from "./system.ts";
 import { ActivityLevel } from "./activity.ts";
 import { ClipDestination, ClipFileName, ClipId, ClipPlacement, ClipPolicy, ClipStats, MacClip } from "./clips.ts";
+import { Drop, DropId, DropPeer, DropPolicy, MacDropFile, ReceivedDropFile } from "./drop.ts";
 import { Device } from "./auth.ts";
 
 const RequestId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
@@ -104,6 +105,9 @@ export const ToApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("pairPrompt"), prompt: PairPrompt }),
   Schema.Struct({ t: Schema.Literal("pairPromptEnded"), id: Schema.String }),
   Schema.Struct({ t: Schema.Literal("clipStats"), stats: ClipStats }),
+  Schema.Struct({ t: Schema.Literal("drop"), drop: Drop }),
+  Schema.Struct({ t: Schema.Literal("dropRemoved"), id: DropId }),
+  Schema.Struct({ t: Schema.Literal("dropReceived"), id: DropId, from: DropPeer, files: Schema.Array(ReceivedDropFile) }),
 ]);
 export type ToApp = typeof ToApp.Type;
 
@@ -135,6 +139,15 @@ export const FromApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("clip"), clip: MacClip }),
   Schema.Struct({ t: Schema.Literal("clipPolicy"), policy: ClipPolicy }),
   Schema.Struct({ t: Schema.Literal("clipClear") }),
+  Schema.Struct({
+    t: Schema.Literal("dropSend"),
+    to: Schema.Array(DeviceId).check(Schema.isMinLength(1), Schema.isMaxLength(8)),
+    files: Schema.Array(MacDropFile).check(Schema.isMinLength(1), Schema.isMaxLength(10_000)),
+  }),
+  Schema.Struct({ t: Schema.Literal("dropDecision"), id: DropId, accept: Schema.Boolean }),
+  Schema.Struct({ t: Schema.Literal("dropCancel"), id: DropId }),
+  Schema.Struct({ t: Schema.Literal("dropPause"), id: DropId, paused: Schema.Boolean }),
+  Schema.Struct({ t: Schema.Literal("dropPolicy"), policy: DropPolicy }),
 ]);
 export type FromApp = typeof FromApp.Type;
 

@@ -13,6 +13,8 @@ import * as Bridge from "./bridge/Bridge.ts";
 import * as ClipStore from "./clips/ClipStore.ts";
 import * as CommandService from "./commands/CommandService.ts";
 import { GatewayConfig, type GatewayConfigShape, MAX_FRAME_BYTES } from "./config.ts";
+import * as DropStore from "./drop/DropStore.ts";
+import { dropRoutes } from "./drop/routes.ts";
 import * as EventLog from "./events/EventLog.ts";
 import { apiRoutes, staticRoutes } from "./http/routes.ts";
 import * as Lan from "./lan/Lan.ts";
@@ -42,7 +44,8 @@ const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
   );
   const bridged = Bridge.layer.pipe(Layer.provideMerge(core));
   const authed = Auth.layer(config.ownerLogin).pipe(Layer.provideMerge(bridged));
-  const lanned = Lan.layer.pipe(Layer.provideMerge(authed));
+  const dropped = DropStore.layer(remoteDb).pipe(Layer.provideMerge(authed));
+  const lanned = Lan.layer.pipe(Layer.provideMerge(dropped));
   const evented = EventLog.layer(activityDb).pipe(Layer.provideMerge(lanned));
   const services = Layer.mergeAll(
     Hubs.layer,
@@ -59,7 +62,7 @@ const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
   return Layer.mergeAll(Admin.layer, ready).pipe(Layer.provideMerge(services));
 };
 
-const routes = (config: GatewayConfigShape) => Layer.mergeAll(apiRoutes, wsRoute, staticRoutes(config.webDir));
+const routes = (config: GatewayConfigShape) => Layer.mergeAll(apiRoutes, dropRoutes, wsRoute, staticRoutes(config.webDir));
 
 export const makeApp = (config: GatewayConfigShape, deps: AppDependencies) =>
   HttpRouter.serve(routes(config), { disableLogger: true, disableListenLog: true }).pipe(
@@ -68,6 +71,7 @@ export const makeApp = (config: GatewayConfigShape, deps: AppDependencies) =>
         port: config.port,
         hostname: "127.0.0.1",
         gracefulShutdownTimeout: "2 seconds",
+        idleTimeout: 120,
         websocket: { idleTimeout: 30, perMessageDeflate: false, maxPayloadLength: MAX_FRAME_BYTES },
       }),
     ),

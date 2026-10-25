@@ -30,5 +30,11 @@
   { "t": "clip", "clip": { "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6d", "kind": "folder", "at": 1790000002000, "source": "Finder", "text": null, "truncated": false, "name": "Invoices", "mime": null, "bytes": 0, "files": 12, "thumb": null, "stored": null, "origin": "/Users/abdul/Documents/Invoices" } },
   { "t": "result", "id": "q-4", "ok": { "_tag": "ClipMaterialize", "stored": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6d.zip", "bytes": 1048576, "files": 12 }, "error": null },
   { "t": "result", "id": "q-5", "ok": { "_tag": "ClipPut", "placed": 2 }, "error": null },
-  { "t": "clipClear" }
+  { "t": "clipClear" },
+  { "t": "clip", "clip": { "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6e", "kind": "link", "at": 1790000003000, "source": "Safari", "text": "https://vitals.rafay99.com", "truncated": false, "name": null, "mime": null, "bytes": 0, "files": null, "thumb": null, "stored": null, "origin": null, "pushed": true } },
+  { "t": "dropPolicy", "policy": { "autoAccept": true, "askWeb": true, "maxBytes": 53687091200 } },
+  { "t": "dropSend", "to": ["dev-1"], "files": [{ "name": "IMG_0042.HEIC", "path": "Trip/IMG_0042.HEIC", "size": 2483021, "mime": "image/heic", "origin": "/Users/abdul/Pictures/Trip/IMG_0042.HEIC" }, { "name": "notes.txt", "path": null, "size": 0, "mime": "text/plain", "origin": "/Users/abdul/Desktop/notes.txt" }] },
+  { "t": "dropDecision", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01", "accept": true },
+  { "t": "dropPause", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01", "paused": true },
+  { "t": "dropCancel", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01" }
 ]

@@ -3,6 +3,8 @@ import SwiftUI
 /// Clipboard history for phones: the on/off switch, retention, what's stored, and a clear button.
 struct ClipboardCard: View {
     @Environment(RemoteModel.self) private var remote
+    @Environment(ShareModel.self) private var share
+    @Environment(Navigator.self) private var navigator
     @State private var confirmingClear = false
 
     private static let keepOptions = [1, 7, 30]
@@ -29,6 +31,13 @@ struct ClipboardCard: View {
             Text("Passwords are always skipped. So are 1Password, Bitwarden, Passwords and Keychain Access.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            settingsRow("Send clipboard to phone") {
+                Button { navigator.section = .settings } label: {
+                    Text(share.shortcut?.display ?? "None").monospacedDigit()
+                }
+                .controlSize(.small)
+                .help("Change it in Settings › Shortcuts")
+            }
             if let stats = remote.clipStats {
                 HStack {
                     Text(Self.statsLine(stats))

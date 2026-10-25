@@ -1,16 +1,17 @@
-import type { Clip } from "@vitals/contracts";
+import type { Clip, DeviceId, Drop, DropId } from "@vitals/contracts";
 import { Button, Field, Mono, Row, Sans, Sheet } from "@vitals/ui";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 
 import { useRemote } from "../../connection/useRemote.ts";
 import { haptics } from "../../lib/haptics";
 import type { Moving } from "../../state/clips.ts";
+import { type DropLive, dropLabel, isEnded, isOutgoing } from "../../state/drops.ts";
 import type { Remote } from "../../state/remote.ts";
 import { fraction } from "../../state/transfer.ts";
-import { useStore } from "../../state/useStore.ts";
+import { useSelect, useStore } from "../../state/useStore.ts";
 import { useNow } from "../../state/useVitals.ts";
-import { acceptDrops, chooseFiles, copyClipText, downloadClip, hasDom, sendOnPaste, sendToMac } from "../clips/browser.ts";
+import { acceptDrops, chooseFiles, copyClipText, downloadClip, hasDom, sendFiles, sendOnPaste, sendToMac } from "../clips/browser.ts";
 import { clipMeta, clipTitle } from "../clips/format.ts";
 
 const ACCEPTED: ReadonlySet<string> = new Set(["done", "running"]);
@@ -30,6 +31,25 @@ function MovingLine({ moving }: { readonly moving: Moving }) {
     </View>
   );
 }
+
+function DropLine({ drop }: { readonly drop: Drop }) {
+  const remote = useRemote();
+  const pick = useCallback((live: ReadonlyMap<DropId, DropLive>) => live.get(drop.id) ?? null, [drop.id]);
+  const live = useSelect(remote.drops.live, pick);
+  const tail = drop.state === "asking" ? "waiting for the Mac to accept" : live === null || live.total === 0 ? "0%" : `${String(Math.round((live.done / live.total) * 100))}%`;
+  return (
+    <View className="flex-row items-center justify-between gap-3 px-[22px] py-2">
+      <Mono tone="ink" numberOfLines={1} className="shrink">{`Sending ${dropLabel(drop)} · ${tail}`}</Mono>
+      <Button label="Cancel" variant="text" small onPress={() => void remote.drops.cancel(drop.id)} />
+    </View>
+  );
+}
+
+const useSending = (me: DeviceId): ReadonlyArray<Drop> => {
+  const remote = useRemote();
+  const mine = useCallback((drops: ReadonlyArray<Drop>) => drops.filter((drop) => !isEnded(drop) && isOutgoing(drop, me)), [me]);
+  return useSelect(remote.drops.drops, mine);
+};
 
 function ClipLine({ clip, remote, now }: { readonly clip: Clip; readonly remote: Remote; readonly now: number }) {
   const text = clip.kind === "text" || clip.kind === "link";
@@ -52,7 +72,17 @@ function History({ canRead, canWrite }: { readonly canRead: boolean; readonly ca
   // On the web a View is a DOM element; it is kept in state so the drop listener attaches once it mounts.
   const [zone, setZone] = useState<unknown>(null);
 
-  useEffect(() => (canWrite ? acceptDrops(zone, (files) => void sendToMac(remote, files, null)) : undefined), [remote, canWrite, zone]);
+  const sending = useSending(remote.credentials.deviceId);
+
+  useEffect(() => (canWrite ? acceptDrops(zone, (files) => void sendFiles(remote, files)) : undefined), [remote, canWrite, zone]);
+  useEffect(
+    () =>
+      remote.drops.onFinish((finish) => {
+        if (finish._tag === "Sent") remote.show("In Downloads › Vitals on the Mac.");
+        if (finish._tag === "Declined") remote.show("The Mac said no.", "bad");
+      }),
+    [remote],
+  );
   useEffect(() => (canWrite ? sendOnPaste((files, pasted) => void sendToMac(remote, files, pasted)) : undefined), [remote, canWrite]);
 
   const sendText = () => {
@@ -71,11 +101,14 @@ function History({ canRead, canWrite }: { readonly canRead: boolean; readonly ca
           <Sans size="small" tone="dim">
             Drop files here, or paste, to send to the Mac
           </Sans>
-          <Button label="Choose files" variant="line" small onPress={() => chooseFiles((files) => void sendToMac(remote, files, null))} />
+          <Button label="Choose files" variant="line" small onPress={() => chooseFiles((files) => void sendFiles(remote, files))} />
         </View>
       ) : null}
       {moving.map((item) => (
         <MovingLine key={item.id} moving={item} />
+      ))}
+      {sending.map((drop) => (
+        <DropLine key={drop.id} drop={drop} />
       ))}
       {!canRead ? (
         <Mono className="px-[22px] pb-4">Reading the Mac clipboard is off for this device.</Mono>
