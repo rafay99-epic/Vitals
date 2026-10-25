@@ -69,6 +69,10 @@ enum LaunchOverrides {
         value(for: "--history-metric").flatMap(HistoryView.Metric.init(rawValue:))
     }
 
+    static func has(_ flag: String, in args: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        args.contains(flag)
+    }
+
     /// The token following `flag`, or nil when the flag is absent or trailing.
     static func value(for flag: String, in args: [String] = ProcessInfo.processInfo.arguments) -> String? {
         guard let index = args.firstIndex(of: flag), args.indices.contains(index + 1) else { return nil }

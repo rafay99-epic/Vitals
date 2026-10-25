@@ -14,6 +14,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var picker: NSPopover?
+    private var detached: NSPanel?
     private var launchObserver: NSObjectProtocol?
     private lazy var dropTarget = StatusDropTarget { [weak self] urls in self?.share.offer(urls, from: .menuBar) }
 
@@ -24,7 +25,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         self.share = share
         super.init()
 
-        share.presentPanel = { [weak self] in self?.showPanel() }
+        share.presentPanel = { [weak self] in self?.showPanel(from: self?.visibleButton) }
         share.presentPicker = { [weak self] batch in self?.showPicker(batch) ?? false }
 
         observeChanges(of: { settings.showMenuBar }) { [weak self] in self?.setVisible($0) }
@@ -88,6 +89,35 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             window.registerForDraggedTypes([.fileURL])
             window.delegate = dropTarget
         }
+        if LaunchOverrides.has("--menu-panel") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showDetachedPanel() }
+        }
+    }
+
+    private var visibleButton: NSStatusBarButton? {
+        guard let button = statusItem?.button, let window = button.window, window.occlusionState.contains(.visible),
+              NSScreen.screens.contains(where: { $0.frame.contains(NSPoint(x: window.frame.midX, y: window.frame.midY)) })
+        else { return nil }
+        return button
+    }
+
+    private func panelView() -> some View {
+        MenuBarPanel()
+            .environment(model)
+            .environment(settings)
+            .environment(navigator)
+            .environment(share)
+    }
+
+    private func showDetachedPanel() {
+        let window = NSPanel(contentRect: .zero, styleMask: [.titled, .utilityWindow, .nonactivatingPanel], backing: .buffered, defer: false)
+        window.title = "Menu bar panel"
+        window.contentViewController = NSHostingController(rootView: panelView())
+        window.isReleasedWhenClosed = false
+        model.setMenuBarPanelVisible(true)
+        share.panelOpen = true
+        window.orderFrontRegardless()
+        detached = window
     }
 
     /// Headroom so sub-pixel rounding on fractional-scaled displays can't shave
@@ -118,23 +148,17 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             popover.performClose(nil)
             return
         }
-        showPanel()
+        showPanel(from: statusItem?.button)
     }
 
-    private func showPanel() {
-        guard let button = statusItem?.button else { return }
+    private func showPanel(from button: NSStatusBarButton?) {
+        guard let button else { return }
         picker?.performClose(nil)
         if let popover, popover.isShown { return }
-        let panel = MenuBarPanel()
-            .environment(model)
-            .environment(settings)
-            .environment(navigator)
-            .environment(share)
-
         let popover = NSPopover()
         popover.behavior = .transient // dismiss on click outside / Esc
         popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: panel)
+        popover.contentViewController = NSHostingController(rootView: panelView())
         self.popover = popover
         button.highlight(true)
         model.setMenuBarPanelVisible(true)
@@ -143,7 +167,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 
     private func showPicker(_ batch: ShareModel.Batch) -> Bool {
-        guard let button = statusItem?.button else { return false }
+        guard let button = visibleButton else { return false }
         popover?.performClose(nil)
         picker?.performClose(nil)
         let picker = NSPopover()

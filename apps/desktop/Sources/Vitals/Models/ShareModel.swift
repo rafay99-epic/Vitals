@@ -62,6 +62,7 @@ final class ShareModel {
     @ObservationIgnored private var pending: [String: Drop] = [:]
     @ObservationIgnored private var flushTask: Task<Void, Never>?
     @ObservationIgnored private var unmatched: [(deviceId: String, files: [MacDropFile])] = []
+    @ObservationIgnored private var deferred: [(urls: [URL], origin: Origin)] = []
 
     static let freshness: TimeInterval = 600
     static let flushDelay: Duration = .milliseconds(250)
@@ -148,7 +149,23 @@ final class ShareModel {
 
     // MARK: Bridge
 
-    func connected() { sendPolicy() }
+    func connected() {
+        sendPolicy()
+        guard !deferred.isEmpty else { return }
+        let queued = deferred
+        deferred = []
+        Task { [weak self] in
+            await self?.remote?.refreshDevices()
+            for entry in queued { self?.offer(entry.urls, from: entry.origin) }
+        }
+    }
+
+    private var gatewayComing: Bool {
+        switch remote?.state {
+        case .starting, .restarting: return true
+        default: return false
+        }
+    }
 
     func disconnected() {
         flushTask?.cancel()
@@ -341,7 +358,11 @@ final class ShareModel {
     func offer(_ urls: [URL], from origin: Origin) {
         guard !urls.isEmpty else { return }
         guard remote?.state == .running else {
-            note("Remote access is off", "Turn it on in Remote to send files to your phone.")
+            if gatewayComing {
+                deferred.append((urls: urls, origin: origin))
+            } else {
+                note("Remote access is off", "Turn it on in Remote to send files to your phone.")
+            }
             return
         }
         guard !phones.isEmpty else {
