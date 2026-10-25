@@ -21,14 +21,15 @@ import type { Scope } from "@vitals/contracts";
 import { formatDateTime } from "@vitals/shared";
 import Constants from "expo-constants";
 import { useCallback, useEffect, useState } from "react";
-import { Linking, StyleSheet, View } from "react-native";
+import { AppState, Linking, Platform, StyleSheet, View } from "react-native";
 
 import { LINK_COLOR, useMac } from "../lib/remote.ts";
+import { askFullStorage, hasFullStorage, phoneRoots, setShareFiles, shareFiles } from "../lib/share.ts";
 import { checkNightly, installedBuild, nightlyState, nightlySupported } from "../lib/nightly.ts";
 import { checkForUpdate, restartIntoUpdate, type UpdateState, updateState } from "../lib/updates.ts";
 import type { SettingsStackParams } from "../navigation.ts";
 import { UnpairSheet } from "../sheets/SendSheets.tsx";
-import { BackBar, BigButton, color, Group, Label, Note, Page, Row, sheet, T, Title, toast } from "../ui/index.ts";
+import { BackBar, BigButton, color, Group, Label, Note, Page, Row, sheet, T, Title, toast, Toggle } from "../ui/index.ts";
 
 type Props<K extends keyof SettingsStackParams> = NativeStackScreenProps<SettingsStackParams, K>;
 
@@ -238,6 +239,10 @@ const SCOPES: ReadonlyArray<{ readonly scope: Scope; readonly label: string }> =
   { scope: "operate", label: "Control the Mac" },
   { scope: "destructive", label: "Shut down, restart, quit apps" },
   { scope: "clipboard", label: "Read the Mac clipboard" },
+  { scope: "files", label: "Send and get files" },
+  { scope: "fsRead", label: "Browse the Mac's folders" },
+  { scope: "fsWrite", label: "Change the Mac's files" },
+  { scope: "terminal", label: "Terminal" },
 ];
 
 export function PhoneScreen() {
@@ -258,7 +263,28 @@ export function PhoneScreen() {
         ))}
       </Group>
       <Note>Change this in Vitals on the Mac, under Remote.</Note>
+      <ShareSettings />
     </Page>
+  );
+}
+
+function ShareSettings() {
+  const sharing = useStore(shareFiles);
+  const [full, setFull] = useState(hasFullStorage);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => state === "active" && setFull(hasFullStorage()));
+    return () => subscription.remove();
+  }, []);
+  const roots = phoneRoots();
+  return (
+    <>
+      <Label>What your Mac can see here</Label>
+      <Group>
+        <Row first label="Let your Mac and other phones browse" control={<Toggle value={sharing} label="Let your Mac and other phones browse" onChange={setShareFiles} />} />
+        {Platform.OS === "android" ? <Row label="All files on this phone" value={full ? "Allowed" : "Off"} valueColor={full ? color.green : color.dim} onPress={() => void askFullStorage()} /> : null}
+      </Group>
+      <Note>{sharing ? `Shared while Vitals is open: ${roots.map((root) => root.label).join(", ")}.` : "Nothing on this phone is shared."}</Note>
+    </>
   );
 }
 

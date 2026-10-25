@@ -242,10 +242,10 @@ export class MacDrops {
     this.publish(true);
   }
 
-  async send(files: ReadonlyArray<OutgoingFile>, dest?: string): Promise<Drop | null> {
+  async send(files: ReadonlyArray<OutgoingFile>, target: { readonly dest?: string; readonly relay?: DeviceId } = {}): Promise<Drop | null> {
     if (!this.engine.supported || files.length === 0) return null;
     const offers = files.map((file) => ({ name: file.name, path: file.path, size: file.size, mime: file.mime, sha256: null }));
-    const result = await this.connection.call((client) => client["drop.offer"](dest === undefined ? { files: offers } : { files: offers, dest }));
+    const result = await this.connection.call((client) => client["drop.offer"]({ files: offers, ...target }));
     if (!result.ok) {
       this.report(result.error.message);
       return null;

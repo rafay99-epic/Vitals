@@ -21,6 +21,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ClipboardSync } from "./ClipboardSync.tsx";
+import { ShareSync } from "./ShareSync.tsx";
 import { CopyStrip } from "./CopyStrip.tsx";
 import { DropStrips } from "./DropTransfers.tsx";
 import { checkForUpdate, launchedNewUpdate, updateState } from "./lib/updates.ts";
@@ -183,6 +184,7 @@ function Shell() {
       />
       <SheetHost />
       <ClipboardSync />
+      <ShareSync />
     </View>
   );
 }

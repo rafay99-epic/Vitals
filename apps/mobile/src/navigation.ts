@@ -1,4 +1,5 @@
 import { createNavigationContainerRef, type NavigatorScreenParams } from "@react-navigation/native";
+import type { DeviceId } from "@vitals/contracts";
 import type { Channel } from "@vitals/ui";
 
 export type HomeStackParams = {
@@ -10,7 +11,7 @@ export type ControlStackParams = {
   Control: undefined;
   Clipboard: undefined;
   Files: undefined;
-  Folder: { readonly path: string; readonly title: string };
+  Folder: { readonly path: string; readonly title: string; readonly device?: DeviceId; readonly deviceName?: string };
   Terminal: undefined;
 };
 

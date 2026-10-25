@@ -4,11 +4,11 @@ import type { SavedFile, SentDrop } from "@vitals/app/state/drops.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
 import { formatBytes } from "@vitals/shared";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { FsEntry, FsRoot } from "@vitals/contracts";
-import { useEffect, useState } from "react";
-import { Image, SectionList, StyleSheet, View } from "react-native";
+import type { FsDevice, FsEntry, FsRoot } from "@vitals/contracts";
+import { useCallback, useEffect, useState } from "react";
+import { Image, ScrollView, SectionList, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DropCards } from "../DropTransfers.tsx";
@@ -20,7 +20,7 @@ import type { ControlStackParams } from "../navigation.ts";
 import { sendSheet } from "../sheets/ClipSheets.tsx";
 import { macFileSheet } from "../sheets/MacFileSheet.tsx";
 import { receivedSheet, sentSheet } from "../sheets/FileSheets.tsx";
-import { BackBar, color, Empty, Group, Icon, type IconName, Label, Note, Row, SearchField, sheet, T, Tap, Tile, TileGrid, Title, toast, Toggle, useDockSpace } from "../ui/index.ts";
+import { BackBar, Chip, color, Empty, Group, Icon, type IconName, Label, Note, Row, SearchField, sheet, T, Tap, Tile, TileGrid, Title, toast, Toggle, useDockSpace } from "../ui/index.ts";
 
 const KIND_LOOK: Readonly<Record<FileKind, { readonly icon: IconName; readonly tint: string }>> = {
   apk: { icon: "android", tint: color.green },
@@ -87,6 +87,9 @@ const PLACE_ICON: Readonly<Record<FsRoot["place"], IconName>> = {
   pictures: "image",
   disk: "mac",
   volume: "files",
+  photos: "image",
+  storage: "android",
+  folder: "folder",
 };
 
 type Places = { readonly _tag: "loading" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly roots: ReadonlyArray<FsRoot> };
@@ -97,19 +100,28 @@ function MacPlaces() {
   const [places, setPlaces] = useState<Places>({ _tag: "loading" });
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<ReadonlyArray<FsEntry> | null>(null);
+  const [devices, setDevices] = useState<ReadonlyArray<FsDevice>>([]);
+  const [picked, setPicked] = useState<FsDevice | null>(null);
   const state = useStore(remote.connection.state);
   const ready = state._tag === "Ready";
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!ready) return;
+      void remote.files.devices().then((outcome) => outcome.ok && setDevices(outcome.value.devices));
+    }, [remote, ready]),
+  );
 
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
-    void remote.files.roots().then((outcome) => {
+    void remote.files.roots(picked?.deviceId).then((outcome) => {
       if (!cancelled) setPlaces(outcome.ok ? { _tag: "loaded", roots: outcome.value.roots } : { _tag: "failed", message: outcome.message });
     });
     return () => {
       cancelled = true;
     };
-  }, [remote, ready]);
+  }, [remote, ready, picked]);
 
   useEffect(() => {
     const text = query.trim();
@@ -136,11 +148,27 @@ function MacPlaces() {
   const openEntry = (entry: FsEntry) =>
     entry.kind === "folder" || entry.kind === "link" ? navigation.push("Folder", { path: entry.path, title: entry.name }) : sheet.open(macFileSheet(entry, false));
 
+  const pick = (device: FsDevice | null) => {
+    setPlaces({ _tag: "loading" });
+    setPicked(device);
+  };
+
+  const openRoot = (root: FsRoot) =>
+    navigation.push("Folder", { path: root.path, title: root.label, ...(picked === null ? {} : { device: picked.deviceId, deviceName: picked.name }) });
+
   return (
     <View>
-      <Label>On your Mac</Label>
-      <SearchField placeholder="Search your Mac" value={query} onChangeText={type} accessibilityLabel="Search your Mac" />
-      {searching ? (
+      {devices.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.devices}>
+          <Chip label="Your Mac" on={picked === null} onPress={() => pick(null)} />
+          {devices.map((device) => (
+            <Chip key={device.deviceId} label={device.online ? device.name : `${device.name} · not open`} on={picked?.deviceId === device.deviceId} onPress={() => pick(device)} />
+          ))}
+        </ScrollView>
+      ) : null}
+      <Label>{picked === null ? "On your Mac" : `On ${picked.name}`}</Label>
+      {picked === null ? <SearchField placeholder="Search your Mac" value={query} onChangeText={type} accessibilityLabel="Search your Mac" /> : null}
+      {searching && picked === null ? (
         found === null ? (
           <Empty title="Searching" />
         ) : found.length === 0 ? (
@@ -151,9 +179,9 @@ function MacPlaces() {
       ) : places._tag === "loading" ? (
         <Empty title="Loading" />
       ) : places._tag === "failed" ? (
-        <Empty title="Can't see your Mac's folders" detail={places.message} />
+        <Empty title={picked === null ? "Can't see your Mac's folders" : `Can't see ${picked.name}`} detail={places.message} />
       ) : (
-        places.roots.map((root) => <PlaceRow key={root.path} icon={PLACE_ICON[root.place]} title={root.label} onPress={() => navigation.push("Folder", { path: root.path, title: root.label })} />)
+        places.roots.map((root) => <PlaceRow key={root.path} icon={PLACE_ICON[root.place]} title={root.label} onPress={() => openRoot(root)} />)
       )}
     </View>
   );
@@ -261,6 +289,7 @@ export function FilesScreen() {
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: color.bg },
   where: { paddingHorizontal: 20, paddingBottom: 12 },
+  devices: { gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 8 },
   rowText: { flex: 1 },
   icon: { width: 34, height: 34, borderRadius: 10 },

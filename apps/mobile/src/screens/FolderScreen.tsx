@@ -90,7 +90,7 @@ export function FolderScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const bottom = useDockSpace();
   const now = useNow(60_000);
-  const { path, title } = route.params;
+  const { path, title, device, deviceName } = route.params;
   const [sort, setSort] = useState<FsSort>("name");
   const [listing, setListing] = useState<Listing>({ _tag: "loading" });
   const [selecting, setSelecting] = useState(false);
@@ -98,32 +98,32 @@ export function FolderScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void remote.files.list(path, sort, 0).then((outcome) => {
+    void remote.files.list(path, sort, 0, device).then((outcome) => {
       if (cancelled) return;
       setListing(outcome.ok ? { _tag: "loaded", entries: outcome.value.entries, total: outcome.value.total, more: false } : { _tag: "failed", message: outcome.message });
-      if (outcome.ok) remote.files.want(outcome.value.entries.slice(0, 40));
+      if (outcome.ok) remote.files.want(outcome.value.entries.slice(0, 40), device);
     });
     return () => {
       cancelled = true;
     };
-  }, [remote, path, sort]);
+  }, [remote, path, sort, device]);
 
   const loadMore = () => {
     if (listing._tag !== "loaded" || listing.more || listing.entries.length >= listing.total) return;
     const shown = listing.entries;
     setListing({ ...listing, more: true });
-    void remote.files.list(path, sort, shown.length).then((outcome) => {
+    void remote.files.list(path, sort, shown.length, device).then((outcome) => {
       setListing((current) => (current._tag !== "loaded" ? current : outcome.ok ? { _tag: "loaded", entries: [...shown, ...outcome.value.entries], total: outcome.value.total, more: false } : { ...current, more: false }));
     });
   };
 
   const open = (entry: FsEntry) => {
     if (entry.kind === "folder" || entry.kind === "link") {
-      navigation.push("Folder", { path: entry.path, title: entry.name });
+      navigation.push("Folder", { path: entry.path, title: entry.name, ...(device === undefined ? {} : { device, deviceName: deviceName ?? "" }) });
       return;
     }
     if (!selecting) {
-      sheet.open(macFileSheet(entry, access.change));
+      sheet.open(macFileSheet(entry, device === undefined && access.change, device === undefined ? null : { device, name: deviceName ?? "That phone" }));
       return;
     }
     setPicked((current) => {
@@ -138,8 +138,14 @@ export function FolderScreen({ navigation, route }: Props) {
     const entries = [...picked.values()];
     setSelecting(false);
     setPicked(new Map());
+    const what = entries.length === 1 ? (entries[0]?.name ?? "it") : `${String(entries.length)} files`;
+    if (device !== undefined) {
+      const outcome = await remote.files.pull(device, entries.map((entry) => entry.path));
+      toast.show(outcome.ok ? `${deviceName ?? "That phone"} is sending ${what} through your Mac` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
+      return;
+    }
     const drop = await remote.drops.pull(entries.map((entry) => entry.path));
-    if (drop !== null) toast.show(`Getting ${entries.length === 1 ? (entries[0]?.name ?? "it") : `${String(entries.length)} files`} from your Mac`);
+    if (drop !== null) toast.show(`Getting ${what} from your Mac`);
   };
 
   const putHere = async () => {
@@ -149,8 +155,8 @@ export function FolderScreen({ navigation, route }: Props) {
   };
 
   const onViewable = useCallback(
-    ({ viewableItems }: { readonly viewableItems: ReadonlyArray<{ readonly item: FsEntry }> }) => remote.files.want(viewableItems.map((token) => token.item).filter(hasPreview)),
-    [remote],
+    ({ viewableItems }: { readonly viewableItems: ReadonlyArray<{ readonly item: FsEntry }> }) => remote.files.want(viewableItems.map((token) => token.item).filter(hasPreview), device),
+    [remote, device],
   );
 
   const toggleSelecting = () => {
@@ -171,7 +177,7 @@ export function FolderScreen({ navigation, route }: Props) {
             {selecting ? "Done" : "Select"}
           </T>
         </Tap>
-        {access.change ? (
+        {access.change && device === undefined ? (
           <Tap onPress={() => void putHere()} accessibilityRole="button" hitSlop={10}>
             <T v="medium" color={color.yellow}>
               Put files here
