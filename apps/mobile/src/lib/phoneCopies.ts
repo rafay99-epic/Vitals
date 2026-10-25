@@ -59,18 +59,29 @@ export const checkPhoneCopy = async (remote: Remote, canRead: boolean): Promise<
   phoneCopy.set({ _tag: "Text", text });
 };
 
-const IN_FRONT_MS = 300;
+const FOCUS_WAIT_MS = 250;
+const FOCUS_TRIES = 8;
 
-export const sendClipboardNow = async (remote: Remote): Promise<void> => {
-  await new Promise((resolve) => setTimeout(resolve, IN_FRONT_MS));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type Copied = { readonly _tag: "Image"; readonly data: string } | { readonly _tag: "Text"; readonly text: string };
+
+const readCopied = async (): Promise<Copied | null> => {
   if (await Clipboard.hasImageAsync().catch(() => false)) {
     const image = await Clipboard.getImageAsync({ format: "png" }).catch(() => null);
-    if (image !== null) {
-      await sendPastedImage(remote, image.data, "Sent to your Mac");
-      return;
-    }
+    if (image !== null) return { _tag: "Image", data: image.data };
   }
   const text = (await Clipboard.getStringAsync().catch(() => "")).trim();
-  if (text === "") return toast.show("Nothing to send. Copy something first.");
-  await sendText(remote, text, "Sent to your Mac");
+  return text === "" ? null : { _tag: "Text", text };
+};
+
+export const sendClipboardNow = async (remote: Remote): Promise<void> => {
+  let copied: Copied | null = null;
+  for (let attempt = 0; attempt < FOCUS_TRIES && copied === null; attempt += 1) {
+    await wait(FOCUS_WAIT_MS);
+    copied = await readCopied();
+  }
+  if (copied === null) return toast.show("Nothing to send. Copy something first.");
+  if (copied._tag === "Image") await sendPastedImage(remote, copied.data, "Sent to your Mac");
+  else await sendText(remote, copied.text, "Sent to your Mac");
 };
