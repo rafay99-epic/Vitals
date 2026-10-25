@@ -4,7 +4,7 @@ import { dropLabel, type SavedFile, type SentDrop } from "@vitals/app/state/drop
 import type { Drop } from "@vitals/contracts";
 import { formatBytes } from "@vitals/shared";
 import type { ComponentType } from "react";
-import { Image, Platform, StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 
 import { canInstallApps, fileKind, installSaved, KIND_NAME, openSaved, saveSavedToPhotos, savedTo, shareSaved } from "../lib/drops.ts";
 import { ActionRow, BigButton, color, sheet, SheetCancel, SheetHeader, T, toast } from "../ui/index.ts";
@@ -66,7 +66,7 @@ export const receivedSheet = (file: SavedFile): ComponentType =>
         {kind === "apk" ? <AppWarning /> : null}
         {kind === "apk" && canInstallApps ? <ActionRow icon="android" label="Install" detail="Opens Android's installer" onPress={after(() => installSaved(file))} /> : null}
         {media ? <ActionRow icon="down" label="Save to Photos" onPress={after(() => saveSavedToPhotos(file))} /> : null}
-        <ActionRow icon="files" label={Platform.OS === "ios" ? "Show in Files" : "Open"} detail={savedTo} onPress={after(() => openSaved(file))} />
+        <ActionRow icon="files" label="Open" detail={savedTo} onPress={after(() => openSaved(file))} />
         <ActionRow icon="share" label="Share" detail="to Drive, WhatsApp, any app" onPress={after(() => shareSaved(file))} />
         <ActionRow icon="trash" label="Remove from this list" detail="The file stays saved" onPress={remove} />
       </>
