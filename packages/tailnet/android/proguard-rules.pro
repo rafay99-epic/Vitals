@@ -3,3 +3,5 @@
 # the moment built-in Tailscale starts.
 -keep class go.** { *; }
 -keep class dev.vitals.** { *; }
+# Drop transfers call back into the Kotlin listener from Go threads by interface method name.
+-keep class * implements dev.vitals.tailnet.DropListener { *; }
