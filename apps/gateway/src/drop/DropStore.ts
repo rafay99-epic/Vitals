@@ -56,6 +56,7 @@ export class DropStore extends Context.Service<
     readonly watch: (caller: DropCaller) => Stream.Stream<DropEvent>;
     readonly offer: (caller: DropCaller, input: DropOfferInput) => Effect.Effect<DropOffered, DropError>;
     readonly accept: (caller: DropCaller, input: DropIdInput) => Effect.Effect<DropOffered, DropError>;
+    readonly pull: (caller: DropCaller, files: ReadonlyArray<MacDropFile>) => Effect.Effect<DropOffered, DropError>;
     readonly decline: (caller: DropCaller, input: DropIdInput) => Effect.Effect<Drop, DropError>;
     readonly cancel: (caller: DropCaller, input: DropIdInput) => Effect.Effect<Drop, DropError>;
     readonly ticket: (caller: DropCaller, input: DropIdInput) => Effect.Effect<DropTicket, DropError>;
@@ -244,6 +245,7 @@ export const layer = (database: Database) =>
           id: drop.id,
           from: drop.from,
           files: drop.files.map((file) => ({ stored: `${drop.id}/${file.id}`, name: file.name, path: file.path, size: file.size })),
+          ...(drop.dest === null ? {} : { dest: drop.dest }),
         });
 
       const finish = (drop: DropRecord, state: Ending, error: string | null = null) => {
@@ -380,6 +382,7 @@ export const layer = (database: Database) =>
               updatedAt: now,
               startedAt: null,
               error: refusal,
+              dest: null,
             });
             add(drop);
             if (refusal === null) for (const file of drop.files) Queue.offerUnsafe(hashJobs, { drop, file });
@@ -501,9 +504,35 @@ export const layer = (database: Database) =>
             updatedAt: now,
             startedAt: asks ? null : now,
             error: null,
+            dest: input.dest ?? null,
           });
           yield* Effect.tryPromise({ try: () => files.ensure(drop.id), catch: () => rejected("The Mac could not get ready for this drop") });
           add(drop);
+          return { drop: wire(drop), ticket: issue(drop) };
+        });
+
+      const pull = (caller: DropCaller, list: ReadonlyArray<MacDropFile>) =>
+        Effect.gen(function* () {
+          const refusal = busy(caller.deviceId);
+          if (refusal !== null) return yield* Effect.fail(rejected(refusal));
+          const now = Date.now();
+          const drop = makeDrop({
+            id: makeDropId(newId()),
+            deviceId: caller.deviceId,
+            incoming: false,
+            from: { _tag: "Mac", name: macName },
+            to: { _tag: "Device", deviceId: caller.deviceId, name: caller.name },
+            files: list.map((file, index) => fileRecord(index, file, file.size, null, file.origin)),
+            createdAt: now,
+            state: "running",
+            route: null,
+            updatedAt: now,
+            startedAt: now,
+            error: null,
+            dest: null,
+          });
+          add(drop);
+          for (const file of drop.files) Queue.offerUnsafe(hashJobs, { drop, file });
           return { drop: wire(drop), ticket: issue(drop) };
         });
 
@@ -737,6 +766,6 @@ export const layer = (database: Database) =>
           }),
         );
 
-      return DropStore.of({ watch, offer, accept, decline, cancel, ticket, received, handle });
+      return DropStore.of({ watch, offer, accept, pull, decline, cancel, ticket, received, handle });
     }),
   );

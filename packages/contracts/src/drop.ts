@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 
+import { FsPath } from "./fs.ts";
 import { DeviceId, EpochMs, NonNegativeInt, PositiveInt } from "./ids.ts";
 
 export const DROP_LIMITS = {
@@ -88,6 +89,7 @@ export type DropTicket = typeof DropTicket.Type;
 
 export const DropOfferInput = Schema.Struct({
   files: Schema.Array(DropFileOffer).check(Schema.isMinLength(1), Schema.isMaxLength(DROP_LIMITS.files)),
+  dest: Schema.optionalKey(FsPath),
 });
 export type DropOfferInput = typeof DropOfferInput.Type;
 

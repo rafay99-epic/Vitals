@@ -15,6 +15,7 @@ export interface GatewayConfigShape {
   readonly manageServe: boolean;
   readonly ownerLogin: string | null;
   readonly lanPort: number | null;
+  readonly homeDir?: string;
 }
 
 export class GatewayConfig extends Context.Service<GatewayConfig, GatewayConfigShape>()("@vitals/gateway/GatewayConfig") {}

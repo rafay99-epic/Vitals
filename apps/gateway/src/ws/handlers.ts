@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, VitalsRpc } from "@vitals/contracts";
+import { CommandRejected, PROTOCOL_VERSION, VitalsRpc } from "@vitals/contracts";
 import * as Effect from "effect/Effect";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
@@ -8,6 +8,7 @@ import { ClipStore } from "../clips/ClipStore.ts";
 import { CommandService } from "../commands/CommandService.ts";
 import { DropStore } from "../drop/DropStore.ts";
 import { EventLog } from "../events/EventLog.ts";
+import { FsService } from "../fs/FsService.ts";
 import { Lan } from "../lan/Lan.ts";
 import { Hubs } from "../live/Hubs.ts";
 import { Store } from "../persistence/Store.ts";
@@ -34,6 +35,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
       const serve = yield* Serve;
       const clips = yield* ClipStore;
       const drops = yield* DropStore;
+      const files = yield* FsService;
       const caller = { id: session.device.id, name: session.device.name };
       const clipCaller = { deviceId: session.device.id, name: session.device.name, connectionId };
       const dropCaller = { ...clipCaller, platform: session.device.platform };
@@ -55,6 +57,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
               scopes: session.device.scopes,
               clips: true,
               drop: true,
+              fs: true,
             };
           }),
         "stats.live": ({ topics }) => hubs.live(topics),
@@ -80,12 +83,22 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "clips.send.finish": (input) => clips.finish(clipCaller, input),
         "clips.put": (input) => clips.put(clipCaller, input),
         "drop.watch": () => drops.watch(dropCaller),
-        "drop.offer": (input) => drops.offer(dropCaller, input),
+        "drop.offer": (input) =>
+          input.dest === undefined ? drops.offer(dropCaller, input) : files.destination(input.dest).pipe(Effect.flatMap((dest) => drops.offer(dropCaller, { ...input, dest }))),
         "drop.accept": (input) => drops.accept(dropCaller, input),
         "drop.decline": (input) => drops.decline(dropCaller, input),
         "drop.cancel": (input) => drops.cancel(dropCaller, input),
         "drop.ticket": (input) => drops.ticket(dropCaller, input),
         "drop.received": (input) => drops.received(dropCaller, input),
+        "fs.roots": () => files.roots(session.device.scopes.includes("fsWrite")),
+        "fs.list": (input) => files.list(input),
+        "fs.search": (input) => files.search(input),
+        "fs.thumbs": (input) => files.thumbs(input),
+        "fs.get": (input) => (session.device.scopes.includes("files") ? files.get(dropCaller, input) : Effect.fail(new CommandRejected({ message: "This device can't receive files. Allow it on your Mac." }))),
+        "fs.open": (input) => files.open(input).pipe(Effect.as({})),
+        "fs.rename": (input) => files.rename(dropCaller, input),
+        "fs.folder": (input) => files.folder(dropCaller, input),
+        "fs.trash": (input) => files.trash(dropCaller, input),
         "activity.ingest": ({ events: batch }) =>
           Effect.sync(() => {
             for (const event of batch) {

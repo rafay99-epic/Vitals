@@ -21,6 +21,21 @@ import {
 } from "./clips.ts";
 import { DropEvent, DropIdInput, DropOffered, DropOfferInput, DropReceivedInput, DropTicket, Drop } from "./drop.ts";
 import { CommandCancelInput, CommandReceipt, CommandRunInput } from "./commands.ts";
+import {
+  FsEntry,
+  FsFolderInput,
+  FsListInput,
+  FsListResult,
+  FsPathInput,
+  FsPathsInput,
+  FsRenameInput,
+  FsRootsResult,
+  FsSearchInput,
+  FsSearchResult,
+  FsThumbsInput,
+  FsThumbsResult,
+  FsTrashResult,
+} from "./fs.ts";
 import { GuardSettings, GuardState } from "./guard.ts";
 import { LanKey, NonNegativeInt } from "./ids.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
@@ -127,6 +142,18 @@ export const DropCancel = Rpc.make("drop.cancel", { payload: DropIdInput, succes
 export const DropTicketRefresh = Rpc.make("drop.ticket", { payload: DropIdInput, success: DropTicket, error: DropError });
 export const DropReceived = Rpc.make("drop.received", { payload: DropReceivedInput, success: Drop, error: DropError });
 
+const FsError = Schema.Union([AuthError, Unavailable, CommandRejected]);
+
+export const FsRoots = Rpc.make("fs.roots", { payload: Empty, success: FsRootsResult, error: FsError });
+export const FsList = Rpc.make("fs.list", { payload: FsListInput, success: FsListResult, error: FsError });
+export const FsSearch = Rpc.make("fs.search", { payload: FsSearchInput, success: FsSearchResult, error: FsError });
+export const FsThumbs = Rpc.make("fs.thumbs", { payload: FsThumbsInput, success: FsThumbsResult, error: FsError });
+export const FsGet = Rpc.make("fs.get", { payload: FsPathsInput, success: DropOffered, error: FsError });
+export const FsOpen = Rpc.make("fs.open", { payload: FsPathInput, success: Empty, error: FsError });
+export const FsRename = Rpc.make("fs.rename", { payload: FsRenameInput, success: FsEntry, error: FsError });
+export const FsFolder = Rpc.make("fs.folder", { payload: FsFolderInput, success: FsEntry, error: FsError });
+export const FsTrash = Rpc.make("fs.trash", { payload: FsPathsInput, success: FsTrashResult, error: FsError });
+
 export const ActivityIngest = Rpc.make("activity.ingest", {
   payload: ActivityIngestInput,
   success: ActivityIngestResult,
@@ -174,6 +201,15 @@ export const VitalsRpc = RpcGroup.make(
   DropCancel,
   DropTicketRefresh,
   DropReceived,
+  FsRoots,
+  FsList,
+  FsSearch,
+  FsThumbs,
+  FsGet,
+  FsOpen,
+  FsRename,
+  FsFolder,
+  FsTrash,
   ActivityIngest,
   DeviceLanKey,
   DeviceForget,
