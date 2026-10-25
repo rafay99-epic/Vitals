@@ -26,12 +26,13 @@ export function Row({ label, detail, value, valueTone = "ink", trailing, control
     <Animated.View entering={swap} layout={settle}>
       <Pressable
         onPress={onPress}
-        disabled={!pressable}
+        // Only action rows can be disabled. A plain row marked disabled would make its trailing buttons read as disabled too.
+        disabled={action ? !pressable : undefined}
         accessible={action || control === undefined}
         accessibilityRole={action ? "button" : "text"}
         accessibilityLabel={accessibilityLabel ?? [label, value, detail].filter((part) => part !== undefined).join(", ")}
         accessibilityState={{ disabled: locked }}
-        className={`min-h-14 flex-row items-center gap-3.5 border-t border-line px-[22px] py-2.5 active:bg-raise ${locked ? "opacity-45" : ""}`}
+        className={`min-h-14 flex-row items-center gap-3.5 border-t border-line px-[22px] py-2.5 ${pressable ? "active:bg-raise" : ""} ${locked ? "opacity-45" : ""}`}
       >
         <View className="min-w-24 flex-1">
           {plain ? (

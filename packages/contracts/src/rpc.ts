@@ -5,9 +5,23 @@ import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 
 import { ActivityIngestInput, ActivityIngestResult } from "./activity.ts";
 import { AuthError, CommandRejected, Unavailable } from "./auth.ts";
+import {
+  Clip,
+  ClipChunk,
+  ClipEvent,
+  ClipSendBegin,
+  ClipSendBegun,
+  ClipSendChunk,
+  ClipSendFinish,
+  ClipsPinInput,
+  ClipsPutInput,
+  ClipsPutResult,
+  ClipsReadInput,
+  ClipsRemoveInput,
+} from "./clips.ts";
 import { CommandCancelInput, CommandReceipt, CommandRunInput } from "./commands.ts";
 import { GuardSettings, GuardState } from "./guard.ts";
-import { LanKey } from "./ids.ts";
+import { LanKey, NonNegativeInt } from "./ids.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, StatsLiveInput } from "./stats.ts";
 import { Hello, SequencedEvent, SystemEventsInput } from "./system.ts";
@@ -87,6 +101,21 @@ export const ClipboardGet = Rpc.make("clipboard.get", {
   error: Schema.Union([AuthError, Unavailable]),
 });
 
+const ClipError = Schema.Union([AuthError, Unavailable, CommandRejected]);
+
+export const ClipsWatch = Rpc.make("clips.watch", { payload: Empty, success: ClipEvent, error: ClipError, stream: true });
+export const ClipsRead = Rpc.make("clips.read", { payload: ClipsReadInput, success: ClipChunk, error: ClipError });
+export const ClipsPin = Rpc.make("clips.pin", { payload: ClipsPinInput, success: Clip, error: ClipError });
+export const ClipsRemove = Rpc.make("clips.remove", { payload: ClipsRemoveInput, success: Empty, error: ClipError });
+export const ClipsSendBegin = Rpc.make("clips.send.begin", { payload: ClipSendBegin, success: ClipSendBegun, error: ClipError });
+export const ClipsSendChunk = Rpc.make("clips.send.chunk", {
+  payload: ClipSendChunk,
+  success: Schema.Struct({ received: NonNegativeInt }),
+  error: ClipError,
+});
+export const ClipsSendFinish = Rpc.make("clips.send.finish", { payload: ClipSendFinish, success: Clip, error: ClipError });
+export const ClipsPut = Rpc.make("clips.put", { payload: ClipsPutInput, success: ClipsPutResult, error: ClipError });
+
 export const ActivityIngest = Rpc.make("activity.ingest", {
   payload: ActivityIngestInput,
   success: ActivityIngestResult,
@@ -119,6 +148,14 @@ export const VitalsRpc = RpcGroup.make(
   GuardWatch,
   GuardUpdate,
   ClipboardGet,
+  ClipsWatch,
+  ClipsRead,
+  ClipsPin,
+  ClipsRemove,
+  ClipsSendBegin,
+  ClipsSendChunk,
+  ClipsSendFinish,
+  ClipsPut,
   ActivityIngest,
   DeviceLanKey,
   DeviceForget,

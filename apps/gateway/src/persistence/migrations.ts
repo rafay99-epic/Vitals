@@ -54,6 +54,30 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
       CREATE UNIQUE INDEX devices_lan_key ON devices(lan_key) WHERE lan_key IS NOT NULL AND revoked_at IS NULL;
     `,
   },
+  {
+    id: 3,
+    sql: `
+      CREATE TABLE clips (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        device_id TEXT,
+        source TEXT,
+        text TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0,
+        name TEXT,
+        mime TEXT,
+        bytes INTEGER NOT NULL DEFAULT 0,
+        files INTEGER,
+        thumb TEXT,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        stored TEXT,
+        origin TEXT,
+        sha256 TEXT
+      );
+      CREATE INDEX clips_at ON clips(at);
+    `,
+  },
 ];
 
 export const ACTIVITY_MIGRATIONS: ReadonlyArray<Migration> = [

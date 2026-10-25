@@ -89,6 +89,32 @@ export function ToastHost({ pinned }: { readonly pinned?: ReactNode }) {
   );
 }
 
+/**
+ * A strip pinned above the dock that stays while something is under way (a countdown, a transfer).
+ * Its text updates in place; only the entrance and exit animate.
+ */
+export function Strip({ text, action, onAction, tone = "ink" }: { readonly text: string; readonly action?: string; readonly onAction?: () => void; readonly tone?: "ink" | "warn" }) {
+  return (
+    <Animated.View
+      entering={SlideInDown.duration(motion.toastIn).easing(curve.out)}
+      exiting={FadeOut.duration(motion.toastOut)}
+      accessibilityRole="alert"
+      style={[styles.toast, tone === "warn" ? styles.warn : null]}
+    >
+      <T v="strong" color={color.bg} style={styles.text} numberOfLines={2}>
+        {text}
+      </T>
+      {action === undefined || onAction === undefined ? null : (
+        <Tap onPress={onAction} accessibilityRole="button" hitSlop={12}>
+          <T v="strong" color={color.bg} style={styles.action}>
+            {action}
+          </T>
+        </Tap>
+      )}
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   host: { position: "absolute", left: 14, right: 14, gap: 8 },
   toast: {
@@ -102,6 +128,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   bad: { backgroundColor: color.red },
+  warn: { backgroundColor: color.orange },
   text: { flex: 1 },
   action: { textDecorationLine: "underline" },
 });

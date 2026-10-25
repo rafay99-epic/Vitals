@@ -7,6 +7,8 @@ import {
   type CommandReceipt,
   type FromApp,
   type LiveSample,
+  type Query,
+  type QueryResult,
   type ToApp,
   FromApp as FromAppSchema,
   ToApp as ToAppSchema,
@@ -67,6 +69,8 @@ export class FakeApp {
   readonly holdCommands = new Set<string>();
   invalidReplies = false;
   silentQueries = false;
+  /** Answers queries the fake doesn't know; return null to fall through to the defaults. */
+  answer: ((q: Query) => QueryResult | Promise<QueryResult> | null) | null = null;
   private readonly queue = Effect.runSync(Queue.unbounded<string>());
 
   readonly lines: Stream.Stream<string> = Stream.fromQueue(this.queue);
@@ -117,6 +121,13 @@ export class FakeApp {
         break;
       case "query":
         if (this.silentQueries) break;
+        {
+          const custom = this.answer?.(message.q) ?? null;
+          if (custom !== null) {
+            void Promise.resolve(custom).then((ok) => this.emit({ t: "result", id: message.id, ok, error: null }));
+            break;
+          }
+        }
         if (message.q._tag === "Apps" && this.invalidReplies) {
           const running = [{ pid: -1, bundleId: null, name: "Launching", active: false, hidden: false }];
           const ok = { _tag: "Apps", result: { running, emulators: [] } };
@@ -255,3 +266,15 @@ export const clientLayer = (base: string, ticket: string) =>
   );
 
 export const makeClient = RpcClient.make(VitalsRpc);
+
+export type Gateway = Awaited<ReturnType<typeof startGateway>>;
+
+/** Runs `body` against a fresh RPC connection as the device holding `token`. */
+export const withClient = async <A>(
+  gateway: Gateway,
+  token: string,
+  body: (client: Effect.Success<typeof makeClient>) => Effect.Effect<A, unknown>,
+) => {
+  const ticket = await ticketFor(gateway.base, token);
+  return Effect.runPromise(Effect.scoped(Effect.flatMap(makeClient, body)).pipe(Effect.provide(clientLayer(gateway.base, ticket))));
+};

@@ -297,6 +297,26 @@ describe("rpc over websocket", () => {
     expect(seqs.every((seq, index) => index === 0 || seq === (seqs[index - 1] ?? 0) + 1)).toBe(true);
   });
 
+  test("a countdown left open when the Mac went down is closed on restart", async () => {
+    const first = await startGateway();
+    gateway = first;
+    const { token, deviceId } = await pairDevice(first);
+    await adminOp(first.app, { _tag: "SetScopes", deviceId: deviceId as never, scopes: ["read", "operate", "destructive"] });
+    first.app.holdCommands.add("ShutDown");
+    const pending = await withClient(token, (client) =>
+      client["command.run"]({ commandId: commandId("cmd-shutdown-gone"), command: { _tag: "ShutDown", graceSeconds: 10 } }),
+    );
+    expect(pending.status).toBe("pending");
+    gateway = null;
+    await first.stop(true);
+    const db = new Database(join(first.dataDir, "remote.db"));
+    db.run("UPDATE commands SET deadline_at = ? WHERE id = ?", [Date.now() - 60_000, pending.id]);
+    db.close();
+    gateway = await startGateway(first.dataDir);
+    const replayed = await withClient(token, (client) => client["command.log"]({}).pipe(Stream.take(1), Stream.runCollect));
+    expect([...replayed][0]).toMatchObject({ id: pending.id, status: "failed" });
+  });
+
   test("alerts left open by a previous Vitals run are cleared on restart", async () => {
     const first = await startGateway();
     const alert = alertFixture("alert-1");

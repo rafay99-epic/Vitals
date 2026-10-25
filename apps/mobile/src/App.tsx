@@ -16,19 +16,22 @@ import { discoverySupported } from "@vitals/discovery";
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { AppState, StyleSheet, View } from "react-native";
+import { AppState, Linking, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { ClipboardSync } from "./ClipboardSync.tsx";
 import { checkForUpdate, launchedNewUpdate, updateState } from "./lib/updates.ts";
-import { type HomeStackParams, navigationRef, openUpdates, type SettingsStackParams, type TabParams } from "./navigation.ts";
+import { type ControlStackParams, type HomeStackParams, navigationRef, openUpdates, type SettingsStackParams, type TabParams } from "./navigation.ts";
 import { PendingStrip } from "./PendingStrip.tsx";
+import { ClipboardScreen } from "./screens/ClipboardScreen.tsx";
 import { AlertsScreen } from "./screens/AlertsScreen.tsx";
 import { AppsScreen } from "./screens/AppsScreen.tsx";
 import { ChannelScreen } from "./screens/ChannelScreen.tsx";
 import { ControlScreen } from "./screens/ControlScreen.tsx";
 import { HomeScreen } from "./screens/HomeScreen.tsx";
 import { ConnectionScreen, DiagnosticsRoute, HelpScreen, NotificationsScreen, PhoneScreen, SettingsScreen, UpdatesScreen } from "./screens/SettingsScreens.tsx";
+import { TransferStrip } from "./Transfers.tsx";
 import { color, Dock, type DockTab, SheetHost, toast, ToastHost } from "./ui/index.ts";
 
 const theme: Theme = {
@@ -39,15 +42,23 @@ const theme: Theme = {
 const scheme = Constants.expoConfig?.scheme;
 const prefix = typeof scheme === "string" ? `${scheme}://` : null;
 
+/** Sharing into Vitals opens `<scheme>://expo-sharing`; that lands on Control > Clipboard, where the Send sheet opens. */
+const shareLanding = (url: string | null): string | null => (url !== null && prefix !== null && url.startsWith(`${prefix}expo-sharing`) ? `${prefix}control/clipboard` : url);
+
 const linking: LinkingOptions<TabParams> = {
   enabled: prefix !== null,
   prefixes: prefix === null ? [] : [prefix],
   filter: (url) => !/:\/\/pair\b/.test(url),
+  getInitialURL: async () => shareLanding((await Linking.getInitialURL()) ?? null),
+  subscribe: (listener) => {
+    const subscription = Linking.addEventListener("url", ({ url }) => listener(shareLanding(url) ?? url));
+    return () => subscription.remove();
+  },
   config: {
     screens: {
       HomeTab: { path: "home", screens: { Home: "", Channel: ":channel" } },
       Apps: "apps",
-      Control: "control",
+      Control: { path: "control", screens: { Control: "", Clipboard: "clipboard" } },
       Alerts: "alerts",
       SettingsTab: { path: "settings", screens: { Settings: "", Connection: "connection", Notifications: "notifications", Updates: "updates", Phone: "phone", Help: "help", ...(isStoreBuild ? {} : { Diagnostics: "diagnostics" }) } },
     },
@@ -55,6 +66,7 @@ const linking: LinkingOptions<TabParams> = {
 };
 
 const HomeStack = createNativeStackNavigator<HomeStackParams>();
+const ControlStack = createNativeStackNavigator<ControlStackParams>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParams>();
 const Tabs = createBottomTabNavigator<TabParams>();
 
@@ -67,6 +79,15 @@ function HomeNavigator() {
       <HomeStack.Screen name="Home" component={HomeScreen} />
       <HomeStack.Screen name="Channel" component={ChannelScreen} />
     </HomeStack.Navigator>
+  );
+}
+
+function ControlNavigator() {
+  return (
+    <ControlStack.Navigator screenOptions={push}>
+      <ControlStack.Screen name="Control" component={ControlScreen} />
+      <ControlStack.Screen name="Clipboard" component={ClipboardScreen} />
+    </ControlStack.Navigator>
   );
 }
 
@@ -138,12 +159,20 @@ function Shell() {
       >
         <Tabs.Screen name="HomeTab" component={HomeNavigator} />
         <Tabs.Screen name="Apps" component={AppsScreen} />
-        <Tabs.Screen name="Control" component={ControlScreen} />
+        <Tabs.Screen name="Control" component={ControlNavigator} />
         <Tabs.Screen name="Alerts" component={AlertsScreen} />
         <Tabs.Screen name="SettingsTab" component={SettingsNavigator} />
       </Tabs.Navigator>
-      <ToastHost pinned={<PendingStrip />} />
+      <ToastHost
+        pinned={
+          <>
+            <PendingStrip />
+            <TransferStrip />
+          </>
+        }
+      />
       <SheetHost />
+      <ClipboardSync />
     </View>
   );
 }

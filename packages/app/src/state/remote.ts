@@ -18,6 +18,7 @@ import { localNetwork, nearby, nearbyEndpoints } from "../connection/nearby.ts";
 import { tunnel } from "../connection/tunnel.ts";
 import { openOutbox } from "../persistence/outbox";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
+import { MacClips } from "./clips.ts";
 import { diagnostics, instrumentConnection } from "./diagnostics.ts";
 import { MacEvents } from "./events.ts";
 import { LiveData } from "./live.ts";
@@ -71,6 +72,7 @@ export class Remote {
   readonly connection: Connection;
   readonly live: LiveData;
   readonly events: MacEvents;
+  readonly clips: MacClips;
   readonly toast = new Store<Toast | null>(null);
   readonly link: Store<Credentials>;
   private disposed = false;
@@ -118,6 +120,7 @@ export class Remote {
     this.live = new LiveData(this.connection);
     this.stopSampleClock = diagnostics.enabled ? this.live.latest.subscribe(() => diagnostics.sample(Date.now())) : null;
     this.events = new MacEvents(this.connection);
+    this.clips = new MacClips(this.connection, (message) => this.show(message, "bad"));
     this.flushTimer = setInterval(() => void this.flush(), FLUSH_MS);
     this.stopTunnelWatch = tunnel.subscribe(() => {
       if (tunnel.get()._tag === "Ready") this.connection.wake("network");
@@ -211,6 +214,7 @@ export class Remote {
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     this.live.dispose();
     this.events.dispose();
+    this.clips.dispose();
     this.connection.dispose();
   }
 }

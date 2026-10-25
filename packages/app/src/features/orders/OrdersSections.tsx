@@ -105,7 +105,7 @@ export function SoundSection({ locked, run }: SectionProps) {
 export function HandOverSection({ locked, canRead, run, onClipboard, onOpen }: SectionProps & { readonly canRead: boolean; readonly onClipboard: () => void; readonly onOpen: () => void }) {
   return (
     <Section title="Hand over">
-      <Row label="Clipboard" detail="copy to the Mac or read it" locked={locked && !canRead} onPress={onClipboard} />
+      <Row label="Clipboard" detail="history, text and files, both ways" locked={locked && !canRead} onPress={onClipboard} />
       <Row label="Open on Mac" detail="a link, in the default browser" locked={locked} onPress={onOpen} />
       <Row label="Locate" detail="plays a sound on the Mac" locked={locked} onPress={() => void run({ _tag: "Locate" })} />
     </Section>

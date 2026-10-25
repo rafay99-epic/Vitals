@@ -1,17 +1,16 @@
-import { type Query, type QueryResult, PROTOCOL_VERSION, Unavailable, VitalsRpc } from "@vitals/contracts";
+import { PROTOCOL_VERSION, VitalsRpc } from "@vitals/contracts";
 import * as Effect from "effect/Effect";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Auth, type Session } from "../auth/Auth.ts";
-import { Bridge } from "../bridge/Bridge.ts";
+import { Bridge, ask } from "../bridge/Bridge.ts";
+import { ClipStore } from "../clips/ClipStore.ts";
 import { CommandService } from "../commands/CommandService.ts";
 import { EventLog } from "../events/EventLog.ts";
 import { Lan } from "../lan/Lan.ts";
 import { Hubs } from "../live/Hubs.ts";
 import { Store } from "../persistence/Store.ts";
 import { Serve } from "../tailscale/Serve.ts";
-
-const unexpected = (tag: string) => new Unavailable({ message: `Unexpected ${tag} reply from Vitals` });
 
 const MAX_CLIENT_DATA_BYTES = 2_048;
 
@@ -32,15 +31,9 @@ export const handlersLayer = (session: Session, connectionId: string) =>
       const store = yield* Store;
       const auth = yield* Auth;
       const serve = yield* Serve;
+      const clips = yield* ClipStore;
       const caller = { id: session.device.id, name: session.device.name };
-
-      const ask = <Tag extends QueryResult["_tag"]>(q: Extract<Query, { readonly _tag: Tag }>) =>
-        bridge.query(q).pipe(
-          Effect.filterOrFail(
-            (result): result is Extract<QueryResult, { readonly _tag: Tag }> => result._tag === q._tag,
-            (result) => unexpected(result._tag),
-          ),
-        );
+      const clipCaller = { deviceId: session.device.id, name: session.device.name, connectionId };
 
       return VitalsRpc.of({
         "server.hello": () =>
@@ -57,22 +50,31 @@ export const handlersLayer = (session: Session, connectionId: string) =>
               alerts: open.alerts,
               serverTime: Date.now(),
               scopes: session.device.scopes,
+              clips: true,
             };
           }),
         "stats.live": ({ topics }) => hubs.live(topics),
         "history.range": (input) =>
-          ask({ _tag: "History", input }).pipe(Effect.map((result) => result.result)),
+          ask(bridge, { _tag: "History", input }).pipe(Effect.map((result) => result.result)),
         "system.events": ({ afterSeq }) => events.subscribe(afterSeq),
         "processes.watch": (input) => hubs.processes(input),
-        "apps.list": () => ask({ _tag: "Apps" }).pipe(Effect.map((result) => result.result)),
+        "apps.list": () => ask(bridge, { _tag: "Apps" }).pipe(Effect.map((result) => result.result)),
         "command.run": (input) => commands.run(caller, input),
         "command.cancel": ({ commandId }) => commands.cancel(caller, commandId),
         "command.log": () => commands.log,
         "guard.watch": () => hubs.guard,
         "guard.update": (settings) =>
-          ask({ _tag: "SetGuard", settings }).pipe(Effect.map((result) => result.settings)),
+          ask(bridge, { _tag: "SetGuard", settings }).pipe(Effect.map((result) => result.settings)),
         "clipboard.get": () =>
-          ask({ _tag: "Clipboard" }).pipe(Effect.map((result) => ({ text: result.text }))),
+          ask(bridge, { _tag: "Clipboard" }).pipe(Effect.map((result) => ({ text: result.text }))),
+        "clips.watch": () => clips.watch,
+        "clips.read": (input) => clips.read(clipCaller, input),
+        "clips.pin": (input) => clips.pin(clipCaller, input),
+        "clips.remove": (input) => clips.remove(clipCaller, input).pipe(Effect.as({})),
+        "clips.send.begin": (input) => clips.begin(clipCaller, input),
+        "clips.send.chunk": (input) => clips.chunk(clipCaller, input),
+        "clips.send.finish": (input) => clips.finish(clipCaller, input),
+        "clips.put": (input) => clips.put(clipCaller, input),
         "activity.ingest": ({ events: batch }) =>
           Effect.sync(() => {
             for (const event of batch) {

@@ -45,6 +45,11 @@ const commitCount = (): number => {
 
 const commits = commitCount();
 
+const bundleId = `com.syntaxlabtechnology.vitals.remote${current.suffix}`;
+
+/** Everything people share into Vitals from other apps, sent on to the Mac. */
+const SHARE_TYPES = ["text/*", "image/*", "video/*", "application/*"];
+
 const FONT_ROOT = "../../packages/ui/node_modules/@expo-google-fonts";
 
 const FONTS: Record<string, string> = {
@@ -104,7 +109,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     requestHeaders: { "expo-channel-name": current.channel },
   },
   ios: {
-    bundleIdentifier: `com.syntaxlabtechnology.vitals.remote${current.suffix}`,
+    bundleIdentifier: bundleId,
     buildNumber: String(commits),
     supportsTablet: false,
     icon: {
@@ -120,7 +125,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   android: {
-    package: `com.syntaxlabtechnology.vitals.remote${current.suffix}`,
+    package: bundleId,
     versionCode: commits,
     permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE", "ACCESS_LOCAL_NETWORK"],
     adaptiveIcon: {
@@ -162,6 +167,20 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
             "-keep class * extends androidx.work.ListenableWorker { <init>(android.content.Context, androidx.work.WorkerParameters); }",
           ].join("\n"),
         },
+      },
+    ],
+    ["expo-image-picker", { photosPermission: "Pick photos and videos to send to your Mac.", cameraPermission: false, microphonePermission: false }],
+    ["expo-media-library", { photosPermission: false, savePhotosPermission: "Save images from your Mac to Photos.", granularPermissions: ["photo"] }],
+    [
+      "expo-sharing",
+      {
+        // The share extension and the app trade shared items through an App Group, one per app.
+        ios: {
+          enabled: true,
+          appGroupId: `group.${bundleId}`,
+          activationRule: { supportsText: true, supportsWebUrlWithMaxCount: 1, supportsImageWithMaxCount: 20, supportsMovieWithMaxCount: 20, supportsFileWithMaxCount: 20 },
+        },
+        android: { enabled: true, singleShareMimeTypes: SHARE_TYPES, multipleShareMimeTypes: SHARE_TYPES },
       },
     ],
     "expo-secure-store",

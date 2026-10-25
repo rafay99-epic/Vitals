@@ -98,6 +98,10 @@ final class AppSettings {
     var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
     var remoteEnabled: Bool { didSet { defaults.set(remoteEnabled, forKey: "remoteEnabled") } }
+    /// Records Mac copies for phones with the Read clipboard scope. Off by default.
+    var clipHistoryEnabled: Bool { didSet { defaults.set(clipHistoryEnabled, forKey: "clipHistoryEnabled") } }
+    /// Days the gateway keeps unpinned clips: 1, 7 or 30.
+    var clipKeepDays: Int { didSet { defaults.set(clipKeepDays, forKey: "clipKeepDays") } }
     var guardSettings: GuardSettings {
         didSet { defaults.set(try? JSONEncoder().encode(guardSettings), forKey: "guardSettings") }
     }
@@ -177,6 +181,8 @@ final class AppSettings {
             "theme": AppTheme.system.rawValue,
             "hideDockIcon": false,
             "autoScanCleanup": false,
+            "clipHistoryEnabled": false,
+            "clipKeepDays": 7
     ]
 
     init(defaults: UserDefaults = .standard) {
@@ -201,6 +207,8 @@ final class AppSettings {
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
         remoteEnabled = defaults.bool(forKey: "remoteEnabled")
+        clipHistoryEnabled = defaults.bool(forKey: "clipHistoryEnabled")
+        clipKeepDays = defaults.integer(forKey: "clipKeepDays")
         guardSettings = defaults.data(forKey: "guardSettings")
             .flatMap { try? JSONDecoder().decode(GuardSettings.self, from: $0) } ?? PressureGuard.defaultSettings
 

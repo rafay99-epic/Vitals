@@ -260,15 +260,63 @@ extension WireEvent: Encodable {
     }
 }
 
+enum ClipKind: String, Codable, Sendable { case text, link, image, file, folder }
+
+/// One copy on the Mac, as the gateway's history records it (`MacClip` in clips.ts).
+struct MacClip: Codable, Equatable, Sendable {
+    let id: String
+    let kind: ClipKind
+    let at: Int64
+    @Nullable var source: String?
+    @Nullable var text: String?
+    var truncated: Bool
+    @Nullable var name: String?
+    @Nullable var mime: String?
+    var bytes: Int
+    @Nullable var files: Int?
+    @Nullable var thumb: String?
+    /// File name inside `clips/` holding the bytes (images, long text).
+    @Nullable var stored: String?
+    /// Absolute path of a copied file or folder, materialized on first download.
+    @Nullable var origin: String?
+
+    init(
+        id: String, kind: ClipKind, at: Int64, source: String?, text: String? = nil, truncated: Bool = false,
+        name: String? = nil, mime: String? = nil, bytes: Int = 0, files: Int? = nil, thumb: String? = nil,
+        stored: String? = nil, origin: String? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.at = at
+        self.source = source
+        self.text = text
+        self.truncated = truncated
+        self.name = name
+        self.mime = mime
+        self.bytes = bytes
+        self.files = files
+        self.thumb = thumb
+        self.stored = stored
+        self.origin = origin
+    }
+}
+
+struct ClipPolicy: Codable, Equatable, Sendable {
+    let enabled: Bool
+    let keepDays: Int
+}
+
 enum QueryResult: Equatable, Sendable {
     case history([WireSeries])
     case apps(WireApps)
     case clipboard(String?)
     case setGuard(GuardSettings)
+    case clipMaterialize(stored: String, bytes: Int, files: Int?)
+    case clipPut(placed: Int)
 }
 
 extension QueryResult: Encodable {
-    private enum Keys: String, CodingKey { case _tag, result, series, text, settings }
+    private enum Keys: String, CodingKey { case _tag, result, series, text, settings, stored, bytes, files, placed }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -286,6 +334,14 @@ extension QueryResult: Encodable {
         case let .setGuard(settings):
             try c.encode("SetGuard", forKey: ._tag)
             try c.encode(settings, forKey: .settings)
+        case let .clipMaterialize(stored, bytes, files):
+            try c.encode("ClipMaterialize", forKey: ._tag)
+            try c.encode(stored, forKey: .stored)
+            try c.encode(bytes, forKey: .bytes)
+            try c.encode(Nullable(wrappedValue: files), forKey: .files)
+        case let .clipPut(placed):
+            try c.encode("ClipPut", forKey: ._tag)
+            try c.encode(placed, forKey: .placed)
         }
     }
 }
@@ -361,10 +417,13 @@ enum FromApp: Equatable, Sendable {
     case result(id: String, ok: QueryResult?, error: String?)
     case admin(id: String, op: AdminOp)
     case log(level: String, kind: String, data: [String: JSONValue])
+    case clip(MacClip)
+    case clipPolicy(ClipPolicy)
+    case clipClear
 }
 
 extension FromApp: Encodable {
-    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind }
+    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind, clip, policy }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -403,6 +462,14 @@ extension FromApp: Encodable {
             try c.encode(level, forKey: .level)
             try c.encode(kind, forKey: .kind)
             try c.encode(data, forKey: .data)
+        case let .clip(clip):
+            try c.encode("clip", forKey: .t)
+            try c.encode(clip, forKey: .clip)
+        case let .clipPolicy(policy):
+            try c.encode("clipPolicy", forKey: .t)
+            try c.encode(policy, forKey: .policy)
+        case .clipClear:
+            try c.encode("clipClear", forKey: .t)
         }
     }
 }

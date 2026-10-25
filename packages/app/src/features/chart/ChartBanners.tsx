@@ -5,7 +5,8 @@ import { AlarmBanner, Row } from "@vitals/ui";
 import { Linking, View } from "react-native";
 
 import { AlertBanner } from "../../components/AlertBanner.tsx";
-import { isPending, PendingOrder, secondsLeft } from "../../components/PendingOrder.tsx";
+import { PendingOrder } from "../../components/PendingOrder.tsx";
+import { isPending, secondsLeft } from "../../state/countdown.ts";
 import { useRemote } from "../../connection/useRemote.ts";
 import { TAILSCALE_STORE_URL } from "../../lib/links.ts";
 import type { TabParams } from "../../navigation/types.ts";

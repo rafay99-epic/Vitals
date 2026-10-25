@@ -21,6 +21,8 @@ import { Store } from "../persistence/Store.ts";
 
 const RECEIPT_TIMEOUT = "5 seconds";
 const LOG_REPLAY = 50;
+/** How long past its deadline a countdown may stay open before a restart closes it. */
+const OVERDUE_GRACE_MS = 10_000;
 
 type Caller = Pick<Device, "id" | "name">;
 
@@ -58,6 +60,13 @@ export const layer = Layer.effect(
       Stream.runForEach((message) => (message.t === "receipt" ? settle(message.receipt) : Effect.void)),
       Effect.forkScoped,
     );
+
+    // A shut down or restart takes this gateway down with the Mac, often before its final receipt
+    // is written. Close those countdowns, or every phone replays them as "Shutting down in 0 s".
+    const startedAt = Date.now();
+    for (const receipt of store.overdueCommands(startedAt - OVERDUE_GRACE_MS)) {
+      yield* settle({ ...receipt, status: "failed", finishedAt: startedAt, error: "Not confirmed: Vitals restarted after the countdown" });
+    }
 
     const awaitReceipt = <E>(id: string, onTimeout: Effect.Effect<CommandReceipt, E>) =>
       Effect.gen(function* () {

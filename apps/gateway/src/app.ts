@@ -10,6 +10,7 @@ import * as ActivityLog from "./activity/ActivityLog.ts";
 import * as Admin from "./admin/Admin.ts";
 import * as Auth from "./auth/Auth.ts";
 import * as Bridge from "./bridge/Bridge.ts";
+import * as ClipStore from "./clips/ClipStore.ts";
 import * as CommandService from "./commands/CommandService.ts";
 import { GatewayConfig, type GatewayConfigShape, MAX_FRAME_BYTES } from "./config.ts";
 import * as EventLog from "./events/EventLog.ts";
@@ -43,7 +44,12 @@ const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
   const authed = Auth.layer(config.ownerLogin).pipe(Layer.provideMerge(bridged));
   const lanned = Lan.layer.pipe(Layer.provideMerge(authed));
   const evented = EventLog.layer(activityDb).pipe(Layer.provideMerge(lanned));
-  const services = Layer.mergeAll(Hubs.layer, CommandService.layer, Serve.layer).pipe(Layer.provideMerge(evented));
+  const services = Layer.mergeAll(
+    Hubs.layer,
+    CommandService.layer,
+    Serve.layer,
+    ClipStore.layer(remoteDb),
+  ).pipe(Layer.provideMerge(evented));
   const ready = Layer.effectDiscard(
     Effect.gen(function* () {
       const bridge = yield* Bridge.Bridge;

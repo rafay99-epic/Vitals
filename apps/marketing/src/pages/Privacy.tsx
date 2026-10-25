@@ -5,7 +5,7 @@ import { useTitle } from '../lib/useTitle'
 export default function Privacy() {
   useTitle('Privacy Policy — Vitals')
   return (
-    <LegalLayout title="Privacy Policy" updated="October 23, 2026">
+    <LegalLayout title="Privacy Policy" updated="October 24, 2026">
       <Section title="The short version">
         <P>
           <Strong>The Vitals app does not collect, store, transmit, or sell any of your personal data. It has no analytics, no
@@ -151,6 +151,17 @@ export default function Privacy() {
             only a session cookie that page scripts cannot read, and nothing in browser storage.
           </Item>
           <Item>
+            <Strong>Clipboard history and files (off by default):</Strong> if you turn on clipboard history in Vitals, the App
+            records what you copy on your Mac (text, links, images, and references to copied files and folders) in{' '}
+            <Strong>~/.vitals/remote/clips/</Strong> so that devices you allowed to read the clipboard can see and download it.
+            Copies marked as passwords by password managers, and copies made in 1Password, Bitwarden, Passwords and Keychain
+            Access, are never recorded. History is kept for the number of days you choose (7 by default); pinned clips stay until
+            you unpin or remove them. Text, photos and files you send from a phone are stored in the same folder, and are put on
+            your clipboard or in your Downloads folder as you ask. All of this moves only between your own devices, over the same
+            encrypted connection, and never passes through our servers. Turning clipboard history off hides it at once; Clear
+            history deletes it.
+          </Item>
+          <Item>
             <Strong>Alerts:</Strong> Pressure Guard alerts reach your phone over the same encrypted Wi-Fi or Tailscale
             connection, and nothing else. While the app is open they
             arrive live; in the background the phone checks your Mac about every 15 minutes and shows a local notification. No
@@ -174,6 +185,14 @@ export default function Privacy() {
           </Item>
           <Item>
             <Strong>Notifications:</Strong> to show Pressure Guard alerts. They are created on the phone; no push service is used.
+          </Item>
+          <Item>
+            <Strong>Photos and files:</Strong> only when you pick photos or files to send to your Mac, or save an image from your
+            Mac's clipboard history to your photo library. The app reads only what you pick.
+          </Item>
+          <Item>
+            <Strong>Clipboard:</Strong> the phone reads its clipboard only when you tap Paste. If you turn on "Copy Mac copies
+            here", new copies from your Mac are written to the phone's clipboard while the app is open.
           </Item>
         </List>
         <P>The phone app also talks to these services, and only these:</P>

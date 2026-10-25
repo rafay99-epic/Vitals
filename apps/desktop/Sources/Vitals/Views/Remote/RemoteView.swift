@@ -58,6 +58,7 @@ private struct RemoteDevicesTab: View {
                 }
                 .disabled(remote.state != .running)
             }
+            ClipboardCard()
         }
         .sheet(isPresented: $showingPairing, onDismiss: { remote.clearPairing() }, content: {
             PairingSheet(isPresented: $showingPairing)

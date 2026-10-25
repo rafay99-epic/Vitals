@@ -140,8 +140,51 @@ export function Field(props: Omit<TextInputProps, "style"> & { readonly tall?: b
   );
 }
 
+/** One-line field with a send button at its end. The button lights up once there is something to send. */
+export function ComposeField({
+  value,
+  onChangeText,
+  onSend,
+  placeholder,
+  label,
+  disabled = false,
+}: {
+  readonly value: string;
+  readonly onChangeText: (next: string) => void;
+  readonly onSend: () => void;
+  readonly placeholder: string;
+  readonly label: string;
+  readonly disabled?: boolean;
+}) {
+  const ready = !disabled && value.trim().length > 0;
+  return (
+    <View style={[styles.compose, disabled ? styles.off : null]}>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={color.mute}
+        selectionColor={color.yellow}
+        editable={!disabled}
+        returnKeyType="send"
+        submitBehavior="blurAndSubmit"
+        onSubmitEditing={ready ? onSend : undefined}
+        accessibilityLabel={label}
+        style={styles.composeInput}
+      />
+      <Tap onPress={onSend} disabled={!ready} accessibilityRole="button" accessibilityLabel="Send" hitSlop={8} style={[styles.send, ready ? styles.sendReady : null]}>
+        <Icon name="send" size={16} color={ready ? color.bg : color.mute} weight={2.4} />
+      </Tap>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   off: { opacity: 0.4 },
+  compose: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 12, backgroundColor: color.s2, borderRadius: 14, paddingLeft: 14, paddingRight: 6, paddingVertical: 6 },
+  composeInput: { flex: 1, paddingVertical: 6, fontFamily: font.sans, fontSize: 14, color: color.ink },
+  send: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: color.s3 },
+  sendReady: { backgroundColor: color.yellow },
   track: { width: 44, height: 26, borderRadius: 13, justifyContent: "center", paddingHorizontal: 3 },
   thumb: { width: 20, height: 20, borderRadius: 10 },
   segment: { flexDirection: "row", marginHorizontal: 16, marginBottom: 14, backgroundColor: color.s2, borderRadius: 14, padding: 4 },

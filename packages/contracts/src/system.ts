@@ -64,5 +64,7 @@ export const Hello = Schema.Struct({
   serverTime: EpochMs,
   scopes: Schema.Array(Scope),
   routes: Schema.optional(MacRoutes),
+  /** Present and true when this Mac's gateway serves the `clips.*` RPCs. */
+  clips: Schema.optional(Schema.Boolean),
 });
 export type Hello = typeof Hello.Type;

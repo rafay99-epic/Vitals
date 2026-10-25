@@ -1,15 +1,22 @@
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
+import { clipAge } from "@vitals/app/features/clips/format.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
+import { useNow } from "@vitals/app/state/useVitals.ts";
 import type { KeepAwakeState } from "@vitals/contracts";
 import { formatClock } from "@vitals/shared";
 import { Slider } from "@vitals/ui";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { copyToPhone } from "../lib/clips.ts";
 import { send, useAccess } from "../lib/remote.ts";
+import type { ControlStackParams } from "../navigation.ts";
 import { PowerTiles } from "../sheets/PowerSheet.tsx";
-import { ClipboardSheet, LinkSheet } from "../sheets/SendSheets.tsx";
-import { color, Group, Label, Note, Page, Row, Segmented, type SegmentOption, sheet, Tile, TileGrid, Title, Toggle } from "../ui/index.ts";
+import { LinkSheet } from "../sheets/SendSheets.tsx";
+import { color, Group, Label, Note, Page, Row, Segmented, type SegmentOption, sheet, T, Tap, Tile, TileGrid, Title, toast, Toggle } from "../ui/index.ts";
+import { ClipRow } from "./ClipboardScreen.tsx";
 
 type Awake = "off" | "1h" | "4h" | "always";
 
@@ -99,8 +106,51 @@ function Sound() {
   );
 }
 
-export function ControlScreen() {
+/** The Mac's latest copy, one tap from the phone clipboard, then the clipboard and send tiles. */
+function Clipboard() {
   const remote = useRemote();
+  const access = useAccess();
+  const navigation = useNavigation<NativeStackNavigationProp<ControlStackParams>>();
+  const now = useNow(30_000);
+  const clips = useStore(remote.clips.clips);
+  const enabled = useStore(remote.clips.enabled);
+  const supported = useStore(remote.clips.supported);
+  const showing = access.clipboard && supported !== false && enabled === true;
+  const latest = showing ? clips.find((clip) => clip.deviceId === null) : undefined;
+  const open = () => navigation.navigate("Clipboard");
+  const copy = latest !== undefined && (latest.kind === "text" || latest.kind === "link" || latest.kind === "image") ? latest : null;
+  return (
+    <>
+      <Label right={showing ? `${String(clips.length)} on the Mac` : undefined}>Clipboard</Label>
+      {showing && latest === undefined ? <Note>Nothing copied on the Mac yet.</Note> : null}
+      {latest === undefined ? null : (
+        <View style={styles.latest}>
+          <ClipRow
+            clip={latest}
+            meta={`Mac copied · ${clipAge(latest.at, now)}`}
+            onPress={open}
+            action={
+              copy === null ? undefined : (
+                <Tap onPress={() => void copyToPhone(remote, copy).then((ok) => ok && toast.show("Copied to this phone"))} accessibilityRole="button" accessibilityLabel="Copy to this phone" hitSlop={10}>
+                  <T v="strong" color={color.yellow}>
+                    Copy
+                  </T>
+                </Tap>
+              )
+            }
+          />
+        </View>
+      )}
+      <TileGrid>
+        <Tile icon="clipboard" label="Clipboard" disabled={!access.operate && !access.clipboard} onPress={open} />
+        <Tile icon="link" label="Open link" disabled={!access.operate} onPress={() => sheet.open(LinkSheet)} />
+        <Tile icon="ping" label="Find Mac" disabled={!access.operate} onPress={() => void send(remote, { _tag: "Locate" }, "Playing a sound on your Mac")} />
+      </TileGrid>
+    </>
+  );
+}
+
+export function ControlScreen() {
   const access = useAccess();
   return (
     <Page>
@@ -109,12 +159,7 @@ export function ControlScreen() {
       <PowerTiles />
       <KeepAwake />
       <Sound />
-      <Label>Send to Mac</Label>
-      <TileGrid>
-        <Tile icon="clipboard" label="Clipboard" disabled={!access.operate && !access.clipboard} onPress={() => sheet.open(ClipboardSheet)} />
-        <Tile icon="link" label="Open link" disabled={!access.operate} onPress={() => sheet.open(LinkSheet)} />
-        <Tile icon="ping" label="Find Mac" disabled={!access.operate} onPress={() => void send(remote, { _tag: "Locate" }, "Playing a sound on your Mac")} />
-      </TileGrid>
+      <Clipboard />
       {access.operate ? null : <Note>This phone can only watch. Turn on control for it in Vitals on the Mac.</Note>}
     </Page>
   );
@@ -123,4 +168,5 @@ export function ControlScreen() {
 const styles = StyleSheet.create({
   slider: { marginHorizontal: 16, marginBottom: 10, backgroundColor: color.s2, borderRadius: 14, paddingHorizontal: 6, paddingVertical: 4 },
   off: { opacity: 0.4 },
+  latest: { marginHorizontal: 16, marginBottom: 10, backgroundColor: color.s2, borderRadius: 16, paddingVertical: 4, overflow: "hidden" },
 });

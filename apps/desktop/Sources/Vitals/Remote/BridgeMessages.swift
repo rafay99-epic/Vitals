@@ -158,15 +158,30 @@ struct GuardSettings: Codable, Equatable, Sendable {
     let rules: [GuardRule]
 }
 
+/// One clip the gateway already resolved for the Mac to place (`ClipPlacement` in clips.ts).
+struct ClipPlacement: Codable, Equatable, Sendable {
+    let kind: ClipKind
+    @Nullable var stored: String?
+    @Nullable var text: String?
+    @Nullable var name: String?
+    @Nullable var mime: String?
+}
+
+enum ClipDestination: String, Codable, Sendable { case clipboard, downloads }
+
 enum BridgeQuery: Equatable, Sendable {
     case history(HistoryInput)
     case apps
     case clipboard
     case setGuard(GuardSettings)
+    /// Clone a copied file, or zip a copied folder, into `clips/`.
+    case clipMaterialize(id: String, kind: ClipKind, origin: String)
+    /// Put phone clips on the Mac clipboard or into Downloads.
+    case clipPut(items: [ClipPlacement], to: ClipDestination, folder: String?, deviceName: String)
 }
 
 extension BridgeQuery: Decodable {
-    private enum Keys: String, CodingKey { case _tag, input, settings }
+    private enum Keys: String, CodingKey { case _tag, input, settings, id, kind, origin, items, to, folder, deviceName }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -175,6 +190,19 @@ extension BridgeQuery: Decodable {
         case "Apps": self = .apps
         case "Clipboard": self = .clipboard
         case "SetGuard": self = .setGuard(try c.decode(GuardSettings.self, forKey: .settings))
+        case "ClipMaterialize":
+            self = .clipMaterialize(
+                id: try c.decode(String.self, forKey: .id),
+                kind: try c.decode(ClipKind.self, forKey: .kind),
+                origin: try c.decode(String.self, forKey: .origin)
+            )
+        case "ClipPut":
+            self = .clipPut(
+                items: try c.decode([ClipPlacement].self, forKey: .items),
+                to: try c.decode(ClipDestination.self, forKey: .to),
+                folder: try c.decodeIfPresent(String.self, forKey: .folder),
+                deviceName: try c.decode(String.self, forKey: .deviceName)
+            )
         case let other:
             throw DecodingError.dataCorruptedError(forKey: ._tag, in: c, debugDescription: "unknown query \(other)")
         }
@@ -333,10 +361,18 @@ enum ToApp: Equatable, Sendable {
     case status(GatewayStatus)
     case pairPrompt(PairPrompt)
     case pairPromptEnded(id: String)
+    case clipStats(ClipStats)
+}
+
+/// What the gateway's clip history holds right now, for Settings.
+struct ClipStats: Codable, Equatable, Sendable {
+    let clips: Int
+    let pinned: Int
+    let bytes: Int
 }
 
 extension ToApp: Decodable {
-    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt }
+    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt, stats }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -361,6 +397,7 @@ extension ToApp: Decodable {
         case "status": self = .status(try c.decode(GatewayStatus.self, forKey: .status))
         case "pairPrompt": self = .pairPrompt(try c.decode(PairPrompt.self, forKey: .prompt))
         case "pairPromptEnded": self = .pairPromptEnded(id: try c.decode(String.self, forKey: .id))
+        case "clipStats": self = .clipStats(try c.decode(ClipStats.self, forKey: .stats))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .t, in: c, debugDescription: "unknown message \(other)")
         }

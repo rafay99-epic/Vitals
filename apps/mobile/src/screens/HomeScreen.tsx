@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { secondsLeft } from "@vitals/app/components/PendingOrder.tsx";
+import { secondsLeft } from "@vitals/app/state/countdown.ts";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { CHANNELS, LIVE_TOPICS } from "@vitals/app/features/chart/channels.ts";
 import { useLiveTopics } from "@vitals/app/features/chart/hooks.ts";

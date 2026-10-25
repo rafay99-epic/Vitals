@@ -105,6 +105,16 @@ class ActivityWriter {
   }
 
   frame(frame: FrameRecord): void {
+    this.tally(frame);
+    if (this.pending >= MAX_QUEUE) {
+      this.dropped += 1;
+      return;
+    }
+    this.frames.push(frame);
+  }
+
+  /** Counts a frame toward its connection's totals without keeping a row for it. */
+  tally(frame: FrameRecord): void {
     this.onDirty();
     const delta = this.connectionDeltas.get(frame.connectionId) ?? { msgsIn: 0, msgsOut: 0, bytesIn: 0, bytesOut: 0 };
     if (frame.dir === "in") {
@@ -115,11 +125,6 @@ class ActivityWriter {
       delta.bytesOut += frame.bytes;
     }
     this.connectionDeltas.set(frame.connectionId, delta);
-    if (this.pending >= MAX_QUEUE) {
-      this.dropped += 1;
-      return;
-    }
-    this.frames.push(frame);
   }
 
   connectionOpened(open: ConnectionOpen): void {
@@ -214,6 +219,8 @@ export class ActivityLog extends Context.Service<
   {
     readonly record: (event: ActivityEvent) => void;
     readonly frame: (frame: FrameRecord) => void;
+    /** For bulk traffic (clip chunks): counts bytes on the connection, keeps no frame row. */
+    readonly tally: (frame: FrameRecord) => void;
     readonly connectionOpened: (open: ConnectionOpen) => void;
     readonly connectionClosed: (id: string, at: number, reason: string) => void;
     readonly flush: Effect.Effect<void>;
@@ -240,6 +247,7 @@ export const layer = (db: Database) =>
       return ActivityLog.of({
         record: (event) => writer.record(event),
         frame: (frame) => writer.frame(frame),
+        tally: (frame) => writer.tally(frame),
         connectionOpened: (open) => writer.connectionOpened(open),
         connectionClosed: (id, at, reason) => writer.connectionClosed(id, at, reason),
         flush: Effect.asVoid(flush),

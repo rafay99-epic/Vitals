@@ -118,7 +118,8 @@ export class RemoteStore {
     | "insertCommand"
     | "getCommand"
     | "updateCommand"
-    | "recentCommands",
+    | "recentCommands"
+    | "overdueCommands",
     Statement
   >;
 
@@ -160,6 +161,9 @@ export class RemoteStore {
         "UPDATE commands SET status = ?, deadline_at = ?, finished_at = ?, error = ? WHERE id = ?",
       ),
       recentCommands: prepare("SELECT * FROM commands ORDER BY created_at DESC LIMIT ?"),
+      overdueCommands: prepare(
+        "SELECT * FROM commands WHERE status IN ('pending', 'running') AND deadline_at IS NOT NULL AND deadline_at < ? ORDER BY created_at",
+      ),
     };
   }
 
@@ -313,6 +317,11 @@ export class RemoteStore {
 
   recentCommands(limit: number): ReadonlyArray<CommandReceipt> {
     return (this.statements.recentCommands.all(limit) as ReadonlyArray<CommandRow>).map(toReceipt);
+  }
+
+  /** Countdowns (shut down, restart, log out) still open whose deadline passed before `before`. */
+  overdueCommands(before: number): ReadonlyArray<CommandReceipt> {
+    return (this.statements.overdueCommands.all(before) as ReadonlyArray<CommandRow>).map(toReceipt);
   }
 
 }
