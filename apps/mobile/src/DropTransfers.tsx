@@ -21,7 +21,7 @@ const waitingLine = (drop: Drop, me: DeviceId): string | null => {
 
 const titleOf = (drop: Drop, me: DeviceId): string => `${isIncoming(drop, me) ? "Getting" : "Sending"} ${dropLabel(drop)}`;
 
-export const useMyDrops = (): ReadonlyArray<Drop> => {
+const useMyDrops = (): ReadonlyArray<Drop> => {
   const remote = useRemote();
   const me = remote.credentials.deviceId;
   const mine = useCallback((drops: ReadonlyArray<Drop>) => drops.filter((drop) => !isEnded(drop) && (isIncoming(drop, me) || isOutgoing(drop, me))), [me]);

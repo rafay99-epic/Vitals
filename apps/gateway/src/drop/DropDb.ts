@@ -92,7 +92,7 @@ const decodePeer = Schema.decodeUnknownSync(Schema.fromJsonString(DropPeerSchema
 const encodePeer = Schema.encodeSync(Schema.fromJsonString(DropPeerSchema));
 const decodeState = Schema.decodeUnknownSync(DropStateSchema);
 
-export const toBitmap = (parts: ReadonlySet<number>): Uint8Array => {
+const toBitmap = (parts: ReadonlySet<number>): Uint8Array => {
   let highest = -1;
   for (const index of parts) highest = Math.max(highest, index);
   const bytes = new Uint8Array(Math.ceil((highest + 1) / 8));
@@ -100,7 +100,7 @@ export const toBitmap = (parts: ReadonlySet<number>): Uint8Array => {
   return bytes;
 };
 
-export const fromBitmap = (bytes: Uint8Array | null): Set<number> => {
+const fromBitmap = (bytes: Uint8Array | null): Set<number> => {
   const parts = new Set<number>();
   if (bytes === null) return parts;
   bytes.forEach((byte, offset) => {

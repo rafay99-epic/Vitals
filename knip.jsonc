@@ -31,8 +31,7 @@
       ],
       "ignoreDependencies": [
         "babel-plugin-react-compiler",
-        "expo-crypto",
-        "@vitals/tailnet"
+        "expo-crypto"
       ]
     },
     "apps/web": {
