@@ -100,6 +100,7 @@ final class AppSettings {
     var remoteEnabled: Bool { didSet { defaults.set(remoteEnabled, forKey: "remoteEnabled") } }
     /// Records Mac copies for phones with the Read clipboard scope. Off by default.
     var clipHistoryEnabled: Bool { didSet { defaults.set(clipHistoryEnabled, forKey: "clipHistoryEnabled") } }
+    var browseEverything: Bool { didSet { defaults.set(browseEverything, forKey: "browseEverything") } }
     /// Days the gateway keeps unpinned clips: 1, 7 or 30.
     var clipKeepDays: Int { didSet { defaults.set(clipKeepDays, forKey: "clipKeepDays") } }
     var shareFolder: String { didSet { defaults.set(shareFolder, forKey: "shareFolder") } }
@@ -193,6 +194,7 @@ final class AppSettings {
             "hideDockIcon": false,
             "autoScanCleanup": false,
             "clipHistoryEnabled": false,
+            "browseEverything": false,
             "clipKeepDays": 7,
             "shareFolder": "",
             "shareAutoAccept": true,
@@ -226,6 +228,7 @@ final class AppSettings {
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
         remoteEnabled = defaults.bool(forKey: "remoteEnabled")
         clipHistoryEnabled = defaults.bool(forKey: "clipHistoryEnabled")
+        browseEverything = defaults.bool(forKey: "browseEverything")
         clipKeepDays = defaults.integer(forKey: "clipKeepDays")
         shareFolder = defaults.string(forKey: "shareFolder") ?? ""
         shareAutoAccept = defaults.bool(forKey: "shareAutoAccept")

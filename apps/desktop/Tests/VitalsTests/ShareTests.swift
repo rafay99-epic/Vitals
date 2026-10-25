@@ -54,7 +54,7 @@ struct DropBridgeTests {
         #expect(received == .dropReceived(id: "drop-0001", from: .device(id: "dev-1", name: "Pixel 9 Pro"), files: [
             ReceivedDropFile(stored: "drop-0001/f1", name: "a.jpg", path: "Trip/day 1/a.jpg", size: 10),
             ReceivedDropFile(stored: "drop-0001/f2", name: "b.txt", path: nil, size: 5)
-        ]))
+        ], dest: nil))
     }
 
     @Test func appDropMessagesMatchTheContract() throws {

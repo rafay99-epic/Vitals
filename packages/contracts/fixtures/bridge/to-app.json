@@ -25,5 +25,9 @@
   { "t": "drop", "drop": { "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01", "from": { "_tag": "Device", "deviceId": "dev-1", "name": "Pixel 9" }, "to": { "_tag": "Mac", "name": "Abdul's MacBook Pro" }, "files": [{ "id": "0", "name": "video.mp4", "path": "Camera/video.mp4", "size": 52428800, "mime": "video/mp4", "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "done": 16777216 }], "bytes": 52428800, "done": 16777216, "state": "running", "route": "lan", "createdAt": 1790000000000, "updatedAt": 1790000004000, "error": null } },
   { "t": "drop", "drop": { "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b02", "from": { "_tag": "Mac", "name": "Abdul's MacBook Pro" }, "to": { "_tag": "Device", "deviceId": "dev-1", "name": "Pixel 9" }, "files": [{ "id": "0", "name": "IMG_0042.HEIC", "path": "Trip/IMG_0042.HEIC", "size": 2483021, "mime": "image/heic", "sha256": null, "done": 0 }], "bytes": 2483021, "done": 0, "state": "waiting", "route": null, "createdAt": 1790000005000, "updatedAt": 1790000005000, "error": null } },
   { "t": "dropReceived", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01", "from": { "_tag": "Device", "deviceId": "dev-1", "name": "Pixel 9" }, "files": [{ "stored": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01/0", "name": "video.mp4", "path": "Camera/video.mp4", "size": 52428800 }] },
-  { "t": "dropRemoved", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b02" }
+  { "t": "dropRemoved", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b02" },
+  { "t": "query", "id": "q-fs-1", "q": { "_tag": "FsThumbs", "paths": ["/Users/abdul/Downloads/IMG_0042.HEIC"], "pixels": 192 } },
+  { "t": "query", "id": "q-fs-2", "q": { "_tag": "FsTrash", "paths": ["/Users/abdul/Desktop/old.zip"], "deviceName": "Pixel 9" } },
+  { "t": "query", "id": "q-fs-3", "q": { "_tag": "FsOpen", "path": "/Users/abdul/Documents/plan.pdf" } },
+  { "t": "dropReceived", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b03", "from": { "_tag": "Device", "deviceId": "dev-1", "name": "Pixel 9" }, "files": [{ "stored": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b03/0", "name": "scan.pdf", "path": null, "size": 2048 }], "dest": "/Users/abdul/Documents" }
 ]

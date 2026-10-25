@@ -35,6 +35,11 @@ private struct FilesCard: View {
                 }
             }
             SwitchRow(
+                label: "Phones can browse the whole Mac",
+                caption: remote.browseEverything ? "Everything you can open, except Vitals' own data and Keychains" : "Desktop, Documents, Downloads, Movies, Music and Pictures",
+                isOn: Binding(get: { remote.browseEverything }, set: { remote.setBrowseEverything($0) })
+            )
+            SwitchRow(
                 label: "Start without asking from my phones",
                 caption: "Phones with Files on. Bigger than the largest drop still asks.",
                 isOn: $share.autoAccept
