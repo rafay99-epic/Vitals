@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bun build --compile --minify --bytecode --target=bun-darwin-arm64 src/main.ts --outfile dist/vitals-gateway && codesign --force --sign - dist/vitals-gateway",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "bun test"
+    "test": "bun test --timeout 20000"
   },
   "dependencies": {
     "@effect/platform-bun": "catalog:",

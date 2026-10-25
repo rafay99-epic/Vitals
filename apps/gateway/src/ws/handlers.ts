@@ -9,6 +9,7 @@ import { CommandService } from "../commands/CommandService.ts";
 import { DropStore } from "../drop/DropStore.ts";
 import { EventLog } from "../events/EventLog.ts";
 import { FsService } from "../fs/FsService.ts";
+import { TerminalService } from "../terminal/TerminalService.ts";
 import { Lan } from "../lan/Lan.ts";
 import { Hubs } from "../live/Hubs.ts";
 import { Store } from "../persistence/Store.ts";
@@ -36,6 +37,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
       const clips = yield* ClipStore;
       const drops = yield* DropStore;
       const files = yield* FsService;
+      const terminals = yield* TerminalService;
       const caller = { id: session.device.id, name: session.device.name };
       const clipCaller = { deviceId: session.device.id, name: session.device.name, connectionId };
       const dropCaller = { ...clipCaller, platform: session.device.platform };
@@ -58,6 +60,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
               clips: true,
               drop: true,
               fs: true,
+              terminal: true,
             };
           }),
         "stats.live": ({ topics }) => hubs.live(topics),
@@ -99,6 +102,12 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "fs.rename": (input) => files.rename(dropCaller, input),
         "fs.folder": (input) => files.folder(dropCaller, input),
         "fs.trash": (input) => files.trash(dropCaller, input),
+        "terminal.list": () => terminals.list,
+        "terminal.open": (input) => terminals.open(clipCaller, input),
+        "terminal.attach": (input) => terminals.attach(clipCaller, input),
+        "terminal.write": (input) => terminals.write(input).pipe(Effect.as({})),
+        "terminal.resize": (input) => terminals.resize(input).pipe(Effect.as({})),
+        "terminal.close": (input) => terminals.close(clipCaller, input).pipe(Effect.as({})),
         "activity.ingest": ({ events: batch }) =>
           Effect.sync(() => {
             for (const event of batch) {

@@ -45,6 +45,8 @@ final class RemoteModel {
     var isEnabled: Bool { settings.remoteEnabled }
     var clipHistoryEnabled: Bool { settings.clipHistoryEnabled }
     var browseEverything: Bool { settings.browseEverything }
+    private(set) var terminals: [MacTerminal] = []
+    @ObservationIgnored private var announcedTerminals = Set<String>()
     var clipKeepDays: Int { settings.clipKeepDays }
 
     @ObservationIgnored private let vitals: VitalsModel
@@ -291,6 +293,8 @@ final class RemoteModel {
             share.remove(id)
         case let .dropReceived(id, from, files, dest):
             share.receivedFiles(id: id, from: from, files: files, dest: dest)
+        case let .terminals(sessions):
+            updateTerminals(sessions)
         }
     }
 
@@ -456,7 +460,29 @@ final class RemoteModel {
         await refreshDevices()
     }
 
+    private func updateTerminals(_ sessions: [MacTerminal]) {
+        let known = Set(terminals.map(\.id))
+        for session in sessions where !known.contains(session.id) && !announcedTerminals.contains(session.id) {
+            announcedTerminals.insert(session.id)
+            NotificationManager.shared.send(
+                title: "\(session.deviceName) opened a terminal",
+                body: "It runs commands on this Mac as you. End it in Vitals › Remote.",
+                id: "vitals.terminal.\(session.id)"
+            )
+        }
+        terminals = sessions
+    }
+
+    func endTerminal(_ id: String) {
+        send(.terminalEnd(id: id, deviceId: nil))
+    }
+
+    func endAllTerminals() {
+        send(.terminalEnd(id: nil, deviceId: nil))
+    }
+
     func setScope(_ scope: String, enabled: Bool, for device: RemoteDevice) async {
+        if scope == "terminal", !enabled { send(.terminalEnd(id: nil, deviceId: device.id)) }
         guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
         var scopes = Set(devices[index].scopes)
         if enabled { scopes.insert(scope) } else { scopes.remove(scope) }
@@ -474,7 +500,7 @@ final class RemoteModel {
         pairPrompts.append(prompt)
         NotificationManager.shared.send(
             title: "\(prompt.device.name) wants to connect",
-            body: "over Wi-Fi · code \(prompt.code) · read and operate",
+            body: "over Wi-Fi · code \(prompt.code) · watch, control, send and browse files",
             id: NotificationManager.pairNotificationId(prompt.id),
             categoryId: NotificationManager.Category.remotePair
         )

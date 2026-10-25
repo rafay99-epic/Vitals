@@ -48,6 +48,7 @@ private struct RemoteDevicesTab: View {
             if !remote.pairPrompts.isEmpty { PairPromptsCard() }
             if remote.isEnabled { RoutesCard(showingAwayAccess: $showingAwayAccess) }
             if !remote.pendingCommands.isEmpty { PendingCommandsCard() }
+            if !remote.terminals.isEmpty { TerminalsCard() }
             KeepAwakeCard()
             SectionCard(title: "Devices", symbol: "iphone.gen3") {
                 if remote.devices.isEmpty {
@@ -73,6 +74,38 @@ private struct RemoteDevicesTab: View {
         })
         .sheet(isPresented: $showingAwayAccess) { AwayAccessSheet(isPresented: $showingAwayAccess) }
         .task(id: remote.state) { await remote.refreshDevices() }
+    }
+}
+
+private struct TerminalsCard: View {
+    @Environment(RemoteModel.self) private var remote
+
+    var body: some View {
+        SectionCard(title: "Terminals", symbol: "apple.terminal") {
+            ForEach(remote.terminals) { session in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(session.deviceName) · \(session.title)").font(.body.weight(.medium))
+                        Text(caption(session)).font(.callout).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("End", role: .destructive) { remote.endTerminal(session.id) }
+                        .controlSize(.small)
+                }
+            }
+            if remote.terminals.count > 1 {
+                Button("End all", role: .destructive) { remote.endAllTerminals() }
+                    .controlSize(.small)
+            }
+            Text("Commands run on this Mac as you. Turn Terminal off for a device to end its sessions.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func caption(_ session: MacTerminal) -> String {
+        let started = Date(timeIntervalSince1970: TimeInterval(session.startedAt) / 1000).formatted(.relative(presentation: .named))
+        return session.attached > 0 ? "open now · started \(started)" : "running in the background · started \(started)"
     }
 }
 
@@ -298,6 +331,7 @@ private struct DeviceRow: View {
                     scopeToggle("files", title: "Files")
                     scopeToggle("fsRead", title: "Browse files")
                     scopeToggle("fsWrite", title: "Change files")
+                    scopeToggle("terminal", title: "Terminal")
                 }
                 .font(.callout)
             }

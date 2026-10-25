@@ -12,6 +12,7 @@ import { ActivityLevel } from "./activity.ts";
 import { ClipDestination, ClipFileName, ClipId, ClipPlacement, ClipPolicy, ClipStats, MacClip } from "./clips.ts";
 import { Drop, DropId, DropPeer, DropPolicy, MacDropFile, ReceivedDropFile } from "./drop.ts";
 import { FsAccess, FsPath, FsThumb } from "./fs.ts";
+import { MacTerminal, TerminalId } from "./terminal.ts";
 import { Device } from "./auth.ts";
 
 const RequestId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
@@ -115,6 +116,7 @@ export const ToApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("drop"), drop: Drop }),
   Schema.Struct({ t: Schema.Literal("dropRemoved"), id: DropId }),
   Schema.Struct({ t: Schema.Literal("dropReceived"), id: DropId, from: DropPeer, files: Schema.Array(ReceivedDropFile), dest: Schema.optionalKey(FsPath) }),
+  Schema.Struct({ t: Schema.Literal("terminals"), sessions: Schema.Array(MacTerminal) }),
 ]);
 export type ToApp = typeof ToApp.Type;
 
@@ -156,6 +158,7 @@ export const FromApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("dropPause"), id: DropId, paused: Schema.Boolean }),
   Schema.Struct({ t: Schema.Literal("dropPolicy"), policy: DropPolicy }),
   Schema.Struct({ t: Schema.Literal("fsPolicy"), access: FsAccess }),
+  Schema.Struct({ t: Schema.Literal("terminalEnd"), id: Schema.NullOr(TerminalId), deviceId: Schema.NullOr(DeviceId) }),
 ]);
 export type FromApp = typeof FromApp.Type;
 

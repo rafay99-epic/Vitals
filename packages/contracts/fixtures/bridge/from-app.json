@@ -48,5 +48,6 @@
     "disk": { "readBytesPerSec": 84000000, "writeBytesPerSec": 12000000, "freeBytes": 412000000000, "totalBytes": 994000000000, "volume": "Macintosh HD",
       "health": { "model": "APPLE SSD AP1024Z", "wearPercent": 3, "readBytes": 61200000000000, "writtenBytes": 38400000000000, "powerOnHours": 2140, "unsafeShutdowns": 6, "sparePercent": 100, "celsius": 41, "warning": false } } } },
   { "t": "fsPolicy", "access": "everything" },
-  { "t": "result", "id": "q-fs-1", "ok": { "_tag": "FsThumbs", "thumbs": [{ "path": "/Users/abdul/Downloads/IMG_0042.HEIC", "jpeg": "/9j/4AAQ" }, { "path": "/Users/abdul/Downloads/notes.bin", "jpeg": null }] }, "error": null }
+  { "t": "result", "id": "q-fs-1", "ok": { "_tag": "FsThumbs", "thumbs": [{ "path": "/Users/abdul/Downloads/IMG_0042.HEIC", "jpeg": "/9j/4AAQ" }, { "path": "/Users/abdul/Downloads/notes.bin", "jpeg": null }] }, "error": null },
+  { "t": "terminalEnd", "id": null, "deviceId": "dev-1" }
 ]

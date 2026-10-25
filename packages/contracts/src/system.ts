@@ -68,5 +68,6 @@ export const Hello = Schema.Struct({
   clips: Schema.optional(Schema.Boolean),
   drop: Schema.optional(Schema.Boolean),
   fs: Schema.optional(Schema.Boolean),
+  terminal: Schema.optional(Schema.Boolean),
 });
 export type Hello = typeof Hello.Type;
