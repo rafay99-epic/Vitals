@@ -457,6 +457,7 @@ final class RemoteModel {
 
     func revoke(_ device: RemoteDevice) async {
         _ = try? await admin(.revokeDevice(device.id))
+        send(.terminalEnd(id: nil, deviceId: device.id))
         await refreshDevices()
     }
 

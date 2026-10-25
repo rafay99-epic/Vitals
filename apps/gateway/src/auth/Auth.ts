@@ -1,4 +1,4 @@
-import { type DeviceInfo, type PairRequest, type PairResponse, type Scope, type SessionInfo, DEFAULT_PAIRED_SCOPES } from "@vitals/contracts";
+import { type DeviceInfo, type PairRequest, type PairResponse, type Scope, type SessionInfo, pairedScopes } from "@vitals/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -75,13 +75,14 @@ export const layer = (initialOwner: string | null) =>
         if (identity !== null) return identity;
         const lanKey = request.lanKey ?? null;
         retire(lanKey);
-        const result = store.redeemPairing(request.code, request.device, DEFAULT_PAIRED_SCOPES, Date.now(), lanKey);
+        const scopes = pairedScopes(request.device.platform);
+        const result = store.redeemPairing(request.code, request.device, scopes, Date.now(), lanKey);
         if (typeof result === "string") {
           log("warn", "pairing.rejected", { reason: result, device: request.device.name });
           return { reason: "credentials", message: `Pairing code ${result}` };
         }
         log("info", "pairing.consumed", { device: request.device.name, platform: request.device.platform }, result.deviceId);
-        return { deviceId: result.deviceId, token: result.token, scopes: DEFAULT_PAIRED_SCOPES, expiresAt: result.expiresAt };
+        return { deviceId: result.deviceId, token: result.token, scopes, expiresAt: result.expiresAt };
       };
 
       const mint = (resolve: (now: number) => SessionMatch | null, now: number) => {
@@ -108,7 +109,7 @@ export const layer = (initialOwner: string | null) =>
 
       const pairLan = (device: DeviceInfo, lanKey: string): NewSession => {
         retire(lanKey);
-        const created = store.createLanDevice(device, DEFAULT_PAIRED_SCOPES, lanKey, Date.now());
+        const created = store.createLanDevice(device, pairedScopes(device.platform), lanKey, Date.now());
         log("info", "pairing.lan", { device: device.name, platform: device.platform }, created.deviceId);
         return created;
       };

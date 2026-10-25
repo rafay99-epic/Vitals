@@ -109,7 +109,7 @@ describe("fs: browse the Mac", () => {
     expect(everything.data).toMatchObject({ _tag: "CommandRejected" });
   });
 
-  test("getting a folder sends every file with its structure, byte-exact", async () => {
+  test("getting a folder sends every file with its structure, byte-exact, and never follows links out", async () => {
     const { gateway: target, token, deviceId } = await paired();
     const result = await withClient(target, token, (client) =>
       Effect.gen(function* () {
@@ -119,7 +119,8 @@ describe("fs: browse the Mac", () => {
           fetch(`${target.base}/api/drop/${offered.drop.id}/${file?.id ?? "x"}`, { headers: { authorization: `Drop ${offered.ticket.ticket}` } }),
         );
         const text = yield* Effect.promise(() => response.text());
-        return { offered, text };
+        const whole = yield* client["fs.get"]({ paths: [join(home, "Downloads")] });
+        return { offered, text, whole };
       }),
     );
     expect(result.offered.drop.state).toBe("running");
@@ -130,6 +131,7 @@ describe("fs: browse the Mac", () => {
       ["Trip/day 2", "two.jpg"],
     ]);
     expect(result.text).toBe("jpeg-two");
+    expect(result.whole.drop.files.map((file) => file.name)).not.toContain("elsewhere.txt");
   });
 
   test("moving to the Trash needs its own permission and stays out of Library and the shared roots", async () => {

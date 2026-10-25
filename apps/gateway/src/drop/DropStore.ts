@@ -348,7 +348,9 @@ export const layer = (database: Database) =>
         macReady = true;
         for (const drop of drops.values()) {
           tell({ t: "drop", drop: wire(drop) });
-          if (drop.incoming && drop.state === "done" && (yield* Effect.promise(() => files.hasStaged(drop.id)))) deliver(drop);
+          if (!drop.incoming || drop.state !== "done" || !(yield* Effect.promise(() => files.hasStaged(drop.id)))) continue;
+          if (drop.relay === null) deliver(drop);
+          else if (![...drops.values()].some((other) => other.source === drop.id)) yield* relayOut(drop, drop.relay);
         }
       });
 
@@ -357,6 +359,7 @@ export const layer = (database: Database) =>
           const sizes = yield* Effect.promise(() => Promise.all(list.map((file) => files.originSize(file.origin))));
           const missing = list.find((_, index) => sizes[index] === null);
           const online = yield* connections.connectedDevices;
+          let started = false;
           for (const deviceId of new Set(to)) {
             const device = store.device(deviceId);
             if (device === null || device.revokedAt !== null) {
@@ -390,8 +393,11 @@ export const layer = (database: Database) =>
               source,
             });
             add(drop);
-            if (refusal === null) for (const file of drop.files) Queue.offerUnsafe(hashJobs, { drop, file });
+            if (refusal !== null) continue;
+            started = true;
+            for (const file of drop.files) Queue.offerUnsafe(hashJobs, { drop, file });
           }
+          if (source !== null && !started) yield* Effect.promise(() => files.removeDrop(source));
         });
 
       const relayOut = (drop: DropRecord, to: DeviceId) =>

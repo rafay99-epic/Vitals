@@ -78,6 +78,7 @@ const FOLDERS: ReadonlyArray<readonly [string, FsRoot["place"]]> = [
 
 const PACKAGES = new Set([".app", ".bundle", ".framework", ".photoslibrary", ".musiclibrary", ".tvlibrary", ".pkg", ".rtfd", ".key", ".pages", ".numbers", ".xcodeproj", ".xcworkspace", ".xcarchive", ".playground", ".sparsebundle", ".band", ".logicx", ".fcpbundle", ".imovielibrary"]);
 
+const CHANNEL_DIRS = [".vitals", ".vitals-nightly", ".vitals-dev"];
 const CACHE_MS = 5_000;
 const CACHE_DIRS = 16;
 const THUMB_CACHE = 512;
@@ -201,7 +202,9 @@ export const layer = Layer.effect(
     const homeDir = config.homeDir ?? homedir();
     const home = yield* Effect.promise(() => realpath(homeDir).catch(() => homeDir));
     const denied = yield* Effect.promise(() =>
-      Promise.all([config.dataDir, dirname(config.dataDir), join(home, "Library", "Keychains")].map((path) => realpath(path).catch(() => path))),
+      Promise.all(
+        [config.dataDir, dirname(config.dataDir), ...CHANNEL_DIRS.map((name) => join(home, name)), join(home, "Library", "Keychains")].map((path) => realpath(path).catch(() => path)),
+      ),
     );
     const library = join(home, "Library");
     let access: FsAccess = "folders";
@@ -410,33 +413,41 @@ export const layer = Layer.effect(
         return { thumbs: known.map((item) => ({ path: item.path, jpeg: item.real === null ? null : (thumbCache.get(item.real)?.jpeg ?? null) })) } satisfies FsThumbsResult;
       });
 
-    const expand = async (real: string): Promise<Array<MacDropFile>> => {
+    const tooMany = () => Object.assign(new Error("too many"), { code: "ETOOMANY" });
+
+    const expand = async (real: string, out: Array<MacDropFile>): Promise<void> => {
       const info = await stat(real);
-      if (!info.isDirectory()) return [{ name: basename(real), path: null, size: info.size, mime: null, origin: real }];
+      if (!info.isDirectory()) {
+        if (out.length >= FS_LIMITS.pull) throw tooMany();
+        out.push({ name: basename(real), path: null, size: info.size, mime: null, origin: real });
+        return;
+      }
       const top = basename(real);
-      const dirents = await readdir(real, { withFileTypes: true, recursive: true });
-      const files = dirents.filter((dirent) => dirent.isFile());
-      if (files.length > FS_LIMITS.pull) throw Object.assign(new Error("too many"), { code: "ETOOMANY" });
-      return inBatches(files, async (dirent) => {
-        const origin = join(dirent.parentPath, dirent.name);
-        const size = (await stat(origin).catch(() => null))?.size ?? 0;
-        const folder = relative(real, dirent.parentPath);
-        return { name: dirent.name, path: folder === "" ? top : join(top, folder), size, mime: null, origin };
-      });
+      const walk = async (dir: string): Promise<void> => {
+        const folder = relative(real, dir);
+        for (const dirent of await readdir(dir, { withFileTypes: true })) {
+          const origin = join(dir, dirent.name);
+          if (denied.some((base) => inside(origin, base))) continue;
+          if (dirent.isDirectory()) await walk(origin);
+          else if (dirent.isFile()) {
+            if (out.length >= FS_LIMITS.pull) throw tooMany();
+            out.push({ name: dirent.name, path: folder === "" ? top : join(top, folder), size: 0, mime: null, origin });
+          }
+        }
+      };
+      await walk(real);
     };
 
     const get = (caller: DropCaller, input: FsPathsInput) =>
       Effect.gen(function* () {
         const reals = yield* Effect.forEach(input.paths, resolve);
-        const lists = yield* Effect.forEach(reals, (real) =>
-          Effect.tryPromise({
-            try: () => expand(real),
-            catch: (error) => (codeOf(error) === "ETOOMANY" ? rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick a smaller folder.`) : failure(error)),
-          }),
-        );
-        const files = lists.flat();
-        if (files.length === 0) return yield* Effect.fail(rejected("Nothing to send in there"));
-        if (files.length > FS_LIMITS.pull) return yield* Effect.fail(rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick fewer.`));
+        const found: Array<MacDropFile> = [];
+        yield* Effect.tryPromise({
+          try: () => reals.reduce((chain, real) => chain.then(() => expand(real, found)), Promise.resolve()),
+          catch: (error) => (codeOf(error) === "ETOOMANY" ? rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick fewer.`) : failure(error)),
+        });
+        if (found.length === 0) return yield* Effect.fail(rejected("Nothing to send in there"));
+        const files = yield* Effect.promise(() => inBatches(found, async (file) => ({ ...file, size: file.size || ((await lstat(file.origin).catch(() => null))?.size ?? 0) })));
         const offered = yield* drops.pull(caller, files);
         log("fs.get", caller, { items: input.paths.length, files: files.length, bytes: offered.drop.bytes });
         return offered;
@@ -462,7 +473,8 @@ export const layer = Layer.effect(
         const real = yield* resolve(path);
         const info = yield* attempt(() => stat(real));
         if (!info.isDirectory()) return yield* Effect.fail(rejected("That isn't a folder"));
-        if (!(inside(real, home) || inside(real, "/Volumes")) || inside(real, library)) return yield* Effect.fail(rejected("Vitals can't put files there"));
+        const hidden = inside(real, home) && relative(home, real).split("/").some((part) => part.startsWith("."));
+        if (!(inside(real, home) || inside(real, "/Volumes")) || real === home || hidden || inside(real, library)) return yield* Effect.fail(rejected("Vitals can't put files there"));
         return real;
       });
 

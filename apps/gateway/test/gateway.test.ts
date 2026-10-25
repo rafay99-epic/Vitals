@@ -38,7 +38,7 @@ describe("pairing and auth", () => {
     const first = await fetch(`${gateway.base}/api/pair`, { method: "POST", headers: ownerHeaders, body });
     expect(first.status).toBe(200);
     const paired = (await first.json()) as { scopes: Array<string> };
-    expect(paired.scopes).toEqual(["read", "operate", "files"]);
+    expect(paired.scopes).toEqual(["read", "operate", "files", "fsRead"]);
     const second = await fetch(`${gateway.base}/api/pair`, { method: "POST", headers: ownerHeaders, body });
     expect(second.status).toBe(401);
   });

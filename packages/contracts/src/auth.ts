@@ -5,10 +5,10 @@ import { DeviceId, EpochMs, LanKey } from "./ids.ts";
 export const Scope = Schema.Literals(["read", "operate", "destructive", "clipboard", "files", "fsRead", "fsWrite", "terminal"]);
 export type Scope = typeof Scope.Type;
 
-export const DEFAULT_PAIRED_SCOPES: ReadonlyArray<Scope> = ["read", "operate", "files", "fsRead"];
-
 export const Platform = Schema.Literals(["android", "ios", "web"]);
 export type Platform = typeof Platform.Type;
+
+export const pairedScopes = (platform: Platform): ReadonlyArray<Scope> => (platform === "web" ? ["read", "operate", "files"] : ["read", "operate", "files", "fsRead"]);
 
 export const DeviceInfo = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
