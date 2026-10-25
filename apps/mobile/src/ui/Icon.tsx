@@ -49,6 +49,8 @@ const PATHS = {
   video: `${box(3, 6, 13, 12, 2)}M16 10.5l5-3v9l-5-3`,
   android: `M6 18v-6a6 6 0 0 1 12 0v6zM8 5l1.6 2.4M16 5l-1.6 2.4${circle(9.5, 12, 0.4)}${circle(14.5, 12, 0.4)}`,
   files: "M9 3h6l4 4v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM15 3v4h4M4 8v11a3 3 0 0 0 3 3h8",
+  terminal: `${box(3, 4, 18, 16, 2)}M7 9l3 3-3 3M12 15h5`,
+  plus: "M12 5v14M5 12h14",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -11,6 +11,7 @@ export type ControlStackParams = {
   Clipboard: undefined;
   Files: undefined;
   Folder: { readonly path: string; readonly title: string };
+  Terminal: undefined;
 };
 
 export type SettingsStackParams = {

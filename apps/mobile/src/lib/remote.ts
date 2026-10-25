@@ -15,6 +15,7 @@ export interface Access {
   readonly files: boolean;
   readonly browse: boolean;
   readonly change: boolean;
+  readonly terminal: boolean;
 }
 
 /** What this phone may do on the Mac, as granted in Vitals on the Mac. */
@@ -27,6 +28,7 @@ export const useAccess = (): Access => {
     files: scopes.includes("files"),
     browse: scopes.includes("fsRead"),
     change: scopes.includes("fsWrite"),
+    terminal: scopes.includes("terminal"),
   };
 };
 
