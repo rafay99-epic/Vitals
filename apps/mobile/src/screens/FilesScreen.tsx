@@ -4,6 +4,10 @@ import type { SavedFile, SentDrop } from "@vitals/app/state/drops.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
 import { formatBytes } from "@vitals/shared";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { FsEntry, FsRoot } from "@vitals/contracts";
+import { useEffect, useState } from "react";
 import { Image, SectionList, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -12,9 +16,11 @@ import type { Batch } from "../lib/clips.ts";
 import { pickFiles, pickPhotos } from "../lib/clips.ts";
 import { BLOCK_NOTE, type FileKind, fileKind, KIND_NAME, keepsGoing, pickFolder, savedTo, useFilesBlock } from "../lib/drops.ts";
 import { useAccess } from "../lib/remote.ts";
+import type { ControlStackParams } from "../navigation.ts";
 import { sendSheet } from "../sheets/ClipSheets.tsx";
+import { macFileSheet } from "../sheets/MacFileSheet.tsx";
 import { receivedSheet, sentSheet } from "../sheets/FileSheets.tsx";
-import { BackBar, color, Empty, Group, Icon, type IconName, Label, Note, Row, sheet, T, Tap, Tile, TileGrid, Title, toast, Toggle, useDockSpace } from "../ui/index.ts";
+import { BackBar, color, Empty, Group, Icon, type IconName, Label, Note, Row, SearchField, sheet, T, Tap, Tile, TileGrid, Title, toast, Toggle, useDockSpace } from "../ui/index.ts";
 
 const KIND_LOOK: Readonly<Record<FileKind, { readonly icon: IconName; readonly tint: string }>> = {
   apk: { icon: "android", tint: color.green },
@@ -71,6 +77,113 @@ function FileRow({ item, now }: { readonly item: Item; readonly now: number }) {
   );
 }
 
+const PLACE_ICON: Readonly<Record<FsRoot["place"], IconName>> = {
+  home: "home",
+  desktop: "screen",
+  documents: "file",
+  downloads: "down",
+  movies: "video",
+  music: "sound",
+  pictures: "image",
+  disk: "mac",
+  volume: "files",
+};
+
+type Places = { readonly _tag: "loading" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly roots: ReadonlyArray<FsRoot> };
+
+function MacPlaces() {
+  const remote = useRemote();
+  const navigation = useNavigation<NativeStackNavigationProp<ControlStackParams>>();
+  const [places, setPlaces] = useState<Places>({ _tag: "loading" });
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<ReadonlyArray<FsEntry> | null>(null);
+  const state = useStore(remote.connection.state);
+  const ready = state._tag === "Ready";
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    void remote.files.roots().then((outcome) => {
+      if (!cancelled) setPlaces(outcome.ok ? { _tag: "loaded", roots: outcome.value.roots } : { _tag: "failed", message: outcome.message });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [remote, ready]);
+
+  useEffect(() => {
+    const text = query.trim();
+    if (text.length < 2) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void remote.files.search(text).then((outcome) => {
+        if (cancelled) return;
+        setFound(outcome.ok ? outcome.value.entries : []);
+        if (outcome.ok) remote.files.want(outcome.value.entries);
+      });
+    }, SEARCH_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [remote, query]);
+
+  const type = (text: string) => {
+    setQuery(text);
+    if (text.trim().length < 2) setFound(null);
+  };
+  const searching = query.trim().length >= 2;
+  const openEntry = (entry: FsEntry) =>
+    entry.kind === "folder" || entry.kind === "link" ? navigation.push("Folder", { path: entry.path, title: entry.name }) : sheet.open(macFileSheet(entry, false));
+
+  return (
+    <View>
+      <Label>On your Mac</Label>
+      <SearchField placeholder="Search your Mac" value={query} onChangeText={type} accessibilityLabel="Search your Mac" />
+      {searching ? (
+        found === null ? (
+          <Empty title="Searching" />
+        ) : found.length === 0 ? (
+          <Empty title="Nothing found" />
+        ) : (
+          found.map((entry) => <PlaceRow key={entry.path} icon={entry.kind === "folder" ? "folder" : "file"} title={entry.name} detail={folderOf(entry.path)} onPress={() => openEntry(entry)} />)
+        )
+      ) : places._tag === "loading" ? (
+        <Empty title="Loading" />
+      ) : places._tag === "failed" ? (
+        <Empty title="Can't see your Mac's folders" detail={places.message} />
+      ) : (
+        places.roots.map((root) => <PlaceRow key={root.path} icon={PLACE_ICON[root.place]} title={root.label} onPress={() => navigation.push("Folder", { path: root.path, title: root.label })} />)
+      )}
+    </View>
+  );
+}
+
+const folderOf = (path: string): string => path.split("/").slice(-3, -1).join(" › ");
+
+function PlaceRow({ icon, title, detail, onPress }: { readonly icon: IconName; readonly title: string; readonly detail?: string; readonly onPress: () => void }) {
+  return (
+    <Tap onPress={onPress} accessibilityRole="button" accessibilityLabel={title} scale={0.99} style={styles.row}>
+      <View style={[styles.icon, styles.iconTile]}>
+        <Icon name={icon} size={16} color={color.blue} />
+      </View>
+      <View style={styles.rowText}>
+        <T v="medium" numberOfLines={1}>
+          {title}
+        </T>
+        {detail === undefined ? null : (
+          <T v="small" numberOfLines={1}>
+            {detail}
+          </T>
+        )}
+      </View>
+      <Icon name="chevron" size={15} color={color.mute} />
+    </Tap>
+  );
+}
+
+const SEARCH_DELAY_MS = 250;
+
 export function FilesScreen() {
   const remote = useRemote();
   const access = useAccess();
@@ -82,6 +195,8 @@ export function FilesScreen() {
   const sent = useStore(remote.drops.sent);
   const autoAccept = useStore(remote.drops.autoAccept);
   const canSend = access.operate && block === null;
+  const state = useStore(remote.connection.state);
+  const browsable = access.browse && state._tag === "Ready" && state.hello.fs === true;
   const startWithoutAsking = (on: boolean) => {
     remote.drops.setAutoAccept(on);
     toast.show(on ? "Files from your Mac start right away" : "Vitals asks before each transfer");
@@ -98,6 +213,8 @@ export function FilesScreen() {
     <View style={{ paddingTop: insets.top + 6 }}>
       <BackBar parent="Control" />
       <Title>Files.</Title>
+      {browsable ? <MacPlaces /> : null}
+      <Label>Send to your Mac</Label>
       <T v="mono" style={styles.where}>{`From your Mac → ${savedTo}`}</T>
       <TileGrid>
         <Tile icon="files" label="Files" disabled={!canSend} onPress={() => pick(pickFiles)} />

@@ -62,9 +62,9 @@ export const BLOCK_NOTE: Readonly<Record<Exclude<FilesBlock, null>, string>> = {
   off: "Files are off for this phone. Turn them on in Vitals on the Mac.",
 };
 
-export const sendDrop = async (remote: Remote, batch: Batch): Promise<boolean> => {
+export const sendDrop = async (remote: Remote, batch: Batch, dest?: string): Promise<boolean> => {
   const files = batch.items.filter(isFile).map(outgoingOf);
-  return (await remote.drops.send(files)) !== null;
+  return (await remote.drops.send(files, dest)) !== null;
 };
 
 const walk = (folder: Directory, prefix: string): ReadonlyArray<PickedFile> =>
