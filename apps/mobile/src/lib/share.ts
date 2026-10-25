@@ -146,24 +146,28 @@ export class PhoneShare {
 
   private list(path: string, sort: FsSort, offset: number, limit: number): FsListResult {
     this.allowed(path);
-    const cached = this.cache.get(path);
-    const entries =
-      cached !== undefined && Date.now() - cached.at < CACHE_MS
-        ? cached.entries
-        : new Directory(uriOf(path))
-            .list()
-            .filter((item) => !item.name.startsWith("."))
-            .map((item) => entryOf(item, path))
-            .filter((entry) => entry !== null);
-    this.cache.set(path, { at: Date.now(), entries });
+    const entries = this.entries(path);
     const sorted = [...entries].sort(SORTS[sort]);
     const parent = path.slice(0, path.lastIndexOf("/"));
     return { path, parent: this.roots.some((root) => root.path === path) || !inside(parent, this.roots) ? null : parent, entries: sorted.slice(offset, offset + limit), total: sorted.length };
   }
 
+  private entries(path: string): ReadonlyArray<FsEntry> {
+    const cached = this.cache.get(path);
+    if (cached !== undefined && Date.now() - cached.at < CACHE_MS) return cached.entries;
+    const entries = new Directory(uriOf(path))
+      .list()
+      .filter((item) => !item.name.startsWith("."))
+      .map((item) => entryOf(item, path))
+      .filter((entry) => entry !== null);
+    this.cache.set(path, { at: Date.now(), entries });
+    return entries;
+  }
+
   private thumb(path: string): FsThumb {
-    if (!IMAGE.test(path) || !inside(path, this.roots)) return { path, jpeg: null };
+    if (!IMAGE.test(path)) return { path, jpeg: null };
     try {
+      this.allowed(path);
       const file = new File(uriOf(path));
       return { path, jpeg: file.size > 0 && file.size <= THUMB_BYTES && /\.jpe?g$/i.test(path) ? file.base64Sync() : null };
     } catch {

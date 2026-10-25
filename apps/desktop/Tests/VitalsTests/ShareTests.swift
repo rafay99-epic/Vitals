@@ -265,4 +265,16 @@ struct ShareSettingsTests {
         #expect(Shortcut(keyCode: kVK_ANSI_V, flags: [.command, .option, .control]) == .sendClipboard)
         #expect(Shortcut(keyCode: kVK_Escape, flags: [.command]) == nil)
     }
+
+    @Test func phonesOpenDocumentsButOnlyRevealAnythingThatRuns() throws {
+        let root = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for name in ["photo.jpg", "notes.txt", "report.pdf"] { try write("x", to: root.appendingPathComponent(name)) }
+        for name in ["run.command", "run.sh", "run.terminal", "run.scpt", "Tool.app/Contents/Info.plist", "bin/tool"] {
+            try write("echo hi", to: root.appendingPathComponent(name))
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.appendingPathComponent("bin/tool").path)
+        for name in ["photo.jpg", "notes.txt", "report.pdf", "bin"] { #expect(FileThumbs.opensDirectly(root.appendingPathComponent(name)), "\(name)") }
+        for name in ["run.command", "run.sh", "run.terminal", "run.scpt", "Tool.app", "bin/tool"] { #expect(!FileThumbs.opensDirectly(root.appendingPathComponent(name)), "\(name)") }
+    }
 }

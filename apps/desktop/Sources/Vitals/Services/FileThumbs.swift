@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import QuickLookThumbnailing
+import UniformTypeIdentifiers
 
 enum FileThumbs {
     private static let concurrency = 6
@@ -28,6 +29,20 @@ enum FileThumbs {
         paths.reduce(0) { count, path in
             (try? FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)) == nil ? count : count + 1
         }
+    }
+
+    static func opensDirectly(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.contentTypeKey, .isDirectoryKey, .isPackageKey])
+        if values?.isPackage == true { return false }
+        if values?.isDirectory == true { return true }
+        guard let type = values?.contentType, !FileManager.default.isExecutableFile(atPath: url.path) else { return false }
+        if [UTType.executable, .script, .application, .package, .bundle, .unixExecutable].contains(where: type.conforms) { return false }
+        return [UTType.image, .audiovisualContent, .pdf, .text, .presentation, .spreadsheet, .archive].contains(where: type.conforms)
+    }
+
+    static func show(_ path: String) {
+        let url = URL(fileURLWithPath: path)
+        if opensDirectly(url) { NSWorkspace.shared.open(url) } else { NSWorkspace.shared.activateFileViewerSelecting([url]) }
     }
 
     private static func jpeg(for path: String, side: CGFloat) async -> String? {

@@ -345,7 +345,7 @@ final class RemoteModel {
                 share.note("\(deviceName) moved \(trashed == 1 ? "1 item" : "\(trashed) items") to the Trash", "Put it back from the Trash in Finder.")
             }
         case let .fsOpen(path):
-            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            FileThumbs.show(path)
             send(.result(id: id, ok: .fsOpen, error: nil))
         }
     }
