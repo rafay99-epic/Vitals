@@ -3,7 +3,7 @@ import { type Line, type TerminalSession } from "@vitals/app/state/terminal.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { type TerminalId, type TerminalInfo, TERMINAL_LIMITS } from "@vitals/contracts";
 import * as Clipboard from "expo-clipboard";
-import * as LocalAuthentication from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
 import { type ComponentRef, memo, useEffect, useRef, useState } from "react";
 import { type LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +15,18 @@ const FONT_SIZE = 12;
 const LINE_HEIGHT = 16;
 const CHAR_WIDTH = FONT_SIZE * 0.6;
 const UNLOCK_MS = 5 * 60 * 1000;
+const GATE_KEY = "vitals.remote.terminalGate";
+const GATE = { requireAuthentication: true, authenticationPrompt: "Unlock Terminal" } as const;
+
+const authenticate = async (): Promise<boolean> => {
+  if (!SecureStore.canUseBiometricAuthentication()) return true;
+  try {
+    if ((await SecureStore.getItemAsync(GATE_KEY, GATE)) === null) await SecureStore.setItemAsync(GATE_KEY, "1", GATE);
+    return true;
+  } catch {
+    return false;
+  }
+};
 const SENTINEL = " ";
 
 let unlockedAt = 0;
@@ -166,8 +178,8 @@ function Session({ info }: { readonly info: TerminalInfo }) {
 
 function Locked({ onUnlock }: { readonly onUnlock: () => void }) {
   const unlock = () =>
-    void LocalAuthentication.authenticateAsync({ promptMessage: "Unlock Terminal", disableDeviceFallback: false }).then((result) => {
-      if (!result.success) return;
+    void authenticate().then((ok) => {
+      if (!ok) return;
       unlockedAt = Date.now();
       onUnlock();
     });

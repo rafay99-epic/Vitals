@@ -426,10 +426,15 @@ enum AdminOp: Equatable, Sendable {
     case revokeDevice(String)
     case setScopes(deviceId: String, scopes: [String])
     case resolvePairPrompt(id: String, allow: Bool)
+    case fsDevices
+    case fsRoots(device: String)
+    case fsList(device: String, path: String, offset: Int)
+    case fsThumbs(device: String, paths: [String])
+    case fsPull(device: String, paths: [String])
 }
 
 extension AdminOp: Encodable {
-    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow }
+    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow, device, path, paths, offset }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -447,6 +452,24 @@ extension AdminOp: Encodable {
             try c.encode("ResolvePairPrompt", forKey: ._tag)
             try c.encode(id, forKey: .id)
             try c.encode(allow, forKey: .allow)
+        case .fsDevices:
+            try c.encode("FsDevices", forKey: ._tag)
+        case let .fsRoots(device):
+            try c.encode("FsRoots", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+        case let .fsList(device, path, offset):
+            try c.encode("FsList", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(path, forKey: .path)
+            try c.encode(offset, forKey: .offset)
+        case let .fsThumbs(device, paths):
+            try c.encode("FsThumbs", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(paths, forKey: .paths)
+        case let .fsPull(device, paths):
+            try c.encode("FsPull", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(paths, forKey: .paths)
         }
     }
 }

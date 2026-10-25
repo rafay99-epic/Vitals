@@ -473,6 +473,26 @@ final class RemoteModel {
         terminals = sessions
     }
 
+    func phoneDevices() async -> [PhoneDevice] {
+        guard case let .fsDevices(devices)? = try? await admin(.fsDevices) else { return [] }
+        return devices
+    }
+
+    func phoneRoots(_ device: String) async throws -> [PhoneRoot] {
+        guard case let .fsRoots(roots) = try await admin(.fsRoots(device: device)) else { return [] }
+        return roots
+    }
+
+    func phoneList(_ device: String, path: String) async throws -> PhoneListing? {
+        guard case let .fsList(listing) = try await admin(.fsList(device: device, path: path, offset: 0)) else { return nil }
+        return listing
+    }
+
+    func pullFromPhone(_ device: String, paths: [String]) async throws -> Int {
+        guard case let .fsPull(files) = try await admin(.fsPull(device: device, paths: paths)) else { return 0 }
+        return files
+    }
+
     func endTerminal(_ id: String) {
         send(.terminalEnd(id: id, deviceId: nil))
     }
@@ -539,7 +559,7 @@ final class RemoteModel {
             adminWaiters[id] = continuation
             send(.admin(id: id, op: op))
             Task { [weak self] in
-                try? await Task.sleep(for: .seconds(10))
+                try? await Task.sleep(for: .seconds(20))
                 self?.adminWaiters.removeValue(forKey: id)?.resume(throwing: AdminFailure(message: "The gateway did not answer"))
             }
         }

@@ -127,7 +127,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: bundleId,
     versionCode: commits,
-    permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE", "ACCESS_LOCAL_NETWORK", "MANAGE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"],
+    permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE", "ACCESS_LOCAL_NETWORK"],
     adaptiveIcon: {
       foregroundImage: `./assets/adaptive-foreground${current.art}.png`,
       monochromeImage: `./assets/adaptive-monochrome${current.art}.png`,
