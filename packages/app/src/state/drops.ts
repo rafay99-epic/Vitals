@@ -195,6 +195,7 @@ export class MacDrops {
         const supported = state.hello.drop === true && state.hello.scopes.includes("files");
         this.supported.set(supported);
         this.flushAcks();
+        this.pump();
         if (watching || !supported || !engine.supported) return;
         watching = true;
         this.stops.push(connection.watch((client) => client["drop.watch"]({}), (event) => void this.ready.then(() => this.apply(event))));
@@ -431,6 +432,12 @@ export class MacDrops {
     job.state = "starting";
     const ticket = await this.ticketFor(job.dropId, job.attempts > 0);
     if (this.jobs.get(job.id) !== job) return;
+    if (ticket === null && this.connection.state.get()._tag !== "Ready") {
+      job.state = "queued";
+      job.stalled = true;
+      this.publish(true);
+      return;
+    }
     if (ticket === null) return this.fail(job, "Your Mac did not let this transfer start");
     job.state = "running";
     const base = { job: job.id, title: fileTitle(job), endpoints: this.endpoints(), ticket: ticket.ticket, dropId: job.dropId, fileId: job.file.id, size: job.file.size };

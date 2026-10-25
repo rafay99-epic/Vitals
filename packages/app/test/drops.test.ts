@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { type Connection, type ConnectionState, Store, type VitalsClient } from "@vitals/client-runtime";
-import { DeviceId, Drop, type DropFile } from "@vitals/contracts";
+import { type Connection, type ConnectionState, NotConnected, Store, type VitalsClient } from "@vitals/client-runtime";
+import { DeviceId, Drop, type DropFile, Hello, PROTOCOL_VERSION } from "@vitals/contracts";
 import type { DownloadJob, TransferEvent, UploadJob } from "@vitals/tailnet/drop";
 import * as Schema from "effect/Schema";
 
@@ -78,6 +78,17 @@ const shelf = (): Shelf => {
 const ticket = { ticket: "t".repeat(40), expiresAt: Date.now() + HOUR };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const readyHello = Schema.decodeUnknownSync(Hello)({
+  protocol: PROTOCOL_VERSION,
+  mac: null,
+  keepAwake: null,
+  lastEventSeq: 0,
+  alerts: [],
+  serverTime: 1,
+  scopes: ["read", "operate", "files"],
+  drop: true,
+});
 
 describe("drop endpoints", () => {
   test("Wi-Fi hosts first with the pin, then built-in Tailscale, then Tailscale", () => {
@@ -185,6 +196,32 @@ describe("MacDrops", () => {
     await settle();
     expect(transfers.started).toHaveLength(2);
     expect(calls.filter((call) => call.method === "drop.ticket")).toHaveLength(2);
+    drops.dispose();
+  });
+
+  test("a retry while the phone is offline waits for the connection instead of failing", async () => {
+    const running = drop("running", [file("a", 10)]);
+    const { connection, calls } = fake((call) => (call.method === "drop.ticket" ? ticket : running));
+    const online = connection.call;
+    const offline: Connection["call"] = async () => ({ ok: false, error: new NotConnected({ message: "offline" }) });
+    const transfers = engine();
+    const reports: Array<string> = [];
+    const drops = new MacDrops(connection, transfers.value, shelf(), me, () => [], (message) => reports.push(message));
+    await drops.ready;
+    drops.apply({ _tag: "Snapshot", drops: [running] });
+    await settle();
+    const job = transfers.started[0]?.job ?? "";
+    Object.assign(connection, { call: offline });
+    connection.state.set({ _tag: "Backoff", attempt: 1, retryAt: Date.now() + 1_000, reason: "Can't reach your Mac", failures: [] });
+    transfers.emit({ type: "error", job, message: "The Mac no longer has this transfer", retryable: false });
+    await settle();
+    expect(transfers.started).toHaveLength(1);
+    expect(reports).toEqual([]);
+    Object.assign(connection, { call: online });
+    connection.state.set({ _tag: "Ready", hello: readyHello, since: Date.now(), route: "lan", latencyMs: 5 });
+    await settle();
+    expect(transfers.started).toHaveLength(2);
+    expect(calls.filter((call) => call.method === "drop.ticket").length).toBeGreaterThan(0);
     drops.dispose();
   });
 
