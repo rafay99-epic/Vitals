@@ -64,8 +64,6 @@ describe("fs: browse the Mac", () => {
         return { roots, byName, byDate, hidden, nested };
       }),
     );
-    expect(result.roots.access).toBe("folders");
-    expect(result.roots.writable).toBe(false);
     expect(result.roots.roots.map((root) => root.label)).toEqual(["Desktop", "Downloads"]);
     expect(result.byName.entries.map((entry) => entry.name)).toEqual(["Trip", "a.txt", "b.mov", "Escape", "file 9.txt", "file 10.txt"]);
     expect(result.byName.entries.find((entry) => entry.name === "Escape")?.kind).toBe("link");
@@ -134,25 +132,24 @@ describe("fs: browse the Mac", () => {
     expect(result.text).toBe("jpeg-two");
   });
 
-  test("changing files needs its own permission and stays out of Library", async () => {
+  test("moving to the Trash needs its own permission and stays out of Library and the shared roots", async () => {
     const { gateway: target, token, deviceId } = await paired();
-    const denied = await withClient(target, token, (client) => Effect.flip(client["fs.folder"]({ parent: join(home, "Downloads"), name: "New" })));
+    target.app.answer = (q) => (q._tag === "FsTrash" ? { _tag: "FsTrash", trashed: q.paths.length } : null);
+    const denied = await withClient(target, token, (client) => Effect.flip(client["fs.trash"]({ paths: [join(home, "Downloads", "a.txt")] })));
     expect(denied).toMatchObject({ _tag: "AuthError" });
 
     await adminOp(target.app, { _tag: "SetScopes", deviceId: deviceIdOf(deviceId), scopes: ["read", "operate", "files", "fsRead", "fsWrite"] });
     const allowed = await withClient(target, token, (client) =>
       Effect.gen(function* () {
-        const made = yield* client["fs.folder"]({ parent: join(home, "Downloads"), name: "New" });
-        const renamed = yield* client["fs.rename"]({ path: made.path, name: "Renamed" });
-        const clash = yield* Effect.flip(client["fs.rename"]({ path: renamed.path, name: "a.txt" }));
-        const root = yield* Effect.flip(client["fs.rename"]({ path: join(home, "Downloads"), name: "Gone" }));
-        return { made, renamed, clash, root };
+        const trashed = yield* client["fs.trash"]({ paths: [join(home, "Downloads", "a.txt")] });
+        const root = yield* Effect.flip(client["fs.trash"]({ paths: [join(home, "Downloads")] }));
+        return { trashed, root };
       }),
     );
-    expect(allowed.made).toMatchObject({ name: "New", kind: "folder" });
-    expect(allowed.renamed).toMatchObject({ name: "Renamed", path: join(home, "Downloads", "Renamed") });
-    expect(allowed.clash).toMatchObject({ _tag: "CommandRejected" });
+    expect(allowed.trashed).toEqual({ trashed: 1 });
     expect(allowed.root).toMatchObject({ _tag: "CommandRejected" });
+    const asked = target.app.received.filter((message) => message.t === "query" && message.q._tag === "FsTrash");
+    expect(asked).toHaveLength(1);
   });
 });
 

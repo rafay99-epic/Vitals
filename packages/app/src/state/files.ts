@@ -51,14 +51,6 @@ export class MacFiles {
     return this.run((client) => client["fs.open"]({ path }));
   }
 
-  rename(path: string, name: string): Promise<Outcome<FsEntry>> {
-    return this.run((client) => client["fs.rename"]({ path, name }));
-  }
-
-  folder(parent: string, name: string): Promise<Outcome<FsEntry>> {
-    return this.run((client) => client["fs.folder"]({ parent, name }));
-  }
-
   trash(paths: ReadonlyArray<string>): Promise<Outcome<{ readonly trashed: number }>> {
     return this.run((client) => client["fs.trash"]({ paths }));
   }

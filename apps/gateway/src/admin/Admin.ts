@@ -63,7 +63,7 @@ export const layer = Layer.effectDiscard(
             return { _tag: "FsDevices", devices } satisfies AdminResult;
           }
           case "FsRoots": {
-            const { roots } = yield* files.roots({ device: op.device }, false).pipe(Effect.mapError((error) => error.message));
+            const { roots } = yield* files.roots({ device: op.device }).pipe(Effect.mapError((error) => error.message));
             return { _tag: "FsRoots", roots } satisfies AdminResult;
           }
           case "FsList": {

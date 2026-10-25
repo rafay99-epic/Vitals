@@ -56,7 +56,6 @@ const CURSOR_BG = "#f2ec6b";
 
 export class TerminalSession {
   readonly frame = new Store<Frame>({ lines: [], exited: false, exitCode: null, attached: false });
-  readonly info = new Store<TerminalInfo | null>(null);
   private readonly connection: Connection;
   private readonly id: TerminalId;
   private readonly term: Terminal;
@@ -126,7 +125,6 @@ export class TerminalSession {
   private apply(event: TerminalEvent): void {
     switch (event._tag) {
       case "Snapshot":
-        this.info.set(event.info);
         this.exited = !event.info.running;
         this.exitCode = event.info.exitCode;
         this.term.reset();

@@ -14,9 +14,6 @@ export const FS_LIMITS = {
 export const FsPath = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096), Schema.isPattern(/^\/[^\0]*$/));
 export type FsPath = typeof FsPath.Type;
 
-export const FsName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(255), Schema.isPattern(/^(?!\.\.?$)[^/\0]+$/));
-export type FsName = typeof FsName.Type;
-
 export const FsKind = Schema.Literals(["folder", "file", "package", "link"]);
 export type FsKind = typeof FsKind.Type;
 
@@ -42,11 +39,7 @@ export type FsRoot = typeof FsRoot.Type;
 export const FsAccess = Schema.Literals(["folders", "everything"]);
 export type FsAccess = typeof FsAccess.Type;
 
-export const FsRootsResult = Schema.Struct({
-  roots: Schema.Array(FsRoot),
-  access: FsAccess,
-  writable: Schema.Boolean,
-});
+export const FsRootsResult = Schema.Struct({ roots: Schema.Array(FsRoot) });
 export type FsRootsResult = typeof FsRootsResult.Type;
 
 export const FsSort = Schema.Literals(["name", "date", "size"]);
@@ -107,12 +100,6 @@ export type FsThumb = typeof FsThumb.Type;
 
 export const FsThumbsResult = Schema.Struct({ thumbs: Schema.Array(FsThumb) });
 export type FsThumbsResult = typeof FsThumbsResult.Type;
-
-export const FsRenameInput = Schema.Struct({ path: FsPath, name: FsName });
-export type FsRenameInput = typeof FsRenameInput.Type;
-
-export const FsFolderInput = Schema.Struct({ parent: FsPath, name: FsName });
-export type FsFolderInput = typeof FsFolderInput.Type;
 
 export const FsPathInput = Schema.Struct({ path: FsPath });
 export type FsPathInput = typeof FsPathInput.Type;

@@ -1,5 +1,5 @@
 import type { Dirent, Stats } from "node:fs";
-import { lstat, mkdir, readdir, realpath, rename, stat } from "node:fs/promises";
+import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 
@@ -15,13 +15,11 @@ import {
   type FsServeResult,
   type FsAccess,
   type FsEntry,
-  type FsFolderInput,
   type FsKind,
   type FsListInput,
   type FsListResult,
   type FsPathInput,
   type FsPathsInput,
-  type FsRenameInput,
   type FsRoot,
   type FsRootsResult,
   type FsSearchInput,
@@ -54,7 +52,7 @@ type FsError = Unavailable | CommandRejected;
 export class FsService extends Context.Service<
   FsService,
   {
-    readonly roots: (input: FsRootsInput, writable: boolean) => Effect.Effect<FsRootsResult, FsError>;
+    readonly roots: (input: FsRootsInput) => Effect.Effect<FsRootsResult, FsError>;
     readonly devices: (except: DeviceId | null) => Effect.Effect<FsDevicesResult>;
     readonly serve: (caller: DropCaller, input: FsServeInput) => Stream.Stream<FsServeRequest>;
     readonly reply: (caller: DropCaller, input: FsReplyInput) => Effect.Effect<void>;
@@ -64,8 +62,6 @@ export class FsService extends Context.Service<
     readonly thumbs: (input: FsThumbsInput) => Effect.Effect<FsThumbsResult, FsError>;
     readonly get: (caller: DropCaller, input: FsPathsInput) => Effect.Effect<DropOffered, FsError>;
     readonly open: (input: FsPathInput) => Effect.Effect<void, FsError>;
-    readonly rename: (caller: DropCaller, input: FsRenameInput) => Effect.Effect<FsEntry, FsError>;
-    readonly folder: (caller: DropCaller, input: FsFolderInput) => Effect.Effect<FsEntry, FsError>;
     readonly trash: (caller: DropCaller, input: FsPathsInput) => Effect.Effect<FsTrashResult, FsError>;
     readonly destination: (path: string) => Effect.Effect<string, FsError>;
   }
@@ -452,30 +448,6 @@ export const layer = Layer.effect(
         yield* ask(bridge, { _tag: "FsOpen", path: real });
       });
 
-    const rename_ = (caller: DropCaller, input: FsRenameInput) =>
-      Effect.gen(function* () {
-        const real = yield* resolveWritable(input.path);
-        const target = join(dirname(real), input.name);
-        if (yield* Effect.promise(() => exists(target))) return yield* Effect.fail(rejected("Something with that name is already there"));
-        yield* attempt(() => rename(real, target));
-        listings.clear();
-        log("fs.rename", caller, {});
-        const entry = yield* Effect.promise(() => statEntry(target));
-        return entry ?? (yield* Effect.fail(unavailable("That's no longer on your Mac")));
-      });
-
-    const folder = (caller: DropCaller, input: FsFolderInput) =>
-      Effect.gen(function* () {
-        const parent = yield* resolve(input.parent);
-        if (!(inside(parent, home) || inside(parent, "/Volumes")) || inside(parent, library)) return yield* Effect.fail(rejected("Vitals can't change files there"));
-        const target = join(parent, input.name);
-        yield* attempt(() => mkdir(target));
-        listings.clear();
-        log("fs.folder", caller, {});
-        const entry = yield* Effect.promise(() => statEntry(target));
-        return entry ?? (yield* Effect.fail(unavailable("Your Mac couldn't make that folder")));
-      });
-
     const trash = (caller: DropCaller, input: FsPathsInput) =>
       Effect.gen(function* () {
         const reals = yield* Effect.forEach(input.paths, resolveWritable);
@@ -507,14 +479,14 @@ export const layer = Layer.effect(
     );
 
     return FsService.of({
-      roots: (input, writable) =>
+      roots: (input) =>
         input.device === undefined
-          ? Effect.promise(async () => ({ roots: await currentRoots(), access, writable }))
+          ? Effect.promise(async () => ({ roots: await currentRoots() }))
           : Effect.suspend(() => {
               const server = servers.get(input.device ?? "");
               return server === undefined
                 ? Effect.fail(unavailable(`${store.device(input.device ?? "")?.name ?? "That device"} isn't open. Open Vitals on it to browse.`))
-                : Effect.succeed({ roots: server.roots, access: "folders" as const, writable: false });
+                : Effect.succeed({ roots: server.roots });
             }),
       devices,
       serve,
@@ -525,8 +497,6 @@ export const layer = Layer.effect(
       thumbs,
       get,
       open,
-      rename: rename_,
-      folder,
       trash,
       destination,
     });
