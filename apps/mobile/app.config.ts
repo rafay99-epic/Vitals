@@ -186,6 +186,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-sqlite",
     "expo-updates",
+    "@vitals/tailnet/app.plugin.js",
   ],
   owner: "prometheus99",
   extra: {
