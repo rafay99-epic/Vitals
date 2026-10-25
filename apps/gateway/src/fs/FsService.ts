@@ -4,7 +4,15 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 
 import {
+  type DeviceId,
   type DropOffered,
+  type FsDevicesResult,
+  type FsPulled,
+  type FsReplyInput,
+  type FsRootsInput,
+  type FsServeInput,
+  type FsServeRequest,
+  type FsServeResult,
   type FsAccess,
   type FsEntry,
   type FsFolderInput,
@@ -27,22 +35,30 @@ import {
   FS_LIMITS,
   Unavailable,
 } from "@vitals/contracts";
+import { newId } from "@vitals/shared";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Bridge, ask } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
 import { type DropCaller, DropStore } from "../drop/DropStore.ts";
+import { Store } from "../persistence/Store.ts";
 
 type FsError = Unavailable | CommandRejected;
 
 export class FsService extends Context.Service<
   FsService,
   {
-    readonly roots: (writable: boolean) => Effect.Effect<FsRootsResult>;
+    readonly roots: (input: FsRootsInput, writable: boolean) => Effect.Effect<FsRootsResult, FsError>;
+    readonly devices: (except: DeviceId | null) => Effect.Effect<FsDevicesResult>;
+    readonly serve: (caller: DropCaller, input: FsServeInput) => Stream.Stream<FsServeRequest>;
+    readonly reply: (caller: DropCaller, input: FsReplyInput) => Effect.Effect<void>;
+    readonly pull: (relay: DeviceId | null, input: FsPathsInput) => Effect.Effect<FsPulled, FsError>;
     readonly list: (input: FsListInput) => Effect.Effect<FsListResult, FsError>;
     readonly search: (input: FsSearchInput) => Effect.Effect<FsSearchResult, FsError>;
     readonly thumbs: (input: FsThumbsInput) => Effect.Effect<FsThumbsResult, FsError>;
@@ -71,6 +87,15 @@ const CACHE_DIRS = 16;
 const THUMB_CACHE = 512;
 const STAT_BATCH = 128;
 const SEARCH_MS = 4_000;
+const PHONE_TIMEOUT = "15 seconds";
+
+const answers = <Tag extends FsServeResult["_tag"]>(tag: Tag, result: FsServeResult): result is Extract<FsServeResult, { readonly _tag: Tag }> => result._tag === tag;
+
+interface Server {
+  readonly name: string;
+  readonly roots: ReadonlyArray<FsRoot>;
+  readonly push: (request: FsServeRequest) => void;
+}
 
 const rejected = (message: string) => new CommandRejected({ message });
 const unavailable = (message: string) => new Unavailable({ message });
@@ -174,6 +199,9 @@ export const layer = Layer.effect(
     const bridge = yield* Bridge;
     const drops = yield* DropStore;
     const activity = yield* ActivityLog;
+    const store = yield* Store;
+    const servers = new Map<string, Server>();
+    const waiting = new Map<string, { readonly deviceId: string; readonly done: Deferred.Deferred<FsServeResult, FsError> }>();
     const homeDir = config.homeDir ?? homedir();
     const home = yield* Effect.promise(() => realpath(homeDir).catch(() => homeDir));
     const denied = yield* Effect.promise(() =>
@@ -256,7 +284,62 @@ export const layer = Layer.effect(
       return (await shared(parent)) ? parent : null;
     };
 
-    const list = (input: FsListInput) =>
+    const askPhone = <Tag extends FsServeResult["_tag"]>(device: DeviceId, request: (id: string) => Extract<FsServeRequest, { readonly _tag: Tag }>) =>
+      Effect.gen(function* () {
+        const server = servers.get(device);
+        const name = store.device(device)?.name ?? "That device";
+        if (server === undefined) return yield* Effect.fail(unavailable(`${name} isn't open. Open Vitals on it to browse.`));
+        const id = newId();
+        const done = yield* Deferred.make<FsServeResult, FsError>();
+        waiting.set(id, { deviceId: device, done });
+        const sent = request(id);
+        server.push(sent);
+        const result = yield* Deferred.await(done).pipe(
+          Effect.timeoutOrElse({ duration: PHONE_TIMEOUT, orElse: () => Effect.fail(unavailable(`${name} didn't answer. Keep Vitals open on it.`)) }),
+          Effect.ensuring(Effect.sync(() => waiting.delete(id))),
+        );
+        if (!answers(sent._tag, result)) return yield* Effect.fail(unavailable(`${name} sent back the wrong answer`));
+        return result;
+      });
+
+    const serve = (caller: DropCaller, input: FsServeInput): Stream.Stream<FsServeRequest> =>
+      Stream.callback<FsServeRequest>((queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            const server: Server = { name: caller.name, roots: input.roots, push: (request) => Queue.offerUnsafe(queue, request) };
+            servers.set(caller.deviceId, server);
+            return server;
+          }),
+          (server) =>
+            Effect.sync(() => {
+              if (servers.get(caller.deviceId) === server) servers.delete(caller.deviceId);
+            }),
+        ),
+      );
+
+    const reply = (caller: DropCaller, input: FsReplyInput) =>
+      Effect.suspend(() => {
+        const entry = waiting.get(input.id);
+        if (entry === undefined || entry.deviceId !== caller.deviceId) return Effect.void;
+        return (input.result === null ? Deferred.fail(entry.done, rejected(input.error ?? "That device couldn't do it")) : Deferred.succeed(entry.done, input.result)).pipe(Effect.asVoid);
+      });
+
+    const devices = (except: DeviceId | null) =>
+      Effect.sync(() => ({
+        devices: store
+          .devices()
+          .filter((device) => device.platform !== "web" && device.id !== except && device.scopes.includes("files"))
+          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id) })),
+      }));
+
+    const pull = (relay: DeviceId | null, input: FsPathsInput) =>
+      Effect.gen(function* () {
+        if (input.device === undefined) return yield* Effect.fail(rejected("Pick a device to get files from"));
+        const answer = yield* askPhone(input.device, (id) => ({ _tag: "Send", id, paths: input.paths, relay }));
+        return { files: answer.files };
+      });
+
+    const listMac = (input: FsListInput) =>
       Effect.gen(function* () {
         const dir = yield* resolve(input.path);
         const entries = yield* attempt(() => readListing(dir, input.hidden));
@@ -298,7 +381,17 @@ export const layer = Layer.effect(
         return { entries: entries.filter((entry) => entry !== null), truncated: found.truncated || allowed.length > input.limit } satisfies FsSearchResult;
       });
 
+    const list = (input: FsListInput) =>
+      input.device === undefined
+        ? listMac(input)
+        : askPhone(input.device, (id) => ({ _tag: "List", id, path: input.path, sort: input.sort, offset: input.offset, limit: input.limit })).pipe(Effect.map((answer) => answer.result));
+
     const thumbs = (input: FsThumbsInput) =>
+      input.device === undefined
+        ? thumbsMac(input)
+        : askPhone(input.device, (id) => ({ _tag: "Thumbs", id, paths: input.paths })).pipe(Effect.map((answer) => ({ thumbs: answer.thumbs })));
+
+    const thumbsMac = (input: FsThumbsInput) =>
       Effect.gen(function* () {
         const known = yield* Effect.promise(() =>
           Promise.all(
@@ -414,7 +507,19 @@ export const layer = Layer.effect(
     );
 
     return FsService.of({
-      roots: (writable) => Effect.promise(async () => ({ roots: await currentRoots(), access, writable })),
+      roots: (input, writable) =>
+        input.device === undefined
+          ? Effect.promise(async () => ({ roots: await currentRoots(), access, writable }))
+          : Effect.suspend(() => {
+              const server = servers.get(input.device ?? "");
+              return server === undefined
+                ? Effect.fail(unavailable(`${store.device(input.device ?? "")?.name ?? "That device"} isn't open. Open Vitals on it to browse.`))
+                : Effect.succeed({ roots: server.roots, access: "folders" as const, writable: false });
+            }),
+      devices,
+      serve,
+      reply,
+      pull,
       list,
       search,
       thumbs,

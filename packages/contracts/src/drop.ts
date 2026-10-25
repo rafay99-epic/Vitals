@@ -90,6 +90,7 @@ export type DropTicket = typeof DropTicket.Type;
 export const DropOfferInput = Schema.Struct({
   files: Schema.Array(DropFileOffer).check(Schema.isMinLength(1), Schema.isMaxLength(DROP_LIMITS.files)),
   dest: Schema.optionalKey(FsPath),
+  relay: Schema.optionalKey(DeviceId),
 });
 export type DropOfferInput = typeof DropOfferInput.Type;
 

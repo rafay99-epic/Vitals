@@ -86,14 +86,23 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "clips.send.finish": (input) => clips.finish(clipCaller, input),
         "clips.put": (input) => clips.put(clipCaller, input),
         "drop.watch": () => drops.watch(dropCaller),
-        "drop.offer": (input) =>
-          input.dest === undefined ? drops.offer(dropCaller, input) : files.destination(input.dest).pipe(Effect.flatMap((dest) => drops.offer(dropCaller, { ...input, dest }))),
+        "drop.offer": (input) => {
+          const relay = input.relay === undefined ? null : store.device(input.relay);
+          if (input.relay !== undefined && (relay === null || relay.revokedAt !== null || relay.platform === "web" || relay.id === session.device.id || !relay.scopes.includes("files"))) {
+            return Effect.fail(new CommandRejected({ message: "That device can't receive files" }));
+          }
+          return input.dest === undefined ? drops.offer(dropCaller, input) : files.destination(input.dest).pipe(Effect.flatMap((dest) => drops.offer(dropCaller, { ...input, dest })));
+        },
         "drop.accept": (input) => drops.accept(dropCaller, input),
         "drop.decline": (input) => drops.decline(dropCaller, input),
         "drop.cancel": (input) => drops.cancel(dropCaller, input),
         "drop.ticket": (input) => drops.ticket(dropCaller, input),
         "drop.received": (input) => drops.received(dropCaller, input),
-        "fs.roots": () => files.roots(session.device.scopes.includes("fsWrite")),
+        "fs.roots": (input) => files.roots(input, session.device.scopes.includes("fsWrite")),
+        "fs.devices": () => files.devices(session.device.id),
+        "fs.serve": (input) => files.serve(dropCaller, input),
+        "fs.reply": (input) => files.reply(dropCaller, input).pipe(Effect.as({})),
+        "fs.pull": (input) => files.pull(session.device.id, input),
         "fs.list": (input) => files.list(input),
         "fs.search": (input) => files.search(input),
         "fs.thumbs": (input) => files.thumbs(input),

@@ -22,16 +22,22 @@ import {
 import { DropEvent, DropIdInput, DropOffered, DropOfferInput, DropReceivedInput, DropTicket, Drop } from "./drop.ts";
 import { CommandCancelInput, CommandReceipt, CommandRunInput } from "./commands.ts";
 import {
+  FsDevicesResult,
   FsEntry,
   FsFolderInput,
   FsListInput,
   FsListResult,
   FsPathInput,
   FsPathsInput,
+  FsPulled,
   FsRenameInput,
+  FsReplyInput,
+  FsRootsInput,
   FsRootsResult,
   FsSearchInput,
   FsSearchResult,
+  FsServeInput,
+  FsServeRequest,
   FsThumbsInput,
   FsThumbsResult,
   FsTrashResult,
@@ -145,7 +151,11 @@ export const DropReceived = Rpc.make("drop.received", { payload: DropReceivedInp
 
 const FsError = Schema.Union([AuthError, Unavailable, CommandRejected]);
 
-export const FsRoots = Rpc.make("fs.roots", { payload: Empty, success: FsRootsResult, error: FsError });
+export const FsRoots = Rpc.make("fs.roots", { payload: FsRootsInput, success: FsRootsResult, error: FsError });
+export const FsDevices = Rpc.make("fs.devices", { payload: Empty, success: FsDevicesResult, error: FsError });
+export const FsServe = Rpc.make("fs.serve", { payload: FsServeInput, success: FsServeRequest, error: FsError, stream: true });
+export const FsReply = Rpc.make("fs.reply", { payload: FsReplyInput, success: Empty, error: FsError });
+export const FsPull = Rpc.make("fs.pull", { payload: FsPathsInput, success: FsPulled, error: FsError });
 export const FsList = Rpc.make("fs.list", { payload: FsListInput, success: FsListResult, error: FsError });
 export const FsSearch = Rpc.make("fs.search", { payload: FsSearchInput, success: FsSearchResult, error: FsError });
 export const FsThumbs = Rpc.make("fs.thumbs", { payload: FsThumbsInput, success: FsThumbsResult, error: FsError });
@@ -212,6 +222,10 @@ export const VitalsRpc = RpcGroup.make(
   DropTicketRefresh,
   DropReceived,
   FsRoots,
+  FsDevices,
+  FsServe,
+  FsReply,
+  FsPull,
   FsList,
   FsSearch,
   FsThumbs,
