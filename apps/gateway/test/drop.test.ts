@@ -207,8 +207,9 @@ describe("drop: Mac to phone", () => {
         const sliceBytes = new Uint8Array(yield* Effect.promise(() => slice.arrayBuffer()));
         const tail = yield* Effect.promise(() => fetch(url, { headers: { ...headers, range: `bytes=${String(bytes.length - 5)}-` } }));
         const tailBytes = new Uint8Array(yield* Effect.promise(() => tail.arrayBuffer()));
-        const whole = yield* Effect.promise(() => fetch(url, { headers }));
+        const whole = yield* Effect.promise(() => fetch(url, { headers: { ...headers, range: "bytes=0-" } }));
         const wholeBytes = new Uint8Array(yield* Effect.promise(() => whole.arrayBuffer()));
+        yield* Effect.promise(() => toMac(target.app, "drop", (message) => message.drop.id === id && message.drop.state === "running" && message.drop.done === bytes.length));
         const outside = yield* Effect.promise(() => fetch(url, { headers: { ...headers, range: `bytes=${String(bytes.length)}-` } }));
         const wrong = yield* Effect.flip(client["drop.received"]({ id: dropIdOf(id), fileId: firstFile, sha256: "f".repeat(64) }));
         const done = yield* client["drop.received"]({ id: dropIdOf(id), fileId: firstFile, sha256: sha256(bytes) });
@@ -220,8 +221,9 @@ describe("drop: Mac to phone", () => {
     expect(result.slice.headers.get("content-range")).toBe(`bytes 100-199/${String(bytes.length)}`);
     expect(Buffer.compare(result.sliceBytes, bytes.subarray(100, 200))).toBe(0);
     expect(Buffer.compare(result.tailBytes, bytes.subarray(bytes.length - 5))).toBe(0);
-    expect(result.whole.status).toBe(200);
+    expect(result.whole.status).toBe(206);
     expect(result.whole.headers.get("content-type")).toBe("image/heic");
+    expect(result.whole.headers.get("content-length")).toBe(String(bytes.length));
     expect(Buffer.compare(result.wholeBytes, bytes)).toBe(0);
     expect(result.outside.status).toBe(416);
     expect(result.wrong).toMatchObject({ _tag: "CommandRejected" });

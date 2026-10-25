@@ -34,11 +34,12 @@ import * as Stream from "effect/Stream";
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Bridge } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
+import { hashFile } from "../hash.ts";
 import { randomToken } from "../persistence/RemoteStore.ts";
 import { Store } from "../persistence/Store.ts";
 import { Connections } from "../ws/Connections.ts";
 import { type DropFileRecord, type DropRecord, type DropRoute, DropDb, makeDrop } from "./DropDb.ts";
-import { dropFiles, hashFile, parseContentRange, parseRange, partCount } from "./DropFiles.ts";
+import { dropFiles, parseContentRange, parseRange, partCount } from "./DropFiles.ts";
 
 export interface DropCaller {
   readonly deviceId: DeviceId;
@@ -543,6 +544,7 @@ export const layer = (database: Database) =>
           if (input.sha256 !== null) {
             const expected = yield* Effect.promise(() => hashOf(drop, file));
             if (expected !== null && expected !== input.sha256) {
+              file.parts.clear();
               file.done = 0;
               progressed(drop);
               return yield* Effect.fail(rejected(`${file.name} changed on the way. Download it again.`));
@@ -646,32 +648,6 @@ export const layer = (database: Database) =>
         return new Response(null, { status: 200, headers });
       };
 
-      const counted = (source: ReadableStream<Uint8Array>, start: number, drop: DropRecord, file: DropFileRecord) => {
-        const reader = source.getReader();
-        let sent = start;
-        return new ReadableStream<Uint8Array>({
-          async pull(controller) {
-            if (!live(drop) || drop.state !== "running") {
-              await reader.cancel().catch(() => undefined);
-              controller.error(new Error("drop stopped"));
-              return;
-            }
-            const { done: finished, value } = await reader.read();
-            if (finished) {
-              controller.close();
-              return;
-            }
-            sent += value.length;
-            if (!file.complete && sent > file.done) {
-              file.done = sent;
-              progressed(drop);
-            }
-            controller.enqueue(value);
-          },
-          cancel: () => reader.cancel().catch(() => undefined),
-        });
-      };
-
       const download = async (request: Request, drop: DropRecord, file: DropFileRecord, route: DropRoute): Promise<Response> => {
         if (drop.incoming) return problem(405, "direction", "This drop goes to the Mac", { allow: "PUT, HEAD" });
         const refused = blocked(drop);
@@ -694,9 +670,15 @@ export const layer = (database: Database) =>
         if (file.size === 0) return new Response(new Uint8Array(0), { status: 200, headers });
         const start = range._tag === "Slice" ? range.start : 0;
         const end = range._tag === "Slice" ? range.end : file.size - 1;
-        headers["content-length"] = String(end - start + 1);
+        const length = end - start + 1;
+        headers["content-length"] = String(length);
         if (range._tag === "Slice") headers["content-range"] = `bytes ${String(start)}-${String(end)}/${String(file.size)}`;
-        const body = counted(Bun.file(origin).slice(start, end + 1).stream(), start, drop, file);
+        if (range._tag === "Slice" && start % PART === 0 && length === Math.min(PART, file.size - start) && !file.complete && !file.parts.has(start / PART)) {
+          file.parts.add(start / PART);
+          file.done = Math.min(file.size, file.done + length);
+          progressed(drop);
+        }
+        const body = Bun.file(origin).slice(start, end + 1);
         return new Response(body, { status: range._tag === "Slice" ? 206 : 200, headers });
       };
 

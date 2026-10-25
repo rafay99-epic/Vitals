@@ -42,7 +42,8 @@ import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Bridge, ask } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
 import { type ClipRecord, ClipDb, expired, isTextKind } from "./ClipDb.ts";
-import { clipFiles, extensionFor, hashFile } from "./ClipFiles.ts";
+import { hashFile } from "../hash.ts";
+import { clipFiles, extensionFor } from "./ClipFiles.ts";
 
 /** Who is calling, for ownership checks and the activity log. */
 export interface ClipCaller {

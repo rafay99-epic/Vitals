@@ -9,15 +9,6 @@ export type PartWrite = "ok" | "short" | "long" | "stopped" | "full" | "broken";
 const isNoSpace = (error: unknown): boolean =>
   typeof error === "object" && error !== null && "code" in error && (error.code === "ENOSPC" || error.code === "EDQUOT");
 
-export const hashFile = async (path: string, keepGoing: () => boolean = () => true): Promise<string | null> => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  for await (const chunk of Bun.file(path).stream()) {
-    if (!keepGoing()) return null;
-    hasher.update(chunk);
-  }
-  return hasher.digest("hex");
-};
-
 export const dropFiles = (dataDir: string) => {
   const dir = resolve(dataDir, "drop");
   const folder = (dropId: string) => join(dir, dropId);
