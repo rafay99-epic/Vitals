@@ -72,8 +72,10 @@ function AskCard({ drop }: { readonly drop: Drop }) {
 }
 
 function DropCard({ drop }: { readonly drop: Drop }) {
-  const me = useRemote().credentials.deviceId;
+  const remote = useRemote();
+  const me = remote.credentials.deviceId;
   const cancel = useCancel(drop);
+  const failed = useLive(drop.id)?.failed === true;
   if (asking(drop, me)) return <AskCard drop={drop} />;
   return (
     <View style={styles.card}>
@@ -81,6 +83,13 @@ function DropCard({ drop }: { readonly drop: Drop }) {
         <T v="strong" numberOfLines={1} style={styles.grow}>
           {titleOf(drop, me)}
         </T>
+        {failed ? (
+          <Tap onPress={() => remote.drops.retry(drop.id)} accessibilityRole="button" hitSlop={10}>
+            <T v="strong" color={color.yellow}>
+              Try again
+            </T>
+          </Tap>
+        ) : null}
         <Tap onPress={cancel} accessibilityRole="button" hitSlop={10}>
           <T v="strong" color={color.dim}>
             Cancel

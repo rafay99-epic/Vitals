@@ -225,6 +225,29 @@ describe("MacDrops", () => {
     drops.dispose();
   });
 
+  test("a transfer that keeps failing says Stopped, and Try again starts it over", async () => {
+    const running = drop("running", [file("a", 10)]);
+    const { connection } = fake((call) => (call.method === "drop.ticket" ? ticket : running));
+    const transfers = engine();
+    const reports: Array<string> = [];
+    const drops = new MacDrops(connection, transfers.value, shelf(), me, () => [], (message) => reports.push(message));
+    await drops.ready;
+    drops.apply({ _tag: "Snapshot", drops: [running] });
+    await settle();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      transfers.emit({ type: "error", job: transfers.started.at(-1)?.job ?? "", message: "The Mac refused part of the file", retryable: false });
+      await settle();
+    }
+    expect(drops.live.get().get(running.id)?.failed).toBe(true);
+    expect(reports).toEqual(["The Mac refused part of the file"]);
+    const before = transfers.started.length;
+    drops.retry(running.id);
+    await settle();
+    expect(transfers.started.length).toBe(before + 1);
+    expect(drops.live.get().get(running.id)?.failed).toBe(false);
+    drops.dispose();
+  });
+
   test("progress reaches the store at most four times a second", async () => {
     const running = drop("running", [file("a", 100)]);
     const { connection } = fake(() => ticket);
@@ -239,7 +262,7 @@ describe("MacDrops", () => {
     for (let done = 1; done <= 50; done++) transfers.emit({ type: "progress", job, done, total: 100, route: "lan" });
     expect(published).toBeLessThanOrEqual(1);
     await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(drops.live.get().get(running.id)).toEqual({ done: 50, total: 100, route: "lan", stalled: false });
+    expect(drops.live.get().get(running.id)).toEqual({ done: 50, total: 100, route: "lan", stalled: false, failed: false });
     drops.dispose();
   });
 

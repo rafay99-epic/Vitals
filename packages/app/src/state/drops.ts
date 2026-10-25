@@ -67,6 +67,7 @@ export interface DropLive {
   readonly total: number;
   readonly route: "lan" | "tailnet" | null;
   readonly stalled: boolean;
+  readonly failed: boolean;
 }
 
 export type DropFinish =
@@ -281,6 +282,17 @@ export class MacDrops {
     if (!result.ok) this.report(result.error.message);
     else this.upsert(result.value);
     return result.ok;
+  }
+
+  retry(id: DropId): void {
+    for (const job of this.jobs.values()) {
+      if (job.dropId !== id || job.state !== "failed") continue;
+      job.state = "queued";
+      job.attempts = 0;
+      job.stalled = false;
+    }
+    this.pump();
+    this.publish(true);
   }
 
   async cancel(id: DropId): Promise<boolean> {
@@ -583,6 +595,7 @@ export class MacDrops {
       let done = 0;
       let route: DropLive["route"] = null;
       let stalled = false;
+      let failed = false;
       for (const file of drop.files) {
         const id = jobIdOf(drop.id, file.id);
         const job = this.jobs.get(id);
@@ -591,8 +604,9 @@ export class MacDrops {
         else done += Math.max(job?.done ?? 0, server);
         route = job?.route ?? route;
         stalled ||= job?.stalled === true;
+        failed ||= job?.state === "failed";
       }
-      live.set(drop.id, { done: Math.min(done, drop.bytes), total: drop.bytes, route: route ?? drop.route, stalled });
+      live.set(drop.id, { done: Math.min(done, drop.bytes), total: drop.bytes, route: route ?? drop.route, stalled, failed });
     }
     return live;
   }

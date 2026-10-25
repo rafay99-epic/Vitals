@@ -89,6 +89,7 @@ export const pickFolder = async (): Promise<Batch | null> => {
 export const liveLine = (live: DropLive | null, waiting: string | null): string => {
   if (waiting !== null) return waiting;
   if (live === null) return "Starting";
+  if (live.failed) return "Stopped";
   if (live.stalled) return "Waiting for your Mac";
   const amount = formatAmount(live.done, live.total);
   return live.route === null ? amount : `${amount} · ${live.route === "lan" ? "Wi-Fi" : "Tailscale"}`;
