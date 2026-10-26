@@ -315,6 +315,51 @@ private struct DeviceRow: View {
     @Environment(RemoteModel.self) private var remote
     let device: RemoteDevice
 
+    private struct Permission {
+        let scope: String
+        let title: String
+        var risky = false
+    }
+
+    private enum Access: CaseIterable {
+        case watch, control, everything, custom
+
+        var title: String {
+            switch self {
+            case .watch: return "Watch only"
+            case .control: return "Control"
+            case .everything: return "Everything"
+            case .custom: return "Custom"
+            }
+        }
+
+        var scopes: Set<String>? {
+            switch self {
+            case .watch: return []
+            case .control: return ["operate", "clipboard", "files"]
+            case .everything: return DeviceRow.managed
+            case .custom: return nil
+            }
+        }
+    }
+
+    private static let rows: [[Permission]] = [
+        [
+            Permission(scope: "operate", title: "Control"),
+            Permission(scope: "destructive", title: "Shut down & quit", risky: true),
+            Permission(scope: "clipboard", title: "Read clipboard"),
+            Permission(scope: "files", title: "Send & get files"),
+        ],
+        [
+            Permission(scope: "fsRead", title: "Browse files"),
+            Permission(scope: "fsWrite", title: "Change files", risky: true),
+            Permission(scope: "terminal", title: "Terminal", risky: true),
+        ],
+    ]
+
+    /// The scopes this row manages. Others, like `read`, pass through untouched.
+    private static let managed = Set(rows.joined().map(\.scope))
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: device.platform == "web" ? "globe" : "iphone.gen3")
@@ -324,16 +369,21 @@ private struct DeviceRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(device.name).font(.body.weight(.medium))
                 Text(subtitle).font(.callout).foregroundStyle(.secondary)
-                HStack(spacing: 14) {
-                    scopeToggle("operate", title: "Control")
-                    scopeToggle("destructive", title: "Shut down, kill, force quit")
-                    scopeToggle("clipboard", title: "Read clipboard")
-                    scopeToggle("files", title: "Files")
-                    scopeToggle("fsRead", title: "Browse files")
-                    scopeToggle("fsWrite", title: "Change files")
-                    scopeToggle("terminal", title: "Terminal")
+                CapsuleSegments(options: Access.allCases, selection: access, title: \.title) { apply($0) }
+                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Self.rows.indices, id: \.self) { row in
+                        HStack(spacing: 6) {
+                            ForEach(Self.rows[row], id: \.scope) { chip($0) }
+                        }
+                    }
                 }
-                .font(.callout)
+                .padding(.top, 2)
+                if !riskyTitles.isEmpty {
+                    Text("Includes \(riskyTitles.joined(separator: ", ").lowercased())")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
             }
             Spacer()
             Button("Revoke", role: .destructive) { Task { await remote.revoke(device) } }
@@ -341,19 +391,45 @@ private struct DeviceRow: View {
         .padding(.vertical, 8)
     }
 
+    private var granted: Set<String> { Set(device.scopes).intersection(Self.managed) }
+
+    private var access: Access {
+        Access.allCases.first { $0.scopes == granted } ?? .custom
+    }
+
+    private var riskyTitles: [String] {
+        Self.rows.joined().filter { $0.risky && granted.contains($0.scope) }.map(\.title)
+    }
+
     private var subtitle: String {
         let seen = device.lastSeenAt.map { Date(timeIntervalSince1970: TimeInterval($0) / 1000).formatted(.relative(presentation: .named)) } ?? "never"
         return "\(device.model) · app \(device.appVersion) · \(device.connected ? "connected" : "last seen \(seen)")"
     }
 
-    private func scopeToggle(_ scope: String, title: String) -> some View {
-        Toggle(title, isOn: Binding(
-            get: { device.scopes.contains(scope) },
-            set: { enabled in
-                let current = remote.devices.first { $0.id == device.id } ?? device
-                Task { await remote.setScope(scope, enabled: enabled, for: current) }
-            }
-        ))
-        .toggleStyle(.checkbox)
+    private var current: RemoteDevice { remote.devices.first { $0.id == device.id } ?? device }
+
+    private func apply(_ access: Access) {
+        guard let scopes = access.scopes else { return }
+        let device = current
+        Task { await remote.setScopes(Set(device.scopes).subtracting(Self.managed).union(scopes), for: device) }
+    }
+
+    private func chip(_ permission: Permission) -> some View {
+        let on = granted.contains(permission.scope)
+        return Button {
+            let device = current
+            Task { await remote.setScope(permission.scope, enabled: !on, for: device) }
+        } label: {
+            Text(permission.title)
+                .font(.callout)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
+                .foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .background(Capsule().fill(on ? AnyShapeStyle(Color.accentColor.opacity(0.10)) : AnyShapeStyle(.clear)))
+                .overlay(Capsule().strokeBorder(on ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.separator)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }

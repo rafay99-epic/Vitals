@@ -503,10 +503,16 @@ final class RemoteModel {
     }
 
     func setScope(_ scope: String, enabled: Bool, for device: RemoteDevice) async {
-        if scope == "terminal", !enabled { send(.terminalEnd(id: nil, deviceId: device.id)) }
-        guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
-        var scopes = Set(devices[index].scopes)
+        guard let current = devices.first(where: { $0.id == device.id }) else { return }
+        var scopes = Set(current.scopes)
         if enabled { scopes.insert(scope) } else { scopes.remove(scope) }
+        await setScopes(scopes, for: current)
+    }
+
+    /// Replaces a device's scopes in one admin call. Dropping `terminal` ends its open terminals.
+    func setScopes(_ scopes: Set<String>, for device: RemoteDevice) async {
+        guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
+        if devices[index].scopes.contains("terminal"), !scopes.contains("terminal") { send(.terminalEnd(id: nil, deviceId: device.id)) }
         let next = Array(scopes).sorted()
         devices[index].scopes = next
         _ = try? await admin(.setScopes(deviceId: device.id, scopes: next))

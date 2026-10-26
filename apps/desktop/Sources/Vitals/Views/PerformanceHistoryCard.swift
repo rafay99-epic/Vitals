@@ -7,7 +7,6 @@ struct PerformanceHistoryCard: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
     @State private var metric: Metric = .temp
-    @Namespace private var indicator
 
     enum Metric: String, CaseIterable, Identifiable {
         case temp, cpu, gpu, memory, power, network
@@ -58,7 +57,7 @@ struct PerformanceHistoryCard: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                switcher(metrics)
+                CapsuleSegments(options: metrics, selection: metric, title: \.title) { metric = $0 }
             }
             Deferred {
                 chart
@@ -72,33 +71,6 @@ struct PerformanceHistoryCard: View {
         .onChange(of: metrics) { _, list in
             if !list.contains(metric) { metric = .temp }
         }
-    }
-
-    // MARK: Switcher
-
-    private func switcher(_ metrics: [Metric]) -> some View {
-        HStack(spacing: 2) {
-            ForEach(metrics) { item in
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { metric = item }
-                } label: {
-                    Text(item.title)
-                        .font(.system(size: 11, weight: .medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(metric == item ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                .background {
-                    if metric == item {
-                        Capsule().fill(.quaternary).matchedGeometryEffect(id: "seg", in: indicator)
-                    }
-                }
-            }
-        }
-        .padding(3)
-        .background(Capsule().fill(.quaternary.opacity(0.45)))
     }
 
     // MARK: Chart
