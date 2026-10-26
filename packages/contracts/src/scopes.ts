@@ -23,6 +23,7 @@ export const RPC_SCOPES = {
   "command.cancel": "operate",
   "command.log": "read",
   "guard.watch": "read",
+  "system.audio": "read",
   "guard.update": "operate",
   "clipboard.get": "clipboard",
   "clips.watch": "clipboard",

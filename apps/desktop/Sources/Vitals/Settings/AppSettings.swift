@@ -98,6 +98,11 @@ final class AppSettings {
     var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
     var remoteEnabled: Bool { didSet { defaults.set(remoteEnabled, forKey: "remoteEnabled") } }
+    /// The keep-awake a phone or this Mac asked for, restored at launch so a
+    /// relaunch or update doesn't quietly drop it. `until` 0 means until stopped.
+    var keepAwakeActive: Bool { didSet { defaults.set(keepAwakeActive, forKey: "keepAwakeActive") } }
+    var keepAwakeUntil: Double { didSet { defaults.set(keepAwakeUntil, forKey: "keepAwakeUntil") } }
+    var keepAwakeDisplay: Bool { didSet { defaults.set(keepAwakeDisplay, forKey: "keepAwakeDisplay") } }
     /// Records Mac copies for phones with the Read clipboard scope. Off by default.
     var clipHistoryEnabled: Bool { didSet { defaults.set(clipHistoryEnabled, forKey: "clipHistoryEnabled") } }
     var browseEverything: Bool { didSet { defaults.set(browseEverything, forKey: "browseEverything") } }
@@ -227,6 +232,9 @@ final class AppSettings {
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
         remoteEnabled = defaults.bool(forKey: "remoteEnabled")
+        keepAwakeActive = defaults.bool(forKey: "keepAwakeActive")
+        keepAwakeUntil = defaults.double(forKey: "keepAwakeUntil")
+        keepAwakeDisplay = defaults.bool(forKey: "keepAwakeDisplay")
         clipHistoryEnabled = defaults.bool(forKey: "clipHistoryEnabled")
         browseEverything = defaults.bool(forKey: "browseEverything")
         clipKeepDays = defaults.integer(forKey: "clipKeepDays")

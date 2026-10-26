@@ -61,6 +61,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
               drop: true,
               fs: true,
               terminal: true,
+              audio: true,
             };
           }),
         "stats.live": ({ topics }) => hubs.live(topics),
@@ -73,6 +74,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "command.cancel": ({ commandId }) => commands.cancel(caller, commandId),
         "command.log": () => commands.log,
         "guard.watch": () => hubs.guard,
+        "system.audio": () => hubs.audio,
         "guard.update": (settings) =>
           ask(bridge, { _tag: "SetGuard", settings }).pipe(Effect.map((result) => result.settings)),
         "clipboard.get": () =>

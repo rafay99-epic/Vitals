@@ -55,6 +55,13 @@ const queue = Effect.runSync(Queue.unbounded<string>());
 const emit = (message: object): void => void Effect.runSync(Queue.offer(queue, JSON.stringify(message)));
 const ALL_SCOPES = ["read", "operate", "destructive", "clipboard", "files", "fsRead", "fsWrite", "terminal"] as const;
 
+// SIGHUP plays the Mac's own volume keys: it steps the volume so phones can be seen following.
+let audio = { volume: 0.4 as number | null, muted: false as boolean | null };
+process.on("SIGHUP", () => {
+  audio = { ...audio, volume: Math.round((((audio.volume ?? 0) + 0.1) % 1) * 100) / 100 };
+  emit({ t: "audio", data: audio });
+});
+
 const wobble = (base: number, spread: number): number => Math.max(0, base + (Math.random() - 0.5) * spread);
 
 const networkSample = (down: number, up: number) => ({
@@ -260,6 +267,14 @@ const apply = (message: Extract<ToApp, { t: "cmd" }>) => {
     case "AllowSleep":
       setKeepAwake({ active: false, display: false, until: null, whileProcess: null });
       return done();
+    case "SetVolume":
+      audio = { ...audio, volume: command.level };
+      emit({ t: "audio", data: audio });
+      return done();
+    case "SetMuted":
+      audio = { ...audio, muted: command.muted };
+      emit({ t: "audio", data: audio });
+      return done();
     case "QuitApp":
     case "ForceQuitApp": {
       const index = apps.findIndex((app) => app.pid === command.app.pid);
@@ -413,6 +428,7 @@ const write = (line: string): void => {
   switch (message.t) {
     case "hello":
       emit({ t: "hello", v: 1, mac: MAC, keepAwake });
+      emit({ t: "audio", data: audio });
       // Give the gateway's event log a moment to subscribe before raising the alert.
       if (alertOpen) setTimeout(() => emit({ t: "event", event: { _tag: "AlertRaised", at: Date.now(), alert: agentAlert } }), 3_000);
       seedClips();

@@ -1,4 +1,4 @@
-import type { GuardState, LiveSample, ProcessesSnapshot, ProcessesWatchInput, Topic } from "@vitals/contracts";
+import type { AudioState, GuardState, LiveSample, ProcessesSnapshot, ProcessesWatchInput, Topic } from "@vitals/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,6 +16,7 @@ export class Hubs extends Context.Service<
     readonly live: (topics: ReadonlyArray<Topic>) => Stream.Stream<LiveSample>;
     readonly processes: (input: ProcessesWatchInput) => Stream.Stream<ProcessesSnapshot>;
     readonly guard: Stream.Stream<GuardState>;
+    readonly audio: Stream.Stream<AudioState>;
   }
 >()("@vitals/gateway/Hubs") {}
 
@@ -41,6 +42,7 @@ export const layer = Layer.effect(
     const samples = yield* PubSub.sliding<LiveSample>({ capacity: 1, replay: 1 });
     const processSnapshots = yield* PubSub.sliding<ProcessesSnapshot>({ capacity: 1, replay: 1 });
     const guardStates = yield* PubSub.sliding<GuardState>({ capacity: 1, replay: 1 });
+    const audioStates = yield* PubSub.sliding<AudioState>({ capacity: 1, replay: 1 });
 
     const topicCounts = new Map<Topic, number>();
     const processWatchers = new Map<symbol, ProcessesWatchInput>();
@@ -72,6 +74,8 @@ export const layer = Layer.effect(
             return PubSub.publish(processSnapshots, message.data);
           case "guard":
             return PubSub.publish(guardStates, message.data);
+          case "audio":
+            return PubSub.publish(audioStates, message.data);
           case "hello":
             lastNeed = "";
             return pushNeed;
@@ -151,6 +155,7 @@ export const layer = Layer.effect(
       live,
       processes,
       guard,
+      audio: Stream.fromPubSub(audioStates),
     });
   }),
 );

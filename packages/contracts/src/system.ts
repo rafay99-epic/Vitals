@@ -32,6 +32,13 @@ export const KeepAwakeState = Schema.Struct({
 });
 export type KeepAwakeState = typeof KeepAwakeState.Type;
 
+/** The Mac's output volume (0 to 1) and mute. Null when the output doesn't expose one. */
+export const AudioState = Schema.Struct({
+  volume: Schema.NullOr(Schema.Number),
+  muted: Schema.NullOr(Schema.Boolean),
+});
+export type AudioState = typeof AudioState.Type;
+
 export const SystemEvent = Schema.Union([
   Schema.TaggedStruct("WillSleep", { at: EpochMs }),
   Schema.TaggedStruct("DidWake", { at: EpochMs }),
@@ -69,5 +76,7 @@ export const Hello = Schema.Struct({
   drop: Schema.optional(Schema.Boolean),
   fs: Schema.optional(Schema.Boolean),
   terminal: Schema.optional(Schema.Boolean),
+  /** Present and true when this Mac's gateway serves `system.audio`. */
+  audio: Schema.optional(Schema.Boolean),
 });
 export type Hello = typeof Hello.Type;

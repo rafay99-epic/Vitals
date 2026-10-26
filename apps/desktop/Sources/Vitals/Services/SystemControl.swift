@@ -29,6 +29,19 @@ enum SystemControl {
         return Double(volume)
     }
 
+    static func muted() -> Bool? {
+        guard let device = defaultOutputDevice() else { return nil }
+        var value = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr else { return nil }
+        return value != 0
+    }
+
     static func setMuted(_ muted: Bool) -> String? {
         guard let device = defaultOutputDevice() else { return "No audio output device" }
         var value = UInt32(muted ? 1 : 0)
@@ -66,7 +79,7 @@ enum SystemControl {
         NSSound(named: "Glass")?.play()
     }
 
-    private static func defaultOutputDevice() -> AudioObjectID? {
+    static func defaultOutputDevice() -> AudioObjectID? {
         var device = AudioObjectID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
         var address = AudioObjectPropertyAddress(

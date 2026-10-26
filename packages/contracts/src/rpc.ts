@@ -44,7 +44,7 @@ import { TerminalAttachInput, TerminalEvent, TerminalIdInput, TerminalInfo, Term
 import { LanKey, NonNegativeInt } from "./ids.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, StatsLiveInput } from "./stats.ts";
-import { Hello, SequencedEvent, SystemEventsInput } from "./system.ts";
+import { AudioState, Hello, SequencedEvent, SystemEventsInput } from "./system.ts";
 
 const Empty = Schema.Struct({});
 
@@ -54,6 +54,13 @@ export const StatsLive = Rpc.make("stats.live", {
   payload: StatsLiveInput,
   success: LiveSample,
   error: Schema.Union([AuthError, Unavailable]),
+  stream: true,
+});
+
+export const SystemAudio = Rpc.make("system.audio", {
+  payload: Empty,
+  success: AudioState,
+  error: AuthError,
   stream: true,
 });
 
@@ -193,6 +200,7 @@ export const VitalsRpc = RpcGroup.make(
   StatsLive,
   HistoryRange,
   SystemEvents,
+  SystemAudio,
   ProcessesWatch,
   AppsList,
   CommandRun,

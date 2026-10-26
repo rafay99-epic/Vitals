@@ -178,6 +178,27 @@ describe("rpc over websocket", () => {
     expect(gateway.app.needs().at(-1)?.topics).toEqual([]);
   });
 
+  test("the Mac's volume and mute reach phones, latest first", async () => {
+    gateway = await startGateway();
+    const { token } = await pairDevice(gateway);
+    const app = gateway.app;
+    app.emit({ t: "audio", data: { volume: 0.3, muted: false } });
+    await Bun.sleep(50);
+    const result = await withClient(token, (client) =>
+      Effect.gen(function* () {
+        const hello = yield* client["server.hello"]({});
+        yield* Effect.sync(() => setTimeout(() => app.emit({ t: "audio", data: { volume: 0.8, muted: true } }), 50));
+        const states = yield* client["system.audio"]({}).pipe(Stream.take(2), Stream.runCollect);
+        return { hello, states: [...states] };
+      }),
+    );
+    expect(result.hello.audio).toBe(true);
+    expect(result.states).toEqual([
+      { volume: 0.3, muted: false },
+      { volume: 0.8, muted: true },
+    ]);
+  });
+
   test("commands are idempotent and destructive ones need the scope", async () => {
     gateway = await startGateway();
     const { token, deviceId } = await pairDevice(gateway);

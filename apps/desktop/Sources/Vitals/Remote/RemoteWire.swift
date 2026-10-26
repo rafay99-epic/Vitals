@@ -22,6 +22,12 @@ struct WireKeepAwake: Codable, Equatable, Sendable {
     static let off = WireKeepAwake(active: false, display: false, until: nil, whileProcess: nil)
 }
 
+/// The Mac's output volume (0...1) and mute. Nil when the output doesn't expose one.
+struct WireAudio: Codable, Equatable, Sendable {
+    @Nullable var volume: Double?
+    @Nullable var muted: Bool?
+}
+
 struct WireCore: Codable, Equatable, Sendable {
     let id: Int
     let percent: Double
@@ -512,6 +518,7 @@ enum FromApp: Equatable, Sendable {
     case sample(WireSample)
     case processes(WireProcesses)
     case guardState(WireGuardState)
+    case audio(WireAudio)
     case receipt(WireReceipt)
     case event(WireEvent)
     case result(id: String, ok: QueryResult?, error: String?)
@@ -548,6 +555,9 @@ extension FromApp: Encodable {
             try c.encode(snapshot, forKey: .data)
         case let .guardState(state):
             try c.encode("guard", forKey: .t)
+            try c.encode(state, forKey: .data)
+        case let .audio(state):
+            try c.encode("audio", forKey: .t)
             try c.encode(state, forKey: .data)
         case let .receipt(receipt):
             try c.encode("receipt", forKey: .t)

@@ -52,6 +52,7 @@ final class RemoteModel {
     @ObservationIgnored private let vitals: VitalsModel
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let power = PowerControl()
+    @ObservationIgnored private let audio = AudioWatch()
     @ObservationIgnored private lazy var router = CommandRouter(executor: SystemCommandExecutor(model: self))
     @ObservationIgnored private lazy var clipWatcher: ClipWatcher = {
         let watcher = ClipWatcher(directory: Self.clipsDirectory)
@@ -86,6 +87,9 @@ final class RemoteModel {
         share = ShareModel(settings: settings)
         guardEngine = PressureGuard(settings: settings.guardSettings)
         power.onKeepAwakeChange = { [weak self] state in self?.keepAwakeChanged(state) }
+        restoreKeepAwake()
+        audio.onChange = { [weak self] state in self?.send(.audio(WireAudio(volume: state.volume, muted: state.muted))) }
+        audio.start()
         vitals.onSampled = { [weak self] table in self?.sampled(table) }
         NotificationManager.shared.onRemoteAction = { [weak self] action in self?.handleNotificationAction(action) }
         configureRouter()
@@ -258,6 +262,7 @@ final class RemoteModel {
             state = .running
             lastGuardSent = nil
             send(.hello(mac: macInfo(), keepAwake: wireKeepAwake(keepAwake)))
+            send(.audio(WireAudio(volume: audio.state.volume, muted: audio.state.muted)))
             for alert in guardEngine.active { send(.event(.alertRaised(at: alert.raisedAt, alert: alert))) }
             sendClipPolicy()
             sendFsPolicy()
@@ -802,12 +807,26 @@ final class RemoteModel {
         return nil
     }
 
+    /// Re-arms the saved keep-awake after a relaunch. Stays tied to a process aren't saved.
+    private func restoreKeepAwake() {
+        guard settings.keepAwakeActive else { return }
+        let until = settings.keepAwakeUntil > 0 ? Date(timeIntervalSince1970: settings.keepAwakeUntil) : nil
+        if let until, until <= Date() {
+            settings.keepAwakeActive = false
+            return
+        }
+        _ = power.startKeepAwake(until: until, display: settings.keepAwakeDisplay, whileProcess: nil)
+    }
+
     func toggleKeepAwake() {
         if keepAwake.active { power.stopKeepAwake() } else { _ = power.startKeepAwake(until: nil, display: false, whileProcess: nil) }
     }
 
     private func keepAwakeChanged(_ state: PowerControl.KeepAwake) {
         keepAwake = state
+        settings.keepAwakeActive = state.active && state.whileProcess == nil
+        settings.keepAwakeUntil = state.until?.timeIntervalSince1970 ?? 0
+        settings.keepAwakeDisplay = state.display
         send(.event(.keepAwakeChanged(at: Self.now(), state: wireKeepAwake(state))))
     }
 
