@@ -1,6 +1,7 @@
 import type { Connection } from "@vitals/client-runtime";
 import { Store } from "@vitals/client-runtime";
 import type { TerminalEvent, TerminalId, TerminalInfo, TerminalSize } from "@vitals/contracts";
+import "./xtermHost.ts";
 import { type IBufferCell, Terminal } from "@xterm/headless";
 
 const FRAME_MS = 33;
