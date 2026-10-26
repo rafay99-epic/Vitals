@@ -807,15 +807,21 @@ final class RemoteModel {
         return nil
     }
 
-    /// Re-arms the saved keep-awake after a relaunch. Stays tied to a process aren't saved.
-    private func restoreKeepAwake() {
-        guard settings.keepAwakeActive else { return }
+    /// The saved keep-awake to re-arm at launch: nil when none was saved or it
+    /// already ran out. Stays tied to a process aren't saved.
+    static func savedKeepAwake(_ settings: AppSettings, now: Date = Date()) -> (until: Date?, display: Bool)? {
+        guard settings.keepAwakeActive else { return nil }
         let until = settings.keepAwakeUntil > 0 ? Date(timeIntervalSince1970: settings.keepAwakeUntil) : nil
-        if let until, until <= Date() {
+        if let until, until <= now { return nil }
+        return (until, settings.keepAwakeDisplay)
+    }
+
+    private func restoreKeepAwake() {
+        guard let saved = Self.savedKeepAwake(settings) else {
             settings.keepAwakeActive = false
             return
         }
-        _ = power.startKeepAwake(until: until, display: settings.keepAwakeDisplay, whileProcess: nil)
+        _ = power.startKeepAwake(until: saved.until, display: saved.display, whileProcess: nil)
     }
 
     func toggleKeepAwake() {
