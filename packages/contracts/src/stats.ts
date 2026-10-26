@@ -114,6 +114,8 @@ export const BatterySample = Schema.Struct({
   fullyCharged: Schema.optionalKey(Schema.Boolean),
   designCapacityMah: Schema.optionalKey(NonNegativeInt),
   maxCapacityMah: Schema.optionalKey(NonNegativeInt),
+  remainingCapacityMah: Schema.optionalKey(NonNegativeInt),
+  designCycleCount: Schema.optionalKey(NonNegativeInt),
   voltage: Schema.optionalKey(Schema.Number),
   amperage: Schema.optionalKey(Schema.Number),
   adapter: Schema.optionalKey(AdapterSample),
@@ -195,6 +197,7 @@ export const LiveSample = Schema.Struct({
   memory: Schema.optionalKey(MemorySample),
   battery: Schema.optionalKey(Schema.NullOr(BatterySample)),
   power: Schema.optionalKey(Schema.NullOr(PowerSample)),
+  systemWatts: Schema.optionalKey(Schema.Number),
   network: Schema.optionalKey(NetworkSample),
   disk: Schema.optionalKey(DiskSample),
 });

@@ -27,6 +27,7 @@ const thermalOf = (sample: LiveSample | null) => sample?.thermal ?? null;
 const fansOf = (sample: LiveSample | null) => sample?.fans ?? null;
 const batteryOf = (sample: LiveSample | null) => sample?.battery;
 const powerOf = (sample: LiveSample | null) => sample?.power ?? null;
+const systemWattsOf = (sample: LiveSample | null) => sample?.systemWatts ?? null;
 const networkOf = (sample: LiveSample | null) => sample?.network ?? null;
 const diskOf = (sample: LiveSample | null) => sample?.disk ?? null;
 
@@ -175,7 +176,8 @@ function OxyDetail() {
           items={[
             reading("Max capacity", battery?.maxCapacityMah, 0, "mAh"),
             reading("Design capacity", battery?.designCapacityMah, 0, "mAh"),
-            reading("Cycles", battery?.cycleCount),
+            { key: "Cycles", value: fixed(battery?.cycleCount), unit: battery === undefined || battery.cycleCount === null || battery.designCycleCount === undefined ? undefined : `of ${String(battery.designCycleCount)}` },
+            reading("Charge left", battery?.remainingCapacityMah, 0, "mAh"),
             { key: "Condition", value: battery?.condition ?? "--", tone: battery === undefined || battery.condition === "Normal" ? "ink" : "temp" },
           ]}
         />
@@ -233,10 +235,12 @@ function EegDetail() {
 
 function DripDetail() {
   const power = useLatest(powerOf);
+  const system = useLatest(systemWattsOf);
   const battery = useLatest(batteryOf);
   return (
     <KeyValueGrid
       items={[
+        reading("Whole Mac", system, 1, "W"),
         reading("CPU", power?.cpuWatts, 1, "W"),
         reading("GPU", power?.gpuWatts, 1, "W"),
         reading("Neural Engine", power?.aneWatts, 1, "W"),

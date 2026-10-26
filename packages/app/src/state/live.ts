@@ -50,7 +50,7 @@ const EXTRACTORS: Record<SeriesKey, Extractor> = {
   batteryWatts: (sample) => sample.battery?.watts,
   cpuWatts: (sample) => sample.power?.cpuWatts,
   gpuWatts: (sample) => sample.power?.gpuWatts,
-  socWatts: (sample) => (sample.power === null || sample.power === undefined ? undefined : sample.power.cpuWatts + sample.power.gpuWatts + sample.power.aneWatts),
+  socWatts: (sample) => (sample.power === null || sample.power === undefined ? sample.systemWatts : sample.power.cpuWatts + sample.power.gpuWatts + sample.power.aneWatts),
   netIn: (sample) => sample.network?.inBytesPerSec,
   netOut: (sample) => sample.network?.outBytesPerSec,
   diskRead: (sample) => sample.disk?.readBytesPerSec,

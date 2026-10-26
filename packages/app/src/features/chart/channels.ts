@@ -17,8 +17,9 @@ export const diskFull = (sample: LiveSample | null): boolean => {
   return disk.freeBytes < Math.min(FULL_BYTES, disk.totalBytes * 0.05);
 };
 
+/** SoC rails when IOReport reports them, else the SMC's whole-Mac figure. */
 const socWatts = (sample: LiveSample | null): number | null =>
-  sample?.power === undefined || sample.power === null ? null : sample.power.cpuWatts + sample.power.gpuWatts + sample.power.aneWatts;
+  sample?.power === undefined || sample.power === null ? (sample?.systemWatts ?? null) : sample.power.cpuWatts + sample.power.gpuWatts + sample.power.aneWatts;
 
 export interface PairDef {
   readonly series: SeriesKey;

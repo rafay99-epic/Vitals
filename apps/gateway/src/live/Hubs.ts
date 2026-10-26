@@ -29,6 +29,7 @@ const project = (sample: LiveSample, topics: ReadonlySet<Topic>): LiveSample => 
   ...(topics.has("memory") && sample.memory !== undefined ? { memory: sample.memory } : {}),
   ...(topics.has("battery") && sample.battery !== undefined ? { battery: sample.battery } : {}),
   ...(topics.has("power") && sample.power !== undefined ? { power: sample.power } : {}),
+  ...(topics.has("power") && sample.systemWatts !== undefined ? { systemWatts: sample.systemWatts } : {}),
   ...(topics.has("network") && sample.network !== undefined ? { network: sample.network } : {}),
   ...(topics.has("disk") && sample.disk !== undefined ? { disk: sample.disk } : {}),
 });

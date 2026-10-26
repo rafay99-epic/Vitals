@@ -93,6 +93,8 @@ struct WireBattery: Codable, Equatable, Sendable {
     var fullyCharged: Bool?
     var designCapacityMah: Int?
     var maxCapacityMah: Int?
+    var remainingCapacityMah: Int?
+    var designCycleCount: Int?
     var voltage: Double?
     var amperage: Double?
     var adapter: WireAdapter?
@@ -173,6 +175,7 @@ struct WireSample: Codable, Equatable, Sendable {
     var memory: WireMemory?
     var battery: Nullable<WireBattery>?
     var power: Nullable<WirePower>?
+    var systemWatts: Double?
     var network: WireNetwork?
     var disk: WireDisk?
 }
