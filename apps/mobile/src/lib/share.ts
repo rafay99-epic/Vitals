@@ -51,6 +51,7 @@ export const phoneRoots = (): ReadonlyArray<FsRoot> => {
     { label: "Camera", path: `${STORAGE}/DCIM`, place: "photos" },
     { label: "Pictures", path: `${STORAGE}/Pictures`, place: "pictures" },
     { label: "Movies", path: `${STORAGE}/Movies`, place: "movies" },
+    { label: "Music", path: `${STORAGE}/Music`, place: "music" },
     { label: "Documents", path: `${STORAGE}/Documents`, place: "documents" },
   ];
 };
