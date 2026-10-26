@@ -1,5 +1,5 @@
 import { type BottomTabBarProps, createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { DarkTheme, type LinkingOptions, NavigationContainer, type Theme } from "@react-navigation/native";
+import { DarkTheme, getFocusedRouteNameFromRoute, type LinkingOptions, NavigationContainer, type Theme } from "@react-navigation/native";
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { sessions } from "@vitals/app/connection/session.ts";
 import { useRemote, useSession } from "@vitals/app/connection/useRemote.ts";
@@ -137,6 +137,8 @@ function useRemoteToasts() {
 
 function DockBar({ state, navigation }: BottomTabBarProps) {
   const alerted = useStore(useRemote().events.alerts).length > 0;
+  const tab = state.routes[state.index];
+  if (tab !== undefined && getFocusedRouteNameFromRoute(tab) === "Terminal") return null;
   return <Dock state={state} navigation={navigation} tabs={{ ...TAB_BASE, Alerts: { ...TAB_BASE.Alerts, badge: alerted } }} />;
 }
 
