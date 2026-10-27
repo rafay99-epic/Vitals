@@ -1,151 +1,177 @@
 import { LegendList } from "@legendapp/list/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { FILES_PAGE, hasPreview } from "@vitals/app/state/files.ts";
+import { FILES_PAGE } from "@vitals/app/state/files.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
-import type { FsEntry, FsSort } from "@vitals/contracts";
-import { formatBytes } from "@vitals/shared";
-import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import type { FsEntry } from "@vitals/contracts";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EntryRow } from "../FsRows.tsx";
+import { EntryRow, isFolder, isPicture, PhotoTile, SelectBar, SelectButton, useSelection } from "../FsRows.tsx";
 import { pickFiles } from "../lib/clips.ts";
 import { sendDrop } from "../lib/drops.ts";
 import { useAccess } from "../lib/remote.ts";
 import type { ControlStackParams } from "../navigation.ts";
-import { macFileSheet } from "../sheets/MacFileSheet.tsx";
-import { BackBar, color, Empty, Segmented, sheet, T, Tap, Title, toast, useDockSpace } from "../ui/index.ts";
+import { fileSheet, transferSheet } from "../sheets/FsSheets.tsx";
+import { ActionRow, BackBar, color, Empty, sheet, T, Tap, Title, toast, useDockSpace } from "../ui/index.ts";
 
 type Props = NativeStackScreenProps<ControlStackParams, "Folder">;
 
 type Listing =
   | { readonly _tag: "loading" }
   | { readonly _tag: "failed"; readonly message: string }
-  | { readonly _tag: "loaded"; readonly entries: ReadonlyArray<FsEntry>; readonly total: number; readonly more: boolean };
+  | { readonly _tag: "loaded"; readonly entries: ReadonlyArray<FsEntry>; readonly total: number; readonly busy: boolean };
 
-const SORTS: ReadonlyArray<{ readonly value: FsSort; readonly label: string }> = [
-  { value: "name", label: "Name" },
-  { value: "date", label: "Newest" },
-  { value: "size", label: "Biggest" },
-];
+/** A list line: one folder or file, or a row of three pictures. */
+type Line = { readonly _tag: "entry"; readonly entry: FsEntry } | { readonly _tag: "pictures"; readonly entries: ReadonlyArray<FsEntry> };
 
+const COLUMNS = 3;
+const GAP = 4;
+const EDGE = 16;
+
+/** Folders first, then pictures three to a row, then every other file. */
+const linesOf = (entries: ReadonlyArray<FsEntry>): ReadonlyArray<Line> => {
+  const pictures = entries.filter(isPicture);
+  return [
+    ...entries.filter(isFolder).map((entry): Line => ({ _tag: "entry", entry })),
+    ...Array.from({ length: Math.ceil(pictures.length / COLUMNS) }, (_, index): Line => ({ _tag: "pictures", entries: pictures.slice(index * COLUMNS, (index + 1) * COLUMNS) })),
+    ...entries.filter((entry) => !isFolder(entry) && !isPicture(entry)).map((entry): Line => ({ _tag: "entry", entry })),
+  ];
+};
+
+const keyOf = (line: Line): string => (line._tag === "entry" ? line.entry.path : `pictures:${line.entries[0]?.path ?? ""}`);
+
+/** The path under the title. Each part goes back to that folder; the first goes back to the device's page. */
+function Crumbs({ parts, onPick }: { readonly parts: ReadonlyArray<string>; readonly onPick: (index: number) => void }) {
+  return (
+    <View style={styles.crumbs}>
+      {parts.map((part, index) => {
+        const last = index === parts.length - 1;
+        return (
+          <Fragment key={parts.slice(0, index + 1).join("/")}>
+            {index > 0 ? <T v="small">›</T> : null}
+            {last ? (
+              <T v="small" color={color.ink}>
+                {part}
+              </T>
+            ) : (
+              <Tap onPress={() => onPick(index)} accessibilityRole="button" accessibilityLabel={`Go to ${part}`} hitSlop={8}>
+                <T v="small" color={color.ink2}>
+                  {part}
+                </T>
+              </Tap>
+            )}
+          </Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+function EmptyFolder({ listing }: { readonly listing: Listing }) {
+  if (listing._tag === "loading") return <Empty title="Loading" />;
+  if (listing._tag === "failed") return <Empty title="Can't open this folder" detail={listing.message} />;
+  return <Empty title="Empty" />;
+}
+
+/** A folder on the Mac or a phone, as deep as it goes. Select, then Transfer. */
 export function FolderScreen({ navigation, route }: Props) {
   const remote = useRemote();
   const access = useAccess();
   const insets = useSafeAreaInsets();
   const bottom = useDockSpace();
   const now = useNow(60_000);
-  const { path, title, device, deviceName } = route.params;
-  const [sort, setSort] = useState<FsSort>("name");
+  const { width } = useWindowDimensions();
+  const { path, source, trail } = route.params;
+  const device = source.device ?? undefined;
+  const title = trail.at(-1) ?? source.name;
   const [listing, setListing] = useState<Listing>({ _tag: "loading" });
-  const [selecting, setSelecting] = useState(false);
-  const [picked, setPicked] = useState<ReadonlyMap<string, FsEntry>>(new Map());
+  const selection = useSelection();
 
   useEffect(() => {
     let cancelled = false;
-    void remote.files.list(path, sort, 0, device).then((outcome) => {
+    void remote.files.list(path, "name", 0, device).then((outcome) => {
       if (cancelled) return;
-      setListing(outcome.ok ? { _tag: "loaded", entries: outcome.value.entries, total: outcome.value.total, more: false } : { _tag: "failed", message: outcome.message });
-      if (outcome.ok) remote.files.want(outcome.value.entries.slice(0, 40), device);
+      setListing(outcome.ok ? { _tag: "loaded", entries: outcome.value.entries, total: outcome.value.total, busy: false } : { _tag: "failed", message: outcome.message });
+      if (outcome.ok) remote.files.want([...outcome.value.entries.filter(isPicture).slice(0, 24), ...outcome.value.entries.filter((entry) => !isPicture(entry)).slice(0, 24)], device);
     });
     return () => {
       cancelled = true;
     };
-  }, [remote, path, sort, device]);
+  }, [remote, path, device]);
 
   const loadMore = () => {
-    if (listing._tag !== "loaded" || listing.more || listing.entries.length >= listing.total) return;
+    if (listing._tag !== "loaded" || listing.busy || listing.entries.length >= listing.total) return;
     const shown = listing.entries;
-    setListing({ ...listing, more: true });
-    void remote.files.list(path, sort, shown.length, device).then((outcome) => {
-      setListing((current) => (current._tag !== "loaded" ? current : outcome.ok ? { _tag: "loaded", entries: [...shown, ...outcome.value.entries], total: outcome.value.total, more: false } : { ...current, more: false }));
+    setListing({ ...listing, busy: true });
+    void remote.files.list(path, "name", shown.length, device).then((outcome) => {
+      setListing((current) => (current._tag !== "loaded" ? current : outcome.ok ? { _tag: "loaded", entries: [...shown, ...outcome.value.entries], total: outcome.value.total, busy: false } : { ...current, busy: false, total: shown.length }));
     });
   };
 
   const open = (entry: FsEntry) => {
-    if (entry.kind === "folder" || entry.kind === "link") {
-      navigation.push("Folder", { path: entry.path, title: entry.name, ...(device === undefined ? {} : { device, deviceName: deviceName ?? "" }) });
-      return;
-    }
-    if (!selecting) {
-      sheet.open(macFileSheet(entry, device === undefined ? null : { device, name: deviceName ?? "That phone" }));
-      return;
-    }
-    setPicked((current) => {
-      const next = new Map(current);
-      if (next.has(entry.path)) next.delete(entry.path);
-      else next.set(entry.path, entry);
-      return next;
-    });
-  };
-
-  const get = async () => {
-    const entries = [...picked.values()];
-    setSelecting(false);
-    setPicked(new Map());
-    const what = entries.length === 1 ? (entries[0]?.name ?? "it") : `${String(entries.length)} files`;
-    if (device !== undefined) {
-      const outcome = await remote.files.pull(device, entries.map((entry) => entry.path));
-      toast.show(outcome.ok ? `${deviceName ?? "That phone"} is sending ${what} through your Mac` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
-      return;
-    }
-    const drop = await remote.drops.pull(entries.map((entry) => entry.path));
-    if (drop !== null) toast.show(`Getting ${what} from your Mac`);
+    if (isFolder(entry)) navigation.push("Folder", { path: entry.path, source, trail: [...trail, entry.name] });
+    else if (selection.selecting) selection.toggle(entry);
+    else sheet.open(fileSheet(entry, source));
   };
 
   const putHere = async () => {
     const batch = await pickFiles();
     if (batch === null) return;
-    if (await sendDrop(remote, batch, path)) toast.show(`Sending ${batch.label} to ${title} on your Mac`);
+    if (await sendDrop(remote, batch, { dest: path })) toast.show(`Sending ${batch.label} to ${title} on your Mac`);
   };
 
   const onViewable = useCallback(
-    ({ viewableItems }: { readonly viewableItems: ReadonlyArray<{ readonly item: FsEntry }> }) => remote.files.want(viewableItems.map((token) => token.item).filter(hasPreview), device),
+    ({ viewableItems }: { readonly viewableItems: ReadonlyArray<{ readonly item: Line }> }) =>
+      remote.files.want(
+        viewableItems.flatMap((token) => (token.item._tag === "entry" ? [token.item.entry] : token.item.entries)),
+        device,
+      ),
     [remote, device],
   );
 
-  const toggleSelecting = () => {
-    if (selecting) setPicked(new Map());
-    setSelecting(!selecting);
-  };
-
-  const pickedBytes = [...picked.values()].reduce((sum, entry) => sum + entry.size, 0);
   const entries = listing._tag === "loaded" ? listing.entries : [];
+  const lines = linesOf(entries);
+  const size = Math.floor((width - EDGE * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
+  const crumbs = [source.name, ...trail];
 
   const header = (
     <View style={{ paddingTop: insets.top + 6 }}>
-      <BackBar parent="Files" />
-      <Title>{`${title}.`}</Title>
-      <View style={styles.actions}>
-        <Tap onPress={toggleSelecting} accessibilityRole="button" hitSlop={10}>
-          <T v="medium" color={color.yellow}>
-            {selecting ? "Done" : "Select"}
-          </T>
-        </Tap>
-        {access.change && device === undefined ? (
-          <Tap onPress={() => void putHere()} accessibilityRole="button" hitSlop={10}>
-            <T v="medium" color={color.yellow}>
-              Put files here
-            </T>
-          </Tap>
-        ) : null}
+      <View style={styles.top}>
+        <BackBar parent={crumbs.at(-2) ?? source.name} />
+        {entries.some((entry) => !isFolder(entry)) ? <SelectButton selecting={selection.selecting} onPress={selection.selecting ? selection.stop : selection.start} /> : null}
       </View>
-      <Segmented options={SORTS} value={sort} onChange={setSort} />
-      {listing._tag === "loaded" && listing.total > FILES_PAGE ? <T v="mono" style={styles.count}>{`${listing.total.toLocaleString()} items`}</T> : null}
+      <Title>{`${title}.`}</Title>
+      <Crumbs parts={crumbs} onPick={(index) => navigation.pop(crumbs.length - 1 - index)} />
     </View>
   );
 
-  const empty =
-    listing._tag === "loading" ? <Empty title="Loading" /> : listing._tag === "failed" ? <Empty title="Can't open this folder" detail={listing.message} /> : <Empty title="Empty" />;
+  const footer = (
+    <View style={{ paddingBottom: bottom + (selection.selecting ? 64 : 0) }}>
+      {listing._tag === "loaded" && listing.total > FILES_PAGE ? <T v="mono" style={styles.count}>{`${listing.total.toLocaleString()} items`}</T> : null}
+      {access.change && source.device === null && listing._tag === "loaded" && !selection.selecting ? <ActionRow icon="plus" label="Put files here" detail={`From this phone into ${title}`} onPress={() => void putHere()} /> : null}
+    </View>
+  );
 
   return (
     <View style={styles.screen}>
       <LegendList
-        data={entries}
-        keyExtractor={(entry) => entry.path}
-        renderItem={({ item }) => <EntryRow entry={item} device={device} now={now} selecting={selecting} selected={picked.has(item.path)} onPress={open} />}
-        extraData={{ selecting, picked }}
+        data={lines}
+        keyExtractor={keyOf}
+        getItemType={(line) => line._tag}
+        renderItem={({ item }) =>
+          item._tag === "entry" ? (
+            <EntryRow entry={item.entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(item.entry.path)} onPress={open} />
+          ) : (
+            <View style={styles.gridRow}>
+              {item.entries.map((entry) => (
+                <PhotoTile key={entry.path} entry={entry} device={source.device} size={size} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} />
+              ))}
+            </View>
+          )
+        }
+        extraData={selection}
         estimatedItemSize={52}
         recycleItems
         drawDistance={600}
@@ -153,29 +179,19 @@ export function FolderScreen({ navigation, route }: Props) {
         onEndReachedThreshold={0.6}
         onViewableItemsChanged={onViewable}
         ListHeaderComponent={header}
-        ListEmptyComponent={empty}
-        ListFooterComponent={<View style={{ height: bottom + (picked.size > 0 ? 64 : 0) }} />}
+        ListEmptyComponent={<EmptyFolder listing={listing} />}
+        ListFooterComponent={footer}
         style={styles.screen}
       />
-      {picked.size > 0 ? (
-        <View style={[styles.bar, { bottom: bottom - 24 }]}>
-          <T v="strong" color={color.bg} style={styles.barText}>{`${String(picked.size)} picked · ${formatBytes(pickedBytes)}`}</T>
-          <Tap onPress={() => void get()} accessibilityRole="button" style={styles.barButton}>
-            <T v="strong" color={color.yellow}>
-              Get
-            </T>
-          </Tap>
-        </View>
-      ) : null}
+      {selection.selecting ? <SelectBar count={selection.picked.size} bottom={bottom - 24} onTransfer={() => sheet.open(transferSheet([...selection.picked.values()], source, selection.stop))} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.bg },
-  actions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12 },
-  count: { paddingHorizontal: 20, paddingTop: 8 },
-  bar: { position: "absolute", left: 14, right: 14, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: color.ink, borderRadius: 18, paddingVertical: 10, paddingLeft: 16, paddingRight: 10 },
-  barText: { flex: 1 },
-  barButton: { backgroundColor: color.bg, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14 },
+  top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  crumbs: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5, paddingHorizontal: 20, paddingBottom: 14, marginTop: -8 },
+  count: { paddingHorizontal: 20, paddingVertical: 8 },
+  gridRow: { flexDirection: "row", gap: GAP, paddingHorizontal: EDGE, marginVertical: GAP / 2 },
 });

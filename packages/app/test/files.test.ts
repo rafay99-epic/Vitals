@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { type Connection, type ConnectionState, type VitalsClient, Store } from "@vitals/client-runtime";
-import { DeviceId, type FsEntry } from "@vitals/contracts";
+import { DeviceId, type FsDevice, type FsEntry } from "@vitals/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { hasPreview, MacFiles, thumbKey } from "../src/state/files.ts";
+import { destinationsFor, hasPreview, MacFiles, mergeNewest, thumbKey } from "../src/state/files.ts";
 
 const deviceIdOf = Schema.decodeUnknownSync(DeviceId);
 
@@ -67,5 +67,34 @@ describe("MacFiles thumbnails", () => {
     expect(hasPreview(entry("plan.pdf"))).toBe(true);
     expect(hasPreview(entry("archive.zip"))).toBe(false);
     expect(hasPreview({ ...entry("Photos.jpg"), kind: "folder" })).toBe(false);
+  });
+});
+
+describe("Transfer destinations", () => {
+  const me = deviceIdOf("01a17bf6-b432-736b-a51e-2b2972ac7801");
+  const iphone = deviceIdOf("01a17bf6-b432-736b-a51e-2b2972ac7802");
+  const tablet = deviceIdOf("01a17bf6-b432-736b-a51e-2b2972ac7803");
+  const phone = (deviceId: DeviceId): FsDevice => ({ deviceId, name: deviceId, platform: "ios", online: true });
+  const phones = [phone(iphone), phone(tablet)];
+  const where = (from: DeviceId | null) => destinationsFor(from, me, phones).map((to) => (to._tag === "Phone" ? to.device.deviceId : to._tag));
+
+  test("never offers the device the files are on", () => {
+    expect(where(null)).toEqual(["Here", iphone, tablet]);
+    expect(where(iphone)).toEqual(["Here", "Mac", tablet]);
+    expect(where(me)).toEqual(["Mac", iphone, tablet]);
+  });
+});
+
+describe("mergeNewest", () => {
+  const at = (name: string, modifiedAt: number): FsEntry => ({ ...entry(name), modifiedAt });
+
+  test("merges kinds newest first and stops where an unfinished page stops", () => {
+    const shots = { entries: [at("s1", 90), at("s2", 50)], more: true };
+    const photos = { entries: [at("p1", 80), at("p2", 40), at("p3", 10)], more: false };
+    const merged = mergeNewest([shots, photos]);
+    expect(merged.entries.map((item) => item.name)).toEqual(["s1", "p1", "s2"]);
+    expect([...merged.behind]).toEqual([0]);
+    expect(mergeNewest([{ ...shots, more: false }, photos]).entries).toHaveLength(5);
+    expect(mergeNewest([shots, { entries: [at("s1", 90)], more: false }]).entries.map((item) => item.name)).toEqual(["s1", "s2"]);
   });
 });

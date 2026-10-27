@@ -1,51 +1,60 @@
 import { LegendList } from "@legendapp/list/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
+import { mergeNewest, type RecentPage } from "@vitals/app/state/files.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
-import type { FsEntry } from "@vitals/contracts";
-import { formatBytes } from "@vitals/shared";
+import type { FsEntry, FsRecentKind } from "@vitals/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EntryRow, isGallery, KIND_TITLE, PhotoTile } from "../FsRows.tsx";
-import { getFromMac } from "../lib/drops.ts";
+import { EntryRow, isGallery, KIND_TITLE, PhotoTile, SelectBar, SelectButton, useSelection, whereOf } from "../FsRows.tsx";
 import type { ControlStackParams } from "../navigation.ts";
-import { macFileSheet } from "../sheets/MacFileSheet.tsx";
-import { BackBar, color, Empty, sheet, T, Tap, Title, toast, useDockSpace } from "../ui/index.ts";
+import { fileSheet, transferSheet } from "../sheets/FsSheets.tsx";
+import { BackBar, color, Empty, sheet, T, Title, useDockSpace } from "../ui/index.ts";
 
 type Props = NativeStackScreenProps<ControlStackParams, "Recent">;
 
-type Page = { readonly _tag: "loading" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly entries: ReadonlyArray<FsEntry>; readonly more: boolean; readonly busy: boolean };
+interface KindPage extends RecentPage {
+  readonly kind: FsRecentKind;
+}
+
+type Paged = { readonly _tag: "loading" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly pages: ReadonlyArray<KindPage>; readonly busy: boolean };
 
 const PAGE = 60;
 const COLUMNS = 3;
-const GAP = 6;
+const GAP = 4;
 const EDGE = 16;
 
 const rowsOf = (entries: ReadonlyArray<FsEntry>, size: number): ReadonlyArray<ReadonlyArray<FsEntry>> =>
   Array.from({ length: Math.ceil(entries.length / size) }, (_, index) => entries.slice(index * size, (index + 1) * size));
 
-/** "See all" for one kind on one device: a grid for pictures, a list for files, newest first. Hold to pick several. */
+/** Everything of one kind on a device, newest first and paged: a grid for pictures, a list for files. Select, then Transfer. */
 export function RecentScreen({ route }: Props) {
   const remote = useRemote();
   const insets = useSafeAreaInsets();
   const bottom = useDockSpace();
   const now = useNow(60_000);
   const { width } = useWindowDimensions();
-  const { kind, device, deviceName } = route.params;
+  const { kind, source } = route.params;
+  const device = source.device ?? undefined;
   const gallery = isGallery(kind);
-  const where = deviceName ?? "your Mac";
-  const [page, setPage] = useState<Page>({ _tag: "loading" });
-  const [selecting, setSelecting] = useState(false);
-  const [picked, setPicked] = useState<ReadonlyMap<string, FsEntry>>(new Map());
+  const [paged, setPaged] = useState<Paged>({ _tag: "loading" });
+  const selection = useSelection();
 
   useEffect(() => {
     let cancelled = false;
-    void remote.files.recent(kind, 0, PAGE, device).then((outcome) => {
+    const kinds: ReadonlyArray<FsRecentKind> = kind === "images" ? ["screenshots", "photos"] : [kind];
+    void Promise.all(kinds.map(async (item): Promise<KindPage | string> => {
+      const outcome = await remote.files.recent(item, 0, PAGE, device);
+      return outcome.ok ? { kind: item, entries: outcome.value.entries, more: outcome.value.more } : outcome.message;
+    })).then((results) => {
       if (cancelled) return;
-      setPage(outcome.ok ? { _tag: "loaded", entries: outcome.value.entries, more: outcome.value.more, busy: false } : { _tag: "failed", message: outcome.message });
-      if (outcome.ok) remote.files.want(outcome.value.entries.slice(0, 30), device);
+      const pages = results.filter((result) => typeof result !== "string");
+      const failure = results.find((result) => typeof result === "string");
+      if (pages.length === 0) return setPaged({ _tag: "failed", message: failure ?? "Nothing to show" });
+      setPaged({ _tag: "loaded", pages, busy: false });
+      remote.files.want(mergeNewest(pages).entries.slice(0, 30), device);
     });
     return () => {
       cancelled = true;
@@ -53,51 +62,20 @@ export function RecentScreen({ route }: Props) {
   }, [remote, kind, device]);
 
   const loadMore = () => {
-    if (page._tag !== "loaded" || !page.more || page.busy) return;
-    const shown = page.entries;
-    setPage({ ...page, busy: true });
-    void remote.files.recent(kind, shown.length, PAGE, device).then((outcome) =>
-      setPage((current) =>
-        current._tag !== "loaded" ? current : outcome.ok ? { _tag: "loaded", entries: [...shown, ...outcome.value.entries], more: outcome.value.more, busy: false } : { ...current, busy: false, more: false },
-      ),
-    );
+    if (paged._tag !== "loaded" || paged.busy) return;
+    const { behind } = mergeNewest(paged.pages);
+    if (behind.size === 0) return;
+    setPaged({ ...paged, busy: true });
+    void Promise.all(
+      paged.pages.map(async (page, index): Promise<KindPage> => {
+        if (!behind.has(index)) return page;
+        const outcome = await remote.files.recent(page.kind, page.entries.length, PAGE, device);
+        return outcome.ok ? { ...page, entries: [...page.entries, ...outcome.value.entries], more: outcome.value.more } : { ...page, more: false };
+      }),
+    ).then((pages) => setPaged((current) => (current._tag === "loaded" ? { _tag: "loaded", pages, busy: false } : current)));
   };
 
-  const toggle = (entry: FsEntry) =>
-    setPicked((current) => {
-      const next = new Map(current);
-      if (next.has(entry.path)) next.delete(entry.path);
-      else next.set(entry.path, entry);
-      return next;
-    });
-
-  const open = (entry: FsEntry) => {
-    if (selecting) return toggle(entry);
-    sheet.open(macFileSheet(entry, device === undefined ? null : { device, name: where }));
-  };
-
-  const hold = (entry: FsEntry) => {
-    if (!selecting) setSelecting(true);
-    toggle(entry);
-  };
-
-  const stopSelecting = () => {
-    setSelecting(false);
-    setPicked(new Map());
-  };
-
-  const get = async () => {
-    const entries = [...picked.values()];
-    stopSelecting();
-    const what = entries.length === 1 ? (entries[0]?.name ?? "it") : `${String(entries.length)} files`;
-    const paths = entries.map((entry) => entry.path);
-    if (device !== undefined) {
-      const outcome = await remote.files.pull(device, paths);
-      toast.show(outcome.ok ? `${where} is sending ${what} through your Mac` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
-      return;
-    }
-    if (await getFromMac(remote, paths)) toast.show(`Getting ${what} from your Mac`);
-  };
+  const open = (entry: FsEntry) => (selection.selecting ? selection.toggle(entry) : sheet.open(fileSheet(entry, source)));
 
   const onViewable = useCallback(
     ({ viewableItems }: { readonly viewableItems: ReadonlyArray<{ readonly item: ReadonlyArray<FsEntry> }> }) => remote.files.want(viewableItems.flatMap((token) => token.item), device),
@@ -105,28 +83,21 @@ export function RecentScreen({ route }: Props) {
   );
 
   const size = Math.floor((width - EDGE * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
-  const entries = page._tag === "loaded" ? page.entries : [];
+  const entries = paged._tag === "loaded" ? mergeNewest(paged.pages).entries : [];
   const rows = rowsOf(entries, gallery ? COLUMNS : 1);
-  const pickedBytes = [...picked.values()].reduce((sum, entry) => sum + entry.size, 0);
 
   const header = (
     <View style={{ paddingTop: insets.top + 6 }}>
-      <BackBar parent="Files" />
-      <Title>{`${KIND_TITLE[kind]}.`}</Title>
-      <View style={styles.actions}>
-        <T v="small">{`On ${where} · newest first`}</T>
-        {entries.length > 0 ? (
-          <Tap onPress={selecting ? stopSelecting : () => setSelecting(true)} accessibilityRole="button" hitSlop={10}>
-            <T v="medium" color={color.yellow}>
-              {selecting ? "Done" : "Select"}
-            </T>
-          </Tap>
-        ) : null}
+      <View style={styles.top}>
+        <BackBar parent={source.name} />
+        {entries.length > 0 ? <SelectButton selecting={selection.selecting} onPress={selection.selecting ? selection.stop : selection.start} /> : null}
       </View>
+      <Title>{`${KIND_TITLE[kind]}.`}</Title>
+      <T v="small" style={styles.sub}>{`On ${whereOf(source)} · newest first`}</T>
     </View>
   );
 
-  const empty = page._tag === "loading" ? <Empty title="Loading" /> : page._tag === "failed" ? <Empty title={`Can't see ${where}`} detail={page.message} /> : <Empty title="Nothing yet" />;
+  const empty = paged._tag === "loading" ? <Empty title="Loading" /> : paged._tag === "failed" ? <Empty title={`Can't see ${whereOf(source)}`} detail={paged.message} /> : <Empty title="Nothing yet" />;
 
   return (
     <View style={styles.screen}>
@@ -138,18 +109,18 @@ export function RecentScreen({ route }: Props) {
           gallery ? (
             <View style={styles.gridRow}>
               {item.map((entry) => (
-                <PhotoTile key={entry.path} entry={entry} device={device} size={size} selecting={selecting} selected={picked.has(entry.path)} onPress={open} onLongPress={hold} />
+                <PhotoTile key={entry.path} entry={entry} device={source.device} size={size} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} />
               ))}
             </View>
           ) : (
             <>
               {item.map((entry) => (
-                <EntryRow key={entry.path} entry={entry} device={device} now={now} selecting={selecting} selected={picked.has(entry.path)} onPress={open} onLongPress={hold} />
+                <EntryRow key={entry.path} entry={entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} />
               ))}
             </>
           )
         }
-        extraData={{ selecting, picked }}
+        extraData={selection}
         estimatedItemSize={gallery ? size + GAP : 52}
         recycleItems
         drawDistance={800}
@@ -158,28 +129,17 @@ export function RecentScreen({ route }: Props) {
         onViewableItemsChanged={onViewable}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
-        ListFooterComponent={<View style={{ height: bottom + (picked.size > 0 ? 64 : 0) }} />}
+        ListFooterComponent={<View style={{ height: bottom + (selection.selecting ? 64 : 0) }} />}
         style={styles.screen}
       />
-      {picked.size > 0 ? (
-        <View style={[styles.bar, { bottom: bottom - 24 }]}>
-          <T v="strong" color={color.bg} style={styles.barText}>{`${String(picked.size)} picked · ${formatBytes(pickedBytes)}`}</T>
-          <Tap onPress={() => void get()} accessibilityRole="button" style={styles.barButton}>
-            <T v="strong" color={color.yellow}>
-              {`Get ${String(picked.size)}`}
-            </T>
-          </Tap>
-        </View>
-      ) : null}
+      {selection.selecting ? <SelectBar count={selection.picked.size} bottom={bottom - 24} onTransfer={() => sheet.open(transferSheet([...selection.picked.values()], source, selection.stop))} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.bg },
-  actions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12 },
+  top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  sub: { paddingHorizontal: 20, paddingBottom: 12, marginTop: -8 },
   gridRow: { flexDirection: "row", gap: GAP, paddingHorizontal: EDGE, marginBottom: GAP },
-  bar: { position: "absolute", left: 14, right: 14, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: color.ink, borderRadius: 18, paddingVertical: 10, paddingLeft: 16, paddingRight: 10 },
-  barText: { flex: 1 },
-  barButton: { backgroundColor: color.bg, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14 },
 });

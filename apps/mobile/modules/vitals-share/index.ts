@@ -33,6 +33,8 @@ interface Android {
   readonly recent: (kind: "photos" | "screenshots" | "documents", offset: number, limit: number) => Promise<NativePage>;
   readonly thumbnail: (path: string, px: number) => Promise<string | null>;
   readonly toBack: () => Promise<boolean>;
+  /** All files access; null before Android 11. Missing on builds from before it was added. */
+  readonly fullStorage?: () => boolean | null;
 }
 
 interface Ios {

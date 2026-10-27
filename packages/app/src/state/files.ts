@@ -2,6 +2,7 @@ import type { Connection, VitalsClient } from "@vitals/client-runtime";
 import { Store } from "@vitals/client-runtime";
 import {
   type DeviceId,
+  type FsDevice,
   type FsDevicesResult,
   type FsEntry,
   type FsListResult,
@@ -30,8 +31,46 @@ export const thumbKey = (path: string, device?: DeviceId): string => (device ===
 
 export type Outcome<A> = { readonly ok: true; readonly value: A } | { readonly ok: false; readonly message: string };
 
+/** The device files are on: a phone, or the Mac when `device` is null. */
+export interface FsSource {
+  readonly device: DeviceId | null;
+  readonly name: string;
+}
+
+/** Where a copy can go: the phone in your hand, the Mac, or another phone. */
+export type Destination = { readonly _tag: "Here" } | { readonly _tag: "Mac" } | { readonly _tag: "Phone"; readonly device: FsDevice };
+
+/** Every place files on `from` (null for the Mac) can be copied to. Never the device they are already on. */
+export const destinationsFor = (from: DeviceId | null, me: DeviceId, phones: ReadonlyArray<FsDevice>): ReadonlyArray<Destination> => [
+  ...(from === me ? [] : [{ _tag: "Here" } as const]),
+  ...(from === null ? [] : [{ _tag: "Mac" } as const]),
+  ...phones.filter((phone) => phone.deviceId !== from && phone.deviceId !== me).map((device) => ({ _tag: "Phone", device }) as const),
+];
+
+export interface RecentPage {
+  readonly entries: ReadonlyArray<FsEntry>;
+  readonly more: boolean;
+}
+
+/**
+ * Newest-first pages of several kinds as one newest-first list, each file once. It stops where the first
+ * unfinished page stops, so loading more only ever adds below. `behind` are the pages to load next.
+ */
+export const mergeNewest = (pages: ReadonlyArray<RecentPage>): { readonly entries: ReadonlyArray<FsEntry>; readonly behind: ReadonlySet<number> } => {
+  const last = (page: RecentPage): number => page.entries.at(-1)?.modifiedAt ?? Number.POSITIVE_INFINITY;
+  const cutoff = Math.max(Number.NEGATIVE_INFINITY, ...pages.filter((page) => page.more).map(last));
+  return {
+    entries: [...new Map(pages.flatMap((page) => page.entries.map((entry) => [entry.path, entry] as const))).values()]
+      .filter((entry) => entry.modifiedAt >= cutoff)
+      .sort((left, right) => right.modifiedAt - left.modifiedAt),
+    behind: new Set(pages.flatMap((page, index) => (page.more && last(page) >= cutoff ? [index] : []))),
+  };
+};
+
 export class MacFiles {
   readonly thumbs = new Store<ReadonlyMap<string, string | null>>(new Map());
+  /** The other phones, as `devices()` last listed them. */
+  readonly phones = new Store<ReadonlyArray<FsDevice>>([]);
   private readonly connection: Connection;
   private readonly wanted = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -46,8 +85,10 @@ export class MacFiles {
     return this.run((client) => client["fs.roots"](device === undefined ? {} : { device }));
   }
 
-  devices(): Promise<Outcome<FsDevicesResult>> {
-    return this.run((client) => client["fs.devices"]({}));
+  async devices(): Promise<Outcome<FsDevicesResult>> {
+    const outcome = await this.run((client) => client["fs.devices"]({}));
+    if (outcome.ok) this.phones.set(outcome.value.devices);
+    return outcome;
   }
 
   list(path: string, sort: FsSort, offset: number, device?: DeviceId): Promise<Outcome<FsListResult>> {

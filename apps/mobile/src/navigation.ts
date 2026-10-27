@@ -1,5 +1,6 @@
 import { createNavigationContainerRef, type NavigatorScreenParams } from "@react-navigation/native";
-import type { DeviceId, FsRecentKind } from "@vitals/contracts";
+import type { FsSource } from "@vitals/app/state/files.ts";
+import type { FsRecentKind } from "@vitals/contracts";
 import type { Channel } from "@vitals/ui";
 
 export type HomeStackParams = {
@@ -11,9 +12,11 @@ export type ControlStackParams = {
   Control: undefined;
   Clipboard: undefined;
   Files: undefined;
-  Folder: { readonly path: string; readonly title: string; readonly device?: DeviceId; readonly deviceName?: string };
-  /** "See all" for one kind on a device page. No device means the Mac. */
-  Recent: { readonly kind: FsRecentKind; readonly device?: DeviceId; readonly deviceName?: string };
+  /** `trail` is the folder names from the device's root down to this one. */
+  Folder: { readonly path: string; readonly source: FsSource; readonly trail: ReadonlyArray<string> };
+  /** Everything of one kind on a device, newest first. "images" is screenshots and photos together. */
+  Recent: { readonly kind: FsRecentKind | "images"; readonly source: FsSource };
+  Transfers: undefined;
   Terminal: undefined;
 };
 
@@ -45,6 +48,11 @@ export const openClipboard = (): void => {
 
 export const openFiles = (): void => {
   if (navigationRef.isReady()) navigationRef.navigate("Control", { screen: "Files", initial: false });
+};
+
+/** Received and sent files, e.g. from a "file landed" toast. */
+export const openTransfers = (): void => {
+  if (navigationRef.isReady()) navigationRef.navigate("Control", { screen: "Transfers", initial: false });
 };
 
 /** Opens Settings > Updates with Settings underneath, so Back works. */

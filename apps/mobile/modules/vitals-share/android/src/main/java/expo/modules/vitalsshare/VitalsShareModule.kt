@@ -1,6 +1,8 @@
 package expo.modules.vitalsshare
 
 import android.content.Intent
+import android.os.Build
+import android.os.Environment
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
@@ -38,6 +40,8 @@ class VitalsShareModule : Module() {
     }
 
     AsyncFunction("thumbnail") { path: String, px: Int -> Recent.thumbnail(path, px) }
+
+    Function("fullStorage") { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else null }
 
     AsyncFunction("toBack") { appContext.currentActivity?.moveTaskToBack(true) ?: false }.runOnQueue(Queues.MAIN)
   }

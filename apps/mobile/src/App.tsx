@@ -36,6 +36,7 @@ import { FilesScreen } from "./screens/FilesScreen.tsx";
 import { FolderScreen } from "./screens/FolderScreen.tsx";
 import { RecentScreen } from "./screens/RecentScreen.tsx";
 import { TerminalScreen } from "./screens/TerminalScreen.tsx";
+import { TransfersScreen } from "./screens/TransfersScreen.tsx";
 import { HomeScreen } from "./screens/HomeScreen.tsx";
 import { ConnectionScreen, DiagnosticsRoute, HelpScreen, NotificationsScreen, PhoneScreen, SettingsScreen, UpdatesScreen } from "./screens/SettingsScreens.tsx";
 import { TransferStrip } from "./Transfers.tsx";
@@ -49,7 +50,7 @@ const theme: Theme = {
 const scheme = Constants.expoConfig?.scheme;
 const prefix = typeof scheme === "string" ? `${scheme}://` : null;
 
-/** Sharing into Vitals opens `<scheme>://expo-sharing`; that lands on Control, and the share inbox opens Clipboard or Files with the Send sheet. */
+/** Sharing into Vitals opens `<scheme>://expo-sharing`; that lands on Control, and the share inbox opens Clipboard or Files with a send sheet. */
 const shareLanding = (url: string | null): string | null => (url !== null && prefix !== null && url.startsWith(`${prefix}expo-sharing`) ? `${prefix}control` : url);
 
 const linking: LinkingOptions<TabParams> = {
@@ -65,7 +66,7 @@ const linking: LinkingOptions<TabParams> = {
     screens: {
       HomeTab: { path: "home", screens: { Home: "", Channel: ":channel" } },
       Apps: "apps",
-      Control: { path: "control", screens: { Control: "", Clipboard: "clipboard", Files: "files" } },
+      Control: { path: "control", screens: { Control: "", Clipboard: "clipboard", Files: "files", Transfers: "transfers" } },
       Alerts: "alerts",
       SettingsTab: { path: "settings", screens: { Settings: "", Connection: "connection", Notifications: "notifications", Updates: "updates", Phone: "phone", Help: "help", ...(isStoreBuild ? {} : { Diagnostics: "diagnostics" }) } },
     },
@@ -97,6 +98,7 @@ function ControlNavigator() {
       <ControlStack.Screen name="Files" component={FilesScreen} />
       <ControlStack.Screen name="Folder" component={FolderScreen} />
       <ControlStack.Screen name="Recent" component={RecentScreen} />
+      <ControlStack.Screen name="Transfers" component={TransfersScreen} />
       <ControlStack.Screen name="Terminal" component={TerminalScreen} />
     </ControlStack.Navigator>
   );

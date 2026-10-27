@@ -25,7 +25,7 @@ import { AppState, Linking, Platform, StyleSheet, View } from "react-native";
 
 import { LINK_COLOR, useMac } from "../lib/remote.ts";
 import { sharesInBackground } from "../../modules/vitals-share/index.ts";
-import { askFullStorage, hasFullStorage, phoneRoots, pickSharedFolder, removeSharedFolder, setShareFiles, setSharePhotos, sharedFolders, shareFiles, sharePhotos } from "../lib/share.ts";
+import { askFullStorage, hasFullStorage, phoneRoots, pickSharedFolder, removeSharedFolder, setSharePhotos, shareThisPhone, sharedFolders, shareFiles, sharePhotos } from "../lib/share.ts";
 import { checkNightly, installedBuild, nightlyState, nightlySupported } from "../lib/nightly.ts";
 import { checkForUpdate, restartIntoUpdate, type UpdateState, updateState } from "../lib/updates.ts";
 import type { SettingsStackParams } from "../navigation.ts";
@@ -282,7 +282,7 @@ function ShareSettings() {
     <>
       <Label>What your Mac can see here</Label>
       <Group>
-        <Row first label="Let your Mac and other phones browse" control={<Toggle value={sharing} label="Let your Mac and other phones browse" onChange={setShareFiles} />} />
+        <Row first label="Let your Mac and other phones browse" control={<Toggle value={sharing} label="Let your Mac and other phones browse" onChange={shareThisPhone} />} />
         <Row label="All files on this phone" value={full ? "Allowed" : "Off"} valueColor={full ? color.green : color.dim} onPress={() => void askFullStorage()} />
       </Group>
       <Note>{sharing ? `Shared ${sharesInBackground ? "until you turn this off, even with Vitals in the background" : "while Vitals is open"}: ${roots.map((root) => root.label).join(", ")}.` : "Nothing on this phone is shared."}</Note>
@@ -309,7 +309,7 @@ function ShareIphone({ sharing }: { readonly sharing: boolean }) {
     <>
       <Label>Share this iPhone</Label>
       <Group>
-        <Row first label="Let your Mac and other phones browse" control={<Toggle value={sharing} label="Let your Mac and other phones browse" onChange={setShareFiles} />} />
+        <Row first label="Let your Mac and other phones browse" control={<Toggle value={sharing} label="Let your Mac and other phones browse" onChange={shareThisPhone} />} />
         <Row label="Photos and screenshots" control={<Toggle value={photos} label="Share photos and screenshots" onChange={showPhotos} />} />
         <Row label="Downloads folder" value={downloads?.name ?? "Pick"} onPress={() => pick("downloads")} />
         <Row label="Documents folder" value={documents?.name ?? "Pick"} onPress={() => pick("documents")} />

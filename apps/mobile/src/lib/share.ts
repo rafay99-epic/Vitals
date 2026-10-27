@@ -6,7 +6,8 @@ import type { OutgoingFile } from "@vitals/app/state/drops.ts";
 import { FS_LIMITS, type FsEntry, type FsListResult, type FsRecentKind, type FsRecentResult, type FsRoot, type FsServeRequest, type FsServeResult, type FsSort, type FsThumb } from "@vitals/contracts";
 import { Directory, File, Paths } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
-import { Linking, Platform } from "react-native";
+import { useEffect, useState } from "react";
+import { AppState, Linking, Platform } from "react-native";
 
 import { androidShare, iosShare, type NativeEntry, type NativePage, type PhotosAccess, type SharedFolder } from "../../modules/vitals-share/index.ts";
 
@@ -88,8 +89,11 @@ export const removeSharedFolder = async (id: string): Promise<void> => {
 const uriOf = (path: string): string => `file://${path}`;
 const pathOf = (uri: string): string => decodeURIComponent(uri.replace(/^file:\/\//, "")).replace(/\/$/, "");
 
+/** All files access on Android. Scoped storage lists the top folders even without it, so Android is asked when it can say. */
 export const hasFullStorage = (): boolean => {
   if (Platform.OS !== "android") return false;
+  const granted = androidShare?.fullStorage?.() ?? null;
+  if (granted !== null) return granted;
   try {
     new Directory(uriOf(STORAGE)).list();
     return true;
@@ -100,10 +104,29 @@ export const hasFullStorage = (): boolean => {
 
 export const askFullStorage = (): Promise<void> => Linking.sendIntent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION").catch(() => Linking.openSettings());
 
+/** Android without All files access, where only Downloads › Vitals is shared. Never on iPhone. */
+const limitedStorage = (): boolean => Platform.OS === "android" && !hasFullStorage();
+
+/** `limitedStorage`, checked again each time Vitals comes back from Android's settings. */
+export const useLimitedStorage = (): boolean => {
+  const [limited, setLimited] = useState(limitedStorage);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => state === "active" && setLimited(limitedStorage()));
+    return () => subscription.remove();
+  }, []);
+  return limited;
+};
+
+/** The sharing switch. On Android, turning it on also asks for All files access, without which only Downloads › Vitals is shared. */
+export const shareThisPhone = (on: boolean): void => {
+  setShareFiles(on);
+  if (on && limitedStorage()) void askFullStorage();
+};
+
 const FOLDER_PLACE: Readonly<Record<SharedFolder["role"], FsRoot["place"]>> = { downloads: "downloads", documents: "documents", other: "folder" };
 
 /** What this phone shares. On iPhone that's Files › Vitals, plus Photos and picked folders when given. */
-export const phoneRoots = (photos = sharePhotos.get(), folders = sharedFolders.get()): ReadonlyArray<FsRoot> => {
+export const phoneRoots = (photos = sharePhotos.get(), folders = sharedFolders.get(), full = hasFullStorage()): ReadonlyArray<FsRoot> => {
   if (Platform.OS === "ios") {
     return [
       { label: "Files › Vitals", path: pathOf(Paths.document.uri), place: "folder" },
@@ -111,7 +134,7 @@ export const phoneRoots = (photos = sharePhotos.get(), folders = sharedFolders.g
       ...folders.map((folder): FsRoot => ({ label: folder.name, path: folder.path, place: FOLDER_PLACE[folder.role] })),
     ];
   }
-  if (!hasFullStorage()) return [{ label: "Downloads › Vitals", path: `${STORAGE}/Download/Vitals`, place: "downloads" }];
+  if (!full) return [{ label: "Downloads › Vitals", path: `${STORAGE}/Download/Vitals`, place: "downloads" }];
   return [
     { label: "Phone storage", path: STORAGE, place: "storage" },
     { label: "Downloads", path: `${STORAGE}/Download`, place: "downloads" },

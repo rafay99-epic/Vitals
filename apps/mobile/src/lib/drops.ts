@@ -1,11 +1,12 @@
 import type { Remote } from "@vitals/app/state/remote.ts";
-import type { DropLive, OutgoingFile, SavedFile } from "@vitals/app/state/drops.ts";
+import type { DropLive, DropTarget, OutgoingFile, SavedFile } from "@vitals/app/state/drops.ts";
+import type { Destination, FsSource } from "@vitals/app/state/files.ts";
+import type { DropId, FsDevice } from "@vitals/contracts";
 import { formatAmount } from "@vitals/app/features/clips/format.ts";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { canInstallApps, dropSupported, installApk, openFile } from "@vitals/tailnet/drop";
 import { Directory, File } from "expo-file-system";
-import * as Clipboard from "expo-clipboard";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
@@ -63,9 +64,36 @@ export const BLOCK_NOTE: Readonly<Record<Exclude<FilesBlock, null>, string>> = {
   off: "Files are off for this phone. Turn them on in Vitals on the Mac.",
 };
 
-export const sendDrop = async (remote: Remote, batch: Batch, dest?: string): Promise<boolean> => {
+export const sendDrop = async (remote: Remote, batch: Batch, target: DropTarget = {}): Promise<boolean> => {
   const files = batch.items.filter(isFile).map(outgoingOf);
-  return (await remote.drops.send(files, dest === undefined ? {} : { dest })) !== null;
+  return (await remote.drops.send(files, target)) !== null;
+};
+
+const relayed = new Map<DropId, string>();
+
+/** Sends picked files through the Mac on to another phone. */
+export const sendToPhone = async (remote: Remote, batch: Batch, phone: FsDevice): Promise<boolean> => {
+  const drop = await remote.drops.send(batch.items.filter(isFile).map(outgoingOf), { relay: phone.deviceId });
+  if (drop !== null) relayed.set(drop.id, phone.name);
+  return drop !== null;
+};
+
+/** The phone a sent drop goes on to after the Mac, or null when it stays on the Mac. */
+export const relayedTo = (id: DropId): string | null => relayed.get(id) ?? null;
+
+/** Copies files from `from` to `to` and says so. The originals stay where they are. */
+export const transferFiles = async (remote: Remote, from: FsSource, paths: ReadonlyArray<string>, what: string, to: Destination): Promise<void> => {
+  if (to._tag === "Here") {
+    if (from.device === null) {
+      if ((await remote.drops.pull(paths)) !== null) toast.show(`Getting ${what} from your Mac`);
+      return;
+    }
+    const outcome = await remote.files.pull(from.device, paths);
+    toast.show(outcome.ok ? `${from.name} is sending ${what} here` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
+    return;
+  }
+  const outcome = await remote.files.transfer(paths, to._tag === "Phone" ? to.device.deviceId : null, from.device ?? undefined);
+  toast.show(outcome.ok ? `Sending ${what} to ${to._tag === "Mac" ? "your Mac" : to.device.name}` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
 };
 
 const walk = (folder: Directory, prefix: string): ReadonlyArray<PickedFile> =>
@@ -122,30 +150,4 @@ export const saveSavedToPhotos = async (file: SavedFile): Promise<void> => {
     () => false,
   );
   toast.show(saved ? "Saved to Photos" : "Photos didn't take that file", saved ? {} : { tone: "bad" });
-};
-
-/** Gets Mac files into this phone's Downloads. `then` gets the saved copies once they land. */
-export const getFromMac = async (remote: Remote, paths: ReadonlyArray<string>, then?: (files: ReadonlyArray<SavedFile>) => void): Promise<boolean> => {
-  const drop = await remote.drops.pull(paths);
-  if (drop === null) return false;
-  if (then === undefined) return true;
-  const stop = remote.drops.onFinish((finish) => {
-    if (finish.drop.id !== drop.id) return;
-    stop();
-    if (finish._tag === "Received") then(finish.files);
-  });
-  return true;
-};
-
-/** Puts a saved picture on this phone's clipboard, ready to paste in any app. */
-export const copySavedImage = async (file: SavedFile): Promise<void> => {
-  if (file.uri === null) return toast.show("Vitals can't find that file anymore", { tone: "bad" });
-  const copied = await new File(file.uri)
-    .base64()
-    .then((data) => Clipboard.setImageAsync(data))
-    .then(
-      () => true,
-      () => false,
-    );
-  toast.show(copied ? "Image copied. Paste it anywhere." : "Vitals couldn't copy that image", copied ? {} : { tone: "bad" });
 };
