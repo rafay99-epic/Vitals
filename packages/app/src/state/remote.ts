@@ -22,6 +22,7 @@ import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { MacClips } from "./clips.ts";
 import { dropEngine } from "./dropEngine";
 import { dropEndpoints, MacDrops } from "./drops.ts";
+import { MacFiles } from "./files.ts";
 import { diagnostics, instrumentConnection } from "./diagnostics.ts";
 import { MacEvents } from "./events.ts";
 import { LiveData } from "./live.ts";
@@ -81,6 +82,7 @@ export class Remote {
   readonly events: MacEvents;
   readonly clips: MacClips;
   readonly drops: MacDrops;
+  readonly files: MacFiles;
   readonly toast = new Store<Toast | null>(null);
   readonly link: Store<Credentials>;
   private disposed = false;
@@ -130,6 +132,7 @@ export class Remote {
     this.events = new MacEvents(this.connection);
     this.clips = new MacClips(this.connection, (message) => this.show(message, "bad"));
     this.drops = new MacDrops(this.connection, dropEngine, openShelf(), credentials.deviceId, () => dropEndpointsOf(this.link.get()), (message) => this.show(message, "bad"));
+    this.files = new MacFiles(this.connection);
     this.flushTimer = setInterval(() => void this.flush(), FLUSH_MS);
     this.stopTunnelWatch = tunnel.subscribe(() => {
       if (tunnel.get()._tag === "Ready") this.connection.wake("network");
@@ -225,6 +228,7 @@ export class Remote {
     this.events.dispose();
     this.clips.dispose();
     this.drops.dispose();
+    this.files.dispose();
     this.connection.dispose();
   }
 }

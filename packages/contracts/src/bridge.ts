@@ -11,6 +11,7 @@ import { BRIDGE_VERSION, KeepAwakeState, MacInfo, SystemEvent } from "./system.t
 import { ActivityLevel } from "./activity.ts";
 import { ClipDestination, ClipFileName, ClipId, ClipPlacement, ClipPolicy, ClipStats, MacClip } from "./clips.ts";
 import { Drop, DropId, DropPeer, DropPolicy, MacDropFile, ReceivedDropFile } from "./drop.ts";
+import { FsAccess, FsPath, FsThumb } from "./fs.ts";
 import { Device } from "./auth.ts";
 
 const RequestId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
@@ -29,6 +30,9 @@ export const Query = Schema.Union([
     folder: Schema.NullOr(Schema.String),
     deviceName: Schema.String,
   }),
+  Schema.TaggedStruct("FsThumbs", { paths: Schema.Array(FsPath), pixels: PositiveInt }),
+  Schema.TaggedStruct("FsTrash", { paths: Schema.Array(FsPath), deviceName: Schema.String }),
+  Schema.TaggedStruct("FsOpen", { path: FsPath }),
 ]);
 export type Query = typeof Query.Type;
 
@@ -39,6 +43,9 @@ export const QueryResult = Schema.Union([
   Schema.TaggedStruct("SetGuard", { settings: GuardSettings }),
   Schema.TaggedStruct("ClipMaterialize", { stored: ClipFileName, bytes: NonNegativeInt, files: Schema.NullOr(NonNegativeInt) }),
   Schema.TaggedStruct("ClipPut", { placed: NonNegativeInt }),
+  Schema.TaggedStruct("FsThumbs", { thumbs: Schema.Array(FsThumb) }),
+  Schema.TaggedStruct("FsTrash", { trashed: NonNegativeInt }),
+  Schema.TaggedStruct("FsOpen", {}),
 ]);
 export type QueryResult = typeof QueryResult.Type;
 
@@ -107,7 +114,7 @@ export const ToApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("clipStats"), stats: ClipStats }),
   Schema.Struct({ t: Schema.Literal("drop"), drop: Drop }),
   Schema.Struct({ t: Schema.Literal("dropRemoved"), id: DropId }),
-  Schema.Struct({ t: Schema.Literal("dropReceived"), id: DropId, from: DropPeer, files: Schema.Array(ReceivedDropFile) }),
+  Schema.Struct({ t: Schema.Literal("dropReceived"), id: DropId, from: DropPeer, files: Schema.Array(ReceivedDropFile), dest: Schema.optionalKey(FsPath) }),
 ]);
 export type ToApp = typeof ToApp.Type;
 
@@ -148,6 +155,7 @@ export const FromApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("dropCancel"), id: DropId }),
   Schema.Struct({ t: Schema.Literal("dropPause"), id: DropId, paused: Schema.Boolean }),
   Schema.Struct({ t: Schema.Literal("dropPolicy"), policy: DropPolicy }),
+  Schema.Struct({ t: Schema.Literal("fsPolicy"), access: FsAccess }),
 ]);
 export type FromApp = typeof FromApp.Type;
 

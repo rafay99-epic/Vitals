@@ -46,5 +46,7 @@
       "links": [{ "name": "en0", "label": "Wi-Fi", "kind": "wifi", "inBytesPerSec": 2100000, "outBytesPerSec": 340000, "active": true }],
       "wifi": { "ssid": "Home-5G", "rssi": -54, "noise": -92, "txRateMbps": 1201, "channel": 149, "band": "5 GHz" } },
     "disk": { "readBytesPerSec": 84000000, "writeBytesPerSec": 12000000, "freeBytes": 412000000000, "totalBytes": 994000000000, "volume": "Macintosh HD",
-      "health": { "model": "APPLE SSD AP1024Z", "wearPercent": 3, "readBytes": 61200000000000, "writtenBytes": 38400000000000, "powerOnHours": 2140, "unsafeShutdowns": 6, "sparePercent": 100, "celsius": 41, "warning": false } } } }
+      "health": { "model": "APPLE SSD AP1024Z", "wearPercent": 3, "readBytes": 61200000000000, "writtenBytes": 38400000000000, "powerOnHours": 2140, "unsafeShutdowns": 6, "sparePercent": 100, "celsius": 41, "warning": false } } } },
+  { "t": "fsPolicy", "access": "everything" },
+  { "t": "result", "id": "q-fs-1", "ok": { "_tag": "FsThumbs", "thumbs": [{ "path": "/Users/abdul/Downloads/IMG_0042.HEIC", "jpeg": "/9j/4AAQ" }, { "path": "/Users/abdul/Downloads/notes.bin", "jpeg": null }] }, "error": null }
 ]

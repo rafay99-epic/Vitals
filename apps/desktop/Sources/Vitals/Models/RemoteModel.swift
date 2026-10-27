@@ -44,6 +44,7 @@ final class RemoteModel {
 
     var isEnabled: Bool { settings.remoteEnabled }
     var clipHistoryEnabled: Bool { settings.clipHistoryEnabled }
+    var browseEverything: Bool { settings.browseEverything }
     var clipKeepDays: Int { settings.clipKeepDays }
 
     @ObservationIgnored private let vitals: VitalsModel
@@ -257,6 +258,7 @@ final class RemoteModel {
             send(.hello(mac: macInfo(), keepAwake: wireKeepAwake(keepAwake)))
             for alert in guardEngine.active { send(.event(.alertRaised(at: alert.raisedAt, alert: alert))) }
             sendClipPolicy()
+            sendFsPolicy()
             share.connected()
             updateClipWatcher()
             Task { await refreshDevices() }
@@ -287,8 +289,8 @@ final class RemoteModel {
             share.update(drop)
         case let .dropRemoved(id):
             share.remove(id)
-        case let .dropReceived(id, from, files):
-            share.receivedFiles(id: id, from: from, files: files)
+        case let .dropReceived(id, from, files, dest):
+            share.receivedFiles(id: id, from: from, files: files, dest: dest)
         }
     }
 
@@ -329,10 +331,32 @@ final class RemoteModel {
             } catch {
                 send(.result(id: id, ok: nil, error: Self.clipMessage(error)))
             }
+        case let .fsThumbs(paths, pixels):
+            let thumbs = await FileThumbs.make(paths: paths, pixels: pixels)
+            send(.result(id: id, ok: .fsThumbs(thumbs), error: nil))
+        case let .fsTrash(paths, deviceName):
+            let trashed = await Task.detached(priority: .userInitiated) { FileThumbs.trash(paths) }.value
+            send(.result(id: id, ok: .fsTrash(trashed: trashed), error: nil))
+            if trashed > 0 {
+                share.note("\(deviceName) moved \(trashed == 1 ? "1 item" : "\(trashed) items") to the Trash", "Put it back from the Trash in Finder.")
+            }
+        case let .fsOpen(path):
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            send(.result(id: id, ok: .fsOpen, error: nil))
         }
     }
 
     // MARK: Clipboard history and drop
+
+    func setBrowseEverything(_ enabled: Bool) {
+        guard settings.browseEverything != enabled else { return }
+        settings.browseEverything = enabled
+        sendFsPolicy()
+    }
+
+    private func sendFsPolicy() {
+        send(.fsPolicy(access: settings.browseEverything ? "everything" : "folders"))
+    }
 
     func setClipHistory(enabled: Bool) {
         guard settings.clipHistoryEnabled != enabled else { return }

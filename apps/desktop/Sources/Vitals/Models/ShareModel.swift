@@ -324,9 +324,9 @@ final class ShareModel {
 
     // MARK: Receiving
 
-    func receivedFiles(id: String, from: DropPeer, files: [ReceivedDropFile]) {
+    func receivedFiles(id: String, from: DropPeer, files: [ReceivedDropFile], dest: String?) {
         let staging = RemoteModel.dataDirectory.appendingPathComponent("drop", isDirectory: true)
-        let folder = folder
+        let folder = dest.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? folder
         Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) {
                 Result { try DropFiles.place(files, staging: staging, into: folder) }
@@ -517,7 +517,7 @@ final class ShareModel {
         clipSent.flatMap { now.timeIntervalSince($0.at) < 120 ? $0 : nil }
     }
 
-    private func note(_ title: String, _ body: String, id: String = "vitals.share.\(UUID().uuidString)", category: String? = nil) {
+    func note(_ title: String, _ body: String, id: String = "vitals.share.\(UUID().uuidString)", category: String? = nil) {
         NotificationManager.shared.send(title: title, body: body, id: id, categoryId: category, quiet: panelOpen)
     }
 }

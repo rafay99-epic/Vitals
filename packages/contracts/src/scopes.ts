@@ -9,6 +9,9 @@ export const commandScope = (command: Command): Scope => (isDestructive(command)
 const hasCommand = (payload: unknown): payload is { readonly command: Command } =>
   typeof payload === "object" && payload !== null && "command" in payload;
 
+const hasDestination = (payload: unknown): boolean =>
+  typeof payload === "object" && payload !== null && "dest" in payload && typeof payload.dest === "string";
+
 export const RPC_SCOPES = {
   "server.hello": "read",
   "stats.live": "read",
@@ -31,12 +34,21 @@ export const RPC_SCOPES = {
   "clips.send.finish": "operate",
   "clips.put": "operate",
   "drop.watch": "files",
-  "drop.offer": "files",
+  "drop.offer": (payload) => (hasDestination(payload) ? "fsWrite" : "files"),
   "drop.accept": "files",
   "drop.decline": "files",
   "drop.cancel": "files",
   "drop.ticket": "files",
   "drop.received": "files",
+  "fs.roots": "fsRead",
+  "fs.list": "fsRead",
+  "fs.search": "fsRead",
+  "fs.thumbs": "fsRead",
+  "fs.get": "fsRead",
+  "fs.open": "operate",
+  "fs.rename": "fsWrite",
+  "fs.folder": "fsWrite",
+  "fs.trash": "fsWrite",
   "activity.ingest": "read",
   "device.lanKey": "read",
   "device.forget": "read",

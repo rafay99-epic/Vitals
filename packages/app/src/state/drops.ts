@@ -242,11 +242,10 @@ export class MacDrops {
     this.publish(true);
   }
 
-  async send(files: ReadonlyArray<OutgoingFile>): Promise<Drop | null> {
+  async send(files: ReadonlyArray<OutgoingFile>, dest?: string): Promise<Drop | null> {
     if (!this.engine.supported || files.length === 0) return null;
-    const result = await this.connection.call((client) =>
-      client["drop.offer"]({ files: files.map((file) => ({ name: file.name, path: file.path, size: file.size, mime: file.mime, sha256: null })) }),
-    );
+    const offers = files.map((file) => ({ name: file.name, path: file.path, size: file.size, mime: file.mime, sha256: null }));
+    const result = await this.connection.call((client) => client["drop.offer"](dest === undefined ? { files: offers } : { files: offers, dest }));
     if (!result.ok) {
       this.report(result.error.message);
       return null;
@@ -255,6 +254,21 @@ export class MacDrops {
     this.tickets.set(drop.id, ticket);
     this.uploads = { ...this.uploads, [drop.id]: drop.files.flatMap((file, index) => (files[index] === undefined ? [] : [{ fileId: file.id, uri: files[index].uri }])) };
     this.save("uploads", this.uploads);
+    this.upsert(drop);
+    this.reconcile(drop);
+    this.publish(true);
+    return drop;
+  }
+
+  async pull(paths: ReadonlyArray<string>): Promise<Drop | null> {
+    if (!this.engine.supported || paths.length === 0) return null;
+    const result = await this.connection.call((client) => client["fs.get"]({ paths }));
+    if (!result.ok) {
+      this.report(result.error.message);
+      return null;
+    }
+    const { drop, ticket } = result.value;
+    this.tickets.set(drop.id, ticket);
     this.upsert(drop);
     this.reconcile(drop);
     this.publish(true);

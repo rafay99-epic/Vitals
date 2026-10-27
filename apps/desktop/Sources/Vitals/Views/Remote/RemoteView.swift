@@ -296,6 +296,8 @@ private struct DeviceRow: View {
                     scopeToggle("destructive", title: "Shut down, kill, force quit")
                     scopeToggle("clipboard", title: "Read clipboard")
                     scopeToggle("files", title: "Files")
+                    scopeToggle("fsRead", title: "Browse files")
+                    scopeToggle("fsWrite", title: "Change files")
                 }
                 .font(.callout)
             }

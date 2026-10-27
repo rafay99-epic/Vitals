@@ -13,12 +13,21 @@ export interface Access {
   readonly destructive: boolean;
   readonly clipboard: boolean;
   readonly files: boolean;
+  readonly browse: boolean;
+  readonly change: boolean;
 }
 
 /** What this phone may do on the Mac, as granted in Vitals on the Mac. */
 export const useAccess = (): Access => {
   const scopes = useScopes();
-  return { operate: scopes.includes("operate"), destructive: scopes.includes("destructive"), clipboard: scopes.includes("clipboard"), files: scopes.includes("files") };
+  return {
+    operate: scopes.includes("operate"),
+    destructive: scopes.includes("destructive"),
+    clipboard: scopes.includes("clipboard"),
+    files: scopes.includes("files"),
+    browse: scopes.includes("fsRead"),
+    change: scopes.includes("fsWrite"),
+  };
 };
 
 /** The paired Mac's hardware info, once connected. */

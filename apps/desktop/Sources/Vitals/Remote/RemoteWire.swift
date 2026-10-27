@@ -371,10 +371,18 @@ enum QueryResult: Equatable, Sendable {
     case setGuard(GuardSettings)
     case clipMaterialize(stored: String, bytes: Int, files: Int?)
     case clipPut(placed: Int)
+    case fsThumbs([WireThumb])
+    case fsTrash(trashed: Int)
+    case fsOpen
+}
+
+struct WireThumb: Codable, Equatable, Sendable {
+    let path: String
+    @Nullable var jpeg: String?
 }
 
 extension QueryResult: Encodable {
-    private enum Keys: String, CodingKey { case _tag, result, series, text, settings, stored, bytes, files, placed }
+    private enum Keys: String, CodingKey { case _tag, result, series, text, settings, stored, bytes, files, placed, thumbs, trashed }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -400,6 +408,14 @@ extension QueryResult: Encodable {
         case let .clipPut(placed):
             try c.encode("ClipPut", forKey: ._tag)
             try c.encode(placed, forKey: .placed)
+        case let .fsThumbs(thumbs):
+            try c.encode("FsThumbs", forKey: ._tag)
+            try c.encode(thumbs, forKey: .thumbs)
+        case let .fsTrash(trashed):
+            try c.encode("FsTrash", forKey: ._tag)
+            try c.encode(trashed, forKey: .trashed)
+        case .fsOpen:
+            try c.encode("FsOpen", forKey: ._tag)
         }
     }
 }
@@ -483,10 +499,11 @@ enum FromApp: Equatable, Sendable {
     case dropCancel(id: String)
     case dropPause(id: String, paused: Bool)
     case dropPolicy(DropPolicy)
+    case fsPolicy(access: String)
 }
 
 extension FromApp: Encodable {
-    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind, clip, policy, to, files, accept, paused }
+    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind, clip, policy, to, files, accept, paused, access }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -551,6 +568,9 @@ extension FromApp: Encodable {
         case let .dropPolicy(policy):
             try c.encode("dropPolicy", forKey: .t)
             try c.encode(policy, forKey: .policy)
+        case let .fsPolicy(access):
+            try c.encode("fsPolicy", forKey: .t)
+            try c.encode(access, forKey: .access)
         }
     }
 }

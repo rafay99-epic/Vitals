@@ -178,10 +178,13 @@ enum BridgeQuery: Equatable, Sendable {
     case clipMaterialize(id: String, kind: ClipKind, origin: String)
     /// Put phone clips on the Mac clipboard or into Downloads.
     case clipPut(items: [ClipPlacement], to: ClipDestination, folder: String?, deviceName: String)
+    case fsThumbs(paths: [String], pixels: Int)
+    case fsTrash(paths: [String], deviceName: String)
+    case fsOpen(path: String)
 }
 
 extension BridgeQuery: Decodable {
-    private enum Keys: String, CodingKey { case _tag, input, settings, id, kind, origin, items, to, folder, deviceName }
+    private enum Keys: String, CodingKey { case _tag, input, settings, id, kind, origin, items, to, folder, deviceName, paths, pixels, path }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -203,6 +206,12 @@ extension BridgeQuery: Decodable {
                 folder: try c.decodeIfPresent(String.self, forKey: .folder),
                 deviceName: try c.decode(String.self, forKey: .deviceName)
             )
+        case "FsThumbs":
+            self = .fsThumbs(paths: try c.decode([String].self, forKey: .paths), pixels: try c.decode(Int.self, forKey: .pixels))
+        case "FsTrash":
+            self = .fsTrash(paths: try c.decode([String].self, forKey: .paths), deviceName: try c.decode(String.self, forKey: .deviceName))
+        case "FsOpen":
+            self = .fsOpen(path: try c.decode(String.self, forKey: .path))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: ._tag, in: c, debugDescription: "unknown query \(other)")
         }
@@ -364,7 +373,7 @@ enum ToApp: Equatable, Sendable {
     case clipStats(ClipStats)
     case drop(Drop)
     case dropRemoved(id: String)
-    case dropReceived(id: String, from: DropPeer, files: [ReceivedDropFile])
+    case dropReceived(id: String, from: DropPeer, files: [ReceivedDropFile], dest: String?)
 }
 
 /// What the gateway's clip history holds right now, for Settings.
@@ -375,7 +384,7 @@ struct ClipStats: Codable, Equatable, Sendable {
 }
 
 extension ToApp: Decodable {
-    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt, stats, drop, from, files }
+    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt, stats, drop, from, files, dest }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -407,7 +416,8 @@ extension ToApp: Decodable {
             self = .dropReceived(
                 id: try c.decode(String.self, forKey: .id),
                 from: try c.decode(DropPeer.self, forKey: .from),
-                files: try c.decode([ReceivedDropFile].self, forKey: .files)
+                files: try c.decode([ReceivedDropFile].self, forKey: .files),
+                dest: try c.decodeIfPresent(String.self, forKey: .dest)
             )
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .t, in: c, debugDescription: "unknown message \(other)")

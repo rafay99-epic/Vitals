@@ -10,6 +10,7 @@ export type ControlStackParams = {
   Control: undefined;
   Clipboard: undefined;
   Files: undefined;
+  Folder: { readonly path: string; readonly title: string };
 };
 
 export type SettingsStackParams = {

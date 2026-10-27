@@ -53,6 +53,8 @@ const CALM = process.env["FAKE_MAC_SCENE"] === "calm";
 const decodeToApp = Schema.decodeUnknownSync(Schema.fromJsonString(ToAppSchema));
 const queue = Effect.runSync(Queue.unbounded<string>());
 const emit = (message: object): void => void Effect.runSync(Queue.offer(queue, JSON.stringify(message)));
+const ALL_SCOPES = ["read", "operate", "destructive", "clipboard", "files", "fsRead", "fsWrite"] as const;
+
 const wobble = (base: number, spread: number): number => Math.max(0, base + (Math.random() - 0.5) * spread);
 
 const networkSample = (down: number, up: number) => ({
@@ -444,6 +446,19 @@ const write = (line: string): void => {
         case "ClipPut":
           console.log(`ClipPut from ${message.q.deviceName}: ${String(message.q.items.length)} to ${message.q.to}`, message.q.items.map((item) => item.stored ?? item.text?.slice(0, 40)));
           return reply({ _tag: "ClipPut", placed: message.q.items.length });
+        case "FsThumbs": {
+          const paths = message.q.paths;
+          void Promise.all(paths.map(async (path) => ({ path, jpeg: /\.jpe?g$/i.test(path) ? Buffer.from(await Bun.file(path).arrayBuffer()).toString("base64") : null }))).then((thumbs) =>
+            reply({ _tag: "FsThumbs", thumbs }),
+          );
+          return;
+        }
+        case "FsTrash":
+          console.log(`FsTrash from ${message.q.deviceName}: ${message.q.paths.join(", ")} (fake, nothing moved)`);
+          return reply({ _tag: "FsTrash", trashed: message.q.paths.length });
+        case "FsOpen":
+          console.log(`FsOpen ${message.q.path} (fake)`);
+          return reply({ _tag: "FsOpen" });
         default:
           return emit({ t: "result", id: message.id, ok: null, error: "not in fake" });
       }
@@ -459,7 +474,7 @@ const write = (line: string): void => {
       if (message.ok?._tag === "ListDevices") {
         phones = message.ok.devices.filter((device) => device.platform !== "web" && device.revokedAt === null);
         for (const device of message.ok.devices) {
-          if (device.scopes.length < 5) emit({ t: "admin", id: `scopes-${device.id}`, op: { _tag: "SetScopes", deviceId: device.id, scopes: ["read", "operate", "destructive", "clipboard", "files"] } });
+          if (device.scopes.length < ALL_SCOPES.length) emit({ t: "admin", id: `scopes-${device.id}`, op: { _tag: "SetScopes", deviceId: device.id, scopes: [...ALL_SCOPES] } });
         }
       }
       if (message.ok?._tag === "CreatePairing") {
@@ -580,6 +595,7 @@ const config = {
   manageServe: false,
   ownerLogin: OWNER,
   lanPort: LAN_PORT,
+  ...(process.env["FAKE_MAC_HOME"] === undefined ? {} : { homeDir: process.env["FAKE_MAC_HOME"] }),
 };
 
 const transport = Layer.succeed(BridgeTransportService, { lines: Stream.fromQueue(queue), write, onClose: () => {} });

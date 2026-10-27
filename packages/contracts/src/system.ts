@@ -67,5 +67,6 @@ export const Hello = Schema.Struct({
   /** Present and true when this Mac's gateway serves the `clips.*` RPCs. */
   clips: Schema.optional(Schema.Boolean),
   drop: Schema.optional(Schema.Boolean),
+  fs: Schema.optional(Schema.Boolean),
 });
 export type Hello = typeof Hello.Type;

@@ -161,7 +161,7 @@ export class FakeApp {
 
 let nextPort = 48_200 + Math.floor(Math.random() * 500);
 
-export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-gateway-"))) => {
+export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-gateway-")), homeDir?: string) => {
   const port = nextPort;
   nextPort += 1;
   const config: GatewayConfigShape = {
@@ -174,6 +174,7 @@ export const startGateway = async (dataDir = mkdtempSync(join(tmpdir(), "vitals-
     manageServe: false,
     ownerLogin: OWNER,
     lanPort: port + 2_000,
+    ...(homeDir === undefined ? {} : { homeDir }),
   };
   const app = new FakeApp();
   const transport = Layer.succeed(BridgeTransportService, { lines: app.lines, write: app.write, onClose: () => {} });

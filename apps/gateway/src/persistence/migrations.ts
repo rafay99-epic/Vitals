@@ -130,6 +130,16 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
       CREATE INDEX drop_tickets_drop ON drop_tickets(drop_id, expires_at);
     `,
   },
+  {
+    id: 7,
+    sql: `
+      ALTER TABLE drops ADD COLUMN dest TEXT;
+      UPDATE devices SET scopes = json_insert(scopes, '$[#]', 'fsRead')
+      WHERE platform != 'web'
+        AND EXISTS (SELECT 1 FROM json_each(devices.scopes) WHERE value = 'files')
+        AND NOT EXISTS (SELECT 1 FROM json_each(devices.scopes) WHERE value = 'fsRead');
+    `,
+  },
 ];
 
 export const ACTIVITY_MIGRATIONS: ReadonlyArray<Migration> = [

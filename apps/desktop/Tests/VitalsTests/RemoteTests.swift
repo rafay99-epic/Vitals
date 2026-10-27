@@ -52,7 +52,9 @@ struct BridgeFixtureTests {
     }
 
     @Test func fullSampleMatchesTheContractFixture() throws {
-        let expected = try #require(try fixture("from-app.json").compactMap { $0 as? NSDictionary }.last)
+        let expected = try #require(try fixture("from-app.json").compactMap { $0 as? NSDictionary }.first {
+            ($0["t"] as? String) == "sample" && (($0["data"] as? NSDictionary)?["seq"] as? Int) == 9
+        })
         var sample = WireSample(seq: 9, at: 1_790_000_002_000)
         sample.gpu = WireGPU(utilization: 18, memoryUsedBytes: 6_200_000_000, coreCount: 40,
                              rendererUtilization: 16, tilerUtilization: 9, memoryTotalBytes: 27_000_000_000)
@@ -76,6 +78,23 @@ struct BridgeFixtureTests {
                                     sparePercent: 100, celsius: 41, warning: false)
         )
         #expect(try encoded(.sample(sample)) == expected)
+    }
+
+    @Test func fileBrowsingMessagesMatchTheContractFixtures() throws {
+        let expected = try fixture("from-app.json").compactMap { $0 as? NSDictionary }
+        #expect(try encoded(.fsPolicy(access: "everything")) == expected[expected.count - 2])
+        let thumbs: [WireThumb] = [
+            WireThumb(path: "/Users/abdul/Downloads/IMG_0042.HEIC", jpeg: "/9j/4AAQ"),
+            WireThumb(path: "/Users/abdul/Downloads/notes.bin", jpeg: nil),
+        ]
+        #expect(try encoded(.result(id: "q-fs-1", ok: .fsThumbs(thumbs), error: nil)) == expected[expected.count - 1])
+
+        let line = #"{"t":"dropReceived","id":"d-1","from":{"_tag":"Device","deviceId":"dev-1","name":"Pixel 9"},"files":[],"dest":"/Users/abdul/Documents"}"#
+        guard case let .dropReceived(_, _, _, dest) = try JSONDecoder().decode(ToApp.self, from: Data(line.utf8)) else {
+            Issue.record("not a dropReceived")
+            return
+        }
+        #expect(dest == "/Users/abdul/Documents")
     }
 
     @Test func unreadExtrasAreOmitted() throws {
