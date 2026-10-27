@@ -1,6 +1,18 @@
 import type { Connection, VitalsClient } from "@vitals/client-runtime";
 import { Store } from "@vitals/client-runtime";
-import { type DeviceId, type FsDevicesResult, type FsEntry, type FsListResult, type FsPulled, type FsRootsResult, type FsSearchResult, type FsSort, FS_LIMITS } from "@vitals/contracts";
+import {
+  type DeviceId,
+  type FsDevicesResult,
+  type FsEntry,
+  type FsListResult,
+  type FsPulled,
+  type FsRecentKind,
+  type FsRecentResult,
+  type FsRootsResult,
+  type FsSearchResult,
+  type FsSort,
+  FS_LIMITS,
+} from "@vitals/contracts";
 import type * as Effect from "effect/Effect";
 
 export const FILES_PAGE = 200;
@@ -51,8 +63,9 @@ export class MacFiles {
     return this.run((client) => client["fs.open"]({ path }));
   }
 
-  trash(paths: ReadonlyArray<string>): Promise<Outcome<{ readonly trashed: number }>> {
-    return this.run((client) => client["fs.trash"]({ paths }));
+  /** Newest photos, screenshots, downloads or documents on the Mac, or on `device` when set. */
+  recent(kind: FsRecentKind, offset: number, limit: number, device?: DeviceId): Promise<Outcome<FsRecentResult>> {
+    return this.run((client) => client["fs.recent"]({ kind, offset, limit, ...(device === undefined ? {} : { device }) }));
   }
 
   want(entries: ReadonlyArray<FsEntry>, device?: DeviceId): void {

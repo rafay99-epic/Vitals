@@ -134,24 +134,19 @@ describe("fs: browse the Mac", () => {
     expect(result.whole.drop.files.map((file) => file.name)).not.toContain("elsewhere.txt");
   });
 
-  test("moving to the Trash needs its own permission and stays out of Library and the shared roots", async () => {
-    const { gateway: target, token, deviceId } = await paired();
-    target.app.answer = (q) => (q._tag === "FsTrash" ? { _tag: "FsTrash", trashed: q.paths.length } : null);
-    const denied = await withClient(target, token, (client) => Effect.flip(client["fs.trash"]({ paths: [join(home, "Downloads", "a.txt")] })));
-    expect(denied).toMatchObject({ _tag: "AuthError" });
-
-    await adminOp(target.app, { _tag: "SetScopes", deviceId: deviceIdOf(deviceId), scopes: ["read", "operate", "files", "fsRead", "fsWrite"] });
-    const allowed = await withClient(target, token, (client) =>
+  test("recent downloads are the newest files first, without folders, hidden files or anything outside", async () => {
+    const { gateway: target, token } = await paired();
+    const result = await withClient(target, token, (client) =>
       Effect.gen(function* () {
-        const trashed = yield* client["fs.trash"]({ paths: [join(home, "Downloads", "a.txt")] });
-        const root = yield* Effect.flip(client["fs.trash"]({ paths: [join(home, "Downloads")] }));
-        return { trashed, root };
+        const first = yield* client["fs.recent"]({ kind: "downloads", offset: 0, limit: 2 });
+        const rest = yield* client["fs.recent"]({ kind: "downloads", offset: 2, limit: 2 });
+        return { first, rest };
       }),
     );
-    expect(allowed.trashed).toEqual({ trashed: 1 });
-    expect(allowed.root).toMatchObject({ _tag: "CommandRejected" });
-    const asked = target.app.received.filter((message) => message.t === "query" && message.q._tag === "FsTrash");
-    expect(asked).toHaveLength(1);
+    expect(result.first.entries.map((entry) => entry.name)).toEqual(["a.txt", "b.mov"]);
+    expect(result.first.more).toBe(true);
+    expect(result.rest.entries.map((entry) => entry.name)).toEqual(["file 9.txt", "file 10.txt"]);
+    expect(result.rest.more).toBe(false);
   });
 });
 
@@ -190,5 +185,41 @@ describe("fs: browse a phone", () => {
     const gone = await withClient(target, other.token, (client) => Effect.flip(client["fs.list"]({ device: phoneId, path: "/", sort: "name", hidden: false, offset: 0, limit: 10 })));
     expect(gone).toMatchObject({ _tag: "Unavailable" });
     expect(gone.message).toContain("isn't open");
+  });
+});
+
+describe("fs: recent on a phone", () => {
+  test("another device gets a phone's recent screenshots, and an older build says to update", async () => {
+    gateway = await startGateway(join(mkdtempSync(join(tmpdir(), "vitals-data-")), "remote"), home);
+    const target = gateway;
+    const phone = await pairDevice(target);
+    const old = await pairDevice(target);
+    const other = await pairDevice(target);
+    const phoneId = deviceIdOf(phone.deviceId);
+    const roots = [{ label: "Pictures", path: "/storage/emulated/0/Pictures", place: "pictures" as const }];
+    const shot = { name: "Screenshot_1.png", path: "/storage/emulated/0/Pictures/Screenshots/Screenshot_1.png", kind: "file" as const, size: 9, modifiedAt: 5 };
+
+    const serving = withClient(target, phone.token, (client) =>
+      client["fs.serve"]({ roots, recent: true }).pipe(
+        Stream.take(1),
+        Stream.runForEach((request) =>
+          request._tag === "Recent" ? client["fs.reply"]({ id: request.id, result: { _tag: "Recent", result: { kind: request.kind, entries: [shot], more: false } }, error: null }) : Effect.void,
+        ),
+      ),
+    );
+    const oldServing = withClient(target, old.token, (client) => client["fs.serve"]({ roots }).pipe(Stream.take(1), Stream.runDrain, Effect.timeout("1500 millis"), Effect.ignore));
+    await Bun.sleep(300);
+    const seen = await withClient(target, other.token, (client) =>
+      Effect.gen(function* () {
+        const recent = yield* client["fs.recent"]({ device: phoneId, kind: "screenshots", offset: 0, limit: 30 });
+        const stale = yield* Effect.flip(client["fs.recent"]({ device: deviceIdOf(old.deviceId), kind: "photos", offset: 0, limit: 30 }));
+        return { recent, stale };
+      }),
+    );
+    await serving;
+    await oldServing;
+    expect(seen.recent).toEqual({ kind: "screenshots", entries: [shot], more: false });
+    expect(seen.stale).toMatchObject({ _tag: "CommandRejected" });
+    expect(seen.stale.message).toContain("Update Vitals");
   });
 });

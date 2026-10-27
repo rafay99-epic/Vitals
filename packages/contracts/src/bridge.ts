@@ -9,9 +9,9 @@ import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processe
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, Topic } from "./stats.ts";
 import { AudioState, BRIDGE_VERSION, KeepAwakeState, MacInfo, SystemEvent } from "./system.ts";
 import { ActivityLevel } from "./activity.ts";
-import { ClipDestination, ClipFileName, ClipId, ClipPlacement, ClipPolicy, ClipStats, MacClip } from "./clips.ts";
+import { Clip, ClipDestination, ClipFileName, ClipId, ClipPlacement, ClipPolicy, ClipStats, MacClip } from "./clips.ts";
 import { Drop, DropId, DropPeer, DropPolicy, MacDropFile, ReceivedDropFile } from "./drop.ts";
-import { FsAccess, FsDevice, FsListResult, FsPath, FsRoot, FsThumb } from "./fs.ts";
+import { FsAccess, FsDevice, FsListResult, FsPath, FsRecentKind, FsRecentResult, FsRoot, FsThumb } from "./fs.ts";
 import { MacTerminal, TerminalId } from "./terminal.ts";
 import { Device } from "./auth.ts";
 
@@ -32,7 +32,6 @@ export const Query = Schema.Union([
     deviceName: Schema.String,
   }),
   Schema.TaggedStruct("FsThumbs", { paths: Schema.Array(FsPath), pixels: PositiveInt }),
-  Schema.TaggedStruct("FsTrash", { paths: Schema.Array(FsPath), deviceName: Schema.String }),
   Schema.TaggedStruct("FsOpen", { path: FsPath }),
 ]);
 export type Query = typeof Query.Type;
@@ -45,7 +44,6 @@ export const QueryResult = Schema.Union([
   Schema.TaggedStruct("ClipMaterialize", { stored: ClipFileName, bytes: NonNegativeInt, files: Schema.NullOr(NonNegativeInt) }),
   Schema.TaggedStruct("ClipPut", { placed: NonNegativeInt }),
   Schema.TaggedStruct("FsThumbs", { thumbs: Schema.Array(FsThumb) }),
-  Schema.TaggedStruct("FsTrash", { trashed: NonNegativeInt }),
   Schema.TaggedStruct("FsOpen", {}),
 ]);
 export type QueryResult = typeof QueryResult.Type;
@@ -61,6 +59,9 @@ export const AdminOp = Schema.Union([
   Schema.TaggedStruct("FsList", { device: DeviceId, path: FsPath, offset: NonNegativeInt }),
   Schema.TaggedStruct("FsThumbs", { device: DeviceId, paths: Schema.Array(FsPath) }),
   Schema.TaggedStruct("FsPull", { device: DeviceId, paths: Schema.Array(FsPath) }),
+  Schema.TaggedStruct("FsRecent", { device: DeviceId, kind: FsRecentKind, offset: NonNegativeInt }),
+  /** What one phone sent to the clipboard history, newest first. */
+  Schema.TaggedStruct("ClipsFrom", { device: DeviceId }),
 ]);
 export type AdminOp = typeof AdminOp.Type;
 
@@ -75,6 +76,9 @@ export const AdminResult = Schema.Union([
   Schema.TaggedStruct("FsList", { result: FsListResult }),
   Schema.TaggedStruct("FsThumbs", { thumbs: Schema.Array(FsThumb) }),
   Schema.TaggedStruct("FsPull", { files: NonNegativeInt }),
+  Schema.TaggedStruct("FsRecent", { result: FsRecentResult }),
+  /** `stored` names the bytes inside `clips/` for images, files and long text. */
+  Schema.TaggedStruct("ClipsFrom", { clips: Schema.Array(Schema.Struct({ clip: Clip, stored: Schema.NullOr(ClipFileName) })) }),
 ]);
 export type AdminResult = typeof AdminResult.Type;
 

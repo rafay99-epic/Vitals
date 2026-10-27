@@ -470,9 +470,6 @@ const write = (line: string): void => {
           );
           return;
         }
-        case "FsTrash":
-          console.log(`FsTrash from ${message.q.deviceName}: ${message.q.paths.join(", ")} (fake, nothing moved)`);
-          return reply({ _tag: "FsTrash", trashed: message.q.paths.length });
         case "FsOpen":
           console.log(`FsOpen ${message.q.path} (fake)`);
           return reply({ _tag: "FsOpen" });

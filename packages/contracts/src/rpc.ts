@@ -37,7 +37,8 @@ import {
   FsServeRequest,
   FsThumbsInput,
   FsThumbsResult,
-  FsTrashResult,
+  FsRecentInput,
+  FsRecentResult,
 } from "./fs.ts";
 import { GuardSettings, GuardState } from "./guard.ts";
 import { TerminalAttachInput, TerminalEvent, TerminalIdInput, TerminalInfo, TerminalList, TerminalSize, TerminalWriteInput } from "./terminal.ts";
@@ -165,7 +166,7 @@ export const FsSearch = Rpc.make("fs.search", { payload: FsSearchInput, success:
 export const FsThumbs = Rpc.make("fs.thumbs", { payload: FsThumbsInput, success: FsThumbsResult, error: FsError });
 export const FsGet = Rpc.make("fs.get", { payload: FsPathsInput, success: DropOffered, error: FsError });
 export const FsOpen = Rpc.make("fs.open", { payload: FsPathInput, success: Empty, error: FsError });
-export const FsTrash = Rpc.make("fs.trash", { payload: FsPathsInput, success: FsTrashResult, error: FsError });
+export const FsRecent = Rpc.make("fs.recent", { payload: FsRecentInput, success: FsRecentResult, error: FsError });
 
 const TerminalError = Schema.Union([AuthError, Unavailable, CommandRejected]);
 
@@ -234,7 +235,7 @@ export const VitalsRpc = RpcGroup.make(
   FsThumbs,
   FsGet,
   FsOpen,
-  FsTrash,
+  FsRecent,
   TerminalListRpc,
   TerminalOpen,
   TerminalAttach,

@@ -110,7 +110,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "fs.thumbs": (input) => files.thumbs(input),
         "fs.get": (input) => (session.device.scopes.includes("files") ? files.get(dropCaller, input) : Effect.fail(new CommandRejected({ message: "This device can't receive files. Allow it on your Mac." }))),
         "fs.open": (input) => files.open(input).pipe(Effect.as({})),
-        "fs.trash": (input) => files.trash(dropCaller, input),
+        "fs.recent": (input) => files.recent(input),
         "terminal.list": () => terminals.list,
         "terminal.open": (input) => terminals.open(clipCaller, input),
         "terminal.attach": (input) => terminals.attach(clipCaller, input),

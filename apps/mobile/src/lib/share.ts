@@ -138,6 +138,8 @@ export class PhoneShare {
         if (drop === null) throw new Error("This phone couldn't start sending");
         return { _tag: "Send", files: files.length };
       }
+      case "Recent":
+        throw new Error("This phone can't list recent files yet");
     }
   }
 

@@ -123,7 +123,7 @@ export function FolderScreen({ navigation, route }: Props) {
       return;
     }
     if (!selecting) {
-      sheet.open(macFileSheet(entry, device === undefined && access.change, device === undefined ? null : { device, name: deviceName ?? "That phone" }));
+      sheet.open(macFileSheet(entry, device === undefined ? null : { device, name: deviceName ?? "That phone" }));
       return;
     }
     setPicked((current) => {

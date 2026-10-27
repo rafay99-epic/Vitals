@@ -146,7 +146,7 @@ function MacPlaces() {
   };
   const searching = query.trim().length >= 2;
   const openEntry = (entry: FsEntry) =>
-    entry.kind === "folder" || entry.kind === "link" ? navigation.push("Folder", { path: entry.path, title: entry.name }) : sheet.open(macFileSheet(entry, false));
+    entry.kind === "folder" || entry.kind === "link" ? navigation.push("Folder", { path: entry.path, title: entry.name }) : sheet.open(macFileSheet(entry));
 
   const pick = (device: FsDevice | null) => {
     setPlaces({ _tag: "loading" });

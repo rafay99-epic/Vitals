@@ -65,6 +65,7 @@ export class ClipStore extends Context.Service<
     readonly chunk: (caller: ClipCaller, input: ClipSendChunk) => Effect.Effect<{ readonly received: number }, CommandRejected>;
     readonly finish: (caller: ClipCaller, input: ClipSendFinish) => Effect.Effect<Clip, CommandRejected>;
     readonly put: (caller: ClipCaller, input: ClipsPutInput) => Effect.Effect<ClipsPutResult, ClipError>;
+    readonly fromDevice: (deviceId: DeviceId) => Effect.Effect<ReadonlyArray<{ readonly clip: Clip; readonly stored: ClipFileName | null }>>;
   }
 >()("@vitals/gateway/ClipStore") {}
 
@@ -628,6 +629,9 @@ export const layer = (database: Database) =>
         }),
       );
 
-      return ClipStore.of({ watch, read, pin, remove, begin, chunk, finish, put });
+      const fromDevice = (deviceId: DeviceId) =>
+        Effect.sync(() => db.fromDevice(deviceId, CLIP_LIMITS.snapshot).map((record) => ({ clip: toWire(record), stored: record.stored })));
+
+      return ClipStore.of({ watch, read, pin, remove, begin, chunk, finish, put, fromDevice });
     }),
   );

@@ -6,9 +6,9 @@ import type { ComponentType } from "react";
 import { Image, StyleSheet } from "react-native";
 
 import { savedTo } from "../lib/drops.ts";
-import { ActionRow, Hold, sheet, SheetCancel, SheetHeader, toast } from "../ui/index.ts";
+import { ActionRow, sheet, SheetCancel, SheetHeader, toast } from "../ui/index.ts";
 
-export const macFileSheet = (entry: FsEntry, canChange: boolean, phone: { readonly device: DeviceId; readonly name: string } | null = null): ComponentType =>
+export const macFileSheet = (entry: FsEntry, phone: { readonly device: DeviceId; readonly name: string } | null = null): ComponentType =>
   function MacFileSheet() {
     const remote = useRemote();
     const thumb = useStore(remote.files.thumbs).get(entry.path) ?? null;
@@ -32,20 +32,12 @@ export const macFileSheet = (entry: FsEntry, canChange: boolean, phone: { readon
       void remote.files.open(entry.path).then((outcome) => toast.show(outcome.ok ? "Opened on your Mac" : outcome.message, { tone: outcome.ok ? "ok" : "bad" }));
     };
 
-    const trash = () => {
-      sheet.close();
-      void remote.files.trash([entry.path]).then((outcome) =>
-        toast.show(outcome.ok ? `${entry.name} is in the Trash on your Mac` : outcome.message, { tone: outcome.ok ? "ok" : "bad" }),
-      );
-    };
-
     return (
       <>
         <SheetHeader title={entry.name} detail={`${size} · on ${phone === null ? "your Mac" : phone.name}`} />
         {thumb === null ? null : <Image source={{ uri: thumb }} style={styles.preview} resizeMode="contain" accessibilityIgnoresInvertColors />}
         <ActionRow icon="down" label="Get it" detail={`${size} · to ${savedTo}`} onPress={get} />
         {phone === null ? <ActionRow icon="mac" label="Open on the Mac" onPress={openOnMac} /> : null}
-        {canChange ? <Hold label="Hold to move to the Mac's Trash" onCommit={trash} small /> : null}
         <SheetCancel />
       </>
     );
