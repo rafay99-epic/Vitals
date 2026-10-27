@@ -102,6 +102,9 @@ final class DevicesModel {
     /// `FS_LIMITS.thumbs`: the most paths one FsThumbs call takes.
     static let thumbBatch = 24
     static let pollInterval: Duration = .seconds(4)
+    /// One at a time, cheapest first, so the phone isn't asked everything at once. Downloads walks
+    /// a folder tree on the phone, so it goes last.
+    static let loadOrder: [RecentKind] = [.screenshots, .photos, .documents, .downloads]
 
     func phone(_ id: String) -> PhoneDevice? { phones.first { $0.id == id } }
 
@@ -132,13 +135,15 @@ final class DevicesModel {
     }
 
     /// Keeps the last list when the gateway can't answer, so the sidebar doesn't flicker on a restart.
-    /// A phone that comes back online reloads its page if it was opened before, and the thumbnails
-    /// on screen ask again.
+    /// A phone that comes back online, or gets All files access, reloads its page if it was opened
+    /// before, and the thumbnails on screen ask again.
     func refreshPhones() async {
         guard let remote, remote.isEnabled, let next = try? await remote.phoneDevices() else { return }
-        let wasOnline = Set(phones.filter(\.online).map(\.id))
+        let before = Dictionary(phones.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         if next != phones { phones = next }
-        for phone in next where phone.online && !wasOnline.contains(phone.id) {
+        for phone in next where phone.online {
+            let was = before[phone.id]
+            guard was?.online != true || was?.limited != phone.limited else { continue }
             if pages[phone.id] != nil { Task { await load(phone.id) } }
             thumbsOnScreen.keys.filter { Self.device(of: $0) == phone.id }.forEach(queueThumb)
         }
@@ -155,17 +160,19 @@ final class DevicesModel {
         }
     }
 
-    /// Clipboard comes from the gateway's history, so it loads even while the phone is away.
+    /// The page shows what it has at once, then fills in a section at a time in `loadOrder`. Clipboard
+    /// comes from the gateway's history, so it loads alongside, even while the phone is away. A phone
+    /// without All files access can't list its recent files, so it isn't asked.
     func load(_ id: String) async {
         if pages[id] == nil { pages[id] = Page() }
-        let online = phone(id)?.online == true
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.loadClips(id) }
-            if online {
-                for kind in RecentKind.allCases { group.addTask { await self.loadRecent(id, kind) } }
-                group.addTask { await self.loadRoots(id) }
+        async let clips: Void = loadClips(id)
+        if let phone = phone(id), phone.online {
+            await loadRoots(id)
+            if phone.limited != true {
+                for kind in Self.loadOrder where !Task.isCancelled { await loadRecent(id, kind) }
             }
         }
+        await clips
     }
 
     /// First page, or with `more` the next page after what's listed.

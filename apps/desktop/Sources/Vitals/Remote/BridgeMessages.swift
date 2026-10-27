@@ -322,6 +322,8 @@ struct PhoneDevice: Codable, Equatable, Identifiable, Sendable {
     let online: Bool
     /// Connected to this Mac, whether or not it shares its files. Older gateways leave it out.
     var connected: Bool?
+    /// Android without All files access: only Downloads › Vitals is shared until it's allowed.
+    var limited: Bool?
     var id: String { deviceId }
 
     /// Connected, but its "Let your Mac and other phones browse" switch is off.

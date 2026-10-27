@@ -42,8 +42,8 @@ struct DevicePage: View {
             PageHero(value: phone.name, subtitle: DeviceLook.status(phone)) { EmptyView() }
             if let notice = page.notice { NoticeLine(text: notice) }
             PreviewLine(phone: phone)
-            if !phone.online { OfflineCard(phone: phone) }
-            if phone.online || !page.recent.isEmpty {
+            if !phone.online || phone.limited == true { BlockedCard(phone: phone) }
+            if phone.limited != true, phone.online || !page.recent.isEmpty {
                 KindTiles(phone: phone) { open(.recent([$0])) }
                 NewestImages(phone: phone, seeAll: { open(.recent(RecentKind.images)) }, pick: { path in
                     selection = [path]
@@ -76,6 +76,7 @@ enum DeviceLook {
 
     static func status(_ phone: PhoneDevice) -> String {
         let platform = phone.platform == "ios" ? "iPhone" : "Android"
+        if phone.limited == true { return "\(platform) · Needs All files access" }
         if phone.online { return "\(platform) · Online" }
         if phone.notSharing { return "\(platform) · Connected, not sharing files" }
         return "\(platform) · \(phone.platform == "ios" ? "Not open" : "Offline")"
@@ -173,7 +174,8 @@ private struct NoticeLine: View {
     }
 }
 
-private struct OfflineCard: View {
+/// Why the page can't show everything: the phone is away, not sharing, or missing All files access.
+private struct BlockedCard: View {
     let phone: PhoneDevice
 
     var body: some View {
@@ -193,11 +195,13 @@ private struct OfflineCard: View {
     }
 
     private var title: String {
+        if phone.limited == true { return "\(phone.name) needs All files access" }
         if phone.notSharing { return "\(phone.name) isn't sharing its files" }
         return phone.platform == "ios" ? "Open Vitals on your iPhone" : "\(phone.name) isn't reachable"
     }
 
     private var detail: String {
+        if phone.limited == true { return "Until then it shares only Downloads › Vitals. Open Vitals on it and tap Turn it on." }
         if phone.notSharing { return "On the phone, open Vitals › Settings › This phone and turn on Let your Mac and other phones browse. This page fills in right away." }
         if phone.platform == "ios" { return "iOS only lets it share while Vitals is open. This page fills in the moment it is." }
         return "Open Vitals on it, or check it's on Wi-Fi or Tailscale. This page fills in the moment it's back."
