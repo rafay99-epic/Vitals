@@ -85,7 +85,7 @@ const inline = (tokens: ReadonlyArray<Token> | undefined): ReactNode =>
   });
 
 function Table({ table }: { readonly table: Tokens.Table }) {
-  const columns = table.header.map((cell, id) => ({ id, width: columnWidth(Math.max(cell.text.length, ...table.rows.map((row) => row[id]?.text.length ?? 0))) }));
+  const columns = table.header.map((cell, id) => ({ id, width: columnWidth(Math.max(cell.text.length, ...table.rows.map((row) => row[id]?.text.length ?? 0)), BODY_CHAR) }));
   const row = (cells: ReadonlyArray<Tokens.TableCell>, head: boolean, key: string) => (
     <View key={key} style={styles.tableRow}>
       {columns.map((column) => (
@@ -210,6 +210,9 @@ export function MarkdownViewer({ file, bottom }: { readonly file: File; readonly
     />
   );
 }
+
+/** Average character width of body text, a little wider than the grid's monospace. */
+const BODY_CHAR = 8.6;
 
 /** h1 to h4; deeper headings look like h4. */
 const HEADINGS = [

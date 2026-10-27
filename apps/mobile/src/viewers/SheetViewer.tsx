@@ -17,8 +17,8 @@ const MAX_WIDTH = 220;
 /** Rows looked at to size the columns. */
 const SAMPLE = 200;
 
-/** A column wide enough for its longest value, within limits. Markdown tables size theirs the same way. */
-export const columnWidth = (longest: number): number => Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, longest * CHAR + 16)));
+/** A column wide enough for its longest value, within limits. `char` is the font's average character width; Markdown tables size theirs the same way. */
+export const columnWidth = (longest: number, char = CHAR): number => Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, longest * char + 16)));
 
 /** Each column as wide as its longest value in the first rows. */
 const widthsOf = (sheet: SheetRows): ReadonlyArray<{ readonly id: number; readonly width: number }> =>
@@ -29,44 +29,48 @@ const keyOf = (_row: ReadonlyArray<string>, index: number): string => String(ind
 /** One sheet as a grid: row numbers on the left, every cell on one line. Scrolls both ways. */
 function Grid({ sheet, bottom }: { readonly sheet: SheetRows; readonly bottom: number }) {
   const widths = useMemo(() => widthsOf(sheet), [sheet]);
-  const [height, setHeight] = useState(0);
+  const [box, setBox] = useState({ width: 0, height: 0 });
   const width = GUTTER + widths.reduce((sum, column) => sum + column.width, 0);
-  const measure = (event: LayoutChangeEvent) => setHeight(event.nativeEvent.layout.height);
+  const measure = (event: LayoutChangeEvent) => setBox({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height });
   if (sheet.rows.length === 0) return <Empty title="Empty" />;
+  // The list mounts once its height is known: started at zero, it lays the rows out too low.
   return (
     <View style={styles.fill} onLayout={measure}>
-      <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false}>
-        <View style={{ width, height }}>
-          <LegendList
-            data={sheet.rows}
-            keyExtractor={keyOf}
-            getFixedItemSize={() => ROW}
-            estimatedItemSize={ROW}
-            renderItem={({ item, index }) => (
-              <View style={styles.row}>
-                <T v="mono" color={color.mute} style={[styles.cell, { width: GUTTER }]}>
-                  {String(index + 1)}
-                </T>
-                {widths.map((column) => (
-                  <T key={column.id} v="mono" color={color.ink2} numberOfLines={1} style={[styles.cell, styles.border, { width: column.width }]}>
-                    {item[column.id] ?? ""}
+      {box.height === 0 ? null : (
+        // Scrolls sideways only when it has to, so a narrow sheet still swipes to the next file.
+        <ScrollView horizontal nestedScrollEnabled scrollEnabled={width > box.width} showsHorizontalScrollIndicator={false}>
+          <View style={{ width, height: box.height }}>
+            <LegendList
+              data={sheet.rows}
+              keyExtractor={keyOf}
+              getFixedItemSize={() => ROW}
+              estimatedItemSize={ROW}
+              renderItem={({ item, index }) => (
+                <View style={styles.row}>
+                  <T v="mono" color={color.mute} style={[styles.cell, { width: GUTTER }]}>
+                    {String(index + 1)}
                   </T>
-                ))}
-              </View>
-            )}
-            ListFooterComponent={
-              <View style={{ paddingBottom: bottom }}>
-                {sheet.cut ? (
-                  <T v="small" style={styles.note}>
-                    {`Showing the first ${SHEET_ROWS.toLocaleString()} rows and 60 columns`}
-                  </T>
-                ) : null}
-              </View>
-            }
-            style={styles.fill}
-          />
-        </View>
-      </ScrollView>
+                  {widths.map((column) => (
+                    <T key={column.id} v="mono" color={color.ink2} numberOfLines={1} style={[styles.cell, styles.border, { width: column.width }]}>
+                      {item[column.id] ?? ""}
+                    </T>
+                  ))}
+                </View>
+              )}
+              ListFooterComponent={
+                <View style={{ paddingBottom: bottom }}>
+                  {sheet.cut ? (
+                    <T v="small" style={styles.note}>
+                      {`Showing the first ${SHEET_ROWS.toLocaleString()} rows and 60 columns`}
+                    </T>
+                  ) : null}
+                </View>
+              }
+              style={styles.fill}
+            />
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }

@@ -213,14 +213,6 @@ export function PreviewScreen({ navigation, route }: Props) {
             )}
           </View>
         </View>
-        <View style={styles.name}>
-          <T v="strong" numberOfLines={1}>
-            {entry.name}
-          </T>
-          <T v="small" numberOfLines={1}>
-            {`${formatBytes(entry.size)} · ${from}`}
-          </T>
-        </View>
       </View>
       <View style={styles.body} onLayout={measure}>
         {page.width === 0 ? null : (
@@ -238,7 +230,20 @@ export function PreviewScreen({ navigation, route }: Props) {
             windowSize={3}
             extraData={body}
             onMomentumScrollEnd={settle}
-            renderItem={({ item, index }) => <View style={page}>{index === at ? body : <Peek entry={item} source={source} />}</View>}
+            renderItem={({ item, index }) => (
+              // The name rides with its page, so it always swipes, even over a sheet that scrolls sideways.
+              <View style={page}>
+                <View style={styles.name}>
+                  <T v="strong" numberOfLines={1}>
+                    {item.name}
+                  </T>
+                  <T v="small" numberOfLines={1}>
+                    {`${formatBytes(item.size)} · ${from}`}
+                  </T>
+                </View>
+                <View style={styles.body}>{index === at ? body : <Peek entry={item} source={source} />}</View>
+              </View>
+            )}
           />
         )}
       </View>
