@@ -36,7 +36,9 @@
     },
     "apps/web": {
       "ignoreDependencies": [
-        "babel-plugin-react-compiler"
+        "babel-plugin-react-compiler",
+        // metro.config.js resolves it from packages/app, so both targets share one copy.
+        "@xterm/headless"
       ]
     }
   }
