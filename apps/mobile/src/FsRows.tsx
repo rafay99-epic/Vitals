@@ -4,11 +4,12 @@ import { type FsSource, thumbKey } from "@vitals/app/state/files.ts";
 import { useSelect } from "@vitals/app/state/useStore.ts";
 import type { DeviceId, FsEntry, FsRecentKind, FsRoot } from "@vitals/contracts";
 import { formatBytes } from "@vitals/shared";
-import { useCallback, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
+import { memo, useCallback, useState } from "react";
+import { StyleSheet, View } from "react-native";
 
 import { fileKind } from "./lib/drops.ts";
-import { color, Icon, type IconName, T, Tap } from "./ui/index.ts";
+import { color, Icon, type IconName, StaticIcon, T, Tap } from "./ui/index.ts";
 
 export type ShownKind = FsRecentKind | "images";
 
@@ -35,7 +36,8 @@ const EXTENSIONS: ReadonlyArray<readonly [RegExp, IconName, string]> = [
   [/\.(zip|xip|dmg|tar|gz|7z|rar|pkg)$/i, "files", color.orange],
 ];
 
-const lookOf = (entry: FsEntry): { readonly icon: IconName; readonly tint: string } => {
+/** The kind icon and its tint for an entry without a thumbnail. */
+export const lookOf = (entry: FsEntry): { readonly icon: IconName; readonly tint: string } => {
   if (entry.kind === "folder") return { icon: "folder", tint: color.green };
   if (entry.kind === "package") return { icon: "files", tint: color.violet };
   if (entry.kind === "link") return { icon: "link", tint: color.dim };
@@ -54,31 +56,32 @@ export const useThumb = (path: string, device: DeviceId | null): string | null =
   return useSelect(thumbs, select);
 };
 
-/** The entry's thumbnail, or its kind icon until there is one. */
+/** The entry's thumbnail, or its kind icon until there is one. Subscribes to its own thumbnail only, so one arriving re-renders just this. */
 function FsThumb({ entry, device, square = false, dim = false }: { readonly entry: FsEntry; readonly device: DeviceId | null; readonly square?: boolean; readonly dim?: boolean }) {
   const uri = useThumb(entry.path, device);
   const shape = [square ? styles.square : styles.icon, dim ? styles.dim : null];
-  if (uri !== null) return <Image source={{ uri }} style={shape} accessibilityIgnoresInvertColors />;
+  if (uri !== null) return <Image source={uri} recyclingKey={entry.path} cachePolicy="memory" transition={null} style={shape} accessibilityIgnoresInvertColors />;
   const look = lookOf(entry);
   return (
     <View style={[shape, styles.iconTile]}>
-      <Icon name={look.icon} size={16} color={look.tint} />
+      <StaticIcon name={look.icon} size={16} color={look.tint} />
     </View>
   );
 }
 
 function Check({ on }: { readonly on: boolean }) {
-  return <View style={[styles.check, on ? styles.checkOn : null]}>{on ? <Icon name="check" size={13} color={color.bg} weight={2.6} /> : null}</View>;
+  return <View style={[styles.check, on ? styles.checkOn : null]}>{on ? <StaticIcon name="check" size={13} color={color.bg} weight={2.6} /> : null}</View>;
 }
 
-/** One file or folder: thumbnail, name, size and age. Files show a check while selecting. */
-export function EntryRow({
+/** One file or folder: thumbnail, name, size and age. Files show a check while selecting. Long press opens the file's sheet. */
+export const EntryRow = memo(function EntryRow({
   entry,
   device,
   now,
   selecting = false,
   selected = false,
   onPress,
+  onLongPress,
 }: {
   readonly entry: FsEntry;
   readonly device: DeviceId | null;
@@ -86,12 +89,14 @@ export function EntryRow({
   readonly selecting?: boolean;
   readonly selected?: boolean;
   readonly onPress: (entry: FsEntry) => void;
+  readonly onLongPress?: ((entry: FsEntry) => void) | undefined;
 }) {
   const meta = metaOf(entry, now);
   const folder = isFolder(entry);
   return (
     <Tap
       onPress={() => onPress(entry)}
+      onLongPress={onLongPress === undefined || folder ? undefined : () => onLongPress(entry)}
       accessibilityRole="button"
       accessibilityLabel={`${entry.name}, ${meta}`}
       accessibilityState={{ selected }}
@@ -107,19 +112,20 @@ export function EntryRow({
           {meta}
         </T>
       </View>
-      {folder ? <Icon name="chevron" size={15} color={color.mute} /> : selecting ? <Check on={selected} /> : null}
+      {folder ? <StaticIcon name="chevron" size={15} color={color.mute} /> : selecting ? <Check on={selected} /> : null}
     </Tap>
   );
-}
+});
 
-/** A square photo or screenshot, for strips and grids. */
-export function PhotoTile({
+/** A square photo or screenshot, for strips and grids. Long press opens the file's sheet. */
+export const PhotoTile = memo(function PhotoTile({
   entry,
   device,
   size,
   selecting = false,
   selected = false,
   onPress,
+  onLongPress,
 }: {
   readonly entry: FsEntry;
   readonly device: DeviceId | null;
@@ -127,9 +133,18 @@ export function PhotoTile({
   readonly selecting?: boolean;
   readonly selected?: boolean;
   readonly onPress: (entry: FsEntry) => void;
+  readonly onLongPress?: ((entry: FsEntry) => void) | undefined;
 }) {
   return (
-    <Tap onPress={() => onPress(entry)} accessibilityRole="button" accessibilityLabel={entry.name} accessibilityState={{ selected }} scale={0.97} style={{ width: size, height: size }}>
+    <Tap
+      onPress={() => onPress(entry)}
+      onLongPress={onLongPress === undefined ? undefined : () => onLongPress(entry)}
+      accessibilityRole="button"
+      accessibilityLabel={entry.name}
+      accessibilityState={{ selected }}
+      scale={0.97}
+      style={{ width: size, height: size }}
+    >
       <FsThumb entry={entry} device={device} square dim={selected} />
       {selecting ? (
         <View style={styles.squareCheck}>
@@ -138,7 +153,7 @@ export function PhotoTile({
       ) : null}
     </Tap>
   );
-}
+});
 
 const PLACE_ICON: Readonly<Record<FsRoot["place"], IconName>> = {
   home: "home",

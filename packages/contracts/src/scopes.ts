@@ -53,6 +53,7 @@ export const RPC_SCOPES = {
   "fs.open": "operate",
   "fs.recent": "fsRead",
   "fs.transfer": "fsRead",
+  "fs.read": "fsRead",
   "terminal.list": "terminal",
   "terminal.open": "terminal",
   "terminal.attach": "terminal",

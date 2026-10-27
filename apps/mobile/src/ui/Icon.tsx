@@ -1,4 +1,5 @@
-import { Canvas, Path, Skia, type SkPath } from "@shopify/react-native-skia";
+import { Canvas, PaintStyle, Path, Skia, type SkPath, StrokeCap, StrokeJoin } from "@shopify/react-native-skia";
+import { Image, PixelRatio } from "react-native";
 
 import { color as palette } from "./tokens.ts";
 
@@ -73,6 +74,41 @@ export interface IconProps {
   readonly size?: number;
   readonly color?: string;
   readonly weight?: number;
+}
+
+const DRAWN = new Map<string, string>();
+
+/** The icon drawn once into a PNG data URI at the screen's pixel density, then reused. */
+const drawn = (name: IconName, size: number, color: string, weight: number): string => {
+  const key = `${name}:${String(size)}:${color}:${String(weight)}`;
+  const known = DRAWN.get(key);
+  if (known !== undefined) return known;
+  const density = PixelRatio.get();
+  const pixels = Math.ceil(size * density);
+  const surface = Skia.Surface.Make(pixels, pixels);
+  if (surface === null) return "";
+  const paint = Skia.Paint();
+  paint.setStyle(PaintStyle.Stroke);
+  paint.setStrokeWidth(weight);
+  paint.setStrokeJoin(StrokeJoin.Round);
+  paint.setStrokeCap(StrokeCap.Round);
+  paint.setColor(Skia.Color(color));
+  paint.setAntiAlias(true);
+  const canvas = surface.getCanvas();
+  canvas.scale((size * density) / 24, (size * density) / 24);
+  canvas.drawPath(pathOf(name), paint);
+  surface.flush();
+  const uri = `data:image/png;base64,${surface.makeImageSnapshot().encodeToBase64()}`;
+  DRAWN.set(key, uri);
+  return uri;
+};
+
+/**
+ * The same icon as a plain image: drawn once, then each use is just a cached bitmap. For long lists, where
+ * a live canvas per row costs JS and UI work on every scroll.
+ */
+export function StaticIcon({ name, size = 20, color = palette.ink, weight = 2 }: IconProps) {
+  return <Image source={{ uri: drawn(name, size, color, weight) }} style={{ width: size, height: size }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />;
 }
 
 export function Icon({ name, size = 20, color = palette.ink, weight = 2 }: IconProps) {

@@ -63,6 +63,8 @@ export const AdminOp = Schema.Union([
   Schema.TaggedStruct("FsRecent", { device: DeviceId, kind: FsRecentKind, offset: NonNegativeInt }),
   /** What one phone sent to the clipboard history, newest first. */
   Schema.TaggedStruct("ClipsFrom", { device: DeviceId }),
+  /** Copies a phone's file into the gateway's preview cache for Quick Look. */
+  Schema.TaggedStruct("FsPreview", { device: DeviceId, path: FsPath }),
 ]);
 export type AdminOp = typeof AdminOp.Type;
 
@@ -80,6 +82,8 @@ export const AdminResult = Schema.Union([
   Schema.TaggedStruct("FsRecent", { result: FsRecentResult }),
   /** `stored` names the bytes inside `clips/` for images, files and long text. */
   Schema.TaggedStruct("ClipsFrom", { clips: Schema.Array(Schema.Struct({ clip: Clip, stored: Schema.NullOr(ClipFileName) })) }),
+  /** Absolute path of the cached copy, named like the original. */
+  Schema.TaggedStruct("FsPreview", { path: Schema.String }),
 ]);
 export type AdminResult = typeof AdminResult.Type;
 

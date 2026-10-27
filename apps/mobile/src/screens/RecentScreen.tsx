@@ -30,7 +30,7 @@ const rowsOf = (entries: ReadonlyArray<FsEntry>, size: number): ReadonlyArray<Re
   Array.from({ length: Math.ceil(entries.length / size) }, (_, index) => entries.slice(index * size, (index + 1) * size));
 
 /** Everything of one kind on a device, newest first and paged: a grid for pictures, a list for files. Select, then Transfer. */
-export function RecentScreen({ route }: Props) {
+export function RecentScreen({ navigation, route }: Props) {
   const remote = useRemote();
   const insets = useSafeAreaInsets();
   const bottom = useDockSpace();
@@ -75,7 +75,9 @@ export function RecentScreen({ route }: Props) {
     ).then((pages) => setPaged((current) => (current._tag === "loaded" ? { _tag: "loaded", pages, busy: false } : current)));
   };
 
-  const open = (entry: FsEntry) => (selection.selecting ? selection.toggle(entry) : sheet.open(fileSheet(entry, source)));
+  const entries = paged._tag === "loaded" ? mergeNewest(paged.pages).entries : [];
+  const open = (entry: FsEntry) => (selection.selecting ? selection.toggle(entry) : navigation.push("Preview", { entry, source, parent: KIND_TITLE[kind], siblings: entries }));
+  const showSheet = (entry: FsEntry) => sheet.open(fileSheet(entry, source));
 
   const onViewable = useCallback(
     ({ viewableItems }: { readonly viewableItems: ReadonlyArray<{ readonly item: ReadonlyArray<FsEntry> }> }) => remote.files.want(viewableItems.flatMap((token) => token.item), device),
@@ -83,7 +85,6 @@ export function RecentScreen({ route }: Props) {
   );
 
   const size = Math.floor((width - EDGE * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
-  const entries = paged._tag === "loaded" ? mergeNewest(paged.pages).entries : [];
   const rows = rowsOf(entries, gallery ? COLUMNS : 1);
 
   const header = (
@@ -107,20 +108,21 @@ export function RecentScreen({ route }: Props) {
         keyExtractor={(row) => row[0]?.path ?? ""}
         renderItem={({ item }) =>
           gallery ? (
-            <View style={styles.gridRow}>
+            <View style={[styles.gridRow, { height: size }]}>
               {item.map((entry) => (
-                <PhotoTile key={entry.path} entry={entry} device={source.device} size={size} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} />
+                <PhotoTile key={entry.path} entry={entry} device={source.device} size={size} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} onLongPress={showSheet} />
               ))}
             </View>
           ) : (
             <>
               {item.map((entry) => (
-                <EntryRow key={entry.path} entry={entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} />
+                <EntryRow key={entry.path} entry={entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} onLongPress={showSheet} />
               ))}
             </>
           )
         }
         extraData={selection}
+        getFixedItemSize={() => (gallery ? size + GAP : undefined)}
         estimatedItemSize={gallery ? size + GAP : 52}
         recycleItems
         drawDistance={800}

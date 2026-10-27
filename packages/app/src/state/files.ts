@@ -7,6 +7,7 @@ import {
   type FsEntry,
   type FsListResult,
   type FsPulled,
+  type FsReadResult,
   type FsRecentKind,
   type FsRecentResult,
   type FsRootsResult,
@@ -16,7 +17,8 @@ import {
 } from "@vitals/contracts";
 import type * as Effect from "effect/Effect";
 
-export const FILES_PAGE = 200;
+/** Entries per folder page: the most one `fs.list` returns, so a big folder needs few round trips. */
+export const FILES_PAGE = FS_LIMITS.page;
 
 const THUMB_DELAY_MS = 60;
 const THUMB_KEEP = 600;
@@ -105,6 +107,11 @@ export class MacFiles {
 
   open(path: string): Promise<Outcome<unknown>> {
     return this.run((client) => client["fs.open"]({ path }));
+  }
+
+  /** One chunk of a file on the Mac, or on `device`, for previewing it here. */
+  read(path: string, offset: number, device?: DeviceId): Promise<Outcome<FsReadResult>> {
+    return this.run((client) => client["fs.read"]({ path, offset, length: FS_LIMITS.readChunk, ...(device === undefined ? {} : { device }) }));
   }
 
   /** Copies `paths` from `device` (the Mac when unset) to `to` (the Mac when null). Files never move off their device. */

@@ -18,19 +18,22 @@ import { ActionRow, BackBar, color, Empty, sheet, T, Tap, Title, toast, useDockS
 
 type Props = NativeStackScreenProps<ControlStackParams, "Folder">;
 
+/** A list line: one folder or file, or a row of three pictures. */
+type Line = { readonly _tag: "entry"; readonly entry: FsEntry } | { readonly _tag: "pictures"; readonly entries: ReadonlyArray<FsEntry> };
+
 type Listing =
   | { readonly _tag: "loading" }
   | { readonly _tag: "failed"; readonly message: string }
-  | { readonly _tag: "loaded"; readonly entries: ReadonlyArray<FsEntry>; readonly total: number; readonly busy: boolean };
-
-/** A list line: one folder or file, or a row of three pictures. */
-type Line = { readonly _tag: "entry"; readonly entry: FsEntry } | { readonly _tag: "pictures"; readonly entries: ReadonlyArray<FsEntry> };
+  | { readonly _tag: "loaded"; readonly count: number; readonly lines: ReadonlyArray<Line>; readonly total: number; readonly busy: boolean };
 
 const COLUMNS = 3;
 const GAP = 4;
 const EDGE = 16;
 
-/** Folders first, then pictures three to a row, then every other file. */
+/**
+ * One page as lines: folders first, then pictures three to a row, then every other file. Pages only ever
+ * add lines below, so a page landing never moves what's already on screen.
+ */
 const linesOf = (entries: ReadonlyArray<FsEntry>): ReadonlyArray<Line> => {
   const pictures = entries.filter(isPicture);
   return [
@@ -40,7 +43,12 @@ const linesOf = (entries: ReadonlyArray<FsEntry>): ReadonlyArray<Line> => {
   ];
 };
 
+/** The files in a page, in the order they show: pictures, then everything else. */
+const filesOf = (lines: ReadonlyArray<Line>): ReadonlyArray<FsEntry> => lines.flatMap((line) => (line._tag === "pictures" ? line.entries : isFolder(line.entry) ? [] : [line.entry]));
+
 const keyOf = (line: Line): string => (line._tag === "entry" ? line.entry.path : `pictures:${line.entries[0]?.path ?? ""}`);
+
+const typeOf = (line: Line): Line["_tag"] => line._tag;
 
 /** The path under the title. Each part goes back to that folder; the first goes back to the device's page. */
 function Crumbs({ parts, onPick }: { readonly parts: ReadonlyArray<string>; readonly onPick: (index: number) => void }) {
@@ -93,7 +101,7 @@ export function FolderScreen({ navigation, route }: Props) {
     let cancelled = false;
     void remote.files.list(path, "name", 0, device).then((outcome) => {
       if (cancelled) return;
-      setListing(outcome.ok ? { _tag: "loaded", entries: outcome.value.entries, total: outcome.value.total, busy: false } : { _tag: "failed", message: outcome.message });
+      setListing(outcome.ok ? { _tag: "loaded", count: outcome.value.entries.length, lines: linesOf(outcome.value.entries), total: outcome.value.total, busy: false } : { _tag: "failed", message: outcome.message });
       if (outcome.ok) remote.files.want([...outcome.value.entries.filter(isPicture).slice(0, 24), ...outcome.value.entries.filter((entry) => !isPicture(entry)).slice(0, 24)], device);
     });
     return () => {
@@ -102,19 +110,26 @@ export function FolderScreen({ navigation, route }: Props) {
   }, [remote, path, device]);
 
   const loadMore = () => {
-    if (listing._tag !== "loaded" || listing.busy || listing.entries.length >= listing.total) return;
-    const shown = listing.entries;
+    if (listing._tag !== "loaded" || listing.busy || listing.count >= listing.total) return;
+    const offset = listing.count;
     setListing({ ...listing, busy: true });
-    void remote.files.list(path, "name", shown.length, device).then((outcome) => {
-      setListing((current) => (current._tag !== "loaded" ? current : outcome.ok ? { _tag: "loaded", entries: [...shown, ...outcome.value.entries], total: outcome.value.total, busy: false } : { ...current, busy: false, total: shown.length }));
+    void remote.files.list(path, "name", offset, device).then((outcome) => {
+      setListing((current) => {
+        if (current._tag !== "loaded" || current.count !== offset) return current;
+        if (!outcome.ok || outcome.value.entries.length === 0) return { ...current, busy: false, total: offset };
+        return { _tag: "loaded", count: offset + outcome.value.entries.length, lines: [...current.lines, ...linesOf(outcome.value.entries)], total: outcome.value.total, busy: false };
+      });
     });
   };
 
+  const lines = listing._tag === "loaded" ? listing.lines : [];
   const open = (entry: FsEntry) => {
     if (isFolder(entry)) navigation.push("Folder", { path: entry.path, source, trail: [...trail, entry.name] });
     else if (selection.selecting) selection.toggle(entry);
-    else sheet.open(fileSheet(entry, source));
+    else navigation.push("Preview", { entry, source, parent: title, siblings: filesOf(lines) });
   };
+
+  const showSheet = (entry: FsEntry) => sheet.open(fileSheet(entry, source));
 
   const putHere = async () => {
     const batch = await pickFiles();
@@ -131,16 +146,15 @@ export function FolderScreen({ navigation, route }: Props) {
     [remote, device],
   );
 
-  const entries = listing._tag === "loaded" ? listing.entries : [];
-  const lines = linesOf(entries);
   const size = Math.floor((width - EDGE * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
   const crumbs = [source.name, ...trail];
+  const hasFiles = lines.some((line) => line._tag === "pictures" || !isFolder(line.entry));
 
   const header = (
     <View style={{ paddingTop: insets.top + 6 }}>
       <View style={styles.top}>
         <BackBar parent={crumbs.at(-2) ?? source.name} />
-        {entries.some((entry) => !isFolder(entry)) ? <SelectButton selecting={selection.selecting} onPress={selection.selecting ? selection.stop : selection.start} /> : null}
+        {hasFiles ? <SelectButton selecting={selection.selecting} onPress={selection.selecting ? selection.stop : selection.start} /> : null}
       </View>
       <Title>{`${title}.`}</Title>
       <Crumbs parts={crumbs} onPick={(index) => navigation.pop(crumbs.length - 1 - index)} />
@@ -159,14 +173,15 @@ export function FolderScreen({ navigation, route }: Props) {
       <LegendList
         data={lines}
         keyExtractor={keyOf}
-        getItemType={(line) => line._tag}
+        getItemType={typeOf}
+        getFixedItemSize={(line) => (line._tag === "pictures" ? size + GAP : undefined)}
         renderItem={({ item }) =>
           item._tag === "entry" ? (
-            <EntryRow entry={item.entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(item.entry.path)} onPress={open} />
+            <EntryRow entry={item.entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(item.entry.path)} onPress={open} onLongPress={showSheet} />
           ) : (
-            <View style={styles.gridRow}>
+            <View style={[styles.gridRow, { height: size }]}>
               {item.entries.map((entry) => (
-                <PhotoTile key={entry.path} entry={entry} device={source.device} size={size} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} />
+                <PhotoTile key={entry.path} entry={entry} device={source.device} size={size} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} onLongPress={showSheet} />
               ))}
             </View>
           )

@@ -44,6 +44,26 @@ public class VitalsShareModule: Module {
       SharedFolders.remove(id: id)
     }
 
+    AsyncFunction("list") { (path: String) throws -> [String: Any] in
+      try LocalFiles.list(path: path)
+    }
+
+    AsyncFunction("readChunk") { (path: String, offset: Double, length: Int) throws -> [String: Any] in
+      try LocalFiles.readChunk(path: path, offset: offset, length: length)
+    }
+
+    AsyncFunction("pdfPages") { (path: String) throws -> [Double] in
+      try PdfPages.pages(path: path)
+    }
+
+    AsyncFunction("pdfPage") { (path: String, index: Int, width: Int) throws -> String in
+      try PdfPages.page(path: path, index: index, width: width)
+    }
+
+    AsyncFunction("pdfClose") {
+      PdfPages.close()
+    }
+
     AsyncFunction("pickFolder") { (role: String, promise: Promise) in
       guard let presenter = self.appContext?.utilities?.currentViewController() else {
         promise.reject("NoWindow", "Nothing to show the folder picker over")

@@ -38,6 +38,7 @@ import { RecentScreen } from "./screens/RecentScreen.tsx";
 import { TerminalScreen } from "./screens/TerminalScreen.tsx";
 import { TransfersScreen } from "./screens/TransfersScreen.tsx";
 import { HomeScreen } from "./screens/HomeScreen.tsx";
+import { PreviewScreen } from "./screens/PreviewScreen.tsx";
 import { ConnectionScreen, DiagnosticsRoute, HelpScreen, NotificationsScreen, PhoneScreen, SettingsScreen, UpdatesScreen } from "./screens/SettingsScreens.tsx";
 import { TransferStrip } from "./Transfers.tsx";
 import { color, Dock, type DockTab, SheetHost, toast, ToastHost } from "./ui/index.ts";
@@ -98,6 +99,7 @@ function ControlNavigator() {
       <ControlStack.Screen name="Files" component={FilesScreen} />
       <ControlStack.Screen name="Folder" component={FolderScreen} />
       <ControlStack.Screen name="Recent" component={RecentScreen} />
+      <ControlStack.Screen name="Preview" component={PreviewScreen} />
       <ControlStack.Screen name="Transfers" component={TransfersScreen} />
       <ControlStack.Screen name="Terminal" component={TerminalScreen} />
     </ControlStack.Navigator>
@@ -142,7 +144,8 @@ function useRemoteToasts() {
 function DockBar({ state, navigation }: BottomTabBarProps) {
   const alerted = useStore(useRemote().events.alerts).length > 0;
   const tab = state.routes[state.index];
-  if (tab !== undefined && getFocusedRouteNameFromRoute(tab) === "Terminal") return null;
+  const focused = tab === undefined ? undefined : getFocusedRouteNameFromRoute(tab);
+  if (focused === "Terminal" || focused === "Preview") return null;
   return <Dock state={state} navigation={navigation} tabs={{ ...TAB_BASE, Alerts: { ...TAB_BASE.Alerts, badge: alerted } }} />;
 }
 

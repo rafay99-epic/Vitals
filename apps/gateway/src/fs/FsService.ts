@@ -1,6 +1,7 @@
 import type { Dirent, Stats } from "node:fs";
-import { lstat, readdir, realpath, stat } from "node:fs/promises";
+import { appendFile, lstat, mkdir, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import { basename, dirname, extname, join, relative } from "node:path";
 
 import {
@@ -20,6 +21,8 @@ import {
   type FsListResult,
   type FsPathInput,
   type FsPathsInput,
+  type FsReadInput,
+  type FsReadResult,
   type FsRecentInput,
   type FsRecentKind,
   type FsRecentResult,
@@ -68,6 +71,9 @@ export class FsService extends Context.Service<
     readonly open: (input: FsPathInput) => Effect.Effect<void, FsError>;
     readonly recent: (input: FsRecentInput) => Effect.Effect<FsRecentResult, FsError>;
     readonly transfer: (caller: DropCaller, input: FsTransferInput) => Effect.Effect<FsPulled, FsError>;
+    readonly read: (input: FsReadInput) => Effect.Effect<FsReadResult, FsError>;
+    /** Copies a phone's file into `<data dir>/preview` and returns where, for Quick Look on the Mac. */
+    readonly preview: (device: DeviceId, path: string) => Effect.Effect<string, FsError>;
     readonly destination: (path: string) => Effect.Effect<string, FsError>;
   }
 >()("@vitals/gateway/FsService") {}
@@ -116,6 +122,8 @@ interface Server {
   readonly name: string;
   readonly roots: ReadonlyArray<FsRoot>;
   readonly recent: boolean;
+  readonly read: boolean;
+  readonly limited: boolean;
   readonly push: (request: FsServeRequest) => void;
 }
 
@@ -309,6 +317,7 @@ export const layer = Layer.effect(
         if (server === undefined) return yield* Effect.fail(unavailable(`${name} isn't open. Open Vitals on it to browse.`));
         const sent = request(newId());
         if (sent._tag === "Recent" && !server.recent) return yield* Effect.fail(rejected(`Update Vitals on ${name} to see its recent files`));
+        if (sent._tag === "Read" && !server.read) return yield* Effect.fail(rejected(`Update Vitals on ${name} to preview its files`));
         const done = yield* Deferred.make<FsServeResult, FsError>();
         const id = sent.id;
         waiting.set(id, { deviceId: device, done });
@@ -325,7 +334,7 @@ export const layer = Layer.effect(
       Stream.callback<FsServeRequest>((queue) =>
         Effect.acquireRelease(
           Effect.sync(() => {
-            const server: Server = { name: caller.name, roots: input.roots, recent: input.recent === true, push: (request) => Queue.offerUnsafe(queue, request) };
+            const server: Server = { name: caller.name, roots: input.roots, recent: input.recent === true, read: input.read === true, limited: input.limited === true, push: (request) => Queue.offerUnsafe(queue, request) };
             servers.set(caller.deviceId, server);
             return server;
           }),
@@ -348,7 +357,10 @@ export const layer = Layer.effect(
         devices: store
           .devices()
           .filter((device) => device.platform !== "web" && device.id !== except && device.scopes.includes("files"))
-          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id), connected: connected.has(device.id) })),
+          .map((device) => {
+            const limited = servers.get(device.id)?.limited === true;
+            return { deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id), connected: connected.has(device.id), ...(limited ? { limited } : {}) };
+          }),
       }));
 
     const pull = (relay: DeviceId | null, input: FsPathsInput) =>
@@ -536,6 +548,46 @@ export const layer = Layer.effect(
         return yield* pull(input.to, { device: input.device, paths: input.paths });
       });
 
+    const readMac = (input: FsReadInput) =>
+      Effect.gen(function* () {
+        const real = yield* resolve(input.path);
+        const info = yield* attempt(() => stat(real));
+        if (!info.isFile()) return yield* Effect.fail(rejected("Only files can be previewed"));
+        const end = Math.min(info.size, input.offset + input.length);
+        const bytes = input.offset >= info.size ? new ArrayBuffer(0) : yield* attempt(() => Bun.file(real).slice(input.offset, end).arrayBuffer());
+        return { data: Buffer.from(bytes).toString("base64"), offset: input.offset, total: info.size, done: end >= info.size } satisfies FsReadResult;
+      });
+
+    const read = (input: FsReadInput) =>
+      input.device === undefined
+        ? readMac(input)
+        : askPhone(input.device, (id) => ({ _tag: "Read", id, path: input.path, offset: input.offset, length: input.length })).pipe(Effect.map((answer) => answer.result));
+
+    const previews = join(config.dataDir, "preview");
+    yield* Effect.promise(() => rm(previews, { recursive: true, force: true }));
+
+    const preview = (device: DeviceId, path: string) =>
+      Effect.gen(function* () {
+        const dir = join(previews, `${createHash("sha256").update(`${device}\0${path}`).digest("hex").slice(0, 16)}-${newId()}`);
+        const target = join(dir, basename(path) || "file");
+        const partial = `${target}.part`;
+        yield* attempt(() => mkdir(dir, { recursive: true }));
+        let offset = 0;
+        for (;;) {
+          const chunk = yield* read({ device, path, offset, length: FS_LIMITS.readChunk });
+          if (chunk.total > FS_LIMITS.previewBytes) return yield* Effect.fail(rejected("That file is too big to preview. Transfer it instead."));
+          const bytes = Buffer.from(chunk.data, "base64");
+          yield* attempt(() => appendFile(partial, bytes));
+          offset += bytes.length;
+          if (chunk.done || bytes.length === 0) break;
+        }
+        yield* attempt(async () => {
+          if (offset === 0) await appendFile(partial, new Uint8Array(0));
+          await rename(partial, target);
+        });
+        return target;
+      });
+
     const recent = (input: FsRecentInput) =>
       input.device === undefined
         ? recentMac(input)
@@ -585,6 +637,8 @@ export const layer = Layer.effect(
       open,
       recent,
       transfer,
+      read,
+      preview,
       destination,
     });
   }),

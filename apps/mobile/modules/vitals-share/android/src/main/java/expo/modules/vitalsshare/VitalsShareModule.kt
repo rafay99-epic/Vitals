@@ -1,8 +1,11 @@
 package expo.modules.vitalsshare
 
+import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
@@ -42,6 +45,31 @@ class VitalsShareModule : Module() {
     AsyncFunction("thumbnail") { path: String, px: Int -> Recent.thumbnail(path, px) }
 
     Function("fullStorage") { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else null }
+
+    /** Opens Vitals' own All files access switch, or the list of apps where a phone has no such page. */
+    AsyncFunction("openFullStorage") {
+      val context = appContext.currentActivity ?: appContext.reactContext ?: return@AsyncFunction false
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return@AsyncFunction false
+      val own = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}"))
+      val any = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+      listOf(own, any).any { intent ->
+        if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }.isSuccess
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("list") { path: String -> Files.list(path) }
+
+    AsyncFunction("readChunk") { path: String, offset: Double, length: Int -> Files.readChunk(path, offset, length) }
+
+    AsyncFunction("pdfPages") { path: String -> Pdf.pages(path) }
+
+    AsyncFunction("pdfPage") { path: String, index: Int, width: Int ->
+      val context = appContext.reactContext ?: throw IllegalStateException("No context")
+      Pdf.page(context, path, index, width)
+    }
+
+    AsyncFunction("pdfClose") { Pdf.close() }
 
     AsyncFunction("toBack") { appContext.currentActivity?.moveTaskToBack(true) ?: false }.runOnQueue(Queues.MAIN)
   }

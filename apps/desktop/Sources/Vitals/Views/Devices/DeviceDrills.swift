@@ -15,7 +15,8 @@ struct Crumb: View {
 }
 
 /// Every item of some kinds, newest first: a six-column grid of thumbnails or a list.
-/// Select items, then Transfer sends them to this Mac or another phone.
+/// Select items, then Transfer sends them to this Mac or another phone; double-click or Space
+/// previews them.
 struct RecentDrill: View {
     @Environment(DevicesModel.self) private var pages
     let phone: PhoneDevice
@@ -26,22 +27,23 @@ struct RecentDrill: View {
     var body: some View {
         let page = pages.page(phone.id)
         let recents = kinds.map { page.recent[$0] ?? DevicesModel.Recent() }
-        let entries = pages.newest(phone.id, kinds)
+        let items = pages.newest(phone.id, kinds)
         let more = recents.contains(where: \.more)
         MetricScroll {
             Crumb(title: phone.name, back: back)
-            PageHero(value: kinds.count == 1 ? kinds[0].title : "Newest images", subtitle: subtitle(entries.count, more: more)) {
-                TransferControls(phone: phone, paths: entries.map(\.path), selection: $selection)
+            PageHero(value: kinds.count == 1 ? kinds[0].title : "Newest images", subtitle: subtitle(items.count, more: more)) {
+                TransferControls(phone: phone, items: items, selection: $selection)
             }
             if let notice = page.notice {
                 Text(notice).font(.callout).foregroundStyle(.secondary)
             }
-            if entries.isEmpty {
+            PreviewLine(phone: phone)
+            if items.isEmpty {
                 Text(DeviceLook.empty(recents)).foregroundStyle(.secondary)
             } else if kinds.allSatisfy(\.isVisual) {
-                ThumbPicker(phone: phone, entries: entries, selection: $selection)
+                ThumbPicker(phone: phone, items: items, selection: $selection)
             } else {
-                EntryPicker(entries: entries, selection: $selection)
+                EntryPicker(phone: phone, items: items, selection: $selection)
             }
             if more {
                 Button(recents.contains(where: \.loading) ? "Loading…" : "Show more") {
@@ -54,6 +56,7 @@ struct RecentDrill: View {
                 .disabled(recents.contains(where: \.loading) || !phone.online)
             }
         }
+        .spaceToPreview { pages.preview(phone.id, items.filter { selection.contains($0.path) }) }
     }
 
     private func subtitle(_ count: Int, more: Bool) -> String {
@@ -61,18 +64,20 @@ struct RecentDrill: View {
     }
 }
 
-/// Deselect and Transfer for a drill's selection. Transfer offers this Mac and every other
-/// phone, never the one the files are on.
+/// Preview, Deselect and Transfer for a drill's selection. Transfer offers this Mac and every
+/// other phone, never the one the files are on.
 struct TransferControls: View {
     @Environment(DevicesModel.self) private var pages
     @Environment(RemoteModel.self) private var remote
     let phone: PhoneDevice
-    /// The drill's items in order, so a transfer keeps it.
-    let paths: [String]
+    /// The drill's items in order, so a preview or transfer keeps it.
+    let items: [DevicesModel.Item]
     @Binding var selection: Set<String>
 
     var body: some View {
         if !selection.isEmpty {
+            Button("Preview") { pages.preview(phone.id, picked) }
+                .disabled(!phone.online)
             Button("Deselect") { selection = [] }
             Menu("Transfer \(selection.count)") {
                 Button { send(to: nil) } label: {
@@ -93,57 +98,118 @@ struct TransferControls: View {
         }
     }
 
+    private var picked: [DevicesModel.Item] { items.filter { selection.contains($0.path) } }
+
     private func send(to target: PhoneDevice?) {
-        let picked = paths.filter(selection.contains)
+        let paths = picked.map(\.path)
         selection = []
-        Task { await pages.transfer(phone.id, paths: picked, to: target) }
+        Task { await pages.transfer(phone.id, paths: paths, to: target) }
     }
 }
 
-/// Selectable thumbnails in the fixed six-column grid.
+/// Selectable thumbnails in the fixed six-column grid. `end` runs when the last one comes on
+/// screen, to load the next page.
 struct ThumbPicker: View {
     @Environment(DevicesModel.self) private var pages
     let phone: PhoneDevice
-    let entries: [PhoneEntry]
+    let items: [DevicesModel.Item]
     @Binding var selection: Set<String>
+    var end: (() -> Void)?
 
     var body: some View {
         LazyVGrid(columns: ThumbGrid.columns, spacing: 8) {
-            ForEach(entries) { entry in
-                Button { selection.formSymmetricDifference([entry.path]) } label: {
-                    ThumbTile(image: pages.thumb(phone.id, entry.path), selected: selection.contains(entry.path))
+            ForEach(items) { item in
+                ThumbCell(device: phone.id, item: item, selected: selection.contains(item.path)) {
+                    selection.formSymmetricDifference([item.path])
+                } open: {
+                    selection = [item.path]
+                    pages.preview(phone.id, [item])
                 }
-                .buttonStyle(.plain)
-                .help(entry.name)
-                .accessibilityLabel(entry.name)
-                .accessibilityAddTraits(selection.contains(entry.path) ? .isSelected : [])
+                .equatable()
+                .onAppear { if item.id == items.last?.id { end?() } }
             }
         }
-        .task(id: "\(phone.online)\(entries.count)\(entries.first?.path ?? "")") { await pages.loadThumbs(phone.id, paths: entries.map(\.path)) }
     }
 }
 
-/// Selectable file rows in one card.
-struct EntryPicker: View {
-    let entries: [PhoneEntry]
-    @Binding var selection: Set<String>
+/// Click selects, double-click previews. Equal cells skip their body when the grid redraws.
+private struct ThumbCell: View, Equatable {
+    let device: String
+    let item: DevicesModel.Item
+    let selected: Bool
+    let toggle: () -> Void
+    let open: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(entries) { entry in
-                Button { selection.formSymmetricDifference([entry.path]) } label: {
-                    EntryRow(entry: entry) {
-                        SelectionMark(selected: selection.contains(entry.path))
-                    }
-                    .contentShape(Rectangle())
+        Button(action: toggle) {
+            ThumbTile(device: device, path: item.path, selected: selected)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture(count: 2).onEnded(open))
+        .contextMenu { Button("Preview", action: open) }
+        .help(item.name)
+        .accessibilityLabel(item.name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.device == rhs.device && lhs.selected == rhs.selected && lhs.item == rhs.item
+    }
+}
+
+/// Selectable file rows in one card. `end` runs when the last one comes on screen.
+struct EntryPicker: View {
+    @Environment(DevicesModel.self) private var pages
+    let phone: PhoneDevice
+    let items: [DevicesModel.Item]
+    @Binding var selection: Set<String>
+    var end: (() -> Void)?
+
+    var body: some View {
+        let last = items.last?.id
+        LazyVStack(spacing: 0) {
+            ForEach(items) { item in
+                EntryCell(item: item, selected: selection.contains(item.path), divider: item.id != last) {
+                    selection.formSymmetricDifference([item.path])
+                } open: {
+                    selection = [item.path]
+                    pages.preview(phone.id, [item])
                 }
-                .buttonStyle(.plain)
-                if entry.id != entries.last?.id { Divider() }
+                .equatable()
+                .onAppear { if item.id == last { end?() } }
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .cardBackground()
+    }
+}
+
+/// Click selects, double-click previews.
+private struct EntryCell: View, Equatable {
+    let item: DevicesModel.Item
+    let selected: Bool
+    let divider: Bool
+    let toggle: () -> Void
+    let open: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: toggle) {
+                EntryRow(item: item) {
+                    SelectionMark(selected: selected)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture(count: 2).onEnded(open))
+            .contextMenu { Button("Preview", action: open) }
+                if divider { Divider() }
+        }
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.selected == rhs.selected && lhs.divider == rhs.divider && lhs.item == rhs.item
     }
 }
 
