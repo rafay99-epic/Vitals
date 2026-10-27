@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Devices: user journeys (plan v2)</title>
+<style>
+  :root { --ink:#fff; --ink2:#c9c9c9; --dim:#8a8a8a; --line:#1e1e1e; --acc:#f2ec6b; --ok:#5cf2a6; --warn:#ffb45c; --bad:#ff4d6d; --blue:#74d4ff; --violet:#c8a8ff; --orange:#ffa95c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  main { max-width:1240px; margin:0 auto; padding:40px 24px 90px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  h2 { font-size:18px; margin:48px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  p, li { color:var(--ink2); }
+  b { color:var(--ink); }
+  code { font:12px ui-monospace, "SF Mono", Menlo, monospace; color:#e6e6e6; background:#111; padding:1px 4px; border-radius:3px; }
+  a { color:var(--blue); }
+  .lead { font-size:15px; max-width:900px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:13px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  td { color:var(--ink2); }
+  td:first-child { color:var(--ink); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--dim); margin:10px 0; }
+  .legend span::before { content:""; display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:-1px; background:var(--c); }
+
+  /* journey */
+  .journey { margin:26px 0 8px; }
+  .jh { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .jh h3 { font-size:15.5px; margin:0; }
+  .jh .who { font-size:11px; font-weight:700; padding:2px 7px; border-radius:5px; }
+  .jh .taps { margin-left:auto; font-size:12px; color:var(--dim); }
+  .jh .taps b { color:var(--ok); }
+  .jp { font-size:13px; margin:4px 0 12px; max-width:900px; }
+  .board { display:flex; align-items:flex-start; gap:0; overflow-x:auto; padding-bottom:10px; }
+  .step { flex:none; display:flex; flex-direction:column; gap:8px; }
+  .cap { font-size:12px; color:var(--ink2); max-width:210px; }
+  .cap i { font-style:normal; color:var(--acc); font-weight:700; margin-right:4px; }
+  .arrow { flex:none; width:34px; align-self:center; text-align:center; color:#444; font-size:20px; margin-top:-40px; }
+  .m-a { background:rgba(92,242,166,.14); color:var(--ok); }
+  .m-i { background:rgba(116,212,255,.14); color:var(--blue); }
+  .m-m { background:rgba(200,168,255,.16); color:var(--violet); }
+
+  /* phone */
+  .ph { width:196px; height:392px; border:1px solid #2a2a2a; border-radius:26px; padding:10px 9px; overflow:hidden; background:#000; position:relative; }
+  .ph .nt { width:58px; height:14px; background:#111; border-radius:9px; margin:0 auto 8px; }
+  .pt { font-size:17px; font-weight:700; margin:0 3px 8px; }
+  .bk { font-size:11px; color:var(--blue); margin:0 3px 4px; }
+  .sg { display:flex; gap:2px; background:#141414; border-radius:99px; padding:2px; margin:0 1px 9px; }
+  .sg span { flex:1; text-align:center; font-size:10px; padding:4px 0; border-radius:99px; color:var(--dim); }
+  .sg span.on { background:#2a2a2a; color:#fff; font-weight:600; }
+  .sh { display:flex; justify-content:space-between; font-size:10.5px; font-weight:600; margin:8px 3px 4px; }
+  .sh small { color:var(--blue); font-weight:500; }
+  .tl { display:flex; gap:4px; margin:0 1px; }
+  .tl div { width:40px; height:40px; border-radius:6px; flex:none; background:linear-gradient(140deg,#4a2a1a,#1d3a2a); }
+  .tl div.s { height:56px; background:linear-gradient(170deg,#1c2a3a,#0b1420); border:1px solid #23384d; }
+  .tl div.b { background:linear-gradient(200deg,#203a5a,#3a1d2a); }
+  .ln { display:flex; justify-content:space-between; gap:6px; font-size:10.5px; color:var(--ink2); padding:5px 3px; border-bottom:1px solid #111; }
+  .ln span:first-child { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .ln span:last-child { color:var(--dim); flex:none; }
+  .ln.hl { background:#0e1a24; border-radius:6px; }
+  .ln .go { color:var(--blue); font-weight:600; }
+  .gr { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; margin:0 1px; }
+  .gr div { aspect-ratio:1; background:linear-gradient(140deg,#4a2a1a,#1d3a2a); border-radius:3px; }
+  .gr div:nth-child(3n) { background:linear-gradient(200deg,#203a5a,#3a1d2a); }
+  .gr div.sel { outline:2px solid var(--blue); outline-offset:-2px; }
+  .sheet { position:absolute; left:6px; right:6px; bottom:6px; background:#121212; border:1px solid #262626; border-radius:16px; padding:10px; }
+  .sheet .h { font-size:11.5px; font-weight:600; margin-bottom:6px; }
+  .sheet .h small { display:block; color:var(--dim); font-weight:400; font-size:10px; }
+  .btn { background:#fff; color:#000; text-align:center; font-weight:700; font-size:11px; padding:7px; border-radius:10px; margin-top:6px; }
+  .btn.g { background:#1d1d1d; color:#fff; font-weight:500; }
+  .toast { position:absolute; left:14px; right:14px; bottom:14px; background:#16241c; border:1px solid #275a3d; color:var(--ok); font-size:10.5px; padding:7px 9px; border-radius:10px; }
+  .note { font-size:10px; color:var(--dim); margin:6px 3px; }
+  .card { margin:6px 1px; padding:8px; border-radius:10px; background:#0d0d0d; border:1px solid #1f1f1f; font-size:10.5px; color:var(--ink2); }
+  .card b { display:block; font-size:11px; margin-bottom:2px; }
+  .tg { width:26px; height:15px; border-radius:99px; background:var(--ok); position:relative; flex:none; }
+  .tg::after { content:""; position:absolute; right:2px; top:2px; width:11px; height:11px; border-radius:50%; background:#fff; }
+  .tg.off { background:#2a2a2a; } .tg.off::after { right:auto; left:2px; }
+  .sr { display:flex; justify-content:space-between; align-items:center; padding:6px 3px; border-bottom:1px solid #111; font-size:10.5px; }
+  .sr small { display:block; color:var(--dim); font-size:9.5px; }
+  .ios-alert { position:absolute; left:18px; right:18px; top:120px; background:#1c1c1e; border-radius:14px; padding:12px 10px 4px; text-align:center; font-size:11px; }
+  .ios-alert b { display:block; margin-bottom:4px; font-size:11.5px; }
+  .ios-alert div { border-top:1px solid #333; padding:6px 0; color:var(--blue); font-size:11px; }
+
+  /* mac */
+  .mc { width:420px; height:270px; border:1px solid #2a2a2a; border-radius:10px; background:#070707; display:flex; flex-direction:column; overflow:hidden; position:relative; }
+  .mc .tb { height:22px; display:flex; gap:5px; align-items:center; padding:0 8px; border-bottom:1px solid #161616; }
+  .mc .tb i { width:8px; height:8px; border-radius:50%; background:#333; display:block; }
+  .mc .bd { flex:1; display:flex; min-height:0; }
+  .mc .sd { width:112px; border-right:1px solid #161616; padding:7px 6px; font-size:10.5px; }
+  .mc .sd .g { color:var(--dim); font-size:9.5px; font-weight:600; margin:7px 6px 2px; }
+  .mc .sd div.r { padding:3px 6px; border-radius:5px; color:var(--ink2); display:flex; justify-content:space-between; }
+  .mc .sd div.r.on { background:#1f1f1f; color:#fff; }
+  .mc .sd small { font-size:8px; }
+  .mc .mn { flex:1; padding:9px 11px; overflow:hidden; }
+  .mc .hd { font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:baseline; }
+  .mc .hd small { font-size:9.5px; color:var(--dim); font-weight:400; }
+  .mc .crumb { font-size:10px; color:var(--blue); margin-bottom:5px; }
+  .mc .tl div { width:36px; height:36px; }
+  .mc .tl div.s { height:50px; }
+  .mc .sh { margin:7px 0 3px; }
+  .mc .ln { padding:4px 2px; }
+  .mc .gr5 { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; }
+  .mc .gr5 div { aspect-ratio:9/16; border-radius:4px; background:linear-gradient(170deg,#1c2a3a,#0b1420); border:1px solid #23384d; }
+  .mc .gr5 div.sel { outline:2px solid var(--blue); outline-offset:1px; }
+  .mc .ctx { position:absolute; right:40px; top:96px; width:150px; background:#1a1a1a; border:1px solid #2e2e2e; border-radius:8px; padding:4px; font-size:10.5px; }
+  .mc .ctx div { padding:4px 7px; border-radius:4px; color:var(--ink2); }
+  .mc .ctx div.on { background:#2b5bd7; color:#fff; }
+  .finder { position:absolute; right:10px; bottom:10px; width:150px; height:86px; border:1px dashed #3a3a3a; border-radius:8px; font-size:10px; color:var(--dim); display:grid; place-items:center; text-align:center; background:#0b0b0b; }
+  .mtoast { position:absolute; left:50%; transform:translateX(-50%); bottom:10px; background:#16241c; border:1px solid #275a3d; color:var(--ok); font-size:10.5px; padding:6px 10px; border-radius:8px; white-space:nowrap; }
+  .notif { position:absolute; right:8px; top:28px; width:200px; background:#1a1a1a; border:1px solid #2e2e2e; border-radius:10px; padding:8px; font-size:10.5px; display:flex; gap:7px; }
+  .notif .th { width:26px; height:38px; border-radius:4px; background:linear-gradient(170deg,#1c2a3a,#0b1420); border:1px solid #23384d; flex:none; }
+  .notif small { display:block; color:var(--dim); font-size:9.5px; }
+  .other { font-size:10.5px; color:var(--dim); text-align:center; margin-top:60px; }
+  .bigq { counter-reset:q; padding:0; list-style:none; }
+  .bigq li { counter-increment:q; padding:10px 0 10px 34px; border-bottom:1px solid var(--line); position:relative; }
+  .bigq li::before { content:counter(q); position:absolute; left:0; top:10px; width:22px; height:22px; border-radius:50%; background:#1d1d1d; color:var(--acc); font-weight:700; font-size:12px; display:grid; place-items:center; }
+  .bigq li small { display:block; color:var(--dim); margin-top:3px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Vitals Devices: user journeys</h1>
+<p class="lead">Plan v2.1, 2026-10-27. Built on your pick: <b>device by device</b> (direction B). Every device gets the same menu on every other device: <b>Photos, Screenshots, Clipboard, Downloads, Documents, All files</b>. The Mac is the hub that keeps all three connected. New things can also <b>arrive on their own</b> (direction C) as a setting. The v1 plan with the A/B/C comparison is <a href="https://pagepilot.rafay99.com/p/71c1d1d1e2a144a1a97fc522c853cb2c">here</a>. Sample names in the screens are layout placeholders. Your decisions are in <a href="#decided">section 7</a>.</p>
+
+<div class="legend"><span style="--c:var(--violet)">Mac</span><span style="--c:var(--ok)">Pixel (Android)</span><span style="--c:var(--blue)">iPhone</span></div>
+
+<h2>1. What every device shows</h2>
+<table>
+  <tr><th>Menu item</th><th>Mac</th><th>Pixel</th><th>iPhone</th></tr>
+  <tr><td>Photos</td><td class="ok">Pictures folder, Photos exports</td><td class="ok">All photos and videos</td><td class="ok">All photos and videos (asks once for Photos access)</td></tr>
+  <tr><td>Screenshots</td><td class="ok">Desktop / screenshot folder</td><td class="ok">Screenshots album</td><td class="ok">Screenshots album</td></tr>
+  <tr><td>Clipboard</td><td class="ok">Full history, live</td><td class="warn">What the Pixel sent: opening Vitals, the tile, or Share › Vitals</td><td class="warn">What the iPhone sent: opening Vitals or Share › Vitals</td></tr>
+  <tr><td>Downloads</td><td class="ok">~/Downloads</td><td class="ok">Download/</td><td class="warn">Files › Downloads, after you pick the folder once</td></tr>
+  <tr><td>Documents</td><td class="ok">~/Documents</td><td class="ok">Documents/ + PDFs and Office files anywhere</td><td class="warn">Files › any folder you pick once (On My iPhone or iCloud Drive)</td></tr>
+  <tr><td>All files</td><td class="ok">Desktop, Downloads, Documents, Pictures; whole Mac if you turn it on</td><td class="ok">Whole phone storage (All files access)</td><td class="warn">Only the folders you picked</td></tr>
+  <tr><td>Reachable when</td><td class="ok">Always</td><td class="ok">Always, even with Vitals closed</td><td class="warn">While Vitals is open on the iPhone</td></tr>
+</table>
+<p><b>Good news on iPhone files:</b> v1 said iPhone could only share Files › Vitals. It can do more. iOS lets you pick a folder once (Downloads, Documents, any iCloud Drive folder) and Vitals keeps that permission. So your iPhone documents and downloads are reachable, as long as Vitals is open on the iPhone. That last part is the one iOS rule we can't get around.</p>
+
+<h2>2. Journeys on the Mac</h2>
+
+<div class="journey">
+  <div class="jh"><span class="who m-m">MAC</span><h3>Get a Pixel screenshot into Slack</h3><span class="taps"><b>3 clicks</b> (today: 7+)</span></div>
+  <p class="jp">Devices live in the main sidebar, one row each. Clicking a device opens its page: short rows of each kind, newest first. "See all" drills into one kind on the same page.</p>
+  <div class="board">
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">MONITOR</div><div class="r">CPU</div><div class="r">Memory</div><div class="g">DEVICES</div><div class="r on">Pixel <small class="ok">●</small></div><div class="r">iPhone <small>○</small></div><div class="g">MAINTAIN</div><div class="r">Storage</div></div>
+      <div class="mn"><div class="hd">Pixel <small>Tailscale · 82% battery</small></div>
+        <div class="sh">Screenshots <small>See all</small></div><div class="tl"><div class="s"></div><div class="s"></div><div class="s"></div><div class="s"></div><div class="s"></div><div class="s"></div></div>
+        <div class="sh">Photos <small>See all</small></div><div class="tl"><div></div><div class="b"></div><div></div><div class="b"></div><div></div><div class="b"></div></div>
+        <div class="sh">Clipboard <small>See all</small></div><div class="ln"><span>Meet at 7, gate B</span><span>3 min</span></div>
+      </div></div></div>
+      <div class="cap"><i>1</i>Click <b>Pixel</b> in the sidebar.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">DEVICES</div><div class="r on">Pixel <small class="ok">●</small></div><div class="r">iPhone <small>○</small></div></div>
+      <div class="mn"><div class="crumb">‹ Pixel</div><div class="hd">Screenshots <small>214 · newest first</small></div>
+        <div class="gr5"><div class="sel"></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+      </div></div></div>
+      <div class="cap"><i>2</i><b>See all</b> on Screenshots. Space bar previews.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">DEVICES</div><div class="r on">Pixel</div></div>
+      <div class="mn"><div class="crumb">‹ Pixel</div><div class="hd">Screenshots</div>
+        <div class="gr5"><div class="sel"></div><div></div><div></div><div></div><div></div><div></div></div>
+      </div></div><div class="finder">Slack message box<br>drop here</div></div>
+      <div class="cap"><i>3</i>Drag it into Slack, Mail or Finder. Or <b>⌘C</b> and paste anywhere.</div></div>
+  </div>
+</div>
+
+<div class="journey">
+  <div class="jh"><span class="who m-m">MAC</span><h3>Use something copied on the Pixel</h3><span class="taps"><b>2 clicks</b></span></div>
+  <p class="jp">On the Pixel you copy a text or link, then tap the <b>Send clipboard</b> tile in Quick Settings (or just open Vitals). On the Mac it shows under Pixel › Clipboard. With "arrives on its own" on, it's already on the Mac clipboard and you skip straight to ⌘V.</p>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="nt"></div>
+      <div class="note" style="margin-top:4px">QUICK SETTINGS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:4px 2px">
+        <div class="card" style="margin:0">Wi-Fi</div><div class="card" style="margin:0">Bluetooth</div>
+        <div class="card" style="margin:0;border-color:#275a3d;color:var(--ok)"><b style="color:var(--ok)">Send clipboard</b>to Mac</div><div class="card" style="margin:0">Flashlight</div>
+      </div>
+      <div class="toast">Sent to your Mac</div></div>
+      <div class="cap"><i>1</i>Pixel: copy, pull down, tap <b>Send clipboard</b>.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">DEVICES</div><div class="r on">Pixel <small class="ok">●</small></div><div class="r">iPhone</div></div>
+      <div class="mn"><div class="crumb">‹ Pixel</div><div class="hd">Clipboard <small>from Pixel</small></div>
+        <div class="ln hl"><span>https://maps.app.goo.gl/x7Lr</span><span class="go">Copy</span></div>
+        <div class="ln"><span>Meet at 7, gate B</span><span>3 min</span></div>
+        <div class="ln"><span>Image · 1080×2400</span><span>1 h</span></div>
+        <div class="ln"><span>Order #48213</span><span>yesterday</span></div>
+      </div></div><div class="mtoast">On your Mac clipboard</div></div>
+      <div class="cap"><i>2</i>Mac: Pixel › Clipboard › <b>Copy</b>. Now ⌘V works in any app.</div></div>
+  </div>
+</div>
+
+<div class="journey">
+  <div class="jh"><span class="who m-m">MAC</span><h3>Open an iPhone document</h3><span class="taps"><b>3 clicks</b></span></div>
+  <p class="jp">If Vitals isn't open on the iPhone, the page says so plainly instead of spinning. Everything already seen stays listed, greyed, until the iPhone is back.</p>
+  <div class="board">
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">DEVICES</div><div class="r">Pixel</div><div class="r on">iPhone <small>○</small></div></div>
+      <div class="mn"><div class="hd">iPhone <small>Last seen 12 min ago</small></div>
+        <div class="card" style="margin:8px 0"><b>Open Vitals on your iPhone</b>iOS only lets it share while it's open. We'll refresh the moment it is.</div>
+        <div class="sh" style="color:var(--dim)">Documents <small style="color:var(--dim)">from 12 min ago</small></div>
+        <div class="ln" style="opacity:.5"><span>Visa-application.pdf</span><span>2 d</span></div>
+      </div></div></div>
+      <div class="cap"><i>1</i>iPhone is closed: a clear "open Vitals" note.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">DEVICES</div><div class="r">Pixel</div><div class="r on">iPhone <small class="ok">●</small></div></div>
+      <div class="mn"><div class="hd">iPhone <small>Wi-Fi · open</small></div>
+        <div class="sh">Documents <small>See all</small></div>
+        <div class="ln hl"><span>Visa-application.pdf</span><span class="go">Open</span></div>
+        <div class="ln"><span>Rent-receipt-Oct.pdf</span><span>4 d</span></div>
+        <div class="sh">Downloads <small>See all</small></div>
+        <div class="ln"><span>boarding-pass.pkpass</span><span>1 h</span></div>
+      </div></div></div>
+      <div class="cap"><i>2</i>You open Vitals on the iPhone; the page fills in live.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">DEVICES</div><div class="r on">iPhone</div></div>
+      <div class="mn"><div class="hd">Visa-application.pdf</div><div class="other">Opens in Preview.<br>Saved in Downloads › Vitals.</div></div></div></div>
+      <div class="cap"><i>3</i><b>Open</b> downloads it and opens it in Preview.</div></div>
+  </div>
+</div>
+
+<h2>3. Journeys on the Pixel</h2>
+
+<div class="journey">
+  <div class="jh"><span class="who m-m">MAC</span><span class="who m-a">PIXEL</span><h3>Mac screenshot into WhatsApp on the Pixel</h3><span class="taps"><b>2 taps</b> (today: Files › Mac › Desktop › find › Get › open WhatsApp)</span></div>
+  <p class="jp">Your real case from today. Copy on the Mac, it's on the Pixel. With "Mac copies on this clipboard" on, you skip step 2 and just paste in WhatsApp.</p>
+  <div class="board">
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd"><div class="mn"><div class="other">⌘⇧4, or copy the saved<br>Screenshot.png in Finder</div></div></div><div class="mtoast">Copied</div></div>
+      <div class="cap"><i>1</i>Mac: take the screenshot and copy it.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Devices</div>
+      <div class="sg"><span class="on">Mac</span><span>iPhone</span></div>
+      <div class="sh">Clipboard <small>See all</small></div>
+      <div class="ln hl"><span>🖼 Screenshot 12.23.08.png</span><span class="go">Copy</span></div>
+      <div class="ln"><span>https://maps.app.goo.gl/x7Lr</span><span>3 m</span></div>
+      <div class="sheet"><div class="h">Screenshot 12.23.08.png<small>1.6 MB · from your Mac</small></div><div class="btn">Copy</div><div class="btn g">Share…</div><div class="btn g">Save to Photos</div></div></div>
+      <div class="cap"><i>2</i>Pixel: Devices › Mac › Clipboard. <b>Copy</b> or <b>Share</b>.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">WhatsApp</div><div class="other" style="margin-top:110px">Long-press › Paste<br>or pick WhatsApp in Share</div><div class="toast">Sent, full quality from your Mac</div></div>
+      <div class="cap"><i>3</i>Paste in the chat. Done.</div></div>
+  </div>
+</div>
+
+<div class="journey">
+  <div class="jh"><span class="who m-a">PIXEL</span><h3>Get a document from the Mac</h3><span class="taps"><b>4 taps</b></span></div>
+  <p class="jp">The Devices tab has one switcher at the top: <b>Mac · iPhone</b>. Each device page is the same menu as on the Mac. "All files" on the Mac is Desktop, Downloads, Documents and Pictures, or the whole Mac if you turned that on.</p>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Devices</div>
+      <div class="sg"><span class="on">Mac</span><span>iPhone</span></div>
+      <div class="sh">Screenshots <small>See all</small></div><div class="tl"><div class="s"></div><div class="s"></div><div class="s"></div><div class="s"></div></div>
+      <div class="sh">Clipboard <small>See all</small></div><div class="ln"><span>ssh vitals@studio.local</span><span>2 m</span></div>
+      <div class="sh">Downloads <small>See all</small></div><div class="ln"><span>contract-v3.docx</span><span>1 h</span></div>
+      <div class="sh">Documents <small>See all</small></div><div class="ln"><span>Taxes 2026</span><span>›</span></div>
+      <div class="sh">All files <small>›</small></div></div>
+      <div class="cap"><i>1</i>Devices tab, <b>Mac</b> selected.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="bk">‹ Mac</div><div class="pt">All files</div>
+      <div class="ln"><span>📁 Desktop</span><span>›</span></div><div class="ln hl"><span>📁 Documents</span><span>›</span></div><div class="ln"><span>📁 Downloads</span><span>›</span></div><div class="ln"><span>📁 Pictures</span><span>›</span></div>
+      <div class="note">Whole Mac is off. Turn it on in Vitals › Remote on the Mac.</div></div>
+      <div class="cap"><i>2</i><b>All files</b> › Documents.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="bk">‹ Documents</div><div class="pt">Taxes 2026</div>
+      <div class="ln hl"><span>return-final.pdf</span><span>2.1 MB</span></div><div class="ln"><span>receipts.zip</span><span>48 MB</span></div>
+      <div class="sheet"><div class="h">return-final.pdf<small>2.1 MB · on your Mac</small></div><div class="btn">Get</div><div class="btn g">Open</div><div class="btn g">Send to iPhone</div></div></div>
+      <div class="cap"><i>3</i>Tap the file. <b>Get</b>, Open, or send it on to the iPhone.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="bk">‹ Documents</div><div class="pt">Taxes 2026</div>
+      <div class="ln"><span>return-final.pdf</span><span class="ok">✓</span></div><div class="ln"><span>receipts.zip</span><span>48 MB</span></div>
+      <div class="toast">In Downloads › Vitals · Open</div></div>
+      <div class="cap"><i>4</i>Saved in Downloads › Vitals. The Mac's copy stays.</div></div>
+  </div>
+</div>
+
+<div class="journey">
+  <div class="jh"><span class="who m-a">PIXEL</span><h3>Pull photos off the iPhone</h3><span class="taps"><b>4 taps</b></span></div>
+  <p class="jp">Select several, get them all at once. Photos land in the Pixel's gallery at full quality. The Mac relays and keeps nothing.</p>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Devices</div>
+      <div class="sg"><span>Mac</span><span class="on">iPhone</span></div>
+      <div class="sh">Photos <small>See all</small></div><div class="tl"><div></div><div class="b"></div><div></div><div class="b"></div></div>
+      <div class="sh">Screenshots <small>See all</small></div><div class="tl"><div class="s"></div><div class="s"></div><div class="s"></div><div class="s"></div></div>
+      <div class="sh">Clipboard <small>See all</small></div><div class="ln"><span>Meet at 7, gate B</span><span>1 h</span></div></div>
+      <div class="cap"><i>1</i>Switch to <b>iPhone</b>.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="bk">‹ iPhone</div><div class="pt">Photos</div>
+      <div class="note">TODAY</div><div class="gr"><div class="sel"></div><div class="sel"></div><div class="sel"></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+      <div class="sheet"><div class="h">3 selected<small>11.4 MB · originals</small></div><div class="btn">Get 3</div></div></div>
+      <div class="cap"><i>2</i><b>See all</b>, hold to select, <b>Get 3</b>.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="bk">‹ iPhone</div><div class="pt">Photos</div>
+      <div class="gr"><div></div><div></div><div></div><div></div><div></div><div></div></div>
+      <div class="toast">3 photos in your gallery · Vitals album</div></div>
+      <div class="cap"><i>3</i>They show up in Google Photos and the gallery.</div></div>
+  </div>
+</div>
+
+<h2>4. Journeys on the iPhone</h2>
+
+<div class="journey">
+  <div class="jh"><span class="who m-i">IPHONE</span><h3>First run: let the others in</h3><span class="taps"><b>once</b></span></div>
+  <p class="jp">One short setup screen, each line optional. This is what lets the Mac and the Pixel see iPhone photos and documents.</p>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Share this iPhone</div>
+      <div class="sr"><div>Photos and screenshots<small>Asks iOS once</small></div><div class="tg off"></div></div>
+      <div class="sr"><div>Downloads folder<small>Pick it in Files</small></div><div class="tg off"></div></div>
+      <div class="sr"><div>Documents folder<small>Pick it in Files</small></div><div class="tg off"></div></div>
+      <div class="sr"><div>Another folder<small>iCloud Drive or On My iPhone</small></div><span class="go" style="color:var(--blue);font-size:10px">Add</span></div>
+      <div class="note">Your Mac and Pixel can see these only while Vitals is open here.</div></div>
+      <div class="cap"><i>1</i>Settings › This phone › <b>Share this iPhone</b>.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Share this iPhone</div>
+      <div class="ios-alert"><b>"Vitals" would like full access to your Photo Library</b><span style="color:var(--dim);font-size:10px">So your Mac and Pixel can get photos.</span><div style="margin-top:6px">Limit Access…</div><div>Allow Full Access</div><div>Don't Allow</div></div></div>
+      <div class="cap"><i>2</i>iOS asks once. Full or a selection.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="bk">Cancel</div><div class="pt">On My iPhone</div>
+      <div class="ln hl"><span>📁 Downloads</span><span>›</span></div><div class="ln"><span>📁 Documents</span><span>›</span></div><div class="ln"><span>📁 Vitals</span><span>›</span></div>
+      <div class="btn" style="margin-top:14px">Open</div>
+      <div class="note">The iOS folder picker. Vitals remembers the folder.</div></div>
+      <div class="cap"><i>3</i>Pick <b>Downloads</b>, then Documents.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Share this iPhone</div>
+      <div class="sr"><div>Photos and screenshots<small>Full access</small></div><div class="tg"></div></div>
+      <div class="sr"><div>Downloads folder<small>On My iPhone › Downloads</small></div><div class="tg"></div></div>
+      <div class="sr"><div>Documents folder<small>iCloud Drive › Documents</small></div><div class="tg"></div></div>
+      <div class="toast">Mac and Pixel can see these now</div></div>
+      <div class="cap"><i>4</i>Done. Change it any time.</div></div>
+  </div>
+</div>
+
+<div class="journey">
+  <div class="jh"><span class="who m-i">IPHONE</span><h3>Grab a PDF from the Pixel's Downloads</h3><span class="taps"><b>3 taps</b></span></div>
+  <p class="jp">The Pixel answers even if its screen is off and Vitals is closed, thanks to the background service.</p>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Devices</div>
+      <div class="sg"><span>Mac</span><span class="on">Pixel</span></div>
+      <div class="sh">Downloads <small>See all</small></div>
+      <div class="ln hl"><span>Invoice-October.pdf</span><span>38 m</span></div><div class="ln"><span>app-release.apk</span><span>1 d</span></div>
+      <div class="sh">Photos <small>See all</small></div><div class="tl"><div></div><div class="b"></div><div></div><div class="b"></div></div>
+      <div class="sh">All files <small>›</small></div></div>
+      <div class="cap"><i>1</i>Devices › <b>Pixel</b>. Downloads shows newest first.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Devices</div>
+      <div class="sg"><span>Mac</span><span class="on">Pixel</span></div>
+      <div class="sheet"><div class="h">Invoice-October.pdf<small>240 KB · on your Pixel</small></div><div class="btn">Get</div><div class="btn g">Open</div><div class="btn g">Send to Mac</div></div></div>
+      <div class="cap"><i>2</i>Tap it, <b>Get</b>.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Devices</div>
+      <div class="sg"><span>Mac</span><span class="on">Pixel</span></div>
+      <div class="toast">In Files › Vitals · Open</div></div>
+      <div class="cap"><i>3</i>Saved in Files › Vitals.</div></div>
+  </div>
+</div>
+
+<h2>5. Arrives on its own (a setting)</h2>
+<div class="journey">
+  <div class="jh"><span class="who m-a">PIXEL</span><span class="who m-m">MAC</span><h3>Take a screenshot, paste it on the Mac</h3><span class="taps"><b>0 taps</b></span></div>
+  <p class="jp">Off by default, set per device. When on, a new Pixel screenshot lands on the Mac within a second or two: in Downloads › Vitals › Screenshots and on the Mac clipboard.</p>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="nt"></div><div class="pt">Arrives on its own</div>
+      <div class="note">FROM THIS PIXEL</div>
+      <div class="sr"><div>New screenshots<small>to Mac</small></div><div class="tg"></div></div>
+      <div class="sr"><div>Things I copy<small>when I tap the tile or open Vitals</small></div><div class="tg"></div></div>
+      <div class="sr"><div>New photos<small>off</small></div><div class="tg off"></div></div>
+      <div class="note">TO THIS PIXEL</div>
+      <div class="sr"><div>Mac copies<small>on this clipboard</small></div><div class="tg"></div></div></div>
+      <div class="cap"><i>1</i>Turn on once.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="nt"></div><div class="other" style="margin-top:150px">📸 Screenshot taken</div></div>
+      <div class="cap"><i>2</i>Take a screenshot as usual.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="mc"><div class="tb"><i></i><i></i><i></i></div><div class="bd"><div class="mn"><div class="other">Any app on the Mac</div></div></div>
+      <div class="notif"><div class="th"></div><div><b>Screenshot from Pixel</b><small>On your clipboard · ⌘V</small></div></div></div>
+      <div class="cap"><i>3</i>Mac shows it; <b>⌘V</b> pastes it.</div></div>
+  </div>
+</div>
+
+<h2>6. Build order</h2>
+<table>
+  <tr><th>Step</th><th>What you get</th><th>Size</th></tr>
+  <tr><td>1. Recent lists</td><td>Each device answers "newest photos, screenshots, downloads, documents". Pixel and Mac for sure, iPhone while open. Gateway test for phone ⇄ phone.</td><td>~2 days</td></tr>
+  <tr><td>2. Device pages</td><td>The screens above: Devices in the Mac sidebar, Devices tab on phones, drag to Finder and ⌘C on the Mac, multi-select on phones. Whole Mac toggle. Trash removed for phones.</td><td>~3 days</td></tr>
+  <tr><td>3. iPhone setup</td><td>Photos read access + folder picking (Downloads, Documents, any folder) that Vitals remembers.</td><td>~1 day</td></tr>
+  <tr><td>4. Clipboard everywhere</td><td>Clipboard per device, the Pixel Quick Settings tile, Share › Vitals for text, Copy straight to the Mac clipboard.</td><td>~2 days</td></tr>
+  <tr><td>5. Arrives on its own</td><td>The toggles in section 5.</td><td>~2 days</td></tr>
+</table>
+<p>Each step: own branch from <code>nightly</code>, tested on the emulator and Vitals Dev, then an APK on your Desktop.</p>
+
+<h2 id="decided">7. Decided (2026-10-27)</h2>
+<table>
+  <tr><th>Question</th><th>Your answer</th><th>What it means in the build</th></tr>
+  <tr><td>What a phone sees on the Mac</td><td>Home folder basics by default; whole Mac behind a toggle, off by default</td><td>Default: Desktop, Downloads, Documents, Pictures. A "Whole Mac" switch per device in Vitals › Remote, off until you turn it on.</td></tr>
+  <tr><td>Rename and delete</td><td>No. Copy and move only</td><td>Get, Send to, Save. The original always stays where it was. The existing "Move to Trash" for phones browsing the Mac comes out. Transfers ride the existing Drop (LocalSend-style) engine.</td></tr>
+  <tr><td>Mac sub-menu</td><td>Rows with See all</td><td>As mocked in section 2.</td></tr>
+  <tr><td>Pixel distribution</td><td>APK now, Play Store later</td><td>All files access stays. Play Store review is a later step.</td></tr>
+  <tr><td>Clipboard</td><td>Everything: text, links, images, screenshots</td><td>Any copy moves between all three. A copied image file (a saved screenshot) counts as an image, not a file. Fixed already, see below.</td></tr>
+</table>
+
+<h2>8. Fixed today: a copied Mac screenshot didn't paste on the phone</h2>
+<p>What happened: you saved a screenshot on the Mac, then copied the file. The Mac recorded it as a <b>file</b> (no preview), and phones only paste text, links and images, so it never reached the phone's clipboard. A copy straight from a screenshot tool (like Shottr) was already an image and worked.</p>
+<p>The fix: copying <b>one image file</b> (PNG, JPEG, HEIC, TIFF, GIF) now records it as a picture with a preview. Phones can tap Copy, auto-copy picks it up, and Share › WhatsApp works. Several files at once stay files.</p>
+
+</main>
+</body>
+</html>
