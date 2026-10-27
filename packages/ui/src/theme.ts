@@ -23,6 +23,7 @@ export interface ChannelSpec {
   readonly wave: Wave;
   readonly beats: number;
   readonly wideBeats: number;
+  readonly pair?: string;
 }
 
 export const channels = {
@@ -33,12 +34,13 @@ export const channels = {
   resp: { tag: "RESP", label: "Fans", color: "#74d4ff", wave: "wave", beats: 8, wideBeats: 36 },
   oxy: { tag: "OXY", label: "Battery", color: "#c8a8ff", wave: "pleth", beats: 4, wideBeats: 14 },
   drip: { tag: "DRIP", label: "Power", color: "#6f9bff", wave: "step", beats: 24, wideBeats: 60 },
-  tele: { tag: "TELE", label: "Network", color: "#b9c4d0", wave: "bars", beats: 30, wideBeats: 60 },
+  tele: { tag: "TELE", label: "Network", color: "#b9c4d0", wave: "bars", beats: 30, wideBeats: 60, pair: "#c8a8ff" },
+  disk: { tag: "DISK", label: "Disk", color: "#63e6e2", wave: "bars", beats: 30, wideBeats: 60, pair: "#ffb45c" },
 } as const satisfies Record<string, ChannelSpec>;
 
 export type Channel = keyof typeof channels;
 
-export const CHANNEL_ORDER: ReadonlyArray<Channel> = ["pulse", "press", "temp", "resp", "oxy", "eeg", "drip", "tele"];
+export const CHANNEL_ORDER: ReadonlyArray<Channel> = ["pulse", "press", "temp", "resp", "oxy", "eeg", "drip", "tele", "disk"];
 
 export const motion = {
   sample: 400,

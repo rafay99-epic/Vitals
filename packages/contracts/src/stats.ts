@@ -36,6 +36,9 @@ export const GpuSample = Schema.Struct({
   utilization: Schema.NullOr(Percent),
   memoryUsedBytes: Reading,
   coreCount: Schema.NullOr(NonNegativeInt),
+  rendererUtilization: Schema.optionalKey(Percent),
+  tilerUtilization: Schema.optionalKey(Percent),
+  memoryTotalBytes: Schema.optionalKey(Schema.Number),
 });
 export type GpuSample = typeof GpuSample.Type;
 
@@ -88,6 +91,16 @@ export const MemorySample = Schema.Struct({
 });
 export type MemorySample = typeof MemorySample.Type;
 
+export const AdapterSample = Schema.Struct({
+  watts: Schema.optionalKey(Schema.Number),
+  name: Schema.optionalKey(Schema.String),
+  wireless: Schema.Boolean,
+  deliveredWatts: Schema.optionalKey(Schema.Number),
+  voltage: Schema.optionalKey(Schema.Number),
+  amperage: Schema.optionalKey(Schema.Number),
+});
+export type AdapterSample = typeof AdapterSample.Type;
+
 export const BatterySample = Schema.Struct({
   percent: Percent,
   charging: Schema.Boolean,
@@ -98,6 +111,12 @@ export const BatterySample = Schema.Struct({
   healthPercent: Reading,
   temperatureC: Reading,
   condition: Schema.String,
+  fullyCharged: Schema.optionalKey(Schema.Boolean),
+  designCapacityMah: Schema.optionalKey(NonNegativeInt),
+  maxCapacityMah: Schema.optionalKey(NonNegativeInt),
+  voltage: Schema.optionalKey(Schema.Number),
+  amperage: Schema.optionalKey(Schema.Number),
+  adapter: Schema.optionalKey(AdapterSample),
 });
 export type BatterySample = typeof BatterySample.Type;
 
@@ -108,17 +127,61 @@ export const PowerSample = Schema.Struct({
 });
 export type PowerSample = typeof PowerSample.Type;
 
+export const LinkKind = Schema.Literals(["wifi", "ethernet", "other"]);
+export type LinkKind = typeof LinkKind.Type;
+
+export const NetworkLinkSample = Schema.Struct({
+  name: Schema.String,
+  label: Schema.String,
+  kind: LinkKind,
+  inBytesPerSec: Schema.Number,
+  outBytesPerSec: Schema.Number,
+  active: Schema.Boolean,
+});
+export type NetworkLinkSample = typeof NetworkLinkSample.Type;
+
+export const WifiSample = Schema.Struct({
+  ssid: Schema.optionalKey(Schema.String),
+  rssi: Schema.optionalKey(Schema.Int),
+  noise: Schema.optionalKey(Schema.Int),
+  txRateMbps: Schema.optionalKey(Schema.Number),
+  channel: Schema.optionalKey(NonNegativeInt),
+  band: Schema.optionalKey(Schema.String),
+});
+export type WifiSample = typeof WifiSample.Type;
+
 export const NetworkSample = Schema.Struct({
   inBytesPerSec: Schema.Number,
   outBytesPerSec: Schema.Number,
   wifiRssi: Schema.NullOr(Schema.Int),
   primaryInterface: Schema.NullOr(Schema.String),
+  totalInBytes: Schema.optionalKey(Schema.Number),
+  totalOutBytes: Schema.optionalKey(Schema.Number),
+  links: Schema.optionalKey(Schema.Array(NetworkLinkSample)),
+  wifi: Schema.optionalKey(WifiSample),
 });
 export type NetworkSample = typeof NetworkSample.Type;
+
+export const DriveHealthSample = Schema.Struct({
+  model: Schema.optionalKey(Schema.String),
+  wearPercent: NonNegativeInt,
+  readBytes: Schema.Number,
+  writtenBytes: Schema.Number,
+  powerOnHours: NonNegativeInt,
+  unsafeShutdowns: NonNegativeInt,
+  sparePercent: NonNegativeInt,
+  celsius: Schema.optionalKey(Schema.Number),
+  warning: Schema.Boolean,
+});
+export type DriveHealthSample = typeof DriveHealthSample.Type;
 
 export const DiskSample = Schema.Struct({
   readBytesPerSec: Schema.Number,
   writeBytesPerSec: Schema.Number,
+  freeBytes: Schema.optionalKey(Schema.Number),
+  totalBytes: Schema.optionalKey(Schema.Number),
+  volume: Schema.optionalKey(Schema.String),
+  health: Schema.optionalKey(DriveHealthSample),
 });
 export type DiskSample = typeof DiskSample.Type;
 

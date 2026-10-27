@@ -152,6 +152,13 @@ export const drawWave = (pen: Pen, wave: Wave, input: WaveInput): void => {
   draw(wave)(pen, levels, width, height);
 };
 
+export const peakOf = (series: ReadonlyArray<ReadonlyArray<number>>, beats: number, min: number): number => {
+  "worklet";
+  let top = min;
+  for (const values of series) for (const value of values.slice(-beats)) top = Math.max(top, value);
+  return top;
+};
+
 export const wavePath = (wave: Wave, input: WaveInput): SkPath => {
   "worklet";
   const builder = Skia.PathBuilder.Make();

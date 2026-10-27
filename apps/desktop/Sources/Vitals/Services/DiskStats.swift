@@ -6,6 +6,21 @@ import IOKit
 struct DiskIOSnapshot: Equatable, Sendable {
     var readPerSec: Double      // bytes/s, summed over drivers
     var writePerSec: Double
+    var space: VolumeSpace?
+}
+
+struct VolumeSpace: Equatable, Sendable {
+    let name: String?
+    let freeBytes: Int64
+    let totalBytes: Int64
+
+    static func boot() -> VolumeSpace? {
+        let keys: Set<URLResourceKey> = [.volumeNameKey, .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]
+        guard let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: keys),
+              let total = values.volumeTotalCapacity, total > 0,
+              let free = values.volumeAvailableCapacityForImportantUsage, free >= 0 else { return nil }
+        return VolumeSpace(name: values.volumeName, freeBytes: free, totalBytes: Int64(total))
+    }
 }
 
 /// Disk throughput from `IOBlockStorageDriver` statistics (the counters `iostat`
@@ -23,6 +38,9 @@ final class DiskStats {
     private var drivers: [(id: UInt64, service: io_object_t)] = []
     private var listedAt = Date.distantPast
     private static let relistInterval: TimeInterval = 60
+    private var space: VolumeSpace?
+    private var spaceAt = Date.distantPast
+    private static let spaceInterval: TimeInterval = 30
 
     deinit { drivers.forEach { IOObjectRelease($0.service) } }
 
@@ -50,7 +68,11 @@ final class DiskStats {
                                       uniquingKeysWith: { first, _ in first })
         previousTimestamp = now
 
-        return DiskIOSnapshot(readPerSec: readPerSec, writePerSec: writePerSec)
+        if Date().timeIntervalSince(spaceAt) >= Self.spaceInterval {
+            space = VolumeSpace.boot()
+            spaceAt = Date()
+        }
+        return DiskIOSnapshot(readPerSec: readPerSec, writePerSec: writePerSec, space: space)
     }
 
     /// `kIOBlockStorageDriverStatistics{Key,BytesReadKey,BytesWrittenKey}` from

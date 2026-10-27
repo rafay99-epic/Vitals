@@ -1,0 +1,1212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals · Connect on the Mac · prototype</title>
+<style>
+:root{
+  --bg:#000; --ink:#fff; --ink2:rgba(255,255,255,.8); --dim:rgba(255,255,255,.56); --mute:rgba(255,255,255,.36);
+  --line:rgba(255,255,255,.09); --line2:rgba(255,255,255,.16);
+  --blue:#0a84ff; --green:#30d158; --orange:#ff9f0a; --red:#ff453a; --yellow:#ffd60a; --mint:#63e6e2; --indigo:#5e5ce6; --purple:#bf5af2; --cyan:#64d2ff; --pink:#ff375f;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro",system-ui,"Helvetica Neue",sans-serif;
+  --round:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --out:cubic-bezier(.23,1,.32,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:default;text-align:left}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.page{max-width:1440px;margin:0 auto;padding:36px 40px 80px}
+.kicker{font:500 11px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim)}
+h1{font:700 34px/1.1 var(--sans);letter-spacing:-.5px;margin:8px 0 10px}
+.lede{color:var(--ink2);max-width:820px;margin:0 0 24px}
+h2{font:600 20px/1.2 var(--sans);margin:0 0 12px}
+.page h3{font:500 11px var(--mono);letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+
+/* stage scaling */
+.stage-wrap{position:relative;width:100%;overflow:hidden;border-radius:14px;border:1px solid var(--line2)}
+#stage{position:absolute;left:0;top:0;width:1360px;height:860px;transform-origin:0 0;overflow:hidden;font:13px/1.35 var(--sans);color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;isolation:isolate;
+  background:
+    radial-gradient(900px 620px at 8% 100%,#5a2a86 0%,rgba(90,42,134,0) 62%),
+    radial-gradient(900px 560px at 100% 0%,#1d4796 0%,rgba(29,71,150,0) 62%),
+    radial-gradient(760px 520px at 62% 72%,#9c3b62 0%,rgba(156,59,98,0) 66%),
+    #110e26}
+.under{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-top:12px}
+.caption{font:12px var(--mono);color:var(--ink2);min-height:18px}
+.caption b{color:var(--yellow);font-weight:500}
+.tools{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font:12px var(--mono)}
+.tools button{color:var(--dim);cursor:pointer} .tools button:hover{color:#fff}
+.tools .read{color:var(--mute);max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:48px;margin-top:40px;align-items:start}
+.journeys{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line2);border-left:1px solid var(--line2)}
+.jbtn{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:11px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer}
+.jbtn:hover{background:#0c0c0c}
+.jbtn b{font:500 13.5px var(--sans);display:block}
+.jbtn small{font:11px var(--mono);color:var(--dim)}
+.jbtn .run{font:500 11px var(--mono);color:var(--yellow);white-space:nowrap}
+.jbtn.ok .run{color:var(--green)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:500 10.5px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line2)}
+td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+td:first-child{color:#fff;white-space:nowrap}
+.gallery-head{margin-top:64px;border-top:1px solid var(--line2);padding-top:22px}
+#gallery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px 22px;margin-top:16px}
+.gcell{margin:0}
+.gbox{position:relative;height:250px;overflow:hidden;border-radius:10px;border:1px solid var(--line);background:radial-gradient(500px 300px at 20% 100%,#2a1640 0%,rgba(0,0,0,0) 70%),#0b0a14}
+.gbox > .gin{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none}
+.gcell figcaption{font:500 10.5px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:8px}
+footer{margin-top:56px;font:11px var(--mono);color:var(--mute)}
+
+/* generic mac controls */
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.num{font-family:var(--round);font-variant-numeric:tabular-nums}
+.grow{flex:1;min-width:0}
+.trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dim{color:var(--dim)}
+.sp{flex:1}
+.btn{height:22px;padding:0 10px;border-radius:6px;background:rgba(255,255,255,.14);font-size:12.5px;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;box-shadow:inset 0 .5px 0 rgba(255,255,255,.14),0 .5px 1px rgba(0,0,0,.4);flex:none}
+.btn:active{background:rgba(255,255,255,.24)}
+.btn.def{background:var(--blue)}
+.btn.def:active{background:#0070e0}
+.btn[disabled]{opacity:.38;pointer-events:none}
+.btn.sm{height:20px;font-size:12px;padding:0 8px}
+.btn .ic{width:13px;height:13px}
+.lnk{color:#4da3ff;font-size:12px;white-space:nowrap}
+.ibtn{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--dim);flex:none}
+.ibtn:hover{background:rgba(255,255,255,.1);color:#fff}
+.ibtn .ic{width:14px;height:14px}
+.sw{width:28px;height:16px;border-radius:8px;background:rgba(255,255,255,.2);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transition:transform 180ms var(--out)}
+.sw.on{background:var(--blue)}
+.sw.on::after{transform:translateX(12px)}
+.cb{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);white-space:nowrap}
+.cbx{width:14px;height:14px;border-radius:4px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.25);display:grid;place-items:center;flex:none;font-style:normal}
+.cbx.on{background:var(--blue);border-color:var(--blue)}
+.cbx .ic{width:10px;height:10px;stroke-width:3;color:#fff}
+.popup{height:22px;padding:0 6px 0 9px;border-radius:6px;background:rgba(255,255,255,.14);font-size:12.5px;display:inline-flex;align-items:center;gap:6px;box-shadow:inset 0 .5px 0 rgba(255,255,255,.14),0 .5px 1px rgba(0,0,0,.4);white-space:nowrap}
+.popup .chevs{width:14px;height:14px;border-radius:4px;background:var(--blue);display:grid;place-items:center}
+.popup .chevs .ic{width:9px;height:9px;stroke-width:2.6}
+.keycap{font:500 12px var(--sans);letter-spacing:1px;padding:1px 6px;border-radius:5px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);white-space:nowrap}
+.tip{position:relative}
+.tip::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%) translateY(2px);white-space:nowrap;font:12px var(--sans);color:#fff;background:#3a3a3c;border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:3px 8px;opacity:0;pointer-events:none;transition:opacity 120ms,transform 160ms var(--out);z-index:5}
+.tip:hover::after{opacity:1;transform:translateX(-50%)}
+.tag{font-size:11px;color:var(--orange);display:inline-flex;align-items:center;gap:3px;margin-left:6px;font-weight:400;vertical-align:1px}
+.tag .ic{width:11px;height:11px}
+.tile{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none}
+.tile .ic{width:14px;height:14px}
+
+/* menu bar */
+.mb{position:absolute;left:0;right:0;top:0;height:26px;display:flex;align-items:center;padding:0 12px;gap:18px;background:rgba(14,12,30,.5);font-size:13px;z-index:200}
+.mb .app{font-weight:700}
+.mb .r{margin-left:auto;display:flex;align-items:center;gap:6px}
+.mbi{height:22px;padding:0 6px;border-radius:5px;display:flex;align-items:center;gap:4px;font-size:13px}
+.mbi .ic{width:16px;height:16px}
+.mbi.on,.mbi.hot{background:rgba(255,255,255,.24)}
+#mbPct{font:600 12px var(--round);font-variant-numeric:tabular-nums}
+.clock{padding:0 4px;white-space:nowrap}
+
+/* windows */
+.win{position:absolute;border-radius:12px;background:#1e1e20;border:1px solid rgba(255,255,255,.13);box-shadow:0 24px 70px rgba(0,0,0,.55),0 0 0 .5px rgba(0,0,0,.9);overflow:hidden}
+.lights{display:flex;gap:8px;flex:none}
+.lights i{width:12px;height:12px;border-radius:50%;background:#ff5f57;display:block}
+.lights i:nth-child(2){background:#febc2e} .lights i:nth-child(3){background:#28c840}
+#finder{left:24px;top:64px;width:540px;height:330px}
+.fbody{display:grid;grid-template-columns:150px 1fr;height:100%}
+.f-side{background:#262628;border-right:1px solid rgba(255,255,255,.06);padding:13px 8px;display:flex;flex-direction:column;gap:1px}
+.f-side .lights{margin:0 4px 16px}
+.f-sec{font-size:11px;font-weight:600;color:var(--mute);padding:8px 8px 3px}
+.f-it{height:24px;border-radius:6px;padding:0 8px;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2)}
+.f-it .ic{width:15px;height:15px;color:var(--blue)}
+.f-it.on{background:rgba(255,255,255,.1);color:#fff}
+.f-main{display:flex;flex-direction:column;min-width:0}
+.f-bar{height:44px;display:flex;align-items:center;gap:4px;padding:0 12px;border-bottom:1px solid rgba(255,255,255,.07)}
+.f-bar b{font-size:13px;margin-left:6px}
+.f-head,.f-row{display:grid;grid-template-columns:1fr 78px 118px;gap:8px;align-items:center;padding:0 12px}
+.f-head{height:24px;font-size:11px;color:var(--dim);border-bottom:1px solid rgba(255,255,255,.07)}
+.f-list{flex:1;overflow:auto;padding:2px 6px}
+.f-row{height:24px;border-radius:5px;font-size:12.5px;padding:0 6px}
+.f-row:nth-child(even){background:rgba(255,255,255,.025)}
+.f-row.sel{background:#0b5fd1}
+.f-row .nm{display:flex;align-items:center;gap:7px;min-width:0}
+.f-row .k,.f-row .s{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.f-row.sel .k,.f-row.sel .s{color:rgba(255,255,255,.85)}
+.f-row .s{text-align:right}
+.ficon{width:16px;height:16px;flex:none}
+.f-status{height:24px;font-size:11px;color:var(--dim);display:flex;align-items:center;justify-content:center;border-top:1px solid rgba(255,255,255,.07)}
+.f-empty{color:var(--dim);font-size:12px;padding:30px;text-align:center}
+
+#vwin{left:578px;top:44px}
+.vwin{width:760px;height:640px}
+.vbody{display:grid;grid-template-columns:190px 1fr;height:100%}
+.v-side{background:#232325;border-right:1px solid rgba(255,255,255,.06);padding:13px 10px 12px;display:flex;flex-direction:column;gap:1px}
+.v-side .lights{margin:0 4px 16px}
+.v-sec{font-size:11px;font-weight:600;color:var(--mute);padding:10px 8px 3px}
+.v-nav{height:25px;border-radius:7px;padding:0 8px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);flex:none}
+.v-nav .ic{width:15px;height:15px;color:var(--blue)}
+.v-nav.on{background:rgba(255,255,255,.1);color:#fff}
+.v-main{display:flex;flex-direction:column;min-height:0;min-width:0;background:#1c1c1e;position:relative}
+.segbar{display:flex;justify-content:center;padding:16px 0 4px;flex:none}
+.seg{display:inline-flex;padding:2px;border-radius:999px;background:rgba(255,255,255,.08);gap:2px}
+.seg button{height:22px;padding:0 14px;border-radius:999px;font-size:12.5px;color:var(--ink2)}
+.seg button.on{background:rgba(255,255,255,.2);color:#fff}
+.scroll{flex:1;overflow:auto;padding:12px 20px 22px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.stack{display:flex;flex-direction:column;gap:12px}
+.v-title{font:700 20px var(--sans);padding:22px 20px 2px}
+.empty{color:var(--dim);font-size:13px;text-align:center;padding:40px 0}
+.card{border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.card-h{display:flex;align-items:center;gap:8px}
+.card-h h4{margin:0;font-size:13px;font-weight:600}
+.row{display:flex;align-items:center;gap:10px;min-height:22px}
+.row .t{font-size:13px}
+.row .c{font-size:12px;color:var(--dim);margin-top:1px}
+.callout{font-size:12px;color:var(--dim)}
+.path{font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
+.path .ic{color:var(--blue);width:15px;height:15px}
+.drow{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+.drow:first-child{border-top:0;padding-top:2px}
+.drow > .ic{width:20px;height:20px;margin-top:1px}
+.drow .t{font-weight:500}
+.drow .scopes{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:5px}
+.rr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+.rr:first-child{border-top:0;padding-top:2px}
+.rr .nm{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .sub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .st{display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
+.bar{height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--blue);transform-origin:0 50%;transition:transform 200ms linear}
+.ok{color:var(--green)} .warn{color:var(--orange)} .bad{color:var(--red)}
+.rec{min-width:92px;height:22px;border-radius:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);font:500 12.5px var(--sans);letter-spacing:1px;display:inline-flex;align-items:center;justify-content:center;padding:0 10px}
+.rec.on{border-color:var(--blue);color:var(--dim);letter-spacing:0}
+
+/* sheets */
+.sheetwrap{position:absolute;inset:0;z-index:20;pointer-events:none}
+.sheetwrap .dim{position:absolute;inset:0;background:rgba(0,0,0,.28);opacity:0;transition:opacity 200ms}
+.sheet{position:absolute;left:50%;top:44px;width:500px;margin-left:-250px;background:#2b2b2d;border:1px solid rgba(255,255,255,.13);border-radius:14px;padding:16px 18px;box-shadow:0 24px 60px rgba(0,0,0,.6);opacity:0;transform:translateY(-14px) scale(.98);transition:opacity 180ms,transform 260ms var(--out);display:flex;flex-direction:column;gap:12px}
+.sheetwrap.open{pointer-events:auto}
+.sheetwrap.open .dim{opacity:1}
+.sheetwrap.open .sheet{opacity:1;transform:none}
+.sh-t{font:600 13px var(--sans);margin:0}
+.dropzone{border:1.5px dashed rgba(255,255,255,.22);border-radius:10px;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--dim);padding:12px}
+.dropzone .ic{width:26px;height:26px;stroke-width:1.5}
+.dropzone.hot{border-color:var(--blue);background:rgba(10,132,255,.1)}
+.dropzone.has{align-items:stretch;justify-content:flex-start}
+.dz-row{display:flex;align-items:center;gap:8px;color:#fff;font-size:12.5px;height:24px}
+.sh-lbl{font-size:12px;color:var(--dim)}
+.sh-foot{display:flex;align-items:center;gap:8px}
+.fo-row{height:28px;border-radius:6px;display:flex;align-items:center;gap:8px;padding:0 8px;font-size:13px}
+.fo-row .ic{color:var(--blue)}
+.fo-row.on{background:#0b5fd1}
+
+/* panel */
+.panel{width:330px;padding:14px;border-radius:14px;background:rgba(36,36,38,.98);border:1px solid rgba(255,255,255,.13);box-shadow:0 18px 50px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:12px}
+#panel{position:absolute;top:30px;z-index:210;opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity 140ms,transform 180ms var(--out)}
+#panel.open{opacity:1;transform:none;pointer-events:auto}
+.p-head{display:flex;justify-content:space-between;align-items:flex-start}
+.p-chip{font-size:15px;font-weight:600}
+.p-therm{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;margin-top:5px;padding:2px 7px;border-radius:99px;background:rgba(48,209,88,.14)}
+.p-therm i{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.p-temp{text-align:right}
+.p-temp b{display:block;font:600 24px var(--round);font-variant-numeric:tabular-nums}
+.p-temp small{font-size:10px;color:var(--dim)}
+.p-share{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.p-sec{font-size:11px;font-weight:600;color:var(--dim);display:flex;justify-content:space-between}
+.p-x{display:flex;flex-direction:column;gap:2px}
+.p-x .top{display:flex;align-items:center;gap:7px;font-size:12.5px}
+.p-x .top > .ic{width:15px;height:15px}
+.p-x .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);font-family:var(--round);font-variant-numeric:tabular-nums}
+.p-line{display:flex;align-items:center;gap:7px;font-size:12.5px;min-height:20px}
+.p-line > .ic{width:15px;height:15px}
+.p-sparks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.spk{padding:8px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06)}
+.spk-h{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);font-weight:500;margin-bottom:4px}
+.spk-h b{font:600 11.5px var(--round);font-variant-numeric:tabular-nums}
+.spk-s{display:block;width:100%;height:30px}
+.p-row{display:flex;align-items:center;gap:6px;font-size:11.5px}
+.p-hr{height:1px;background:rgba(255,255,255,.08)}
+.p-act{display:flex;align-items:center;gap:6px}
+
+/* menus, picker */
+.menu{min-width:210px;padding:5px;border-radius:10px;background:rgba(40,40,42,.98);border:1px solid rgba(255,255,255,.13);box-shadow:0 12px 34px rgba(0,0,0,.55);font-size:13px;position:relative}
+.mi{position:relative;height:22px;padding:0 10px 0 22px;border-radius:5px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.mi:hover,.mi.open{background:var(--blue)}
+.mi.dis{color:rgba(255,255,255,.3)}
+.mi.dis:hover{background:none}
+.mi .chev{margin-left:auto;width:11px;height:11px;stroke-width:2.4}
+.mi .chk{position:absolute;left:6px;width:11px;height:11px;stroke-width:2.6}
+.mi .ai{width:15px;height:15px;border-radius:4px}
+.mi > .menu{position:absolute;left:calc(100% + 2px);top:-6px}
+.mhead{font-size:11px;font-weight:600;color:var(--mute);padding:4px 10px 2px 22px}
+.msep{height:1px;margin:5px 8px;background:rgba(255,255,255,.12)}
+#ctx,#menu{position:absolute;z-index:230;display:none}
+.picker{width:300px;border-radius:14px;background:rgba(40,40,42,.98);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 50px rgba(0,0,0,.55);padding:14px;display:flex;flex-direction:column;gap:10px;position:relative}
+#picker{position:absolute;z-index:220;opacity:0;transform:scale(.96);pointer-events:none;transition:opacity 140ms,transform 180ms var(--out)}
+#picker.open{opacity:1;transform:none;pointer-events:auto}
+.pk-t{font-weight:600;font-size:13px}
+.pk-sub{font-size:12px;color:var(--dim);margin-top:-6px}
+.pk-row{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.04);width:100%}
+.pk-row.on{background:rgba(10,132,255,.12)}
+.pk-row b{display:block;font-weight:500;font-size:13px}
+.pk-row small{font-size:11px;color:var(--dim)}
+.pk-row .last{font-size:11px;color:var(--dim)}
+.pk-list{display:flex;flex-direction:column;gap:6px}
+.pk-foot{display:flex;justify-content:flex-end;gap:8px}
+.caret{position:absolute;width:14px;height:14px;background:rgba(40,40,42,.98);border:1px solid rgba(255,255,255,.14);transform:rotate(45deg)}
+.caret.up{top:-7px;border-right:0;border-bottom:0}
+.caret.down{bottom:-7px;border-left:0;border-top:0}
+
+/* notifications */
+#notifs{position:absolute;top:34px;right:10px;width:392px;display:flex;flex-direction:column;gap:8px;z-index:300}
+.nt{display:flex;border-radius:16px;background:rgba(46,46,48,.98);border:1px solid rgba(255,255,255,.13);box-shadow:0 10px 30px rgba(0,0,0,.45);overflow:hidden;width:392px}
+#notifs .nt{transform:translateX(380px);opacity:0;transition:transform 380ms var(--out),opacity 220ms}
+#notifs .nt.in{transform:none;opacity:1}
+.nb{flex:1;display:flex;gap:10px;padding:11px 12px;min-width:0}
+.ntext{min-width:0;flex:1}
+.nrow{display:flex;gap:8px;align-items:baseline}
+.nrow b{font-size:13px;font-weight:600;flex:1;min-width:0}
+.ntime{font-size:11px;color:var(--dim)}
+.nbody{font-size:12.5px;color:var(--ink2);margin-top:1px}
+.nact{display:flex;flex-direction:column;border-left:1px solid rgba(255,255,255,.1);width:92px;flex:none}
+.nact button{flex:1;font-size:12.5px;font-weight:500;text-align:center;padding:0 8px;min-height:30px}
+.nact button:hover{background:rgba(255,255,255,.06)}
+.nact button+button{border-top:1px solid rgba(255,255,255,.1)}
+
+/* app icons, dock */
+.ai{width:50px;height:50px;border-radius:12px;display:grid;place-items:center;position:relative;flex:none;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.25)}
+.ai svg{width:60%;height:60%;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ai.vitals{background:linear-gradient(180deg,#ff6b5e,#c3161f)}
+.ai.finder{background:linear-gradient(90deg,#8fd3ff 0 50%,#2a7de1 50% 100%)}
+.ai.safari{background:radial-gradient(circle at 50% 50%,#fff 0 30%,#2f8cff 31% 100%)}
+.ai.msgs{background:linear-gradient(180deg,#6ff07e,#1fbf3c)}
+.ai.notes{background:linear-gradient(180deg,#ffd84a 0 28%,#fbf7ea 28% 100%)}
+.ai.dl{background:linear-gradient(180deg,#5cb8ff,#1c74d8)}
+.ai.trash{background:linear-gradient(180deg,#d9dde2,#a7adb5)}
+.ai.trash svg{stroke:#555}
+.ai.notes svg{stroke:#a38a2a}
+.ai.safari svg{stroke:#d33}
+.nicon{width:34px;height:34px;border-radius:9px}
+.dock{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);display:flex;align-items:flex-end;gap:8px;padding:6px 8px;border-radius:20px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);z-index:150}
+.dk{position:relative;transition:transform 200ms var(--out)}
+.dk.hot{transform:translateY(-8px) scale(1.12)}
+.dk.bounce{animation:bounce 520ms var(--out) 2}
+@keyframes bounce{0%,100%{transform:none}40%{transform:translateY(-16px)}}
+.dk .dot{position:absolute;bottom:-5px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:rgba(255,255,255,.75)}
+.dsep{width:1px;height:46px;background:rgba(255,255,255,.22);margin:0 2px}
+.dprog{position:absolute;left:6px;right:6px;bottom:6px;height:6px;border-radius:3px;background:rgba(0,0,0,.6);overflow:hidden;opacity:0}
+.dprog.on{opacity:1}
+.dprog i{display:block;height:100%;background:#fff;transform-origin:0 50%;transform:scaleX(0);transition:transform 200ms linear}
+
+/* overlays */
+#ghost{position:absolute;left:0;top:0;z-index:400;pointer-events:none;display:none;align-items:center;gap:6px;padding:4px 9px 4px 5px;border-radius:7px;background:rgba(30,30,34,.9);font-size:12px;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+#ghost.on{display:flex}
+#ghost .plus{display:none;width:16px;height:16px;border-radius:50%;background:var(--green);place-items:center;margin-left:2px}
+#ghost .plus .ic{width:10px;height:10px;stroke-width:3}
+#ghost.over .plus{display:grid}
+#ring{position:absolute;width:44px;height:44px;border-radius:50%;border:2px solid var(--yellow);box-shadow:0 0 0 6px rgba(255,214,10,.2);transform:translate(-50%,-50%) scale(.6);opacity:0;transition:opacity 160ms,transform 260ms var(--out);z-index:500;pointer-events:none}
+#ring.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#hud{position:absolute;left:50%;top:330px;width:260px;margin-left:-130px;padding:18px;border-radius:18px;background:rgba(30,30,32,.92);border:1px solid rgba(255,255,255,.12);text-align:center;z-index:350;opacity:0;transform:scale(.96);transition:opacity 180ms,transform 220ms var(--out);pointer-events:none}
+#hud.on{opacity:1;transform:none}
+#hud .keys{font:600 30px var(--sans);letter-spacing:4px}
+#hud small{display:block;color:var(--dim);font-size:12px;margin-top:6px}
+
+/* connect: layout overrides */
+#finder{left:20px;top:60px;width:440px;height:372px}
+#vwin{left:476px;top:38px}
+.vwin{width:866px;height:724px}
+.lede a{color:#4da3ff;text-decoration:none}
+.lede a:hover{text-decoration:underline}
+
+/* menu bar terminal glyph */
+#mbTerm{display:none;align-items:center;margin-left:2px;color:var(--orange)}
+#mbTerm.on{display:inline-flex}
+#mbTerm .ic{width:15px;height:15px}
+
+/* devices */
+.dv{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid rgba(255,255,255,.07);width:100%}
+.dv:first-child{border-top:0;padding-top:2px}
+.dv .nm{font-size:13px;font-weight:500}
+.dv .sub{font-size:12px;color:var(--dim)}
+.dv .go{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--dim)}
+.dv .go .ic{width:12px;height:12px}
+button.dv:hover .go{color:#fff}
+.urow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,.07)}
+.urow:first-child{border-top:0;padding-top:0}
+.urow > .ic{width:17px;height:17px}
+.urow .nm{font-size:13px}
+.urow .sub{font-size:11.5px;color:var(--dim);font-family:var(--round);font-variant-numeric:tabular-nums}
+.back{color:#4da3ff;font-size:13px;display:inline-flex;align-items:center;gap:2px;padding:16px 20px 0;flex:none;align-self:flex-start}
+.back .ic{width:13px;height:13px}
+.dhead{display:flex;align-items:center;gap:10px;padding:8px 20px 4px;flex:none}
+.dhead .t2{font:700 20px var(--sans)}
+.pf{display:grid;grid-template-columns:168px minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:14px;min-height:0;flex:1;padding:10px 20px 18px}
+.places{display:flex;flex-direction:column;gap:1px}
+.pl-sec{font-size:11px;font-weight:600;color:var(--mute);padding:4px 8px 4px}
+.pl{height:26px;border-radius:7px;padding:0 8px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);width:100%}
+.pl.on{background:rgba(255,255,255,.1);color:#fff}
+.pl .ic{color:var(--blue);width:15px;height:15px}
+.pl .n{margin-left:auto;font:11px var(--round);font-variant-numeric:tabular-nums;color:var(--dim)}
+.pnote{font-size:11.5px;color:var(--dim);padding:12px 8px 0;line-height:1.4}
+.flist{border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.fl-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.07);flex:none}
+.fl-bar b{font-size:13px;font-weight:600}
+.fl-head,.fl-row{display:grid;grid-template-columns:34px minmax(0,1fr) 58px 84px 74px;gap:10px;align-items:center;padding:0 12px}
+.fl-head{height:24px;font-size:11px;color:var(--dim);border-bottom:1px solid rgba(255,255,255,.07);flex:none}
+.fl-head .r{text-align:right}
+.fl-rows{overflow:auto;flex:1;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.fl-row{height:44px;border-top:1px solid rgba(255,255,255,.05);font-size:12.5px}
+.fl-row:first-child{border-top:0}
+.thumb{width:34px;height:34px;border-radius:6px;display:grid;place-items:center;overflow:hidden;position:relative;flex:none}
+.thumb .ic{width:16px;height:16px}
+.thumb .dur{position:absolute;right:3px;bottom:2px;font:600 8.5px var(--round);color:#fff;text-shadow:0 1px 2px #000}
+.fl-row .s,.fl-row .d{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fl-row .s{text-align:right;font-family:var(--round);font-variant-numeric:tabular-nums}
+.fl-row .a{display:flex;justify-content:flex-end;font-size:12px}
+.got{color:var(--green);display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.got .ic{width:13px;height:13px}
+.xrow{padding:10px 12px;border-top:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:2px;flex:none}
+.xrow .top{display:flex;align-items:center;gap:7px;font-size:12.5px}
+.xrow .top > .ic{width:15px;height:15px}
+.xrow .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);font-family:var(--round);font-variant-numeric:tabular-nums}
+.off{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--dim);text-align:center;padding:0 60px}
+.off .ic{width:30px;height:30px;stroke-width:1.4}
+.off b{color:#fff;font-weight:600;font-size:14px}
+
+/* quick look */
+#ql{position:absolute;inset:0;z-index:260;display:none;place-items:center;background:rgba(0,0,0,.32)}
+#ql.on{display:grid}
+.qlw{width:520px;border-radius:12px;background:#1e1e20;border:1px solid rgba(255,255,255,.14);overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.ql-bar{height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:13px}
+.ql-img{height:330px;display:grid;place-items:center;position:relative}
+.ql-img .ic{width:56px;height:56px;stroke-width:1.2;color:rgba(255,255,255,.75)}
+.ql-foot{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);padding:8px 12px;font-family:var(--round);font-variant-numeric:tabular-nums}
+
+/* settings */
+.perm{padding:10px 0;border-top:1px solid rgba(255,255,255,.07)}
+.perm:first-child{border-top:0;padding-top:2px}
+.perm-h{display:flex;align-items:center;gap:8px;font-size:13px}
+.perm-h > .ic{width:17px;height:17px}
+.perm-h b{font-weight:500}
+.pgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 16px;margin-top:9px;padding-left:25px}
+.pc{display:flex;flex-direction:column;gap:1px}
+.pc small{font-size:11px;color:var(--dim);padding-left:20px}
+.new{font-size:10px;color:var(--blue);font-weight:600;margin-left:5px;letter-spacing:.3px}
+.sf{display:flex;align-items:center;gap:8px;height:30px;border-top:1px solid rgba(255,255,255,.07);font-size:13px}
+.sf:first-child{border-top:0}
+.sf > .ic{color:var(--blue);width:15px;height:15px}
+.sf .who{font-size:11.5px;color:var(--orange)}
+.sheet .body{font-size:12.5px;color:var(--ink2);line-height:1.45}
+.sheet .warnline{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--dim)}
+.sheet .warnline .ic{width:15px;height:15px;color:var(--orange);margin-top:1px}
+
+/* finder volume */
+.f-it.vol .ic{color:var(--ink2)}
+.f-it .ej{margin-left:auto;width:12px;height:12px;color:var(--dim)}
+.f-row .nm .ic{flex:none}
+#finder .f-head,#finder .f-row,.gin .f-head,.gin .f-row{grid-template-columns:minmax(0,1fr) 60px 82px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-ecg" viewBox="0 0 24 24"><path d="M2 12h4l2.5-6 4 12 3-8 2 2H22"/></symbol>
+  <symbol id="i-apple" viewBox="0 0 24 24"><path d="M16.5 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.9-3.5.9s-1.9-.8-3.1-.8C6.9 7.3 5 8.5 5 11.5c0 3.3 2.4 8 4.2 8 .9 0 1.4-.6 2.6-.6s1.6.6 2.6.6c1.9 0 3.3-3.6 3.6-4.6-1.5-.6-1.5-2.1-1.5-2.3zM14.2 5.6c.7-.8 1.1-1.9 1-3-1 .1-2.1.7-2.7 1.5-.6.7-1.1 1.8-1 2.8 1.1.1 2.1-.5 2.7-1.3z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.2" r="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-batt" viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="3"/><rect x="4" y="9" width="12" height="6" rx="1.4" fill="currentColor" stroke="none"/><path d="M22 10.5v3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
+  <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="3"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/><rect x="3" y="13" width="18" height="6" rx="3"/><circle cx="16" cy="16" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12L4 7.5M12 12v9"/></symbol>
+  <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="9" rx="1.5"/><path d="M7 10v3M11 10v3M15 10v3M6 16v3M10 16v3M14 16v3M18 16v3"/></symbol>
+  <symbol id="i-battery" viewBox="0 0 24 24"><rect x="3" y="7" width="16" height="10" rx="2.5"/><path d="M21 10.5v3M7 10v4M10.5 10v4"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><path d="M8 20V5M4 9l4-4 4 4M16 4v15M12 15l4 4 4-4"/></symbol>
+  <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 14.5V5a2 2 0 0 0-4 0v9.5a4 4 0 1 0 4 0z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2.5"/><circle cx="17" cy="12" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="9" width="11" height="11" rx="2.5"/><path d="M8 6.5V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-.5"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+  <symbol id="i-iphone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 5h3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-checkc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M7.5 12.3l3 3 6-6.2" stroke="#1c1c1e" stroke-width="2.2"/></symbol>
+  <symbol id="i-xmark" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-xc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 16.5v-9M8.3 11l3.7-3.7 3.7 3.7" stroke="#fff" stroke-width="2"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 7.5v9M8.3 13l3.7 3.7 3.7-3.7" stroke="#fff" stroke-width="2"/></symbol>
+  <symbol id="i-wait" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 7.5V12l3 2" stroke="#1c1c1e" stroke-width="2"/></symbol>
+  <symbol id="i-ask" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.4" stroke="#1c1c1e" stroke-width="2"/><circle cx="12" cy="16.8" r="1.1" fill="#1c1c1e" stroke="none"/></symbol>
+  <symbol id="i-mag" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-chevs" viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="4" rx="1.2"/></symbol>
+  <symbol id="i-clipup" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="4" rx="1.2"/><path d="M12 17.5v-7M9 13.5l3-3 3 3"/></symbol>
+  <symbol id="i-tray" viewBox="0 0 24 24"><path d="M3.5 13.5l2.2-7.5h12.6l2.2 7.5v5a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5zM3.5 13.5h5l1 2h5l1-2h5M12 3v7M9 7.5l3 3 3-3"/></symbol>
+  <symbol id="i-trayup" viewBox="0 0 24 24"><path d="M3.5 13.5l2.2-7.5h2.5M15.8 6h2.5l2.2 7.5v5a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5zM3.5 13.5h5l1 2h5l1-2h5M12 11V2.5M9 5.5l3-3 3 3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.5-3 7.7-7 9.5-4-1.8-7-5-7-9.5V6z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M2.5 7a2 2 0 0 1 2-2h4.6l2 2.2h8.4a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 2.5h8l4.5 4.5v13a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5z"/><path d="M14 2.5V7h4.5"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 17.5l5-5 3.5 3.5 2.5-2.5 5 5"/></symbol>
+  <symbol id="i-desk" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v8.5M8.5 12.5l3.5 3.5 3.5-3.5"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8M7 6.5a7 7 0 1 0 10 0"/></symbol>
+  <symbol id="i-appout" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="15" height="15" rx="3.5"/><path d="M12 3.5h8.5V12M20.5 3.5l-9 9"/></symbol>
+  <symbol id="i-fan" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.8"/><path d="M12 10.2c0-4 1-6.7 3.4-6.7 2.6 0 2.6 4-3.4 6.7zM13.8 12c4 0 6.7 1 6.7 3.4 0 2.6-4 2.6-6.7-3.4zM12 13.8c0 4-1 6.7-3.4 6.7-2.6 0-2.6-4 3.4-6.7zM10.2 12c-4 0-6.7-1-6.7-3.4 0-2.6 4-2.6 6.7 3.4z"/></symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M7 3.5v2.5M10 3.5v2.5M13 3.5v2.5"/></symbol>
+  <symbol id="i-kbd" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 9.5h.01M9 9.5h.01M12 9.5h.01M15 9.5h.01M18 9.5h.01M7 14.5h10"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-face" viewBox="0 0 24 24"><path d="M8 8.5v2.5M16 8.5v2.5M7 15.5c3 2.2 7 2.2 10 0M12.5 4c-1 4-1.2 7-.6 10h-1.5"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><path d="M15.5 8.5l-2.2 4.8-4.8 2.2 2.2-4.8z"/></symbol>
+  <symbol id="i-bubble" viewBox="0 0 24 24"><path d="M12 4.5c4.7 0 8.5 3 8.5 6.8s-3.8 6.8-8.5 6.8c-1 0-1.9-.1-2.8-.4L5 19.5l1.1-3.6C4.4 14.7 3.5 13.1 3.5 11.3 3.5 7.5 7.3 4.5 12 4.5z"/></symbol>
+  <symbol id="i-lines" viewBox="0 0 24 24"><path d="M6 11h12M6 15h12M6 19h8"/></symbol>
+  <symbol id="i-bin" viewBox="0 0 24 24"><path d="M5 7h14M9 7V4.5h6V7M7 7l1 13h8l1-13M10.5 10.5v6M13.5 10.5v6"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M6.5 9.5l3 2.5-3 2.5M11.5 15h5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12c2.3-4 5.5-6 9.5-6s7.2 2 9.5 6c-2.3 4-5.5 6-9.5 6s-7.2-2-9.5-6z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-eject" viewBox="0 0 24 24"><path d="M12 5l7 8H5zM5 18h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+  <symbol id="i-android" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><circle cx="12" cy="18.5" r=".9" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-phonedisk" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><rect x="9" y="8.5" width="6" height="7" rx="1"/></symbol>
+</svg>
+
+<div class="page">
+  <div class="kicker">Vitals for macOS · Connect · phone files, Finder, terminal</div>
+  <h1>Connect, on the Mac.</h1>
+  <p class="lede">Open a phone from the new Devices page and get its photos, videos and shared folders onto the Mac. Or turn on Show phones in Finder and open the phone like a drive. Phones only see the Mac folders you list in Settings, and a terminal stays off until you allow it for that phone. When a phone is browsing or has a terminal open, the menu bar shows it, with Stop and End right there. Everything below is clickable, or run a journey. Phone side: <a href="https://pagepilot.rafay99.com/p/7764c2a80fd946fba5403458abfdaf47">phone prototype</a>. Plan: <a href="https://pagepilot.rafay99.com/p/b706c9f39f784a33921acedfd008e298">connect plan</a>.</p>
+
+  <div class="stage-wrap" id="wrap">
+    <div id="stage">
+      <div class="mb">
+        <svg class="ic" style="width:15px;height:15px"><use href="#i-apple"/></svg>
+        <span class="app">Finder</span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span>
+        <div class="r">
+          <button class="mbi" id="mbIcon" data-k="mb-icon" aria-label="Vitals"><svg class="ic"><use href="#i-ecg"/></svg><span id="mbTerm" class="tip" data-tip="A phone has a terminal open"><svg class="ic"><use href="#i-term"/></svg></span><span id="mbPct" style="display:none"></span></button>
+          <span class="mbi"><svg class="ic"><use href="#i-wifi"/></svg></span>
+          <span class="mbi"><svg class="ic" style="width:22px"><use href="#i-batt"/></svg></span>
+          <span class="mbi"><svg class="ic" style="width:14px"><use href="#i-search"/></svg></span>
+          <span class="mbi"><svg class="ic" style="width:15px"><use href="#i-cc"/></svg></span>
+          <span class="clock">Sun Oct 25&nbsp;&nbsp;22:41</span>
+        </div>
+      </div>
+      <div class="win" id="finder"><div class="fbody"></div></div>
+      <div class="win vwin" id="vwin"><div class="vbody"></div><div class="sheetwrap"><div class="dim"></div><div class="sheet"></div></div></div>
+      <div class="dock" id="dock"></div>
+      <div class="panel" id="panel"></div>
+      <div id="ql"></div>
+      <div id="notifs" aria-live="polite"></div>
+      <div id="ring"></div>
+    </div>
+  </div>
+  <div class="under">
+    <div>
+      <div class="caption" id="caption">Open Devices in the Vitals window, click the Vitals menu bar icon, or use the buttons below to play the phone's side.</div>
+      <div class="tools" id="tools"></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Journeys</h2>
+      <div class="journeys" id="journeys"></div>
+    </div>
+    <div>
+      <h2>What changes</h2>
+      <table>
+        <thead><tr><th>Where</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td>Sidebar</td><td>New Connect group with Devices. Remote moves under it. One nav level: a phone opens inline with a Devices back link, never a tab.</td></tr>
+          <tr><td>Devices</td><td>Paired phones and browsers with route and state. An online phone opens to its Places (Photos, Videos, Downloads › Vitals, folders shared on the phone). A phone in the background says to open Vitals on it. Get and Get All pull through Drop into ~/Downloads/Vitals.</td></tr>
+          <tr><td>Quick Look</td><td>Click a thumbnail for a big preview, fetched from the phone at screen size, not the full file.</td></tr>
+          <tr><td>Finder</td><td>Settings › Remote › Show phones in Finder mounts each online phone under Locations. Vitals serves it as WebDAV on 127.0.0.1 only, so nothing new listens on the network.</td></tr>
+          <tr><td>Settings › Remote</td><td>Shared with phones lists the only Mac folders a phone can open. Each device gets three new permissions: Browse my files, Change my files, Terminal. Terminal is off for every device and asks once before turning on.</td></tr>
+          <tr><td>Menu bar</td><td>A static terminal glyph next to the Vitals icon while any phone has a terminal open. The panel's Using this Mac section lists sessions and browsing, with End, End All and Stop.</td></tr>
+          <tr><td>Notifications</td><td>Opened a terminal (End). Terminal is off for this phone (Settings). Got files (Show in Finder). No banner for browsing; it shows in the panel instead.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="gallery-head">
+    <h2>Every state, frozen</h2>
+    <div id="gallery"></div>
+  </div>
+  <footer>Mockup. File names, sizes and speeds are examples, not readings.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  function $(s, r) { return (r || document).querySelector(s); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function h(tag, a) {
+    var el = document.createElement(tag);
+    if (a) Object.keys(a).forEach(function (k) {
+      var v = a[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === "class") el.className = v;
+      else if (k === "style") el.setAttribute("style", v);
+      else if (k === "k") el.dataset.k = v;
+      else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    });
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c === null || c === undefined || c === false) return;
+        if (Array.isArray(c)) return add(c);
+        el.append(c instanceof Node ? c : String(c));
+      });
+    })(Array.prototype.slice.call(arguments, 2));
+    return el;
+  }
+  function icon(n, cls, style) {
+    var s = document.createElementNS(NS, "svg");
+    s.setAttribute("class", "ic" + (cls ? " " + cls : "")); s.setAttribute("aria-hidden", "true");
+    if (style) s.setAttribute("style", style);
+    var u = document.createElementNS(NS, "use"); u.setAttribute("href", "#i-" + n);
+    s.appendChild(u); return s;
+  }
+  function appIcon(kind, cls) {
+    var glyph = { vitals: "ecg", finder: "face", safari: "compass", msgs: "bubble", notes: "lines", dl: "dl", trash: "bin" }[kind];
+    return h("div", { class: "ai " + kind + (cls ? " " + cls : "") }, icon(glyph));
+  }
+
+  /* ---------- data ---------- */
+  var KB = 1e3, MB = 1e6, GB = 1e9;
+  function size(b) { if (b >= GB) return (b / GB).toFixed(1) + " GB"; if (b >= MB) return (b / MB).toFixed(1) + " MB"; return Math.round(b / KB) + " KB"; }
+  function ofSize(d, t) { var u = t >= GB ? GB : MB, n = t >= GB ? " GB" : " MB"; return (d / u).toFixed(1) + " of " + (t / u).toFixed(1) + n; }
+  function plural(n, w) { return n.toLocaleString("en-US") + " " + w + (n === 1 ? "" : "s"); }
+  function slug(s) { return s.replace(/[^A-Za-z0-9]/g, ""); }
+  var TINTS = [["#ff9f0a", "#7a2e0b"], ["#30d158", "#0d4a2a"], ["#0a84ff", "#13225a"], ["#bf5af2", "#3b1450"], ["#ff375f", "#4f1020"], ["#64d2ff", "#123b52"], ["#ffd60a", "#5a4300"], ["#5e5ce6", "#1b1a52"]];
+  function tint(name) { var n = 0; for (var i = 0; i < name.length; i++) n = (n * 31 + name.charCodeAt(i)) >>> 0; return TINTS[n % TINTS.length]; }
+  function photoBg(name) { var t = tint(name); return "background:radial-gradient(120% 90% at 30% 20%," + t[0] + " 0%," + t[1] + " 70%,#0b0b0d 100%)"; }
+  var KIND = { photo: ["photo", "#ff375f", "JPEG image"], movie: ["film", "#bf5af2", "MPEG-4 movie"], apk: ["doc", "#30d158", "Android package"], doc: ["doc", "#c7c7cc", "PDF document"], text: ["lines", "#c7c7cc", "Plain text"], folder: ["folder", "#5ab3ff", "Folder"], dmg: ["disk", "#c7c7cc", "Disk image"], png: ["photo", "#ff9f0a", "PNG image"] };
+  function f(name, bytes, date, kind, dur) { return { name: name, bytes: bytes, date: date, kind: kind, dur: dur }; }
+  var PHONE_FS = {
+    pixel: {
+      "Photos": { icon: "photo", total: 1284, items: [
+        f("PXL_20261025_184211.jpg", 4.1 * MB, "Today 18:42", "photo"), f("PXL_20261025_184158.jpg", 3.8 * MB, "Today 18:41", "photo"),
+        f("PXL_20261024_221903.jpg", 2.9 * MB, "Yesterday 22:19", "photo"), f("PXL_20261024_131540.PORTRAIT.jpg", 5.6 * MB, "Yesterday 13:15", "photo"),
+        f("Screenshot_20261024-094412.png", 1.2 * MB, "Yesterday 09:44", "png"), f("PXL_20261023_190012.jpg", 3.3 * MB, "Oct 23 19:00", "photo"),
+        f("PXL_20261022_075530.jpg", 4.4 * MB, "Oct 22 07:55", "photo"), f("PXL_20261021_120118.jpg", 3.0 * MB, "Oct 21 12:01", "photo")] },
+      "Videos": { icon: "film", total: 37, items: [
+        f("PXL_20261025_182004.mp4", 186 * MB, "Today 18:20", "movie", "0:42"), f("PXL_20261020_201533.mp4", 1.24 * GB, "Oct 20 20:15", "movie", "4:51"),
+        f("Screen_Recording_20261019.mp4", 64 * MB, "Oct 19 11:02", "movie", "0:28")] },
+      "Downloads › Vitals": { icon: "dl", total: 2, items: [
+        f("vitals-dev.apk", 82 * MB, "Today 17:05", "apk"), f("invoice-october.pdf", 412 * KB, "Today 16:30", "doc")] },
+      "Documents": { icon: "folder", total: 3, shared: true, items: [
+        f("boarding-pass-LHE-DXB.pdf", 220 * KB, "Oct 24 08:10", "doc"), f("lease-2026.pdf", 1.9 * MB, "Oct 12 14:22", "doc"), f("wifi-passwords.txt", 4 * KB, "Sep 30 21:48", "text")] }
+    },
+    iphone: {
+      "Photos": { icon: "photo", total: 4127, items: [
+        f("IMG_4410.HEIC", 2.6 * MB, "Today 20:03", "photo"), f("IMG_4409.HEIC", 2.4 * MB, "Today 20:03", "photo"), f("IMG_4401.MOV", 92 * MB, "Today 17:48", "movie", "0:21"), f("IMG_4398.HEIC", 3.1 * MB, "Yesterday 12:10", "photo")] },
+      "Files › Vitals": { icon: "folder", total: 1, items: [f("scan-2026-10-24.pdf", 640 * KB, "Yesterday 10:31", "doc")] }
+    }
+  };
+  var PLACES = { pixel: ["Photos", "Videos", "Downloads › Vitals", "Documents"], iphone: ["Photos", "Files › Vitals"] };
+  var VOLUME = { "Photos": "Photos", "Videos": "Videos", "Download": "Downloads › Vitals", "Documents": "Documents" };
+
+  var XID = 0;
+  function initial() {
+    XID = 0;
+    return {
+      devices: [
+        { id: "pixel", name: "Pixel 9", kind: "android", os: "Android 16", route: "Wi-Fi", online: true, fg: true, free: "88.4 GB free of 256 GB",
+          scopes: { operate: true, destructive: false, clipboard: true, files: true, fsRead: true, fsWrite: false, terminal: false } },
+        { id: "iphone", name: "iPhone 17", kind: "ios", os: "iOS 26.1", route: "Tailscale", online: true, fg: false, free: "41.2 GB free of 128 GB",
+          scopes: { operate: true, destructive: false, clipboard: true, files: true, fsRead: true, fsWrite: false, terminal: false } },
+        { id: "web", name: "Brave on macOS", kind: "web", os: "Web", route: "Wi-Fi", online: true, fg: true,
+          scopes: { operate: false, destructive: false, clipboard: false, files: true, fsRead: false, fsWrite: false, terminal: false } }
+      ],
+      shared: ["Desktop", "Documents", "Downloads", "Movies", "Pictures"],
+      mount: false, section: "devices", drill: null, place: { pixel: "Photos", iphone: "Photos" },
+      gets: [], got: {}, sessions: [], browsing: [], warned: {},
+      panel: false, sheet: null, ql: null,
+      finderDir: "Downloads", finderSel: [],
+      fs: {
+        Vitals: [{ name: "Vitals-Nightly.dmg", bytes: 61.4 * MB, kind: "dmg" }],
+        Desktop: [{ name: "Screenshot 2026-10-25 at 21.02.png", bytes: 1.9 * MB, kind: "png" }],
+        Documents: [{ name: "Taxes 2025", bytes: 12 * MB, kind: "folder" }]
+      }
+    };
+  }
+  var S = initial();
+  function dev(id) { return S.devices.filter(function (d) { return d.id === id; })[0]; }
+  function browsable(d) { return d.kind !== "web" && d.online && d.fg; }
+  function devIcon(d) { return d.kind === "web" ? "globe" : d.kind === "android" ? "android" : "iphone"; }
+  function devState(d) {
+    if (!d.online) return "offline";
+    if (d.kind === "web") return "online";
+    return d.fg ? "online" : "in the background";
+  }
+
+  /* ---------- elements ---------- */
+  var stage = $("#stage"), wrap = $("#wrap"), finderEl = $("#finder"), vwinEl = $("#vwin"), panelEl = $("#panel"), qlEl = $("#ql"),
+    notifEl = $("#notifs"), ring = $("#ring"), mbIcon = $("#mbIcon"), mbTerm = $("#mbTerm"), mbPct = $("#mbPct"), dockEl = $("#dock"), caption = $("#caption");
+  var scale = 1;
+  function fit() { scale = Math.min(1, wrap.clientWidth / 1360); stage.style.transform = "scale(" + scale + ")"; wrap.style.height = Math.round(860 * scale) + "px"; }
+  window.addEventListener("resize", fit); fit();
+  function rectIn(el) { var r = el.getBoundingClientRect(), s = stage.getBoundingClientRect(); return { left: (r.left - s.left) / scale, top: (r.top - s.top) / scale, width: r.width / scale, height: r.height / scale }; }
+  var Z = 11;
+  function front(el) { el.style.zIndex = String(++Z); }
+
+  /* ---------- small builders ---------- */
+  function sw(on, k, fn, label) { return h("button", { class: "sw" + (on ? " on" : ""), role: "switch", "aria-checked": String(on), "aria-label": label, k: k, onclick: function () { fn(!on); } }); }
+  function cbx(on) { return h("i", { class: "cbx" + (on ? " on" : "") }, on ? icon("check") : null); }
+  function chk(label, on, fn, k) { return h("button", { class: "cb", k: k, role: "checkbox", "aria-checked": String(on), onclick: function () { fn(!on); } }, cbx(on), label); }
+  function tile(n, t) { return h("div", { class: "tile", style: "background:" + t + "24;color:" + t }, icon(n)); }
+  function card(title, ic, t, right) {
+    var body = Array.prototype.slice.call(arguments, 4);
+    return h("section", { class: "card" }, h("header", { class: "card-h" }, tile(ic, t), h("h4", null, title), h("span", { class: "sp" }), right), body);
+  }
+  function settingRow(label, cap, control) {
+    return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "t" }, label), cap ? h("div", { class: "c" }, cap) : null), control);
+  }
+  function thumb(it, onclick) {
+    var k = KIND[it.kind] || KIND.doc;
+    var visual = it.kind === "photo" || it.kind === "png" || it.kind === "movie";
+    return h("button", { class: "thumb", "aria-label": "Quick Look " + it.name, k: "th-" + slug(it.name), style: visual ? photoBg(it.name) : "background:" + k[1] + "1f;color:" + k[1], onclick: onclick },
+      visual ? (it.kind === "movie" ? h("span", { class: "dur" }, it.dur) : null) : icon(k[0]),
+      it.kind === "movie" ? icon("play", null, "width:12px;height:12px;color:#fff;fill:#fff") : null);
+  }
+
+  /* ---------- using this Mac (sessions + browsing) ---------- */
+  function mins(m) { return m < 1 ? "just now" : m + " min"; }
+  function usingRows() {
+    var rows = [];
+    S.sessions.forEach(function (s) {
+      var d = dev(s.device);
+      rows.push(h("div", { class: "urow" }, icon("term", null, "color:var(--orange)"),
+        h("div", { class: "grow" }, h("div", { class: "nm trunc" }, d.name + " · " + s.shell + " · " + s.cwd), h("div", { class: "sub" }, "Terminal · " + mins(s.mins) + " · runs as rafay")),
+        h("button", { class: "btn sm", k: "ss-end-" + s.id, onclick: function () { endSession(s.id); } }, "End")));
+    });
+    S.browsing.forEach(function (b) {
+      var d = dev(b.device);
+      rows.push(h("div", { class: "urow" }, icon("eye", null, "color:var(--blue)"),
+        h("div", { class: "grow" }, h("div", { class: "nm trunc" }, d.name + " is browsing " + b.folder), h("div", { class: "sub" }, "Read only · " + mins(b.mins))),
+        h("button", { class: "btn sm", k: "br-stop-" + b.device, onclick: function () { stopBrowsing(b.device); } }, "Stop")));
+    });
+    return rows;
+  }
+  function endAllBtn() { return S.sessions.length > 1 ? h("button", { class: "btn sm", k: "ss-endall", onclick: endAll }, "End All") : null; }
+  function endSession(id) { S.sessions = S.sessions.filter(function (s) { return s.id !== id; }); render(); }
+  function endAll() { S.sessions = []; render(); }
+  function stopBrowsing(id) { S.browsing = S.browsing.filter(function (b) { return b.device !== id; }); render(); }
+
+  /* ---------- menu bar panel ---------- */
+  function svg(str) { var t = document.createElement("template"); t.innerHTML = str.trim(); return t.content.firstChild; }
+  function series(seed) {
+    var x = seed * 7919 % 233280, v = .45, out = [];
+    for (var i = 0; i < 40; i++) { x = (x * 9301 + 49297) % 233280; v = Math.max(.1, Math.min(.92, v + (x / 233280 - .5) * .28)); out.push(v); }
+    return out;
+  }
+  function sparkSvg(vals, color) {
+    var w = 136, hh = 30;
+    var pts = vals.map(function (v, i) { return (i * w / (vals.length - 1)).toFixed(1) + " " + (hh - v * hh * .9 - 1).toFixed(1); });
+    var line = "M" + pts.join(" L"), area = line + " L" + w + " " + hh + " L0 " + hh + " Z";
+    return svg('<svg class="spk-s" viewBox="0 0 ' + w + " " + hh + '" preserveAspectRatio="none"><path d="' + area + '" style="fill:' + color + ';opacity:.16"/><path d="' + line + '" style="fill:none;stroke:' + color + ';stroke-width:1.5" vector-effect="non-scaling-stroke"/></svg>');
+  }
+  function spark(title, val, color, seed) { return h("div", { class: "spk" }, h("div", { class: "spk-h" }, h("span", null, title), h("b", { style: "color:" + color }, val)), sparkSvg(series(seed), color)); }
+  function panelContent() {
+    var rows = usingRows();
+    var g = S.gets.filter(function (x) { return x.state === "running"; })[0];
+    return [
+      h("div", { class: "p-head" }, h("div", null, h("div", { class: "p-chip" }, "Apple M4 Pro"), h("div", { class: "p-therm" }, h("i"), "Nominal")),
+        h("div", { class: "p-temp" }, h("b", null, "48°"), h("small", null, "avg CPU"))),
+      rows.length ? h("div", { class: "p-share", k: "p-using" }, h("div", { class: "p-sec" }, h("span", null, "Using this Mac"), endAllBtn()), rows) : null,
+      g ? h("div", { class: "p-share" }, h("div", { class: "p-sec" }, h("span", null, "Share")), xferRow(g)) : null,
+      h("div", { class: "p-sparks" }, spark("Temp", "52°", "#ff9f0a", 3), spark("CPU", "14%", "#0a84ff", 5), spark("Memory", "21.4G", "#5e5ce6", 8), spark("Network", "↓ 2.1 MB/s", "#63e6e2", 13)),
+      h("div", { class: "p-hr" }),
+      h("div", { class: "p-act" },
+        h("button", { class: "btn sm", k: "p-open", onclick: function () { S.panel = false; S.section = "devices"; S.drill = null; front(vwinEl); render(); } }, icon("appout"), "Open Vitals"),
+        h("span", { class: "sp" }),
+        h("button", { class: "btn sm tip", "data-tip": "Settings", k: "p-settings", onclick: function () { S.panel = false; S.section = "settings"; front(vwinEl); render(); } }, icon("gear")),
+        h("button", { class: "btn sm tip", "data-tip": "Quit Vitals" }, icon("power")))
+    ];
+  }
+
+  /* ---------- gets (phone to Mac, through Drop) ---------- */
+  function key(devId, name) { return devId + "/" + name; }
+  function activeGet(devId, name) { return S.gets.filter(function (x) { return x.state === "running" && x.device === devId && x.names.indexOf(name) >= 0; })[0]; }
+  function startGet(devId, items, label) {
+    items = items.filter(function (it) { return !S.got[key(devId, it.name)] && !activeGet(devId, it.name); });
+    if (!items.length) return;
+    var bytes = items.reduce(function (a, it) { return a + it.bytes; }, 0);
+    var x = { id: "g" + (++XID), device: devId, items: items, names: items.map(function (it) { return it.name; }), bytes: bytes, done: 0, state: "running", fresh: false,
+      label: items.length === 1 ? items[0].name : label, ms: Math.round(2400 + Math.min(3000, bytes / GB * 2200)) };
+    S.gets.unshift(x); ensureTick(); render();
+  }
+  function xferRow(x) {
+    var d = dev(x.device);
+    if (x.state === "running") return h("div", { class: "xrow", k: "xrow" },
+      h("div", { class: "top" }, icon("down", null, "color:var(--green)"), h("span", { class: "grow trunc" }, "Getting " + x.label + " from " + d.name),
+        h("button", { class: "ibtn tip", "data-tip": "Cancel", k: "x-cancel", onclick: function () { x.state = "cancelled"; render(); } }, icon("xc"))),
+      h("div", { class: "bar" }, h("i", { "data-prog": x.id, style: "transform:scaleX(" + (x.done / x.bytes).toFixed(4) + ")" })),
+      h("div", { class: "meta" }, h("span", { "data-pt": x.id }, ofSize(x.done, x.bytes) + " · " + d.route), h("span", { "data-pp": x.id }, Math.floor(x.done / x.bytes * 100) + "%")));
+    return h("div", { class: "xrow", k: "xrow" },
+      h("div", { class: "top" }, icon("checkc", null, "color:var(--green)"), h("span", { class: "grow trunc" }, (x.items.length === 1 ? x.label + " is" : x.label + " are") + " in Downloads › Vitals"),
+        h("button", { class: "btn sm", k: "x-show", onclick: function () { reveal(x); } }, "Open in Finder")));
+  }
+  var tickId = null;
+  function ensureTick() { if (tickId || !S.gets.some(function (x) { return x.state === "running"; })) return; tickId = setInterval(tick, 200); }
+  function tick() {
+    var changed = false;
+    S.gets.forEach(function (x) {
+      if (x.state !== "running") return;
+      x.done = Math.min(x.bytes, x.done + x.bytes * 200 / x.ms);
+      if (x.done >= x.bytes) { finishGet(x); changed = true; }
+    });
+    if (!S.gets.some(function (x) { return x.state === "running"; })) { clearInterval(tickId); tickId = null; }
+    if (changed) render(); else updateProgress();
+  }
+  function finishGet(x) {
+    x.state = "done";
+    S.gets.forEach(function (y) { y.fresh = false; }); x.fresh = true;
+    x.items.forEach(function (it) { S.got[key(x.device, it.name)] = true; S.fs.Vitals.push(it); });
+    notify({ title: "Got " + x.label + " from " + dev(x.device).name, body: "In Downloads › Vitals · " + size(x.bytes), actions: [{ label: "Show in Finder", k: "n-show", fn: function () { reveal(x); } }] });
+  }
+  function reveal(x) { S.finderDir = "Vitals"; S.finderSel = x.names.slice(); front(finderEl); render(); }
+  function updateProgress() {
+    var act = S.gets.filter(function (x) { return x.state === "running"; });
+    act.forEach(function (x) {
+      var p = x.done / x.bytes;
+      stage.querySelectorAll('[data-prog="' + x.id + '"]').forEach(function (e) { e.style.transform = "scaleX(" + p.toFixed(4) + ")"; });
+      stage.querySelectorAll('[data-pt="' + x.id + '"]').forEach(function (e) { e.textContent = ofSize(x.done, x.bytes) + " · " + dev(x.device).route; });
+      stage.querySelectorAll('[data-pp="' + x.id + '"]').forEach(function (e) { e.textContent = Math.floor(p * 100) + "%"; });
+    });
+    var tot = act.reduce(function (a, x) { return a + x.bytes; }, 0), dn = act.reduce(function (a, x) { return a + x.done; }, 0);
+    mbPct.style.display = act.length ? "" : "none";
+    mbPct.textContent = act.length ? Math.floor(dn / tot * 100) + "%" : "";
+  }
+
+  /* ---------- devices page ---------- */
+  function devRow(d) {
+    var ok = browsable(d);
+    var sub = (d.kind === "web" ? "Browser" : d.os) + " · " + d.route + " · " + devState(d);
+    var right = d.kind === "web" ? h("span", { class: "dim", style: "font-size:12px" }, "No files to browse")
+      : ok ? h("span", { class: "go" }, "Browse", icon("chev-r"))
+      : h("span", { class: "dim", style: "font-size:12px" }, "Open Vitals on the " + (d.kind === "ios" ? "iPhone" : "phone") + " to browse");
+    var body = [icon(devIcon(d), null, "width:20px;height:20px;color:" + (d.online ? (d.fg || d.kind === "web" ? "var(--green)" : "var(--orange)") : "var(--dim)")),
+      h("div", { style: "min-width:0" }, h("div", { class: "nm" }, d.name), h("div", { class: "sub" }, sub)), right];
+    return ok ? h("button", { class: "dv", k: "dev-" + d.id, onclick: function () { S.drill = d.id; render(); } }, body) : h("div", { class: "dv", k: "dev-" + d.id }, body);
+  }
+  function devicesPage() {
+    if (S.drill) return drillPage(dev(S.drill));
+    var rows = usingRows();
+    return [h("div", { class: "v-title" }, "Devices"), h("div", { class: "scroll" }, h("div", { class: "stack" },
+      rows.length ? card("Using this Mac now", "eye", "#ff9f0a", endAllBtn(), h("div", null, rows)) : null,
+      card("Your devices", "iphone", "#0a84ff", null, h("div", null, S.devices.map(devRow))),
+      h("div", { class: "callout", style: "padding:0 4px" }, "A phone shows only its photos, videos, Downloads › Vitals and the folders you share on it. What each device can do is in Settings › Remote.")))];
+  }
+  function drillPage(d) {
+    var ok = browsable(d);
+    var head = [h("button", { class: "back", k: "back", onclick: function () { S.drill = null; render(); } }, icon("chev-l"), "Devices"),
+      h("div", { class: "dhead" }, tile(devIcon(d), "#30d158"), h("div", { class: "grow" }, h("div", { class: "t2" }, d.name), h("div", { class: "callout" }, d.os + " · " + d.route + (d.free ? " · " + d.free : ""))))];
+    if (!ok) return head.concat(h("div", { class: "off", k: "drill-off" }, icon(devIcon(d)), h("b", null, d.name + " is in the background"),
+      "Open Vitals on the " + (d.kind === "ios" ? "iPhone" : "phone") + " to browse. iPhone stops sharing about 30 seconds after you leave Vitals."));
+    var cur = S.place[d.id], P = PHONE_FS[d.id][cur];
+    var places = h("div", { class: "places" }, h("div", { class: "pl-sec" }, "On " + d.name),
+      PLACES[d.id].map(function (p) {
+        var Q = PHONE_FS[d.id][p];
+        return h("button", { class: "pl" + (p === cur ? " on" : ""), k: "pl-" + slug(p), onclick: function () { S.place[d.id] = p; render(); } }, icon(Q.icon), h("span", { class: "trunc" }, p), h("span", { class: "n" }, Q.total.toLocaleString("en-US")));
+      }),
+      h("div", { class: "pnote" }, d.kind === "android" ? "Add a folder on the phone: Vitals › Files › Share a folder." : "Add a folder on the iPhone: Vitals › Files › Share a folder."));
+    var g = S.gets.filter(function (x) { return x.device === d.id && (x.state === "running" || x.fresh); })[0];
+    var left = P.items.filter(function (it) { return !S.got[key(d.id, it.name)]; }).length;
+    var list = h("div", { class: "flist" },
+      h("div", { class: "fl-bar" }, h("b", null, cur), h("span", { class: "dim", style: "font-size:12px" }, P.items.length < P.total ? "Latest " + P.items.length + " of " + P.total.toLocaleString("en-US") : plural(P.total, "item")),
+        h("span", { class: "sp" }), h("button", { class: "btn", k: "get-all", disabled: left ? null : true, onclick: function () { startGet(d.id, P.items, P.items.length + (cur === "Photos" ? " photos" : cur === "Videos" ? " videos" : " files")); } }, "Get All")),
+      h("div", { class: "fl-head" }, h("span"), h("span", null, "Name"), h("span", { class: "r" }, "Size"), h("span", null, "Date Added"), h("span")),
+      h("div", { class: "fl-rows" }, P.items.length ? P.items.map(function (it) { return flRow(d, it); }) : h("div", { class: "empty" }, "Empty")),
+      g ? xferRow(g) : null);
+    return head.concat(h("div", { class: "pf" }, places, list));
+  }
+  function flRow(d, it) {
+    var got = S.got[key(d.id, it.name)], run = activeGet(d.id, it.name);
+    var act = got ? h("span", { class: "got" }, icon("check"), "In Downloads")
+      : run ? h("span", { class: "dim num", "data-pp": run.id }, Math.floor(run.done / run.bytes * 100) + "%")
+      : h("button", { class: "btn sm", k: "get-" + slug(it.name), onclick: function () { startGet(d.id, [it]); } }, "Get");
+    return h("div", { class: "fl-row" }, thumb(it, function () { S.ql = { device: d.id, item: it }; renderOverlays(); }),
+      h("span", { class: "trunc" }, it.name), h("span", { class: "s" }, size(it.bytes)), h("span", { class: "d" }, it.date), h("span", { class: "a" }, act));
+  }
+  function qlNode(q) {
+    var it = q.item, k = KIND[it.kind] || KIND.doc, visual = it.kind === "photo" || it.kind === "png" || it.kind === "movie";
+    var got = S.got[key(q.device, it.name)];
+    return h("div", { class: "qlw", onclick: function (e) { e.stopPropagation(); } },
+      h("div", { class: "ql-bar" }, h("button", { class: "ibtn", k: "ql-close", "aria-label": "Close", onclick: function () { S.ql = null; renderOverlays(); } }, icon("xmark")), h("b", { class: "grow trunc", style: "font-weight:600" }, it.name),
+        got ? h("span", { class: "got" }, icon("check"), "In Downloads") : h("button", { class: "btn sm def", k: "ql-get", onclick: function () { S.ql = null; startGet(q.device, [it]); } }, "Get")),
+      h("div", { class: "ql-img", style: visual ? photoBg(it.name) : "background:#141416" }, visual ? (it.kind === "movie" ? icon("play") : null) : icon(k[0], null, "color:" + k[1])),
+      h("div", { class: "ql-foot" }, h("span", null, dev(q.device).name + " · " + it.date), h("span", null, visual ? "Preview at screen size · full file " + size(it.bytes) : size(it.bytes))));
+  }
+
+  /* ---------- settings page ---------- */
+  function setMount(v) { S.mount = v; if (!v && /^Pixel 9/.test(S.finderDir)) S.finderDir = "Downloads"; render(); }
+  function addFolder() { if (S.shared.indexOf("Code") < 0) S.shared.push("Code"); render(); }
+  function removeFolder(n) { S.shared = S.shared.filter(function (x) { return x !== n; }); S.browsing = S.browsing.filter(function (b) { return b.folder !== n; }); render(); }
+  function sharedRow(n) {
+    var who = S.browsing.filter(function (b) { return b.folder === n; }).map(function (b) { return dev(b.device).name; });
+    return h("div", { class: "sf", k: "sf-" + n }, icon("folder"), h("span", null, "~/" + n), who.length ? h("span", { class: "who" }, who.join(", ") + " is browsing") : null, h("span", { class: "sp" }),
+      h("button", { class: "ibtn tip", "data-tip": "Stop sharing", k: "sf-rm-" + n, onclick: function () { removeFolder(n); } }, icon("minus")));
+  }
+  function pc(control, small) { return h("div", { class: "pc" }, control, small ? h("small", null, small) : null); }
+  function newLabel(text) { return [text, h("span", { class: "new" }, "NEW")]; }
+  function setTerminal(d, v) {
+    if (v) { S.sheet = { type: "term", device: d.id }; render(); return; }
+    d.scopes.terminal = false;
+    S.sessions = S.sessions.filter(function (s) { return s.device !== d.id; });
+    render();
+  }
+  function permBlock(d) {
+    var s = d.scopes, re = function (k) { return function (v) { s[k] = v; if (k === "fsRead" && !v) stopBrowsing(d.id); render(); }; };
+    return h("div", { class: "perm", k: "perm-" + d.id },
+      h("div", { class: "perm-h" }, icon(devIcon(d), null, "color:" + (d.online ? "var(--green)" : "var(--dim)")), h("b", null, d.name), h("span", { class: "dim" }, d.os), h("span", { class: "sp" }), h("button", { class: "btn sm" }, "Revoke")),
+      h("div", { class: "pgrid" },
+        pc(chk("Control", s.operate, re("operate"))),
+        pc(chk("Shut down, kill, force quit", s.destructive, re("destructive"))),
+        pc(chk("Read clipboard", s.clipboard, re("clipboard"))),
+        pc(chk("Send files", s.files, re("files"))),
+        pc(chk(newLabel("Browse my files"), s.fsRead, re("fsRead"), "perm-" + d.id + "-read"), "Shared folders only"),
+        pc(chk(newLabel("Change my files"), s.fsWrite, re("fsWrite"), "perm-" + d.id + "-write"), "Save into, rename, move to Trash"),
+        pc(chk(newLabel("Terminal"), s.terminal, function (v) { setTerminal(d, v); }, "perm-" + d.id + "-terminal"), "Runs commands as you")));
+  }
+  function settingsPage() {
+    return [h("div", { class: "v-title" }, "Settings"), h("div", { class: "scroll" }, h("div", { class: "stack" },
+      card("Remote", "radio", "#30d158", null,
+        settingRow("Show phones in Finder", "Each online phone appears under Locations. Served by Vitals on this Mac only (127.0.0.1).", sw(S.mount, "sw-finder", setMount, "Show phones in Finder"))),
+      card("Shared with phones", "folder", "#0a84ff", h("button", { class: "btn", k: "sf-add", onclick: addFolder }, "Add Folder…"),
+        h("div", { class: "callout" }, "Devices with Browse my files can open these folders and nothing else on this Mac."),
+        S.shared.length ? h("div", null, S.shared.map(sharedRow)) : h("div", { class: "empty", style: "padding:12px 0" }, "Empty. Phones can't browse this Mac.")),
+      card("Permissions", "shield", "#ff9f0a", null, h("div", null, S.devices.map(permBlock))),
+      h("div", { class: "empty", style: "padding:16px 0" }, "Other settings unchanged")))];
+  }
+
+  /* ---------- sheet ---------- */
+  function sheetContent() {
+    var d = dev(S.sheet.device);
+    return [h("div", { class: "sh-t" }, "Let " + d.name + " use Terminal?"),
+      h("div", { class: "body" }, d.name + " will be able to open a shell on this Mac and run any command you could, as rafay, in any folder. Not only the shared ones."),
+      h("div", { class: "warnline" }, icon("term"), "Open sessions show in the menu bar. End them there, or turn this off to end them all."),
+      h("div", { class: "sh-foot" }, h("span", { class: "sp" }), h("button", { class: "btn", k: "sh-cancel", onclick: function () { S.sheet = null; render(); } }, "Cancel"),
+        h("button", { class: "btn def", k: "sh-allow", onclick: function () { d.scopes.terminal = true; S.sheet = null; render(); } }, "Allow Terminal"))];
+  }
+
+  /* ---------- finder ---------- */
+  var FAV = [["Recents", "clock"], ["Applications", "apps"], ["Desktop", "desk"], ["Documents", "doc"], ["Downloads", "dl"]];
+  function withLabel(it) { var k = KIND[it.kind] || KIND.doc; return Object.assign({ kindLabel: k[2] }, it); }
+  function finderItems(dir) {
+    if (dir === "Downloads") return [{ name: "Vitals", kind: "folder", dir: "Vitals", bytes: 0 }, { name: "Vitals.dmg", kind: "dmg", bytes: 58.8 * MB }, { name: "invoice-sept.pdf", kind: "doc", bytes: 388 * KB }].map(withLabel);
+    if (dir === "Pixel 9") return Object.keys(VOLUME).map(function (n) { return withLabel({ name: n, kind: "folder", dir: "Pixel 9/" + n, bytes: 0 }); });
+    if (dir.indexOf("Pixel 9/") === 0) return PHONE_FS.pixel[VOLUME[dir.slice(8)]].items.map(withLabel);
+    return (S.fs[dir] || []).map(withLabel);
+  }
+  function fIcon(it) { var k = KIND[it.kind] || KIND.doc; return icon(k[0], "ficon", "color:" + k[1]); }
+  function fRow(it) {
+    var sel = S.finderSel.indexOf(it.name) >= 0;
+    var row = h("div", { class: "f-row" + (sel ? " sel" : ""), k: "f-" + slug(it.name),
+      onclick: function () { S.finderSel = [it.name]; finderEl.querySelectorAll(".f-row").forEach(function (r) { r.classList.toggle("sel", r === row); }); },
+      ondblclick: function () { if (it.dir) { S.finderDir = it.dir; S.finderSel = []; render(); } } },
+      h("span", { class: "nm" }, fIcon(it), h("span", { class: "trunc" }, it.name)),
+      h("span", { class: "s num" }, it.kind === "folder" ? "--" : size(it.bytes)), h("span", { class: "k" }, it.kindLabel || ""));
+    return row;
+  }
+  function finderBody() {
+    var dir = S.finderDir, items = finderItems(dir), onVol = dir.indexOf("Pixel 9") === 0, px = dev("pixel");
+    var title = onVol ? (dir === "Pixel 9" ? "Pixel 9" : dir.slice(8)) : dir;
+    var status = onVol ? (dir === "Pixel 9" ? plural(items.length, "item") : plural(PHONE_FS.pixel[VOLUME[dir.slice(8)]].total, "item")) + " · Pixel 9 over " + px.route : plural(items.length, "item");
+    function up() { if (dir === "Vitals") S.finderDir = "Downloads"; else if (dir.indexOf("Pixel 9/") === 0) S.finderDir = "Pixel 9"; else return; S.finderSel = []; render(); }
+    return [
+      h("div", { class: "f-side" }, h("div", { class: "lights" }, h("i"), h("i"), h("i")), h("div", { class: "f-sec" }, "Favorites"),
+        FAV.map(function (s) {
+          var on = dir === s[0] || (s[0] === "Downloads" && dir === "Vitals");
+          return h("button", { class: "f-it" + (on ? " on" : ""), onclick: function () { if (S.fs[s[0]] || s[0] === "Downloads") { S.finderDir = s[0]; S.finderSel = []; render(); } } }, icon(s[1]), s[0]);
+        }), h("div", { class: "f-sec" }, "Locations"), h("div", { class: "f-it" }, icon("disk"), "Macintosh HD"),
+        S.mount && browsable(px) ? h("button", { class: "f-it vol" + (onVol ? " on" : ""), k: "f-vol-pixel", onclick: function () { S.finderDir = "Pixel 9"; S.finderSel = []; render(); } }, icon("android"), "Pixel 9",
+          h("span", { class: "ej tip", "data-tip": "Turn off in Vitals Settings", onclick: function (e) { e.stopPropagation(); setMount(false); } }, icon("eject", null, "width:12px;height:12px"))) : null),
+      h("div", { class: "f-main" },
+        h("div", { class: "f-bar" }, h("button", { class: "ibtn", k: "f-back", onclick: up }, icon("chev-l")), h("button", { class: "ibtn" }, icon("chev-r")),
+          h("b", null, title), h("span", { class: "sp" }), h("span", { class: "ibtn" }, icon("search"))),
+        h("div", { class: "f-head" }, h("span", null, "Name"), h("span", { style: "text-align:right" }, "Size"), h("span", null, "Kind")),
+        h("div", { class: "f-list" }, items.length ? items.map(fRow) : h("div", { class: "f-empty" }, "Empty")),
+        h("div", { class: "f-status" }, status))
+    ];
+  }
+
+  /* ---------- vitals window ---------- */
+  var NAV = [["overview", "Overview", "grid"], "MONITOR", ["cpu", "CPU", "cpu"], ["gpu", "GPU", "cube"], ["memory", "Memory", "memory"], ["battery", "Battery", "battery"], ["network", "Network", "net"], ["temps", "Temps & Fans", "thermo"], ["history", "History", "clock"],
+    "MAINTAIN", ["disk", "Disk Health", "disk"], ["cleanup", "Cleanup", "sparkle"], ["apps", "Applications", "apps"],
+    "CONNECT", ["devices", "Devices", "iphone"], ["remote", "Remote", "radio"]];
+  function navItem(n) { return h("button", { class: "v-nav" + (S.section === n[0] ? " on" : ""), k: "nav-" + n[0], onclick: function () { S.section = n[0]; if (n[0] === "devices") S.drill = null; render(); } }, icon(n[2]), n[1]); }
+  function vbody() {
+    return [
+      h("aside", { class: "v-side" }, h("div", { class: "lights" }, h("i"), h("i"), h("i")),
+        NAV.map(function (n) { return typeof n === "string" ? h("div", { class: "v-sec" }, n) : navItem(n); }),
+        h("span", { class: "sp" }), navItem(["settings", "Settings", "gear"])),
+      h("main", { class: "v-main" }, page())
+    ];
+  }
+  function page() {
+    if (S.section === "devices") return devicesPage();
+    if (S.section === "settings") return settingsPage();
+    var label = NAV.filter(function (n) { return n[0] === S.section; })[0];
+    return [h("div", { class: "v-title" }, label ? label[1] : ""), h("div", { class: "empty" }, "Unchanged")];
+  }
+
+  /* ---------- notifications ---------- */
+  var NID = 0, ntimers = [];
+  function notifNode(n) {
+    return h("div", { class: "nt", "data-nid": n.id },
+      h("div", { class: "nb" }, appIcon("vitals", "nicon"), h("div", { class: "ntext" }, h("div", { class: "nrow" }, h("b", null, n.title), h("span", { class: "ntime" }, "now")), n.body ? h("div", { class: "nbody" }, n.body) : null)),
+      n.actions ? h("div", { class: "nact" }, n.actions.map(function (a) { return h("button", { k: a.k, onclick: function () { dismiss(n.id); a.fn(); } }, a.label); })) : null);
+  }
+  function notify(n) {
+    if (S.panel) return;
+    n.id = "n" + (++NID);
+    var node = notifNode(n);
+    notifEl.prepend(node);
+    void node.offsetWidth; node.classList.add("in");
+    var all = notifEl.querySelectorAll(".nt"); if (all.length > 3) all[all.length - 1].remove();
+    ntimers.push(setTimeout(function () { dismiss(n.id); }, n.sticky ? 12000 : 6500));
+  }
+  function dismiss(id) {
+    var node = notifEl.querySelector('[data-nid="' + id + '"]'); if (!node) return;
+    node.classList.remove("in"); ntimers.push(setTimeout(function () { node.remove(); }, 320));
+  }
+
+  /* ---------- phone side (simulated) ---------- */
+  var SID = 0;
+  function phoneOpensTerminal() {
+    var d = dev("pixel");
+    if (!d.scopes.terminal) {
+      notify({ title: "Terminal is off for Pixel 9", body: "Pixel 9 tried to open a terminal. Turn it on in Settings › Remote if you want it.", actions: [{ label: "Settings", k: "n-settings", fn: function () { S.section = "settings"; front(vwinEl); render(); } }] });
+      return;
+    }
+    var first = !S.warned.pixel; S.warned.pixel = true;
+    var s = { id: "s" + (++SID), device: "pixel", shell: "zsh", cwd: "~/Code/Vitals", mins: 0 };
+    S.sessions.push(s); render();
+    if (first) notify({ title: "Pixel 9 opened a terminal", body: "zsh in ~/Code/Vitals, running as rafay.", sticky: true, actions: [{ label: "End", k: "n-end", fn: function () { endSession(s.id); } }] });
+  }
+  function phoneEndsTerminal() { S.sessions = S.sessions.filter(function (s) { return s.device !== "pixel"; }); render(); }
+  function phoneBrowses() {
+    var d = dev("pixel");
+    if (!d.scopes.fsRead || S.shared.indexOf("Downloads") < 0) { notify({ title: "Pixel 9 can't browse this Mac", body: "Turn on Browse my files and share a folder in Settings › Remote." }); return; }
+    if (!S.browsing.some(function (b) { return b.device === "pixel"; })) S.browsing.push({ device: "pixel", folder: "Downloads", mins: 0 });
+    render();
+  }
+  function toggleIphone() { var d = dev("iphone"); d.fg = !d.fg; render(); renderTools(); }
+
+  /* ---------- render ---------- */
+  var lastView = "";
+  function renderDock() {
+    if (dockEl.childNodes.length) return;
+    var apps = [["finder", "Finder"], ["safari", "Safari"], ["msgs", "Messages"], ["notes", "Notes"], ["vitals", "Vitals"]];
+    dockEl.append.apply(dockEl, apps.map(function (a) {
+      return h("div", { class: "dk tip", "data-tip": a[1], onclick: a[0] === "vitals" ? function () { front(vwinEl); } : a[0] === "finder" ? function () { front(finderEl); } : null }, appIcon(a[0]), (a[0] === "finder" || a[0] === "vitals") ? h("i", { class: "dot" }) : null);
+    }).concat([h("div", { class: "dsep" }), h("div", { class: "dk" }, appIcon("dl")), h("div", { class: "dk" }, appIcon("trash"))]));
+  }
+  function renderOverlays() {
+    panelEl.classList.toggle("open", S.panel);
+    mbIcon.classList.toggle("on", S.panel);
+    mbTerm.classList.toggle("on", S.sessions.length > 0);
+    if (S.panel) {
+      notifEl.querySelectorAll(".nt.in").forEach(function (n) { dismiss(n.dataset.nid); });
+      panelEl.replaceChildren.apply(panelEl, panelContent().filter(Boolean));
+      var r = rectIn(mbIcon);
+      panelEl.style.left = Math.max(8, Math.min(r.left - 10, 1360 - 330 - 8)) + "px";
+    }
+    qlEl.classList.toggle("on", !!S.ql);
+    qlEl.replaceChildren(S.ql ? qlNode(S.ql) : "");
+    updateProgress();
+  }
+  function render() {
+    $(".fbody", finderEl).replaceChildren.apply($(".fbody", finderEl), finderBody());
+    var view = S.section + "/" + S.drill, sc = vwinEl.querySelector(".scroll"), top = sc ? sc.scrollTop : 0;
+    $(".vbody", vwinEl).replaceChildren.apply($(".vbody", vwinEl), vbody());
+    var sc2 = vwinEl.querySelector(".scroll"); if (sc2 && view === lastView) sc2.scrollTop = top;
+    lastView = view;
+    var wrapS = $(".sheetwrap", vwinEl);
+    wrapS.classList.toggle("open", !!S.sheet);
+    if (S.sheet) $(".sheet", wrapS).replaceChildren.apply($(".sheet", wrapS), sheetContent());
+    renderDock();
+    renderOverlays();
+  }
+  mbIcon.addEventListener("click", function () { S.panel = !S.panel; renderOverlays(); });
+  qlEl.addEventListener("click", function () { S.ql = null; renderOverlays(); });
+  stage.addEventListener("pointerdown", function (e) {
+    if (S.panel && !e.target.closest("#panel, #mbIcon")) { S.panel = false; renderOverlays(); }
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.ql) { S.ql = null; renderOverlays(); } });
+
+  var toolsEl = $("#tools");
+  function renderTools() {
+    var ip = dev("iphone");
+    toolsEl.replaceChildren(
+      h("button", { onclick: function () { if (!running) { reset(); caption.textContent = "Reset."; } } }, "Reset"),
+      h("button", { onclick: phoneOpensTerminal }, "Pixel opens a terminal"),
+      h("button", { onclick: phoneEndsTerminal }, "Pixel closes its terminal"),
+      h("button", { onclick: phoneBrowses }, "Pixel browses Downloads"),
+      h("button", { onclick: toggleIphone }, ip.fg ? "iPhone goes to the background" : "iPhone opens Vitals"),
+      h("button", { onclick: function () { setMount(!S.mount); renderTools(); } }, S.mount ? "Unmount from Finder" : "Mount in Finder"));
+  }
+  function reset() {
+    clearInterval(tickId); tickId = null;
+    ntimers.forEach(clearTimeout); ntimers = []; notifEl.replaceChildren();
+    S = initial(); lastView = ""; SID = 0;
+    ring.classList.remove("show");
+    finderEl.style.zIndex = "10"; vwinEl.style.zIndex = "11"; Z = 11;
+    render(); renderTools();
+  }
+
+  /* ---------- journeys ---------- */
+  var running = false;
+  function idle() { return !S.gets.some(function (x) { return x.state === "running"; }); }
+  var JOURNEYS = [
+    { name: "Get today's photos off the Pixel", cost: "4 clicks", done: "Eight photos in Downloads › Vitals, selected in Finder.", steps: [
+      ["tap", "nav-devices", "Open Devices"],
+      ["tap", "dev-pixel", "Open Pixel 9"],
+      ["tap", "th-PXL20261025184211jpg", "Click a thumbnail for Quick Look"],
+      ["tap", "ql-close", "Close it"],
+      ["tap", "get-all", "Get All"],
+      ["until", idle, "Pulling over Wi-Fi through Drop. The menu bar shows the percent."],
+      ["tap", "x-show", "Open in Finder"],
+      ["look", ".f-row.sel", "Finder opens on them"]] },
+    { name: "Open the Pixel in Finder", cost: "3 clicks", done: "The phone is a drive under Locations. Turn it off in Settings or with the eject button.", steps: [
+      ["tap", "nav-settings", "Open Settings"],
+      ["tap", "sw-finder", "Turn on Show phones in Finder"],
+      ["tap", "f-vol-pixel", "Pixel 9 appears under Locations"],
+      ["dbl", "f-Photos", "Double-click Photos"],
+      ["look", "f-back", "The phone's photos, read straight from it"]] },
+    { name: "Let the Pixel use Terminal", cost: "3 clicks", done: "The glyph next to the Vitals icon stays while the session is open. End is one click.", steps: [
+      ["tap", "nav-settings", "Open Settings"],
+      ["tap", "perm-pixel-terminal", "Check Terminal for Pixel 9"],
+      ["tap", "sh-allow", "Read the warning, then Allow Terminal"],
+      ["custom", phoneOpensTerminal, "On the Pixel: open a terminal"],
+      ["look", "n-end", "First session: a banner with End"],
+      ["tap", "mb-icon", "Open the menu bar panel"],
+      ["tap", "ss-end-s1", "End the session"]] },
+    { name: "Terminal is off, the phone is told", cost: "1 click", done: "Nothing ran. The Mac said why and where to change it.", steps: [
+      ["custom", phoneOpensTerminal, "On the Pixel: try to open a terminal"],
+      ["tap", "n-settings", "Click Settings on the banner"],
+      ["look", "perm-pixel-terminal", "Terminal stays off until you check it"]] },
+    { name: "See who is browsing, then stop it", cost: "2 clicks", done: "Stopped. The phone needs to open the folder again.", steps: [
+      ["custom", phoneBrowses, "On the Pixel: open Mac › Downloads"],
+      ["tap", "mb-icon", "Open the menu bar panel"],
+      ["tap", "br-stop-pixel", "Stop"]] },
+    { name: "iPhone is in the background", cost: "1 click", done: "Browsing opens the moment Vitals is open on the iPhone.", steps: [
+      ["tap", "nav-devices", "Open Devices"],
+      ["look", "dev-iphone", "The iPhone says to open Vitals on it"],
+      ["custom", toggleIphone, "On the iPhone: open Vitals"],
+      ["tap", "dev-iphone", "Open iPhone 17"],
+      ["look", "pl-Photos", "Its photos, over Tailscale"]] },
+    { name: "Limit what phones can see", cost: "2 clicks", done: "Phones see Desktop, Documents, Downloads, Pictures and ~/Code. Nothing else.", steps: [
+      ["tap", "nav-settings", "Open Settings"],
+      ["tap", "sf-rm-Movies", "Stop sharing Movies"],
+      ["tap", "sf-add", "Add Folder…"],
+      ["look", "sf-Code", "~/Code is shared"]] }
+  ];
+  function find(k) {
+    var sel = k.charAt(0) === "." ? k : '[data-k="' + k + '"]';
+    var list = Array.prototype.slice.call(stage.querySelectorAll(sel)).filter(function (e) {
+      return !e.closest("#panel:not(.open), .sheetwrap:not(.open)") && e.getClientRects().length;
+    });
+    return list[list.length - 1];
+  }
+  function scrollTo(el) {
+    var sc = el.closest(".scroll, .fl-rows"); if (!sc) return;
+    var er = el.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    if (er.top < sr.top) sc.scrollTop -= (sr.top - er.top) / scale + 20;
+    else if (er.bottom > sr.bottom) sc.scrollTop += (er.bottom - sr.bottom) / scale + 20;
+  }
+  async function showRing(el) {
+    scrollTo(el);
+    var r = rectIn(el);
+    ring.style.left = (r.left + Math.min(r.width / 2, 60)) + "px";
+    ring.style.top = (r.top + r.height / 2) + "px";
+    ring.classList.add("show"); await sleep(520);
+  }
+  function say(j, text) { caption.replaceChildren(h("b", null, j.name), " · " + text); }
+  async function run(j, btn) {
+    if (running) return false;
+    running = true; reset(); await sleep(350);
+    var ok = true;
+    for (var i = 0; i < j.steps.length; i++) {
+      var s = j.steps[i], kind = s[0];
+      say(j, "step " + (i + 1) + " of " + j.steps.length + ": " + s[s.length - 1]);
+      if (kind === "custom") { s[1](); await sleep(1100); continue; }
+      if (kind === "until") { var t0 = Date.now(); while (!s[1]() && Date.now() - t0 < 15000) await sleep(150); if (!s[1]()) ok = false; await sleep(700); continue; }
+      var el = find(s[1]);
+      if (!el) { say(j, "could not find " + s[1]); ok = false; break; }
+      await showRing(el);
+      if (kind === "tap") el.click();
+      if (kind === "dbl") el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      await sleep(kind === "look" ? 1000 : 240);
+      ring.classList.remove("show");
+      await sleep(kind === "look" ? 300 : 650);
+    }
+    if (ok) say(j, j.done);
+    if (btn && ok) btn.classList.add("ok");
+    running = false;
+    return ok;
+  }
+  var jl = $("#journeys");
+  JOURNEYS.forEach(function (j, i) {
+    var b = h("button", { class: "jbtn", "data-j": String(i), onclick: function () { run(j, b); } }, h("span", null, h("b", null, j.name), h("small", null, j.cost + " · " + j.steps.length + " steps")), h("span", { class: "run" }, "Run ›"));
+    jl.append(b);
+  });
+  window.__proto = { journeys: JOURNEYS.map(function (j) { return j.name; }), run: function (i) { return run(JOURNEYS[i], jl.children[i]); }, isRunning: function () { return running; } };
+
+  /* ---------- gallery ---------- */
+  function galPanel() { return h("div", { class: "panel" }, panelContent().filter(Boolean)); }
+  function galWindow() {
+    return h("div", { class: "win vwin", style: "position:relative" }, h("div", { class: "vbody" }, vbody()),
+      h("div", { class: "sheetwrap" + (S.sheet ? " open" : "") }, h("div", { class: "dim" }), h("div", { class: "sheet" }, S.sheet ? sheetContent() : null)));
+  }
+  function galFinder() { return h("div", { class: "win", style: "position:relative;width:440px;height:372px" }, h("div", { class: "fbody" }, finderBody())); }
+  function galNotif(n) { n.id = "g"; var node = notifNode(n); node.classList.add("in"); return node; }
+  function session(mins) { S.sessions.push({ id: "s9", device: "pixel", shell: "zsh", cwd: "~/Code/Vitals", mins: mins }); }
+  var GALLERY = [
+    ["Devices", null, galWindow],
+    ["Devices · using this Mac now", function () { session(12); S.browsing.push({ device: "pixel", folder: "Downloads", mins: 2 }); }, galWindow],
+    ["Pixel 9 › Photos", function () { S.drill = "pixel"; }, galWindow],
+    ["Getting 8 photos", function () { S.drill = "pixel"; S.gets.unshift({ id: "g9", device: "pixel", items: PHONE_FS.pixel.Photos.items, names: PHONE_FS.pixel.Photos.items.map(function (i) { return i.name; }), bytes: 28.3 * MB, done: 11.6 * MB, state: "running", label: "8 photos" }); }, galWindow],
+    ["Pixel 9 › Videos, one got", function () { S.drill = "pixel"; S.place.pixel = "Videos"; S.got["pixel/PXL_20261025_182004.mp4"] = true; }, galWindow],
+    ["iPhone 17 in the background", function () { S.drill = "iphone"; }, galWindow],
+    ["Quick Look", null, function () { return qlNode({ device: "pixel", item: PHONE_FS.pixel.Photos.items[3] }); }],
+    ["Settings › Remote", function () { S.section = "settings"; S.mount = true; }, galWindow],
+    ["Allow Terminal sheet", function () { S.section = "settings"; S.sheet = { type: "term", device: "pixel" }; }, galWindow],
+    ["Panel · terminal and browsing", function () { session(12); S.browsing.push({ device: "pixel", folder: "Downloads", mins: 2 }); }, galPanel],
+    ["Finder · Pixel 9 mounted", function () { S.mount = true; S.finderDir = "Pixel 9"; }, galFinder],
+    ["Finder · Pixel 9 › Photos", function () { S.mount = true; S.finderDir = "Pixel 9/Photos"; }, galFinder],
+    ["Notice · opened a terminal", null, function () { return galNotif({ title: "Pixel 9 opened a terminal", body: "zsh in ~/Code/Vitals, running as rafay.", actions: [{ label: "End", fn: function () {} }] }); }],
+    ["Notice · terminal is off", null, function () { return galNotif({ title: "Terminal is off for Pixel 9", body: "Pixel 9 tried to open a terminal. Turn it on in Settings › Remote if you want it.", actions: [{ label: "Settings", fn: function () {} }] }); }],
+    ["Notice · got photos", null, function () { return galNotif({ title: "Got 8 photos from Pixel 9", body: "In Downloads › Vitals · 28.3 MB", actions: [{ label: "Show in Finder", fn: function () {} }] }); }],
+    ["Menu bar · terminal glyph", null, function () { return h("div", { class: "mb", style: "position:relative;width:360px;border-radius:8px" }, h("div", { class: "r" }, h("span", { class: "mbi on" }, icon("ecg"), h("span", { style: "display:inline-flex;color:var(--orange)" }, icon("term", null, "width:15px;height:15px"))), h("span", { class: "mbi" }, icon("wifi")), h("span", { class: "clock" }, "Sun Oct 25  22:41"))); }]
+  ];
+  var grid = $("#gallery"), live = S;
+  GALLERY.forEach(function (g) {
+    S = initial();
+    if (g[1]) g[1]();
+    var node = g[2]();
+    node.querySelectorAll("button").forEach(function (b) { b.setAttribute("tabindex", "-1"); });
+    var inner = h("div", { class: "gin" }, node), box = h("div", { class: "gbox", "aria-hidden": "true" }, inner);
+    grid.append(h("figure", { class: "gcell" }, box, h("figcaption", null, g[0])));
+  });
+  S = live; XID = 50;
+  function fitGallery() {
+    grid.querySelectorAll(".gbox").forEach(function (box) {
+      var inner = box.firstChild, w = inner.scrollWidth, ht = inner.scrollHeight;
+      var k = Math.min(1, (box.clientWidth - 24) / w, (box.clientHeight - 24) / ht);
+      inner.style.transform = "translate(" + Math.round((box.clientWidth - w * k) / 2) + "px," + Math.round((box.clientHeight - ht * k) / 2) + "px) scale(" + k.toFixed(3) + ")";
+    });
+  }
+  fitGallery(); window.addEventListener("resize", fitGallery);
+
+  reset();
+})();
+</script>
+</body>
+</html>

@@ -55,6 +55,20 @@ const queue = Effect.runSync(Queue.unbounded<string>());
 const emit = (message: object): void => void Effect.runSync(Queue.offer(queue, JSON.stringify(message)));
 const wobble = (base: number, spread: number): number => Math.max(0, base + (Math.random() - 0.5) * spread);
 
+const networkSample = (down: number, up: number) => ({
+  inBytesPerSec: down,
+  outBytesPerSec: up,
+  wifiRssi: -52,
+  primaryInterface: "en0",
+  totalInBytes: 48.2 * GB,
+  totalOutBytes: 6.1 * GB,
+  links: [
+    { name: "en0", label: "Wi-Fi", kind: "wifi" as const, inBytesPerSec: down, outBytesPerSec: up, active: true },
+    { name: "en5", label: "Ethernet", kind: "ethernet" as const, inBytesPerSec: 0, outBytesPerSec: 0, active: false },
+  ],
+  wifi: { ssid: "Home-5G", rssi: -52, noise: -92, txRateMbps: 1201, channel: 149, band: "5 GHz" },
+});
+
 const MAC = {
   name: "MacBook Pro",
   model: "Mac15,8",
@@ -170,7 +184,7 @@ const sample = () => {
     seq,
     at: Date.now(),
     cpu: { overall: Math.min(100, wobble(71 * busy, 14)), performance: Math.min(100, wobble(80 * busy, 12)), efficiency: Math.min(100, wobble(40, 20)), perCore: cores },
-    gpu: { utilization: CALM ? wobble(1, 1) : wobble(18, 10), memoryUsedBytes: 2.3 * GB, coreCount: 30 },
+    gpu: { utilization: CALM ? wobble(1, 1) : wobble(18, 10), memoryUsedBytes: 2.3 * GB, coreCount: 30, rendererUtilization: wobble(14, 8), tilerUtilization: wobble(7, 5), memoryTotalBytes: 27 * GB },
     thermal: { state: CALM ? "nominal" : "fair", cpuC: wobble(CALM ? 47 : calmApplied ? 56 : 68, 2), gpuC: wobble(52, 4), storageC: 41, batteryC: 33, sensors: [] },
     // Same Mac in both scenes; at rest its fans are simply off, and say so.
     fans: [
@@ -178,10 +192,10 @@ const sample = () => {
       { id: 1, rpm: CALM ? 0 : wobble(calmApplied ? 1300 : 2380, 120), minRpm: 1200, maxRpm: 5800 },
     ],
     memory: { totalBytes: 16 * GB, usedBytes: wobble((CALM ? 12.4 : 14.1) * GB, 0.2 * GB), appBytes: 8 * GB, wiredBytes: 2.5 * GB, compressedBytes: 1.5 * GB, cachedBytes: 2 * GB, freeBytes: 1 * GB, swapUsedBytes: (CALM ? 0.3 : 2.1) * GB, swapTotalBytes: 4 * GB, pressure: CALM ? "normal" : "warning" },
-    battery: { percent: 85, charging: CALM, externalPower: CALM, watts: CALM ? wobble(23, 4) : wobble(-23, 4), timeRemainingMinutes: 190, cycleCount: 212, healthPercent: 94, temperatureC: 33, condition: "Normal" },
+    battery: { percent: 85, charging: CALM, externalPower: CALM, watts: CALM ? wobble(23, 4) : wobble(-23, 4), timeRemainingMinutes: 190, cycleCount: 212, healthPercent: 94, temperatureC: 33, condition: "Normal", fullyCharged: false, designCapacityMah: 7594, maxCapacityMah: 7139, voltage: 12.7, amperage: CALM ? 1.8 : -1.8, ...(CALM ? { adapter: { watts: 96, name: "96W USB-C Power Adapter", wireless: false, deliveredWatts: 41.2, voltage: 20, amperage: 2.06 } } : {}) },
     power: { cpuWatts: wobble(16 * busy, 4), gpuWatts: wobble(4, 2), aneWatts: 0.2 },
-    network: { inBytesPerSec: wobble(2.1 * MB, MB), outBytesPerSec: wobble(300_000, 200_000), wifiRssi: -52, primaryInterface: "en0" },
-    disk: { readBytesPerSec: wobble(4 * MB, 3 * MB), writeBytesPerSec: wobble(2 * MB, 2 * MB) },
+    network: networkSample(wobble(2.1 * MB, MB), wobble(300_000, 200_000)),
+    disk: { readBytesPerSec: wobble(4 * MB, 3 * MB), writeBytesPerSec: wobble(2 * MB, 2 * MB), freeBytes: 412 * GB, totalBytes: 994 * GB, volume: "Macintosh HD", health: { model: "APPLE SSD AP1024Z", wearPercent: 3, readBytes: 61e12, writtenBytes: 38e12, powerOnHours: 2140, unsafeShutdowns: 6, sparePercent: 100, celsius: 41, warning: false } },
   };
 };
 

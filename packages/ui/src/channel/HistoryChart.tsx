@@ -2,7 +2,7 @@ import { Canvas, Path, Skia } from "@shopify/react-native-skia";
 import { useState } from "react";
 import { type LayoutChangeEvent, View } from "react-native";
 
-import { type Channel, channels, colors } from "../theme.ts";
+import { type Channel, type ChannelSpec, channels, colors } from "../theme.ts";
 import { Mono } from "../typography.tsx";
 
 export interface Bucket {
@@ -15,6 +15,7 @@ export interface Bucket {
 export interface HistoryChartProps {
   readonly channel: Channel;
   readonly buckets: ReadonlyArray<Bucket>;
+  readonly pair?: ReadonlyArray<Bucket> | undefined;
   readonly from: number;
   readonly to: number;
   readonly labels: ReadonlyArray<string>;
@@ -26,11 +27,22 @@ export interface HistoryChartProps {
 
 const GRID = [0.25, 0.5, 0.75];
 
+const NO_BUCKETS: ReadonlyArray<Bucket> = [];
+
 const MARKER = 12;
 
 const markerSpan = (top: number): readonly [number, number] => (top >= MARKER + 4 ? [top - 4, top - 4 - MARKER] : [top + 4, top + 4 + MARKER]);
 
-const geometry = (buckets: ReadonlyArray<Bucket>, from: number, to: number, width: number, height: number, floor: number, top: number) => {
+const linePath = (buckets: ReadonlyArray<Bucket>, x: (t: number) => number, y: (value: number) => number) => {
+  const line = Skia.PathBuilder.Make();
+  buckets.forEach((bucket, index) => {
+    if (index === 0) line.moveTo(x(bucket.t), y(bucket.avg));
+    else line.lineTo(x(bucket.t), y(bucket.avg));
+  });
+  return line.build();
+};
+
+const geometry = (buckets: ReadonlyArray<Bucket>, pair: ReadonlyArray<Bucket>, from: number, to: number, width: number, height: number, floor: number, top: number) => {
   const x = (t: number) => ((t - from) / Math.max(to - from, 1)) * width;
   const y = (value: number) => height - ((Math.min(Math.max(value, floor), top) - floor) / Math.max(top - floor, 1e-6)) * height;
   const band = Skia.PathBuilder.Make();
@@ -54,14 +66,15 @@ const geometry = (buckets: ReadonlyArray<Bucket>, from: number, to: number, widt
     const [from, to] = markerSpan(y(peak.max));
     marker.moveTo(x(peak.t), from).lineTo(x(peak.t), to);
   }
-  return { band: band.build(), line: line.build(), grid: grid.build(), marker: marker.build(), peak, peakX: peak === null ? 0 : x(peak.t) };
+  return { band: band.build(), line: line.build(), pairLine: linePath(pair, x, y), grid: grid.build(), marker: marker.build(), peak, peakX: peak === null ? 0 : x(peak.t) };
 };
 
-export function HistoryChart({ channel, buckets, from, to, labels, format, floor = 0, ceiling, height = 120 }: HistoryChartProps) {
+export function HistoryChart({ channel, buckets, pair = NO_BUCKETS, from, to, labels, format, floor = 0, ceiling, height = 120 }: HistoryChartProps) {
   const [width, setWidth] = useState(0);
-  const color = channels[channel].color;
-  const top = ceiling ?? Math.max(floor + 1e-6, ...buckets.map((bucket) => bucket.max));
-  const shapes = geometry(buckets, from, to, width, height, floor, top);
+  const spec: ChannelSpec = channels[channel];
+  const color = spec.color;
+  const top = ceiling ?? Math.max(floor + 1e-6, ...buckets.map((bucket) => bucket.max), ...pair.map((bucket) => bucket.avg));
+  const shapes = geometry(buckets, pair, from, to, width, height, floor, top);
   return (
     <View>
       <View className="mb-1 h-4 flex-row">
@@ -77,6 +90,7 @@ export function HistoryChart({ channel, buckets, from, to, labels, format, floor
             <Path path={shapes.grid} style="stroke" strokeWidth={1} color={colors.line} />
             <Path path={shapes.band} color={color} opacity={0.09} />
             <Path path={shapes.line} style="stroke" strokeWidth={1.5} color={color} strokeJoin="round" />
+            {pair.length === 0 || spec.pair === undefined ? null : <Path path={shapes.pairLine} style="stroke" strokeWidth={1.3} color={spec.pair} strokeJoin="round" />}
             <Path path={shapes.marker} style="stroke" strokeWidth={1} color={colors.ink} />
           </Canvas>
         )}

@@ -32,13 +32,19 @@ function ChannelBody({ channel }: { readonly channel: Channel }) {
         </Serif>
         <Mono className="mt-1">{`${spec.label} · ${def.context}`}</Mono>
       </View>
-      <View className="px-[22px] pb-2">
+      <View className="flex-row items-baseline gap-4 px-[22px] pb-2">
         <Serif size="xl2" tone={signal ? channel : "mute"}>
           <LiveText select={def.reading} />
         </Serif>
+        {def.pair === undefined || !signal ? null : (
+          <Mono tone="ink2">
+            <LiveText select={def.pair.reading} />
+            {` ${def.pair.label}`}
+          </Mono>
+        )}
       </View>
       <View className="border-y border-line px-[22px] py-3">
-        <Trace channel={channel} source={remote.live.series(def.series)} height={80} min={def.min} max={channel === "press" ? memoryMax : def.max} beats={14} flat={!signal} />
+        <Trace channel={channel} source={remote.live.series(def.series)} pair={def.pair === undefined ? undefined : remote.live.series(def.pair.series)} height={80} min={def.min} max={channel === "press" ? memoryMax : def.max} beats={14} flat={!signal} />
       </View>
       <History channel={channel} />
       <View className="pt-6">
@@ -55,7 +61,7 @@ export function ChannelScreen({ navigation, route }: Props) {
   return (
     <Screen>
       <BackHeader parent="Chart" onBack={back} />
-      {isChannel(channel) ? <ChannelBody channel={channel} /> : <EmptyState title="No such channel." detail="Go back to the Chart and pick one of the eight vitals." />}
+      {isChannel(channel) ? <ChannelBody channel={channel} /> : <EmptyState title="No such channel." detail="Go back to the Chart and pick one of the vitals." />}
     </Screen>
   );
 }
