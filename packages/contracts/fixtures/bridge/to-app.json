@@ -27,7 +27,6 @@
   { "t": "dropReceived", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01", "from": { "_tag": "Device", "deviceId": "dev-1", "name": "Pixel 9" }, "files": [{ "stored": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b01/0", "name": "video.mp4", "path": "Camera/video.mp4", "size": 52428800 }] },
   { "t": "dropRemoved", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b02" },
   { "t": "query", "id": "q-fs-1", "q": { "_tag": "FsThumbs", "paths": ["/Users/abdul/Downloads/IMG_0042.HEIC"], "pixels": 192 } },
-  { "t": "query", "id": "q-fs-2", "q": { "_tag": "FsTrash", "paths": ["/Users/abdul/Desktop/old.zip"], "deviceName": "Pixel 9" } },
   { "t": "query", "id": "q-fs-3", "q": { "_tag": "FsOpen", "path": "/Users/abdul/Documents/plan.pdf" } },
   { "t": "dropReceived", "id": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b03", "from": { "_tag": "Device", "deviceId": "dev-1", "name": "Pixel 9" }, "files": [{ "stored": "0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5b03/0", "name": "scan.pdf", "path": null, "size": 2048 }], "dest": "/Users/abdul/Documents" },
   { "t": "terminals", "sessions": [{ "id": "01a173b5-eb03-71ad-ac2e-aa6f5ef2cc9e", "title": "zsh", "deviceId": "dev-1", "deviceName": "Pixel 9", "startedAt": 1790000000000, "attached": 1 }] }

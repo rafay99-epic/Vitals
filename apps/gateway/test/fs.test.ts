@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-import { type Gateway, adminOp, pairDevice, startGateway, withClient } from "./harness.ts";
+import { type Gateway, pairDevice, startGateway, withClient } from "./harness.ts";
 
 const deviceIdOf = Schema.decodeUnknownSync(DeviceId);
 
