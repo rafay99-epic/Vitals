@@ -1,6 +1,8 @@
 package expo.modules.vitalsshare
 
 import android.content.Intent
+import android.os.Build
+import android.os.Environment
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
@@ -31,6 +33,17 @@ class VitalsShareModule : Module() {
       context.stopService(Intent(context, ShareService::class.java))
       Unit
     }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("recent") { kind: String, offset: Int, limit: Int ->
+      val context = appContext.reactContext ?: throw IllegalStateException("No context")
+      Recent.page(context, kind, offset, limit)
+    }
+
+    AsyncFunction("thumbnail") { path: String, px: Int -> Recent.thumbnail(path, px) }
+
+    Function("fullStorage") { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else null }
+
+    AsyncFunction("toBack") { appContext.currentActivity?.moveTaskToBack(true) ?: false }.runOnQueue(Queues.MAIN)
   }
 
   private companion object {

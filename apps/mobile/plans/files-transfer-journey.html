@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals · Files and Transfer · the flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<style>
+  :root { --s1:#0e0e0e; --s2:#161616; --s3:#1f1f1f; --line:#232323; --ink:#fff; --ink2:#b4b4b4; --dim:#7d7d7d; --acc:#f2ec6b; --ok:#5cf2a6; --blue:#74d4ff; --orange:#ffa95c; --violet:#c8a8ff;
+    --serif:"Instrument Serif", Georgia, serif; --sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.5 var(--sans); }
+  main { max-width:1500px; margin:0 auto; padding:36px 22px 100px; }
+  h1 { font:italic 44px/1 var(--serif); margin:0 0 8px; }
+  h2 { font-size:17px; margin:40px 0 4px; padding-top:14px; border-top:1px solid var(--line); }
+  .lead { color:var(--ink2); max-width:920px; }
+  .rules { color:var(--ink2); font-size:13px; max-width:920px; padding-left:18px; }
+  .rules b { color:#fff; }
+  .board { display:flex; gap:0; overflow-x:auto; padding:14px 0 6px; align-items:flex-start; }
+  .step { flex:none; display:flex; flex-direction:column; gap:8px; }
+  .cap { font-size:12px; color:var(--ink2); max-width:276px; }
+  .cap i { font-style:normal; color:var(--acc); font-weight:800; margin-right:4px; }
+  .arrow { flex:none; width:30px; align-self:center; text-align:center; color:#444; font-size:20px; margin-top:-40px; }
+  .ph { width:276px; height:590px; border:1px solid #2b2b2b; border-radius:36px; background:#000; position:relative; overflow:hidden; padding:12px 0 0; }
+  .sb { display:flex; justify-content:space-between; padding:0 22px; font-size:11px; color:#ddd; height:16px; }
+  .in { padding:6px 14px 0; height:calc(100% - 16px); overflow:hidden; position:relative; }
+  .back { color:var(--acc); font-size:12.5px; margin:4px 2px 2px; }
+  .ttl { font:italic 36px/1.05 var(--serif); margin:2px 2px 8px; }
+  .ttl.sm { font-size:28px; }
+  .sub { font-size:11px; color:var(--dim); margin:-4px 2px 8px; }
+  .seg { display:flex; background:var(--s2); border-radius:99px; padding:3px; gap:2px; margin:0 0 10px; }
+  .seg span { flex:1; text-align:center; font-size:11.5px; padding:6px 0; border-radius:99px; color:var(--dim); }
+  .seg span.on { background:var(--acc); color:#000; font-weight:700; }
+  .lbl { display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink2); margin:12px 2px 6px; font-weight:600; }
+  .lbl a { color:var(--acc); }
+  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .tile { background:var(--s1); border:1px solid #1d1d1d; border-radius:15px; padding:9px 10px; height:74px; position:relative; overflow:hidden; }
+  .tile b { font-size:12px; font-weight:600; display:block; }
+  .tile small { color:var(--dim); font-size:10.5px; }
+  .peek { position:absolute; right:-6px; bottom:-10px; width:40px; height:56px; border-radius:8px; transform:rotate(-8deg); }
+  .peek.s { background:linear-gradient(180deg,#1b2633,#0b1018); border:1px solid #23384d; }
+  .peek.p { background:linear-gradient(135deg,#5b3a1f,#1d3a2a); }
+  .peek.d { background:#1a1408; border:1px solid #3a2a10; }
+  .strip { display:flex; gap:5px; }
+  .t { border-radius:9px; flex:none; position:relative; overflow:hidden; }
+  .t.s { width:44px; height:78px; background:linear-gradient(180deg,#1b2633,#0b1018 60%,#1a1a1a); border:1px solid #23384d; }
+  .t.p { width:56px; height:56px; background:linear-gradient(135deg,#5b3a1f,#1d3a2a); }
+  .t.p.b { background:linear-gradient(200deg,#21405f,#3b1d2c); }
+  .row { display:flex; align-items:center; gap:10px; padding:6px 2px; }
+  .row + .row { border-top:1px solid #121212; }
+  .ic { width:30px; height:30px; border-radius:9px; background:var(--s3); flex:none; display:grid; place-items:center; font-size:9.5px; font-weight:800; color:var(--ok); }
+  .ic.pdf { color:var(--orange); }
+  .rt { flex:1; min-width:0; }
+  .rt b { display:block; font-weight:500; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rt small { display:block; font-size:10.5px; color:var(--dim); }
+  .chev { color:var(--dim); }
+  .dock { position:absolute; left:10px; right:10px; bottom:12px; height:50px; border-radius:25px; background:#0e0e0e; border:1px solid #232323; display:flex; align-items:center; justify-content:space-around; font-size:9.5px; color:var(--dim); }
+  .dock span.on { color:var(--acc); background:#2a2a12; padding:6px 12px; border-radius:18px; }
+  .share { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--ink2); margin:0 2px 8px; }
+  .share .dot { width:7px; height:7px; border-radius:50%; background:var(--ok); }
+  .share .send { margin-left:auto; color:var(--acc); font-weight:700; }
+  .g3 { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+  .g3 .t { width:auto; height:112px; }
+  .chk { position:absolute; right:6px; top:6px; width:18px; height:18px; border-radius:50%; border:1.5px solid #ffffff99; }
+  .chk.on { background:var(--acc); border-color:var(--acc); }
+  .chk.on::after { content:"✓"; color:#000; font-size:11px; font-weight:900; position:absolute; inset:0; display:grid; place-items:center; }
+  .bar { position:absolute; left:10px; right:10px; bottom:72px; background:#fff; color:#000; border-radius:20px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:12px; }
+  .bar .btn { background:#000; color:var(--acc); border-radius:12px; padding:7px 12px; }
+  .dim { position:absolute; inset:0; background:#000a; }
+  .sheet { position:absolute; left:6px; right:6px; bottom:6px; background:#121212; border:1px solid #262626; border-radius:24px 24px 30px 30px; padding:12px 12px 14px; }
+  .grab { width:34px; height:4px; border-radius:2px; background:#3a3a3a; margin:0 auto 10px; }
+  .sheet h3 { margin:0 2px 2px; font-size:15px; }
+  .sheet p { margin:0 2px 10px; font-size:11px; color:var(--dim); }
+  .dest { display:flex; align-items:center; gap:10px; background:var(--s1); border:1px solid #222; border-radius:16px; padding:10px; margin-bottom:7px; }
+  .dest .ic { width:34px; height:34px; color:var(--acc); font-size:15px; }
+  .dest .go { color:var(--acc); font-weight:800; font-size:12px; }
+  .dest.off { opacity:.5; }
+  .cancel { text-align:center; color:var(--ink2); font-size:12.5px; padding:8px 0 0; }
+  .toast { position:absolute; left:14px; right:14px; bottom:76px; background:#16241c; border:1px solid #275a3d; color:var(--ok); font-size:11px; padding:8px 10px; border-radius:12px; }
+  .mac { width:560px; height:380px; border:1px solid #2b2b2b; border-radius:12px; background:#0a0a0a; display:flex; flex-direction:column; overflow:hidden; position:relative; }
+  .mac .tb { height:24px; display:flex; gap:6px; align-items:center; padding:0 10px; border-bottom:1px solid #191919; }
+  .mac .tb i { width:9px; height:9px; border-radius:50%; background:#333; display:block; }
+  .mac .bd { flex:1; display:flex; min-height:0; }
+  .mac .sd { width:130px; border-right:1px solid #191919; padding:8px 6px; font-size:11px; }
+  .mac .sd .g { color:var(--dim); font-size:9.5px; font-weight:700; margin:8px 6px 2px; }
+  .mac .sd div.r { padding:4px 7px; border-radius:6px; color:var(--ink2); display:flex; justify-content:space-between; }
+  .mac .sd div.r.on { background:#1f1f1f; color:#fff; }
+  .mac .mn { flex:1; padding:10px 12px; overflow:hidden; position:relative; }
+  .mac .hd { font-size:15px; font-weight:700; }
+  .mac .hd small { display:block; font-size:10.5px; color:var(--dim); font-weight:400; }
+  .mac .tiles { grid-template-columns:repeat(4,1fr); margin-top:8px; }
+  .mac .tile { height:62px; }
+  .g6 { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; margin-top:6px; }
+  .g6 div { aspect-ratio:9/16; border-radius:5px; background:linear-gradient(180deg,#1b2633,#0b1018); border:1px solid #23384d; position:relative; }
+  .g6 div.on { outline:2px solid var(--acc); outline-offset:1px; }
+  .pop { position:absolute; right:14px; bottom:14px; width:230px; background:#1a1a1a; border:1px solid #2e2e2e; border-radius:12px; padding:8px; font-size:11.5px; box-shadow:0 10px 30px #000c; }
+  .pop .h { color:var(--dim); font-size:10.5px; margin:0 4px 6px; }
+  .pop div.o { padding:6px 8px; border-radius:7px; display:flex; justify-content:space-between; }
+  .pop div.o.on { background:#2b5bd7; }
+  .pop div.o small { color:#ffffffaa; }
+  .footer { margin-top:34px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+  textarea { flex:1; min-width:280px; min-height:70px; background:#0b0b0b; color:#fff; border:1px solid #2b2b2b; border-radius:12px; padding:10px; font:13px var(--sans); }
+  button { background:var(--acc); color:#000; border:0; border-radius:12px; padding:12px 18px; font-weight:800; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--acc); border:1px solid var(--acc); }
+  button:focus-visible, textarea:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+  #status { color:var(--dim); font-size:12.5px; align-self:center; }
+  .stamp { color:var(--dim); font-size:11.5px; margin-top:24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Files, and Transfer.</h1>
+  <p class="lead">Your feedback, drawn as the real flow. If it looks right, tap "Build it". If not, say what to change and tap "Change this".</p>
+  <ul class="rules">
+    <li><b>Files are files.</b> No clipboard in here. Clipboard keeps its own place in Control.</li>
+    <li><b>Tabs are the other devices.</b> On the Pixel: Mac · iPhone. On the iPhone: Mac · Pixel. Only the Mac is connected? Just Mac.</li>
+    <li><b>Each tab:</b> shortcut tiles (Screenshots, Photos, Downloads, Documents), the newest images, then the folders.</li>
+    <li><b>Select, then Transfer.</b> A sheet lists where it can go, never the device you're looking at. Copy only: the original stays.</li>
+    <li><b>The Mac works the same way:</b> a device page, select, then Transfer to This Mac or another phone.</li>
+  </ul>
+
+  <h2>On the Pixel: Mac files to the iPhone, or to this phone</h2>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="in">
+      <div class="back">‹ Control</div>
+      <div class="ttl">Files.</div>
+      <div class="seg"><span class="on">Mac</span><span>iPhone</span></div>
+      <div class="share"><span class="dot"></span>This phone is shared<span class="send">Send from this phone</span></div>
+      <div class="tiles">
+        <div class="tile"><b>Screenshots</b><small>4 today</small><div class="peek s"></div></div>
+        <div class="tile"><b>Photos</b><small>132</small><div class="peek p"></div></div>
+        <div class="tile"><b>Downloads</b><small>PDF · 1 h</small><div class="peek d"></div></div>
+        <div class="tile"><b>Documents</b><small>24</small><div class="peek d"></div></div>
+      </div>
+      <div class="lbl">Newest images <a>See all</a></div>
+      <div class="strip"><div class="t s"></div><div class="t s"></div><div class="t p"></div><div class="t p b"></div><div class="t s"></div></div>
+      <div class="lbl">Folders</div>
+      <div class="row"><div class="ic">▤</div><div class="rt"><b>Desktop</b></div><span class="chev">›</span></div>
+      <div class="row"><div class="ic">▤</div><div class="rt"><b>Documents</b></div><span class="chev">›</span></div>
+      <div class="dock"><span>Home</span><span>Apps</span><span class="on">Control</span><span>Alerts</span><span>Settings</span></div>
+    </div></div><div class="cap"><i>1</i>Files opens on the Mac tab: tiles, newest images, then folders.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="in">
+      <div class="back">‹ Mac</div>
+      <div class="ttl sm">Screenshots.</div>
+      <div class="sub">On your Mac · newest first</div>
+      <div class="g3">
+        <div class="t s"><span class="chk on"></span></div><div class="t s"><span class="chk on"></span></div><div class="t s"><span class="chk on"></span></div>
+        <div class="t s"><span class="chk"></span></div><div class="t s"><span class="chk"></span></div><div class="t s"><span class="chk"></span></div>
+        <div class="t s"><span class="chk"></span></div><div class="t s"><span class="chk"></span></div><div class="t s"><span class="chk"></span></div>
+      </div>
+      <div class="bar"><span>3 selected · 4.1 MB</span><span class="btn">Transfer</span></div>
+      <div class="dock"><span>Home</span><span>Apps</span><span class="on">Control</span><span>Alerts</span><span>Settings</span></div>
+    </div></div><div class="cap"><i>2</i>Tap Screenshots. Tap to select, then Transfer.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="in">
+      <div class="back">‹ Mac</div>
+      <div class="ttl sm">Screenshots.</div>
+      <div class="g3"><div class="t s"></div><div class="t s"></div><div class="t s"></div></div>
+      <div class="dim"></div>
+      <div class="sheet"><div class="grab"></div>
+        <h3>Transfer 3 screenshots</h3><p>From your Mac. The Mac keeps its copy.</p>
+        <div class="dest"><div class="ic">▯</div><div class="rt"><b>This phone</b><small>Pixel 9 · into Downloads › Vitals</small></div><span class="go">Here</span></div>
+        <div class="dest"><div class="ic"></div><div class="rt"><b>iPhone</b><small>Online · into Files › Vitals</small></div><span class="go">Send</span></div>
+        <div class="cancel">Cancel</div>
+      </div>
+    </div></div><div class="cap"><i>3</i>The sheet lists every other device, never the Mac you're looking at.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="in">
+      <div class="back">‹ Mac</div>
+      <div class="ttl sm">Screenshots.</div>
+      <div class="g3"><div class="t s"></div><div class="t s"></div><div class="t s"></div><div class="t s"></div><div class="t s"></div><div class="t s"></div></div>
+      <div class="toast">Sending 3 screenshots to iPhone · 40%</div>
+      <div class="dock"><span>Home</span><span>Apps</span><span class="on">Control</span><span>Alerts</span><span>Settings</span></div>
+    </div></div><div class="cap"><i>4</i>It goes Mac to iPhone. Progress shows here and on the iPhone.</div></div>
+  </div>
+
+  <h2>On the iPhone: same structure, tabs Mac · Pixel</h2>
+  <div class="board">
+    <div class="step"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="in">
+      <div class="back">‹ Control</div>
+      <div class="ttl">Files.</div>
+      <div class="seg"><span>Mac</span><span class="on">Pixel 9</span></div>
+      <div class="share"><span class="dot"></span>This iPhone is shared<span class="send">Send from this phone</span></div>
+      <div class="tiles">
+        <div class="tile"><b>Screenshots</b><small>Pixel · 12</small><div class="peek s"></div></div>
+        <div class="tile"><b>Photos</b><small>Camera · 2 new</small><div class="peek p"></div></div>
+        <div class="tile"><b>Downloads</b><small>APK · 1 d</small><div class="peek d"></div></div>
+        <div class="tile"><b>Documents</b><small>8</small><div class="peek d"></div></div>
+      </div>
+      <div class="lbl">Newest images <a>See all</a></div>
+      <div class="strip"><div class="t p"></div><div class="t s"></div><div class="t p b"></div><div class="t s"></div></div>
+      <div class="lbl">Folders</div>
+      <div class="row"><div class="ic">▤</div><div class="rt"><b>Download</b></div><span class="chev">›</span></div>
+      <div class="row"><div class="ic">▤</div><div class="rt"><b>DCIM</b></div><span class="chev">›</span></div>
+      <div class="dock"><span>Home</span><span>Apps</span><span class="on">Control</span><span>Alerts</span><span>Settings</span></div>
+    </div></div><div class="cap"><i>1</i>Pixel tab on the iPhone: everything the Pixel shares, same layout.</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="in">
+      <div class="back">‹ Pixel 9</div>
+      <div class="ttl sm">Downloads.</div>
+      <div class="row"><div class="ic pdf">PDF</div><div class="rt"><b>Invoice-October.pdf</b><small>240 KB · 38 min</small></div><span class="chk on" style="position:static;display:inline-block"></span></div>
+      <div class="row"><div class="ic">APK</div><div class="rt"><b>app-release.apk</b><small>40 MB · 1 d</small></div><span class="chk" style="position:static;display:inline-block"></span></div>
+      <div class="dim"></div>
+      <div class="sheet"><div class="grab"></div>
+        <h3>Transfer Invoice-October.pdf</h3><p>From Pixel 9.</p>
+        <div class="dest"><div class="ic"></div><div class="rt"><b>This iPhone</b><small>Into Files › Vitals</small></div><span class="go">Here</span></div>
+        <div class="dest"><div class="ic">▭</div><div class="rt"><b>Mac</b><small>Into Downloads › Vitals</small></div><span class="go">Send</span></div>
+        <div class="cancel">Cancel</div>
+      </div>
+    </div></div><div class="cap"><i>2</i>Lists work the same: select, Transfer, pick where.</div></div>
+  </div>
+
+  <h2>On the Mac: same idea, same words</h2>
+  <div class="board">
+    <div class="step"><div class="mac"><div class="tb"><i></i><i></i><i></i></div><div class="bd">
+      <div class="sd"><div class="g">DEVICES</div><div class="r on">Pixel 9 <span style="color:var(--ok)">●</span></div><div class="r">iPhone <span>○</span></div></div>
+      <div class="mn"><div class="hd">Pixel 9<small>Android · Online</small></div>
+        <div class="tiles"><div class="tile"><b>Screenshots</b><small>12</small><div class="peek s"></div></div><div class="tile"><b>Photos</b><small>2 new</small><div class="peek p"></div></div><div class="tile"><b>Downloads</b><small>APK</small><div class="peek d"></div></div><div class="tile"><b>Documents</b><small>8</small><div class="peek d"></div></div></div>
+        <div style="font-size:11.5px;color:var(--ink2);margin:10px 0 0;font-weight:600">Screenshots · 2 selected</div>
+        <div class="g6"><div class="on"></div><div class="on"></div><div></div><div></div><div></div><div></div></div>
+        <div class="pop"><div class="h">Transfer 2 screenshots</div><div class="o on">This Mac <small>Downloads › Vitals</small></div><div class="o">iPhone <small>Files › Vitals</small></div></div>
+      </div></div></div><div class="cap" style="max-width:560px"><i>1</i>The phone's page on the Mac has the same tiles. Select, click Transfer, then pick This Mac or the iPhone. Never the Pixel itself.</div></div>
+  </div>
+
+  <div class="footer">
+    <textarea id="note" aria-label="What to change" placeholder="Optional: what to change"></textarea>
+    <button id="ok" type="button">Build it</button>
+    <button id="change" class="ghost" type="button">Change this</button>
+    <span id="status" role="status"></span>
+  </div>
+  <p class="stamp">Updated 2026-10-27 · Vitals Remote · PR #171</p>
+</main>
+<script>
+async function submitToClaude(payload) {
+  const text = JSON.stringify(payload, null, 2);
+  const status = document.getElementById("status");
+  if (window.__CLAUDE_SUBMIT_URL__) {
+    try {
+      const response = await fetch(window.__CLAUDE_SUBMIT_URL__, { method: "POST", headers: { "content-type": "application/json" }, body: text });
+      if (response.ok) { status.textContent = "Sent."; return; }
+    } catch (error) {}
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    status.textContent = "Copied. Paste it back in the chat.";
+    return;
+  } catch (error) {}
+  const area = document.createElement("textarea");
+  area.value = text;
+  document.body.appendChild(area);
+  area.select();
+  let copied = false;
+  try { copied = document.execCommand("copy"); } catch (error) {}
+  if (copied) { area.remove(); status.textContent = "Copied. Paste it back in the chat."; return; }
+  area.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;height:150px;z-index:9;background:#111;color:#fff;border:1px solid #f2ec6b;border-radius:12px;padding:10px";
+  status.textContent = "Copy the text in the box and paste it in the chat.";
+}
+for (const [id, verdict] of [["ok", "build"], ["change", "change"]]) {
+  document.getElementById(id).addEventListener("click", () =>
+    submitToClaude({ skill: "html-brainstorm-grid", kind: "flow-verdict", data: { verdict, note: document.getElementById("note").value }, version: 1 }),
+  );
+}
+</script>
+</body>
+</html>

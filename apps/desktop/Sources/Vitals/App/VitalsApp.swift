@@ -56,6 +56,7 @@ struct VitalsApp: App {
                 .environment(navigator)
                 .environment(remote)
                 .environment(remote.share)
+                .environment(remote.phonePages)
         }
         .defaultSize(width: 1100, height: 760)
         // No system title bar: the sidebar carries branding and window dragging.

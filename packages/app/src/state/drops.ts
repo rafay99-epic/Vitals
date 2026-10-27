@@ -62,6 +62,12 @@ export interface OutgoingFile {
   readonly mime: string | null;
 }
 
+/** Where an upload goes: a folder on the Mac (`dest`, else Downloads › Vitals), or on through the Mac to another phone (`relay`). */
+export interface DropTarget {
+  readonly dest?: string;
+  readonly relay?: DeviceId;
+}
+
 export interface DropLive {
   readonly done: number;
   readonly total: number;
@@ -242,7 +248,7 @@ export class MacDrops {
     this.publish(true);
   }
 
-  async send(files: ReadonlyArray<OutgoingFile>, target: { readonly dest?: string; readonly relay?: DeviceId } = {}): Promise<Drop | null> {
+  async send(files: ReadonlyArray<OutgoingFile>, target: DropTarget = {}): Promise<Drop | null> {
     if (!this.engine.supported || files.length === 0) return null;
     const offers = files.map((file) => ({ name: file.name, path: file.path, size: file.size, mime: file.mime, sha256: null }));
     const result = await this.connection.call((client) => client["drop.offer"]({ files: offers, ...target }));

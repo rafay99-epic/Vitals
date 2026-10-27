@@ -41,6 +41,8 @@ final class RemoteModel {
     private(set) var clipReadsBlocked = false
     let lanAdvertiser = LanAdvertiser()
     let share: ShareModel
+    /// What each phone's page in the sidebar's Devices group shows.
+    let phonePages = DevicesModel()
 
     var isEnabled: Bool { settings.remoteEnabled }
     var clipHistoryEnabled: Bool { settings.clipHistoryEnabled }
@@ -107,6 +109,7 @@ final class RemoteModel {
             }
         ]
         share.remote = self
+        phonePages.remote = self
         if settings.remoteEnabled { startGateway() }
     }
 
@@ -204,6 +207,7 @@ final class RemoteModel {
         clipStats = nil
         updateClipWatcher()
         share.disconnected()
+        phonePages.reset()
         devices = []
         pairing = nil
         needs = .none
@@ -343,12 +347,6 @@ final class RemoteModel {
         case let .fsThumbs(paths, pixels):
             let thumbs = await FileThumbs.make(paths: paths, pixels: pixels)
             send(.result(id: id, ok: .fsThumbs(thumbs), error: nil))
-        case let .fsTrash(paths, deviceName):
-            let trashed = await Task.detached(priority: .userInitiated) { FileThumbs.trash(paths) }.value
-            send(.result(id: id, ok: .fsTrash(trashed: trashed), error: nil))
-            if trashed > 0 {
-                share.note("\(deviceName) moved \(trashed == 1 ? "1 item" : "\(trashed) items") to the Trash", "Put it back from the Trash in Finder.")
-            }
         case let .fsOpen(path):
             FileThumbs.show(path)
             send(.result(id: id, ok: .fsOpen, error: nil))
@@ -412,11 +410,27 @@ final class RemoteModel {
         }
     }
 
+    private nonisolated static var downloads: URL {
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+    }
+
+    /// Puts a clip a phone sent on the Mac clipboard: text as text, images from the stored bytes.
+    func copyPhoneClip(_ item: PhoneClip, deviceName: String) async throws {
+        let clip = item.clip
+        let placement = ClipPlacement(kind: clip.kind, stored: item.stored, text: clip.text, name: clip.name, mime: clip.mime)
+        let directory = Self.clipsDirectory
+        let downloads = Self.downloads
+        let entries = try await Task.detached(priority: .userInitiated) {
+            try ClipDrop.clipboardEntries(try ClipDrop.resolve([placement], in: directory), downloads: downloads, deviceName: deviceName)
+        }.value
+        guard writeClipboard(entries) != nil else { throw ClipDrop.Failure("Couldn't write to the clipboard") }
+    }
+
     private func placeClips(_ items: [ClipPlacement], to destination: ClipDestination, folder: String?, deviceName: String) async throws -> Int {
         guard !items.isEmpty else { return 0 }
         let directory = Self.clipsDirectory
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+        let downloads = Self.downloads
         switch destination {
         case .downloads:
             _ = try await Task.detached(priority: .userInitiated) {
@@ -458,6 +472,7 @@ final class RemoteModel {
         guard let result = try? await admin(.listDevices), case let .listDevices(list) = result else { return }
         if pairing != nil, list.count > devices.count { pairing = nil }
         devices = list
+        await phonePages.refreshPhones()
     }
 
     func revoke(_ device: RemoteDevice) async {
@@ -479,8 +494,8 @@ final class RemoteModel {
         terminals = sessions
     }
 
-    func phoneDevices() async -> [PhoneDevice] {
-        guard case let .fsDevices(devices)? = try? await admin(.fsDevices) else { return [] }
+    func phoneDevices() async throws -> [PhoneDevice] {
+        guard case let .fsDevices(devices) = try await admin(.fsDevices) else { return [] }
         return devices
     }
 
@@ -494,9 +509,25 @@ final class RemoteModel {
         return listing
     }
 
-    func pullFromPhone(_ device: String, paths: [String]) async throws -> Int {
-        guard case let .fsPull(files) = try await admin(.fsPull(device: device, paths: paths)) else { return 0 }
+    /// Asks `device` to send `paths` to this Mac, or on to the phone `to`.
+    func pullFromPhone(_ device: String, paths: [String], to: String? = nil) async throws -> Int {
+        guard case let .fsPull(files) = try await admin(.fsPull(device: device, paths: paths, to: to)) else { return 0 }
         return files
+    }
+
+    func phoneRecent(_ device: String, kind: RecentKind, offset: Int) async throws -> RecentFiles? {
+        guard case let .fsRecent(page) = try await admin(.fsRecent(device: device, kind: kind, offset: offset)) else { return nil }
+        return page
+    }
+
+    func phoneThumbs(_ device: String, paths: [String]) async throws -> [WireThumb] {
+        guard case let .fsThumbs(thumbs) = try await admin(.fsThumbs(device: device, paths: paths)) else { return [] }
+        return thumbs
+    }
+
+    func phoneClips(_ device: String) async throws -> [PhoneClip] {
+        guard case let .clipsFrom(clips) = try await admin(.clipsFrom(device: device)) else { return [] }
+        return clips
     }
 
     func endTerminal(_ id: String) {

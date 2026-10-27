@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals · Files prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<style>
+  :root { --s1:#0e0e0e; --s2:#161616; --s3:#1f1f1f; --line:#232323; --ink:#fff; --ink2:#b4b4b4; --dim:#7d7d7d; --acc:#f2ec6b; --ok:#5cf2a6; --blue:#74d4ff; --orange:#ffa95c; --pink:#ff7ab6;
+    --serif:"Instrument Serif", Georgia, serif; --sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.5 var(--sans); }
+  .page { max-width:1100px; margin:0 auto; padding:32px 20px 60px; display:grid; grid-template-columns:1fr 380px; gap:40px; align-items:start; }
+  @media (max-width:820px) { .page { grid-template-columns:1fr; } .side { order:2; } }
+  h1 { font:italic 44px/1 var(--serif); margin:0 0 10px; }
+  .side p, .side li { color:var(--ink2); font-size:13.5px; }
+  .side ul { padding-left:18px; }
+  .side b { color:#fff; }
+  .as { display:flex; gap:6px; background:var(--s2); border-radius:99px; padding:3px; width:max-content; margin:6px 0 16px; }
+  .as button { background:transparent; color:var(--dim); border:0; border-radius:99px; padding:7px 14px; font:600 12.5px var(--sans); cursor:pointer; }
+  .as button.on { background:var(--acc); color:#000; }
+  .fb { display:flex; flex-direction:column; gap:8px; margin-top:22px; }
+  .fb textarea { min-height:70px; background:#0b0b0b; color:#fff; border:1px solid #2b2b2b; border-radius:12px; padding:10px; font:13px var(--sans); }
+  .fb .btns { display:flex; gap:8px; }
+  .fb button { background:var(--acc); color:#000; border:0; border-radius:12px; padding:11px 16px; font-weight:800; cursor:pointer; }
+  .fb button.ghost { background:transparent; color:var(--acc); border:1px solid var(--acc); }
+  #fbstatus { color:var(--dim); font-size:12.5px; }
+  button:focus-visible, textarea:focus-visible, [role=button]:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+  .stamp { color:var(--dim); font-size:11.5px; margin-top:20px; }
+
+  /* phone */
+  .phone { width:380px; height:780px; border:1px solid #2e2e2e; border-radius:46px; background:#000; position:relative; overflow:hidden; justify-self:center; box-shadow:0 30px 80px #0008; }
+  .sbar { position:absolute; top:0; left:0; right:0; height:40px; display:flex; justify-content:space-between; align-items:center; padding:0 30px; font-size:12px; font-weight:600; z-index:5; background:#000; }
+  .scroll { position:absolute; top:40px; left:0; right:0; bottom:0; overflow-y:auto; padding:6px 18px 170px; scrollbar-width:none; }
+  .scroll::-webkit-scrollbar { display:none; }
+  .back { color:var(--acc); font-size:14px; background:none; border:0; padding:4px 0; cursor:pointer; font-family:var(--sans); }
+  .top { display:flex; justify-content:space-between; align-items:center; min-height:30px; }
+  .top .sel { color:var(--acc); font-weight:700; font-size:14px; background:none; border:0; cursor:pointer; }
+  .ttl { font:italic 44px/1.05 var(--serif); margin:4px 0 10px; }
+  .ttl.sm { font-size:34px; }
+  .sub { font-size:12px; color:var(--dim); margin:-6px 0 12px; }
+  .crumbs { display:flex; flex-wrap:wrap; gap:4px; font-size:12px; color:var(--dim); margin:-6px 0 12px; }
+  .crumbs button { background:none; border:0; color:var(--ink2); padding:0; font:12px var(--sans); cursor:pointer; }
+  .crumbs button:last-child { color:#fff; }
+  .seg { display:flex; background:var(--s2); border-radius:99px; padding:3px; gap:2px; margin:0 0 12px; }
+  .seg button { flex:1; background:transparent; border:0; color:var(--dim); border-radius:99px; padding:8px 0; font:600 13px var(--sans); cursor:pointer; }
+  .seg button.on { background:var(--acc); color:#000; }
+  .share { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink2); margin:0 2px 12px; }
+  .share .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); }
+  .share .dot.off { background:#555; }
+  .share button { background:none; border:0; color:var(--ink2); padding:0; font:12.5px var(--sans); cursor:pointer; }
+  .share .send { margin-left:auto; color:var(--acc); font-weight:700; }
+  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .tile { background:var(--s1); border:1px solid #1d1d1d; border-radius:18px; padding:12px; height:92px; position:relative; overflow:hidden; text-align:left; color:#fff; cursor:pointer; font-family:var(--sans); }
+  .tile b { font-size:14px; font-weight:600; display:block; }
+  .tile small { color:var(--dim); font-size:11.5px; }
+  .peek { position:absolute; right:-6px; bottom:-12px; width:50px; height:70px; border-radius:9px; transform:rotate(-8deg); }
+  .lbl { display:flex; justify-content:space-between; align-items:baseline; font-size:13px; color:var(--ink2); margin:18px 2px 8px; font-weight:600; }
+  .lbl button { background:none; border:0; color:var(--acc); font:600 13px var(--sans); cursor:pointer; }
+  .strip { display:flex; gap:7px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; }
+  .strip::-webkit-scrollbar { display:none; }
+  .thumb { border-radius:11px; flex:none; position:relative; overflow:hidden; border:0; padding:0; cursor:pointer; }
+  .strip .thumb { width:70px; height:120px; }
+  .strip .thumb.sq { width:92px; height:120px; }
+  .row { display:flex; align-items:center; gap:12px; padding:9px 2px; width:100%; background:none; border:0; border-top:1px solid #131313; color:#fff; text-align:left; cursor:pointer; font-family:var(--sans); }
+  .row:first-child { border-top:0; }
+  .ic { width:38px; height:38px; border-radius:11px; background:var(--s3); flex:none; display:grid; place-items:center; font-size:10px; font-weight:800; overflow:hidden; }
+  .rt { flex:1; min-width:0; }
+  .rt b { display:block; font-weight:500; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rt small { display:block; font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chev { color:var(--dim); font-size:16px; }
+  .ck { width:22px; height:22px; border-radius:50%; border:1.6px solid #ffffff88; flex:none; display:grid; place-items:center; font-size:12px; font-weight:900; color:#000; }
+  .ck.on { background:var(--acc); border-color:var(--acc); }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+  .grid3 .thumb { width:100%; height:150px; }
+  .grid3 .thumb.sq { height:112px; }
+  .thumb .ck { position:absolute; right:7px; top:7px; }
+  .empty { color:var(--dim); text-align:center; padding:40px 10px; font-size:13px; }
+  .note { color:var(--dim); font-size:12px; margin:10px 2px; }
+  .dock { position:absolute; left:14px; right:14px; bottom:16px; height:62px; border-radius:31px; background:#0e0e0e; border:1px solid #232323; display:flex; align-items:center; justify-content:space-around; font-size:11px; color:var(--dim); z-index:6; }
+  .dock span.on { color:var(--acc); background:#2a2a12; padding:8px 16px; border-radius:20px; }
+  .bar { position:absolute; left:14px; right:14px; bottom:90px; background:#fff; color:#000; border-radius:22px; padding:11px 12px 11px 16px; display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:14px; z-index:7; }
+  .bar button { background:#000; color:var(--acc); border:0; border-radius:14px; padding:9px 14px; font:800 14px var(--sans); cursor:pointer; }
+  .bar button:disabled { opacity:.35; }
+  .scrim { position:absolute; inset:0; background:#000b; z-index:8; }
+  .sheet { position:absolute; left:8px; right:8px; bottom:8px; background:#121212; border:1px solid #262626; border-radius:28px 28px 38px 38px; padding:12px 14px 16px; z-index:9; max-height:86%; overflow-y:auto; }
+  .grab { width:38px; height:5px; border-radius:3px; background:#3a3a3a; margin:0 auto 12px; }
+  .sheet h3 { margin:0 2px 2px; font-size:17px; }
+  .sheet p { margin:0 2px 12px; font-size:12px; color:var(--dim); }
+  .prev { height:220px; border-radius:16px; margin-bottom:12px; }
+  .dest { display:flex; align-items:center; gap:12px; width:100%; background:var(--s1); border:1px solid #222; border-radius:18px; padding:12px; margin-bottom:8px; color:#fff; text-align:left; cursor:pointer; font-family:var(--sans); }
+  .dest .ic { color:var(--acc); font-size:16px; }
+  .dest .go { color:var(--acc); font-weight:800; font-size:14px; }
+  .dest:disabled { opacity:.45; cursor:default; }
+  .mainbtn { width:100%; background:var(--acc); color:#000; border:0; border-radius:16px; padding:13px; font:800 15px var(--sans); cursor:pointer; margin-bottom:8px; }
+  .plain { width:100%; background:none; border:0; color:var(--ink2); padding:10px; font:14px var(--sans); cursor:pointer; }
+  .toast { position:absolute; left:16px; right:16px; bottom:92px; background:#16241c; border:1px solid #275a3d; color:var(--ok); font-size:13px; padding:10px 12px; border-radius:14px; z-index:7; }
+  .toast i { display:block; height:3px; background:#275a3d; border-radius:2px; margin-top:7px; overflow:hidden; }
+  .toast i span { display:block; height:100%; background:var(--ok); }
+</style>
+</head>
+<body>
+<div class="page">
+  <section class="side">
+    <h1>Try it.</h1>
+    <p>This is a working prototype, not a picture. Tap the tabs, the tiles, the images and the folders. Scroll inside the phone. Open a folder inside a folder.</p>
+    <p><b>Holding</b></p>
+    <div class="as" role="group" aria-label="Which phone you are holding"><button id="asPixel" class="on" type="button">Pixel 9</button><button id="asIphone" type="button">iPhone</button></div>
+    <ul>
+      <li><b>Tabs</b> are the other devices. Switch "Holding" to see them change.</li>
+      <li><b>Tap a file</b> to preview it and Transfer it.</li>
+      <li><b>Select</b> (top right) to pick several, then <b>Transfer</b>. The sheet never offers the device you're looking at.</li>
+      <li><b>Folders</b> go as deep as the device does. Use the path under the title to jump back.</li>
+      <li>No clipboard here. Files only.</li>
+    </ul>
+    <p>Names, sizes and pictures are placeholders.</p>
+    <div class="fb">
+      <textarea id="note" aria-label="What to change" placeholder="Optional: what to change"></textarea>
+      <div class="btns"><button id="ok" type="button">Build it</button><button id="change" class="ghost" type="button">Change this</button></div>
+      <span id="fbstatus" role="status"></span>
+    </div>
+    <p class="stamp">Updated 2026-10-27 · Vitals Remote · PR #171</p>
+  </section>
+  <div class="phone" aria-label="Phone prototype">
+    <div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="scroll" id="scroll"></div>
+    <div id="overlay"></div>
+    <div class="dock" aria-hidden="true"><span>Home</span><span>Apps</span><span class="on">Control</span><span>Alerts</span><span>Settings</span></div>
+  </div>
+</div>
+<script>
+(function () {
+  const PAL = [["#1b2633","#0b1018"],["#5b3a1f","#1d3a2a"],["#21405f","#3b1d2c"],["#4d4a1d","#1e2a3a"],["#3b2a5c","#152a2a"],["#2a4d3a","#2a1a12"],["#5a2a3a","#1a2440"]];
+  const look = (name) => { let n = 0; for (const c of name) n = (n * 31 + c.charCodeAt(0)) >>> 0; return PAL[n % PAL.length]; };
+  const bg = (name, kind) => kind === "shot" ? "linear-gradient(180deg,#1b2633,#0b1018 62%,#1a1a1a)" : "linear-gradient(135deg," + look(name)[0] + "," + look(name)[1] + ")";
+
+  const F = (name, children) => ({ name, children });
+  const f = (name, type, size, ago) => ({ name, type, size, ago });
+  const shots = (prefix, n, start) => Array.from({ length: n }, (_, i) => f(prefix + (start + i) + ".png", "shot", (0.8 + (i % 5) * 0.3).toFixed(1) + " MB", i === 0 ? "2 min" : i < 4 ? (i * 17) + " min" : (i - 2) + " d"));
+  const imgs = (prefix, n, ext) => Array.from({ length: n }, (_, i) => f(prefix + (4400 + i * 7) + ext, "img", (2 + (i % 4) * 0.7).toFixed(1) + " MB", i < 2 ? (i + 1) + " h" : i + " d"));
+
+  const TREES = {
+    mac: [
+      F("Desktop", [F("Vitals launch", [f("hero-dark.png", "img", "3.1 MB", "2 d"), f("press-kit.pdf", "pdf", "4.8 MB", "2 d")]), ...shots("Screenshot 2026-10-27 at 12.", 3, 31), f("todo.txt", "txt", "2 KB", "1 h")]),
+      F("Documents", [F("Taxes 2026", [f("return-final.pdf", "pdf", "2.1 MB", "3 d"), f("receipts.zip", "zip", "48 MB", "3 d"), F("Scans", [f("scan-01.jpg", "img", "1.2 MB", "5 d"), f("scan-02.jpg", "img", "1.1 MB", "5 d")])]), F("University", [f("conf_admission_letter.pdf", "pdf", "200 KB", "1 h"), f("transcript.pdf", "pdf", "640 KB", "4 d"), f("University Contacts (4).xlsx", "xls", "17 KB", "1 d")]), f("Lease-signed.pdf", "pdf", "1.4 MB", "1 d"), f("Notes.pages", "doc", "380 KB", "6 d")]),
+      F("Downloads", [f("conf_admission_letter.pdf", "pdf", "200 KB", "1 h"), f("University Contacts (4).xlsx", "xls", "17 KB", "1 d"), f("app-release.apk", "apk", "40 MB", "1 d"), F("Trip", [f("boarding-pass.pdf", "pdf", "90 KB", "2 d"), ...imgs("IMG_", 4, ".jpg")]), f("invoice-october.pdf", "pdf", "245 KB", "2 d")]),
+      F("Pictures", [F("Screenshots", shots("Screenshot 2026-10-2", 14, 0)), F("Wallpapers", imgs("wall-", 6, ".jpg")), ...imgs("IMG_", 5, ".HEIC")]),
+    ],
+    pixel: [
+      F("Download", [f("Invoice-October.pdf", "pdf", "240 KB", "38 min"), f("app-release.apk", "apk", "40 MB", "1 d"), f("menu.pdf", "pdf", "1.1 MB", "3 d")]),
+      F("DCIM", [F("Camera", imgs("PXL_2026102", 12, ".jpg"))]),
+      F("Pictures", [F("Screenshots", shots("Screenshot_2026102", 12, 0)), F("WhatsApp Images", imgs("IMG-WA", 8, ".jpg"))]),
+      F("Documents", [f("CV-2026.pdf", "pdf", "180 KB", "2 d"), f("rent-agreement.docx", "doc", "64 KB", "6 d")]),
+    ],
+    iphone: [
+      F("Photos", [F("Screenshots", shots("IMG_9", 9, 120)), F("Recents", imgs("IMG_", 14, ".HEIC"))]),
+      F("Downloads", [f("boarding-pass.pkpass", "doc", "120 KB", "1 h"), f("Visa-application.pdf", "pdf", "1.9 MB", "2 d")]),
+      F("Documents", [f("Rent-receipt-Oct.pdf", "pdf", "300 KB", "4 d"), f("Passport scan.pdf", "pdf", "2.2 MB", "9 d")]),
+    ],
+  };
+  const NAMES = { mac: "Mac", pixel: "Pixel 9", iphone: "iPhone" };
+  const INTO = { mac: "Downloads › Vitals", pixel: "Downloads › Vitals", iphone: "Files › Vitals" };
+  const ICON = { mac: "▭", pixel: "▯", iphone: "" };
+  const TYPE = { pdf: ["PDF", "#ffa95c"], zip: ["ZIP", "#c8a8ff"], apk: ["APK", "#5cf2a6"], xls: ["XLS", "#5cf2a6"], doc: ["DOC", "#74d4ff"], txt: ["TXT", "#b4b4b4"] };
+
+  const all = (device) => {
+    const out = [];
+    const walk = (nodes, path) => { for (const node of nodes) { if (node.children) walk(node.children, [...path, node.name]); else out.push({ ...node, path: [...path, node.name] }); } };
+    walk(TREES[device], []);
+    return out;
+  };
+  const KINDS = {
+    screenshots: { title: "Screenshots", grid: true, pick: (d) => all(d).filter((x) => x.type === "shot") },
+    photos: { title: "Photos", grid: true, pick: (d) => all(d).filter((x) => x.type === "img") },
+    downloads: { title: "Downloads", grid: false, pick: (d) => all(d).filter((x) => /^Downloads?$/.test(x.path[0]) && x.path.length === 2) },
+    documents: { title: "Documents", grid: false, pick: (d) => all(d).filter((x) => ["pdf", "doc", "xls"].includes(x.type)) },
+  };
+  const isImage = (x) => x.type === "shot" || x.type === "img";
+
+  const state = { holding: "pixel", tab: "mac", stack: [], selecting: false, selected: new Map(), sheet: null, toast: null };
+  const tabs = () => ["mac", "pixel", "iphone"].filter((d) => d !== state.holding);
+  const key = (x) => x.path.join("/");
+
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k === "style") el.style.cssText = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) el.append(typeof kid === "string" ? document.createTextNode(kid) : kid);
+    return el;
+  }
+
+  const scroll = document.getElementById("scroll");
+  const overlay = document.getElementById("overlay");
+  const go = (screen) => { state.stack.push(screen); state.selecting = false; state.selected.clear(); render(true); };
+  const back = () => { state.stack.pop(); state.selecting = false; state.selected.clear(); render(true); };
+  const toggle = (x) => { const k = key(x); if (state.selected.has(k)) state.selected.delete(k); else state.selected.set(k, x); render(false); };
+
+  function fileIcon(x) {
+    if (isImage(x)) return h("span", { class: "ic", style: "background:" + bg(x.name, x.type) });
+    const t = TYPE[x.type] || ["FILE", "#b4b4b4"];
+    return h("span", { class: "ic", style: "color:" + t[1] }, t[0]);
+  }
+  function check(x) { const on = state.selected.has(key(x)); return h("span", { class: "ck" + (on ? " on" : "") }, on ? "✓" : ""); }
+  function openFile(x) { if (state.selecting) toggle(x); else { state.sheet = { type: "file", items: [x] }; render(false); } }
+
+  function fileRow(x) {
+    return h("button", { class: "row", type: "button", onclick: () => openFile(x), "aria-label": x.name }, fileIcon(x), h("span", { class: "rt" }, h("b", {}, x.name), h("small", {}, [x.size, x.ago].join(" · "))), state.selecting ? check(x) : null);
+  }
+  function thumb(x, wide) {
+    return h("button", { class: "thumb" + (wide ? " sq" : ""), type: "button", style: "background:" + bg(x.name, x.type), onclick: () => openFile(x), "aria-label": x.name }, state.selecting ? check(x) : null);
+  }
+
+  function header(backLabel, title, opts) {
+    const top = h("div", { class: "top" }, h("button", { class: "back", type: "button", onclick: backLabel === "Control" ? () => {} : back }, "‹ " + backLabel), opts && opts.select ? h("button", { class: "sel", type: "button", onclick: () => { state.selecting = !state.selecting; state.selected.clear(); render(false); } }, state.selecting ? "Done" : "Select") : null);
+    return [top, h("div", { class: "ttl" + (title.length > 11 ? " sm" : "") }, title + ".")];
+  }
+
+  function home() {
+    const d = state.tab;
+    const kids = header("Control", "Files");
+    kids.push(h("div", { class: "seg", role: "tablist" }, tabs().map((t) => h("button", { type: "button", role: "tab", class: t === d ? "on" : "", "aria-selected": String(t === d), onclick: () => { state.tab = t; state.stack = []; render(true); } }, NAMES[t]))));
+    kids.push(h("div", { class: "share" }, h("span", { class: "dot" }), h("span", {}, state.holding === "iphone" ? "This iPhone is shared" : "This phone is shared"), h("button", { class: "send", type: "button", onclick: () => { state.sheet = { type: "send" }; render(false); } }, "Send from this phone")));
+    const counts = Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, v.pick(d)]));
+    kids.push(h("div", { class: "tiles" }, Object.entries(KINDS).map(([k, v]) => {
+      const items = counts[k];
+      const first = items[0];
+      return h("button", { class: "tile", type: "button", onclick: () => go({ screen: "kind", kind: k }) }, h("b", {}, v.title), h("small", {}, items.length + (first ? " · newest " + first.ago : "")), first ? h("span", { class: "peek", style: "background:" + (isImage(first) ? bg(first.name, first.type) : "#1a1408") + ";border:1px solid #ffffff14" }) : null);
+    })));
+    const newest = [...counts.screenshots.slice(0, 4), ...counts.photos.slice(0, 4)];
+    kids.push(h("div", { class: "lbl" }, h("span", {}, "Newest images"), h("button", { type: "button", onclick: () => go({ screen: "kind", kind: "photos" }) }, "See all")));
+    kids.push(h("div", { class: "strip" }, newest.map((x) => thumb(x, x.type === "img"))));
+    kids.push(h("div", { class: "lbl" }, h("span", {}, "Folders")));
+    kids.push(h("div", {}, TREES[d].map((node) => h("button", { class: "row", type: "button", onclick: () => go({ screen: "folder", path: [node.name] }) }, h("span", { class: "ic", style: "color:var(--ok)" }, "▤"), h("span", { class: "rt" }, h("b", {}, node.name), h("small", {}, node.children.length + " items")), h("span", { class: "chev" }, "›")))));
+    if (d === "mac") kids.push(h("p", { class: "note" }, "Desktop, Documents, Downloads and Pictures. The whole Mac shows here only if you turn it on, on the Mac."));
+    if (d === "iphone") kids.push(h("p", { class: "note" }, "The iPhone shares Photos and the folders picked on it, while Vitals is open there."));
+    return kids;
+  }
+
+  function kindScreen(screen) {
+    const d = state.tab;
+    const k = KINDS[screen.kind];
+    const items = k.pick(d);
+    const kids = header(NAMES[d], k.title, { select: true });
+    kids.push(h("div", { class: "sub" }, "On " + (d === "mac" ? "your Mac" : NAMES[d]) + " · newest first · " + items.length));
+    if (items.length === 0) kids.push(h("div", { class: "empty" }, "Nothing yet"));
+    else if (k.grid) kids.push(h("div", { class: "grid3" }, items.map((x) => thumb(x, x.type === "img"))));
+    else kids.push(h("div", {}, items.map(fileRow)));
+    return kids;
+  }
+
+  function folderScreen(screen) {
+    const d = state.tab;
+    let nodes = TREES[d];
+    for (const name of screen.path) nodes = nodes.find((n) => n.name === name).children;
+    const parent = state.stack.length > 1 ? (state.stack[state.stack.length - 2].path || [NAMES[d]]).slice(-1)[0] : NAMES[d];
+    const kids = header(parent, screen.path[screen.path.length - 1], { select: true });
+    kids.push(h("div", { class: "crumbs" }, [NAMES[d], ...screen.path].map((part, i) => [i > 0 ? h("span", {}, "›") : null, h("button", { type: "button", onclick: () => { state.stack = state.stack.slice(0, i === 0 ? 0 : state.stack.findIndex((s) => s.screen === "folder" && s.path.length === i) + 1); state.selecting = false; state.selected.clear(); render(true); } }, part)])));
+    const folders = nodes.filter((n) => n.children);
+    const files = nodes.filter((n) => !n.children).map((x) => ({ ...x, path: [...screen.path, x.name] }));
+    if (nodes.length === 0) kids.push(h("div", { class: "empty" }, "Empty"));
+    kids.push(h("div", {}, folders.map((node) => h("button", { class: "row", type: "button", onclick: () => go({ screen: "folder", path: [...screen.path, node.name] }) }, h("span", { class: "ic", style: "color:var(--ok)" }, "▤"), h("span", { class: "rt" }, h("b", {}, node.name), h("small", {}, node.children.length + " items")), h("span", { class: "chev" }, "›")))));
+    const pics = files.filter(isImage);
+    const rest = files.filter((x) => !isImage(x));
+    if (pics.length > 0) kids.push(h("div", { class: "grid3", style: "margin:8px 0" }, pics.map((x) => thumb(x, x.type === "img"))));
+    kids.push(h("div", {}, rest.map(fileRow)));
+    return kids;
+  }
+
+  function transferSheet(items) {
+    const from = state.tab;
+    const targets = ["mac", "pixel", "iphone"].filter((t) => t !== from);
+    const what = items.length === 1 ? items[0].name : items.length + " items";
+    return [
+      h("div", { class: "grab" }),
+      h("h3", {}, "Transfer " + what),
+      h("p", {}, "From " + (from === "mac" ? "your Mac" : NAMES[from]) + ". It keeps its copy."),
+      targets.map((t) => {
+        const here = t === state.holding;
+        return h("button", { class: "dest", type: "button", onclick: () => send(items, t) }, h("span", { class: "ic" }, ICON[t]), h("span", { class: "rt" }, h("b", {}, here ? "This phone" : NAMES[t]), h("small", {}, (here ? NAMES[t] + " · " : "Online · ") + "into " + INTO[t])), h("span", { class: "go" }, here ? "Here" : "Send"));
+      }),
+      h("button", { class: "plain", type: "button", onclick: closeSheet }, "Cancel"),
+    ];
+  }
+
+  function fileSheet(x) {
+    return [
+      h("div", { class: "grab" }),
+      isImage(x) ? h("div", { class: "prev", style: "background:" + bg(x.name, x.type) }) : h("div", { class: "prev", style: "background:#141008;display:grid;place-items:center;color:" + (TYPE[x.type] || ["", "#fff"])[1] + ";font-weight:800;font-size:28px" }, (TYPE[x.type] || ["FILE"])[0]),
+      h("h3", {}, x.name),
+      h("p", {}, [x.size, "on " + (state.tab === "mac" ? "your Mac" : NAMES[state.tab]), x.path.slice(0, -1).join(" › ")].filter(Boolean).join(" · ")),
+      h("button", { class: "mainbtn", type: "button", onclick: () => { state.sheet = { type: "transfer", items: [x] }; render(false); } }, "Transfer"),
+      state.tab === "mac" ? h("button", { class: "dest", type: "button", onclick: () => { closeSheet(); toast("Opened on your Mac", true); } }, h("span", { class: "ic" }, "▭"), h("span", { class: "rt" }, h("b", {}, "Open on the Mac")), h("span", { class: "go" }, "Open")) : null,
+      h("button", { class: "plain", type: "button", onclick: closeSheet }, "Close"),
+    ];
+  }
+
+  function sendSheet() {
+    const targets = ["mac", "pixel", "iphone"].filter((t) => t !== state.holding);
+    return [
+      h("div", { class: "grab" }),
+      h("h3", {}, "Send from this phone"),
+      h("p", {}, "Pick photos or files on this phone, then where they go."),
+      h("button", { class: "mainbtn", type: "button", onclick: () => { state.sheet = { type: "transfer", items: [{ name: "3 photos from this phone", type: "img", path: ["x"] }, {}, {}], fromHere: true }; render(false); } }, "Pick photos"),
+      h("button", { class: "dest", type: "button", onclick: () => { state.sheet = { type: "transfer", items: [{ name: "Report.pdf", type: "pdf", path: ["x"] }], fromHere: true }; render(false); } }, h("span", { class: "ic" }, "▤"), h("span", { class: "rt" }, h("b", {}, "Pick files"), h("small", {}, "Any file on this phone")), h("span", { class: "go" }, "›")),
+      h("p", { style: "margin-top:6px" }, "It can go to " + targets.map((t) => NAMES[t]).join(" or ") + "."),
+      h("button", { class: "plain", type: "button", onclick: closeSheet }, "Cancel"),
+    ];
+  }
+
+  function closeSheet() { state.sheet = null; render(false); }
+
+  function send(items, target) {
+    state.sheet = null;
+    state.selecting = false;
+    state.selected.clear();
+    const label = (items.length === 1 ? items[0].name : items.length + " items");
+    toast(target === state.holding ? "Getting " + label + " to this phone" : "Sending " + label + " to " + NAMES[target], false);
+  }
+
+  let timer = null;
+  function toast(text, instant) {
+    if (timer !== null) clearInterval(timer);
+    state.toast = { text, pct: instant ? 100 : 0 };
+    render(false);
+    if (instant) { timer = setTimeout(() => { state.toast = null; timer = null; render(false); }, 1600); return; }
+    timer = setInterval(() => {
+      state.toast.pct += 20;
+      if (state.toast.pct >= 100) {
+        clearInterval(timer);
+        state.toast.text = state.toast.text.replace(/^Getting/, "Got").replace(/^Sending/, "Sent") + ". Done.";
+        timer = setTimeout(() => { state.toast = null; timer = null; render(false); }, 1600);
+      }
+      render(false);
+    }, 350);
+  }
+
+  function render(resetScroll) {
+    const top = state.stack[state.stack.length - 1];
+    const kids = !top ? home() : top.screen === "kind" ? kindScreen(top) : folderScreen(top);
+    scroll.replaceChildren(...kids);
+    if (resetScroll) scroll.scrollTop = 0;
+    const layer = [];
+    if (state.selecting) {
+      const n = state.selected.size;
+      layer.push(h("div", { class: "bar" }, h("span", {}, n === 0 ? "Tap to select" : n + " selected"), h("button", { type: "button", disabled: n === 0, onclick: () => { state.sheet = { type: "transfer", items: [...state.selected.values()] }; render(false); } }, "Transfer")));
+    }
+    if (state.toast) layer.push(h("div", { class: "toast", role: "status" }, state.toast.text, h("i", {}, h("span", { style: "width:" + state.toast.pct + "%" }))));
+    if (state.sheet) {
+      layer.push(h("div", { class: "scrim", onclick: closeSheet }));
+      const body = state.sheet.type === "transfer" ? (state.sheet.fromHere ? transferFromHere(state.sheet.items) : transferSheet(state.sheet.items)) : state.sheet.type === "file" ? fileSheet(state.sheet.items[0]) : sendSheet();
+      layer.push(h("div", { class: "sheet", role: "dialog", "aria-modal": "true" }, body));
+    }
+    overlay.replaceChildren(...layer);
+  }
+
+  function transferFromHere(items) {
+    const targets = ["mac", "pixel", "iphone"].filter((t) => t !== state.holding);
+    const what = items.length === 1 ? items[0].name : items[0].name;
+    return [
+      h("div", { class: "grab" }),
+      h("h3", {}, "Transfer " + what),
+      h("p", {}, "From this phone."),
+      targets.map((t) => h("button", { class: "dest", type: "button", onclick: () => { state.sheet = null; toast("Sending " + what + " to " + NAMES[t], false); } }, h("span", { class: "ic" }, ICON[t]), h("span", { class: "rt" }, h("b", {}, NAMES[t]), h("small", {}, "Online · into " + INTO[t])), h("span", { class: "go" }, "Send"))),
+      h("button", { class: "plain", type: "button", onclick: closeSheet }, "Cancel"),
+    ];
+  }
+
+  function hold(device) {
+    state.holding = device;
+    state.tab = "mac";
+    state.stack = [];
+    state.selecting = false;
+    state.selected.clear();
+    state.sheet = null;
+    document.getElementById("asPixel").classList.toggle("on", device === "pixel");
+    document.getElementById("asIphone").classList.toggle("on", device === "iphone");
+    render(true);
+  }
+  document.getElementById("asPixel").addEventListener("click", () => hold("pixel"));
+  document.getElementById("asIphone").addEventListener("click", () => hold("iphone"));
+
+  async function submitToClaude(payload) {
+    const text = JSON.stringify(payload, null, 2);
+    const status = document.getElementById("fbstatus");
+    try { await navigator.clipboard.writeText(text); status.textContent = "Copied. Paste it back in the chat."; return; } catch (error) {}
+    const area = h("textarea", {});
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch (error) {}
+    if (copied) { area.remove(); status.textContent = "Copied. Paste it back in the chat."; return; }
+    area.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;height:150px;z-index:20;background:#111;color:#fff;border:1px solid #f2ec6b;border-radius:12px;padding:10px";
+    status.textContent = "Copy the text in the box and paste it in the chat.";
+  }
+  for (const [id, verdict] of [["ok", "build"], ["change", "change"]]) {
+    document.getElementById(id).addEventListener("click", () => submitToClaude({ skill: "html-design-prototypes", kind: "flow-verdict", data: { verdict, note: document.getElementById("note").value }, version: 1 }));
+  }
+
+  render(true);
+})();
+</script>
+</body>
+</html>

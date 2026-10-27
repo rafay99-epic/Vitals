@@ -170,7 +170,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     ["expo-image-picker", { photosPermission: "Pick photos and videos to send to your Mac.", cameraPermission: false, microphonePermission: false }],
-    ["expo-media-library", { photosPermission: false, savePhotosPermission: "Save photos and videos from your Mac to Photos.", granularPermissions: ["photo", "video"] }],
+    ["expo-media-library", { photosPermission: "Lets your Mac and other phones get photos and screenshots from this iPhone, when you turn it on.", savePhotosPermission: "Save photos and videos from your Mac to Photos.", granularPermissions: ["photo", "video"] }],
     [
       "expo-sharing",
       {

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Recent: screenshots, photos, documents and clipboard from every device (plan)</title>
+<style>
+  :root { --ink:#fff; --ink2:#c9c9c9; --dim:#8a8a8a; --line:#222; --acc:#f2ec6b; --ok:#5cf2a6; --warn:#ffb45c; --bad:#ff4d6d; --blue:#74d4ff; --violet:#c8a8ff; --pink:#ff7ab6; --orange:#ffa95c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  main { max-width:1120px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  h2 { font-size:18px; margin:44px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:22px 0 6px; }
+  p, li { color:var(--ink2); }
+  p { margin:6px 0 10px; }
+  ul, ol { margin:6px 0 10px; padding-left:20px; }
+  li { margin:3px 0; }
+  b { color:var(--ink); }
+  code { font:12.5px ui-monospace, "SF Mono", Menlo, monospace; color:#e6e6e6; background:#111; padding:1px 4px; border-radius:3px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:13px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  td { color:var(--ink2); }
+  td:first-child { color:var(--ink); }
+  .lead { font-size:15px; color:var(--ink2); max-width:860px; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .pick { color:var(--acc); font-weight:600; }
+  a { color:var(--blue); }
+  .phase { display:grid; grid-template-columns:170px 1fr; gap:10px 18px; margin:10px 0 18px; }
+  .phase .k { color:var(--ink); font-weight:600; }
+  .phase .k small { color:var(--acc); font-weight:500; display:block; }
+  @media (max-width:800px) { .phase { grid-template-columns:1fr; } }
+  svg text { font-family:-apple-system, system-ui, sans-serif; }
+
+  /* direction cards */
+  .dir { border-top:1px solid var(--line); padding:18px 0 8px; }
+  .dir h3 { font-size:16px; margin:0 0 4px; }
+  .dir h3 .tag { font-size:11px; color:#000; background:var(--acc); padding:2px 7px; border-radius:99px; margin-left:8px; vertical-align:2px; }
+  .stage { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; margin:14px 0 6px; }
+  .why { max-width:300px; font-size:13px; }
+  .why b { display:block; margin-top:8px; }
+
+  /* phone */
+  .phone { width:280px; height:580px; border:1px solid #2a2a2a; border-radius:34px; background:#000; padding:14px 12px; position:relative; overflow:hidden; flex:none; }
+  .phone .notch { width:84px; height:20px; background:#111; border-radius:12px; margin:0 auto 10px; }
+  .p-title { font-size:22px; font-weight:700; margin:2px 4px 10px; }
+  .seg { display:flex; gap:2px; background:#141414; border-radius:99px; padding:3px; margin:0 2px 12px; }
+  .seg span { flex:1; text-align:center; font-size:11.5px; padding:5px 0; border-radius:99px; color:var(--dim); font-weight:500; }
+  .seg span.on { background:#2a2a2a; color:#fff; }
+  .chips { display:flex; gap:6px; margin:0 2px 10px; flex-wrap:nowrap; overflow:hidden; }
+  .chips span { font-size:11px; padding:4px 9px; border-radius:99px; border:1px solid #2a2a2a; color:var(--ink2); white-space:nowrap; }
+  .chips span.on { background:#fff; color:#000; border-color:#fff; font-weight:600; }
+  .row { display:flex; align-items:center; gap:10px; padding:7px 4px; border-bottom:1px solid #121212; }
+  .row .t { flex:1; min-width:0; }
+  .row .t div { font-size:12.5px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .t small { font-size:10.5px; color:var(--dim); display:block; }
+  .row .act { font-size:11px; color:var(--blue); font-weight:600; }
+  .thumb { width:36px; height:36px; border-radius:7px; flex:none; position:relative; }
+  .thumb.ss { background:linear-gradient(160deg,#1c2a3a,#0b1420); border:1px solid #23384d; }
+  .thumb.ph { background:linear-gradient(140deg,#4a2a1a,#1d3a2a); }
+  .thumb.doc { background:#1a1408; border:1px solid #3a2a10; }
+  .thumb.doc::after { content:"PDF"; position:absolute; inset:0; display:grid; place-items:center; font-size:9px; font-weight:700; color:var(--orange); }
+  .thumb.clip { background:#111; border:1px solid #2a2a2a; }
+  .thumb.clip::after { content:"Aa"; position:absolute; inset:0; display:grid; place-items:center; font-size:11px; font-weight:700; color:var(--ink2); }
+  .dev { font-size:9.5px; font-weight:700; padding:1px 5px; border-radius:4px; margin-right:4px; }
+  .dev.a { background:rgba(92,242,166,.14); color:var(--ok); }
+  .dev.i { background:rgba(116,212,255,.14); color:var(--blue); }
+  .dev.m { background:rgba(200,168,255,.16); color:var(--violet); }
+  .shelf-h { display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin:10px 4px 6px; }
+  .shelf-h small { color:var(--blue); font-weight:500; }
+  .shelf { display:flex; gap:6px; margin:0 2px; }
+  .shelf .tile { width:58px; height:80px; border-radius:8px; flex:none; }
+  .shelf .tile.ss { background:linear-gradient(170deg,#1c2a3a,#0b1420); border:1px solid #23384d; }
+  .shelf .tile.ph { background:linear-gradient(140deg,#5a3a20,#1d3a2a); height:58px; width:58px; }
+  .shelf .tile.ph2 { background:linear-gradient(200deg,#203a5a,#3a1d2a); height:58px; width:58px; }
+  .mini { font-size:11.5px; color:var(--ink2); padding:5px 4px; display:flex; justify-content:space-between; border-bottom:1px solid #121212; }
+  .mini span:last-child { color:var(--dim); }
+  .banner { margin:4px 2px 12px; padding:10px; border-radius:12px; background:#0d0d0d; border:1px solid #1f1f1f; display:flex; gap:10px; align-items:center; }
+  .banner .t div { font-size:12.5px; }
+  .banner .t small { color:var(--dim); font-size:10.5px; }
+  .tog { width:34px; height:20px; border-radius:99px; background:var(--ok); position:relative; flex:none; }
+  .tog::after { content:""; position:absolute; right:2px; top:2px; width:16px; height:16px; border-radius:50%; background:#fff; }
+  .tog.off { background:#2a2a2a; }
+  .tog.off::after { right:auto; left:2px; }
+  .setrow { display:flex; justify-content:space-between; align-items:center; padding:9px 4px; border-bottom:1px solid #121212; font-size:12.5px; }
+  .setrow small { display:block; color:var(--dim); font-size:10.5px; }
+  .label { font-size:11px; color:var(--dim); margin:12px 4px 4px; font-weight:600; }
+
+  /* mac */
+  .mac { width:560px; height:360px; border:1px solid #2a2a2a; border-radius:12px; background:#0a0a0a; overflow:hidden; flex:none; display:flex; flex-direction:column; }
+  .mac .bar { height:28px; display:flex; align-items:center; gap:6px; padding:0 10px; border-bottom:1px solid #1a1a1a; }
+  .mac .bar i { width:10px; height:10px; border-radius:50%; background:#333; display:block; }
+  .mac .bar span { margin-left:10px; font-size:11.5px; color:var(--dim); }
+  .mac .body { flex:1; display:flex; min-height:0; }
+  .mac .side { width:140px; border-right:1px solid #1a1a1a; padding:10px 8px; font-size:12px; }
+  .mac .side div { padding:5px 8px; border-radius:6px; color:var(--ink2); display:flex; justify-content:space-between; }
+  .mac .side div.on { background:#1d1d1d; color:#fff; }
+  .mac .side small { color:var(--dim); }
+  .mac .main { flex:1; padding:12px 14px; overflow:hidden; }
+  .mac .grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .mac .grid div { aspect-ratio:9/16; border-radius:6px; background:linear-gradient(170deg,#1c2a3a,#0b1420); border:1px solid #23384d; }
+  .mac .grid div.sel { outline:2px solid var(--blue); outline-offset:1px; }
+  .mac .hint { font-size:11px; color:var(--dim); margin-top:8px; }
+  .menu { width:300px; border:1px solid #2a2a2a; border-radius:12px; background:#0a0a0a; padding:10px; flex:none; }
+  .menu .hd { font-size:12px; font-weight:600; display:flex; justify-content:space-between; margin:0 2px 8px; }
+  .menu .hd small { color:var(--dim); font-weight:400; }
+
+  /* diagram */
+  .diagram { border:1px solid var(--line); border-radius:10px; padding:10px; margin:12px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Vitals Recent</h1>
+<p class="lead">Goal: get a screenshot, photo, document or clipboard text from any of your devices to any other in two taps, without WhatsApp. It goes over your own Wi-Fi or Tailscale, through your Mac, with no cloud copy. Plan written 2026-10-27. Nothing here is built yet. Three UX directions are in <a href="#dirs">section 3</a>; pick one.</p>
+
+<h2>1. Where it stands today</h2>
+<p>The pieces exist on <code>feat/connect-phone-files</code> (#170) and the Drop and Clipboard PRs. The problem is the path to them: they are spread over four screens and you have to know which folder a file is in.</p>
+<table>
+  <tr><th>You want</th><th>Works today?</th><th>How, today</th><th>Taps</th></tr>
+  <tr><td>Android screenshot on the Mac</td><td class="ok">Yes</td><td>Mac: Remote › Sharing › Phone files › pick phone › Pictures › Screenshots › find it › Get</td><td class="bad">7+</td></tr>
+  <tr><td>Android document on the Mac</td><td class="ok">Yes</td><td>Same path, but you have to guess Downloads or Documents</td><td class="bad">6+</td></tr>
+  <tr><td>Android file on the iPhone</td><td class="ok">Yes</td><td>iPhone: Files › pick Android › browse › Get (relayed by the Mac)</td><td class="warn">5+</td></tr>
+  <tr><td>iPhone photo or screenshot anywhere</td><td class="warn">Partly</td><td>iPhone has to push it: Control › Photos › Send to your Mac. Nobody can pull it.</td><td class="warn">4</td></tr>
+  <tr><td>Mac clipboard on a phone</td><td class="ok">Yes</td><td>Clipboard tab shows the Mac's history; "Copy Mac copies here" while Vitals is open</td><td class="ok">1</td></tr>
+  <tr><td>Phone clipboard on the Mac</td><td class="warn">Partly</td><td>"Send copies" only fires when you open Vitals; Android blocks reading the clipboard in the background</td><td class="warn">2</td></tr>
+  <tr><td>Android clipboard on the iPhone</td><td class="warn">Partly</td><td>Works through the Mac's history, but only after the Android copy reaches the Mac</td><td class="warn">3</td></tr>
+</table>
+
+<h2>2. The idea: one "Recent" list per device</h2>
+<p>You almost never want "a file in a folder". You want <b>the screenshot I just took</b>, <b>the PDF I downloaded this morning</b> or <b>the text I copied a minute ago</b>. So instead of a folder tree, every device exposes a short, newest-first list in five kinds:</p>
+<table>
+  <tr><th>Kind</th><th>Android source</th><th>iPhone source</th><th>Mac source</th></tr>
+  <tr><td>Screenshots</td><td>MediaStore, <code>Pictures/Screenshots</code> + <code>DCIM/Screenshots</code></td><td>Photos, Screenshots smart album</td><td>Desktop + <code>screencapture</code> location</td></tr>
+  <tr><td>Photos and videos</td><td>MediaStore images and video</td><td>Photos library (needs read access)</td><td>Pictures folder</td></tr>
+  <tr><td>Downloads</td><td><code>Download/</code> by date</td><td>Files › Vitals</td><td>~/Downloads by date</td></tr>
+  <tr><td>Documents</td><td>MediaStore by type: PDF, Office, text</td><td>Files › Vitals</td><td>~/Documents by date</td></tr>
+  <tr><td>Clipboard</td><td>Copies sent from this phone</td><td>Copies sent from this phone</td><td>Clipboard history (already built)</td></tr>
+</table>
+<p>The full folder browser stays, one tap down, for the rare "it's somewhere in there" case.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1060 250" width="100%" role="img" aria-label="The Mac is the hub. Android and iPhone connect to it over Wi-Fi or Tailscale. Each device answers a Recent request; files relay through the Mac.">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#8a8a8a"/></marker></defs>
+  <rect x="400" y="70" width="260" height="110" rx="12" fill="#0d0b14" stroke="#c8a8ff"/>
+  <text x="530" y="98" fill="#fff" font-size="15" font-weight="700" text-anchor="middle">Mac (hub)</text>
+  <text x="530" y="120" fill="#c9c9c9" font-size="12" text-anchor="middle">gateway: auth, scopes, relay</text>
+  <text x="530" y="138" fill="#c9c9c9" font-size="12" text-anchor="middle">clipboard history</text>
+  <text x="530" y="156" fill="#c9c9c9" font-size="12" text-anchor="middle">its own Recent list</text>
+  <rect x="30" y="20" width="250" height="90" rx="12" fill="#07140e" stroke="#5cf2a6"/>
+  <text x="155" y="48" fill="#fff" font-size="14" font-weight="700" text-anchor="middle">Android</text>
+  <text x="155" y="70" fill="#c9c9c9" font-size="12" text-anchor="middle">answers even when closed</text>
+  <text x="155" y="88" fill="#8a8a8a" font-size="11" text-anchor="middle">foreground service + MediaStore</text>
+  <rect x="30" y="140" width="250" height="90" rx="12" fill="#07111a" stroke="#74d4ff"/>
+  <text x="155" y="168" fill="#fff" font-size="14" font-weight="700" text-anchor="middle">iPhone</text>
+  <text x="155" y="190" fill="#c9c9c9" font-size="12" text-anchor="middle">answers while Vitals is open</text>
+  <text x="155" y="208" fill="#8a8a8a" font-size="11" text-anchor="middle">PhotoKit; closed = Share › Vitals</text>
+  <line x1="282" y1="68" x2="398" y2="110" stroke="#8a8a8a" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <line x1="282" y1="185" x2="398" y2="145" stroke="#8a8a8a" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="340" y="78" fill="#8a8a8a" font-size="11" text-anchor="middle" transform="rotate(20 340 78)">Wi-Fi / Tailscale</text>
+  <text x="340" y="182" fill="#8a8a8a" font-size="11" text-anchor="middle" transform="rotate(-19 340 182)">Wi-Fi / Tailscale</text>
+  <rect x="740" y="40" width="290" height="170" rx="12" fill="#0b0b0b" stroke="#222"/>
+  <text x="760" y="66" fill="#fff" font-size="13" font-weight="700">Android → iPhone, one photo</text>
+  <text x="760" y="92" fill="#c9c9c9" font-size="12">1. iPhone asks the Mac for Android's Recent</text>
+  <text x="760" y="114" fill="#c9c9c9" font-size="12">2. Mac forwards; Android lists, sends thumbs</text>
+  <text x="760" y="136" fill="#c9c9c9" font-size="12">3. Tap Get: bytes stream Android → Mac → iPhone</text>
+  <text x="760" y="158" fill="#c9c9c9" font-size="12">4. Nothing is stored on the Mac on the way</text>
+  <text x="760" y="186" fill="#8a8a8a" font-size="11">Same relay #170 already uses for phone files</text>
+  <line x1="662" y1="125" x2="738" y2="125" stroke="#222"/>
+</svg>
+</div>
+
+<h3>Why this beats WhatsApp for this</h3>
+<ul>
+  <li><b>Never leaves your devices.</b> Bytes go phone → your Mac → phone over your LAN (pinned TLS) or Tailscale (WireGuard). No server holds a copy.</li>
+  <li><b>Full quality.</b> WhatsApp re-compresses photos and strips metadata unless you send them as documents. Vitals sends the original file.</li>
+  <li><b>You decide who sees what.</b> The per-device access presets on the Mac (Watch, Control, Everything) already gate files; Recent uses the same <code>files</code> scope.</li>
+  <li><b>No chat to scroll.</b> You don't send yourself a message and dig it out later; you just pick it from the other device.</li>
+</ul>
+
+<h2 id="dirs">3. Three UX directions (pick one)</h2>
+<p>Each shows the phone and the Mac. Sample names are placeholders for the layout, not real data.</p>
+
+<div class="dir">
+  <h3>A. One feed <span class="tag">fastest for "the thing I just did"</span></h3>
+  <p>A single newest-first list mixing every device. A small badge says where each item lives. Filter chips narrow it. Tap gets it here; hold for "Send to…".</p>
+  <div class="stage">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="p-title">Recent</div>
+      <div class="chips"><span class="on">All</span><span>Screenshots</span><span>Photos</span><span>Docs</span><span>Clipboard</span></div>
+      <div class="row"><div class="thumb ss"></div><div class="t"><div>Screenshot 14:02</div><small><span class="dev a">PIXEL</span>2 min · 1.1 MB</small></div><span class="act">Get</span></div>
+      <div class="row"><div class="thumb clip"></div><div class="t"><div>https://tailscale.com/kb/1242</div><small><span class="dev m">MAC</span>4 min · link</small></div><span class="act">Copy</span></div>
+      <div class="row"><div class="thumb doc"></div><div class="t"><div>Invoice-October.pdf</div><small><span class="dev a">PIXEL</span>Downloads · 38 min · 240 KB</small></div><span class="act">Get</span></div>
+      <div class="row"><div class="thumb ph"></div><div class="t"><div>IMG_4471.HEIC</div><small><span class="dev i">IPHONE</span>1 h · 3.2 MB</small></div><span class="act">Get</span></div>
+      <div class="row"><div class="thumb clip"></div><div class="t"><div>Meet at 7, gate B</div><small><span class="dev i">IPHONE</span>1 h · text</small></div><span class="act">Copy</span></div>
+      <div class="row"><div class="thumb ss"></div><div class="t"><div>Screenshot 12:40</div><small><span class="dev m">MAC</span>Desktop · 2 h</small></div><span class="act">Get</span></div>
+      <div class="row"><div class="thumb ph"></div><div class="t"><div>PXL_20261027_0918.jpg</div><small><span class="dev a">PIXEL</span>Camera · 5 h</small></div><span class="act">Get</span></div>
+      <div class="row"><div class="thumb doc"></div><div class="t"><div>Lease-signed.pdf</div><small><span class="dev m">MAC</span>Documents · yesterday</small></div><span class="act">Get</span></div>
+    </div>
+    <div class="menu">
+      <div class="hd">Recent <small>menu bar</small></div>
+      <div class="row"><div class="thumb ss"></div><div class="t"><div>Screenshot 14:02</div><small><span class="dev a">PIXEL</span>2 min</small></div><span class="act">Drag</span></div>
+      <div class="row"><div class="thumb doc"></div><div class="t"><div>Invoice-October.pdf</div><small><span class="dev a">PIXEL</span>38 min</small></div><span class="act">Drag</span></div>
+      <div class="row"><div class="thumb ph"></div><div class="t"><div>IMG_4471.HEIC</div><small><span class="dev i">IPHONE</span>1 h</small></div><span class="act">Drag</span></div>
+      <div class="row"><div class="thumb clip"></div><div class="t"><div>Meet at 7, gate B</div><small><span class="dev i">IPHONE</span>1 h</small></div><span class="act">Copy</span></div>
+      <p style="font-size:11px;color:var(--dim);margin:8px 2px 0">Drag any row straight into Finder, Mail or Slack.</p>
+    </div>
+    <div class="why"><b>Good</b>One screen, no choosing a device first. Great for "I just screenshotted this on my phone".<b>Weak</b>Gets long with three devices; older things need the search box or the folder browser.</div>
+  </div>
+</div>
+
+<div class="dir">
+  <h3>B. Device, then shelves <span class="tag">recommended</span></h3>
+  <p>Pick a device at the top. Below it, short horizontal shelves: Screenshots, Photos, Downloads, Documents, Clipboard. "All files" sits at the bottom for the folder browser you have today.</p>
+  <div class="stage">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="p-title">Devices</div>
+      <div class="seg"><span>Mac</span><span class="on">Pixel</span><span>iPhone</span></div>
+      <div class="shelf-h">Screenshots <small>See all</small></div>
+      <div class="shelf"><div class="tile ss"></div><div class="tile ss"></div><div class="tile ss"></div><div class="tile ss"></div></div>
+      <div class="shelf-h">Photos <small>See all</small></div>
+      <div class="shelf"><div class="tile ph"></div><div class="tile ph2"></div><div class="tile ph"></div><div class="tile ph2"></div></div>
+      <div class="shelf-h">Downloads and documents <small>See all</small></div>
+      <div class="mini"><span>Invoice-October.pdf</span><span>38 min</span></div>
+      <div class="mini"><span>app-release.apk</span><span>yesterday</span></div>
+      <div class="shelf-h">Clipboard <small>See all</small></div>
+      <div class="mini"><span>https://tailscale.com/kb/1242</span><span>9 min</span></div>
+      <div class="shelf-h" style="margin-top:12px">All files <small>›</small></div>
+    </div>
+    <div class="mac">
+      <div class="bar"><i></i><i></i><i></i><span>Vitals Dev · Devices</span></div>
+      <div class="body">
+        <div class="side">
+          <div>This Mac</div>
+          <div class="on">Pixel <small>●</small></div>
+          <div>iPhone <small>○</small></div>
+          <div style="margin-top:10px;color:var(--dim)">Screenshots</div>
+          <div>Photos</div>
+          <div>Downloads</div>
+          <div>Documents</div>
+          <div>Clipboard</div>
+          <div>All files</div>
+        </div>
+        <div class="main">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Pixel · Screenshots</div>
+          <div class="grid"><div class="sel"></div><div></div><div></div><div></div><div></div></div>
+          <div class="hint">Drag to Finder to copy. Space to preview. ⌘C copies the image.</div>
+        </div>
+      </div>
+    </div>
+    <div class="why"><b>Good</b>Matches how you think: "I want something from my Android". Each shelf is short and obvious. Reuses the device picker from #170.<b>Weak</b>One extra tap (pick the device) compared to A.</div>
+  </div>
+</div>
+
+<div class="dir">
+  <h3>C. Arrives on its own</h3>
+  <p>Nothing to browse first. You choose once what should flow automatically, and it just shows up on the other devices. A and B still exist for older things.</p>
+  <div class="stage">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="p-title">Arrived</div>
+      <div class="banner"><div class="thumb ss"></div><div class="t"><div>Screenshot from Pixel</div><small>just now · saved to Photos</small></div></div>
+      <div class="label">SEND FROM THIS PHONE, AUTOMATICALLY</div>
+      <div class="setrow"><div>New screenshots<small>to your Mac</small></div><div class="tog"></div></div>
+      <div class="setrow"><div>Things I copy<small>to your Mac and other phone</small></div><div class="tog"></div></div>
+      <div class="setrow"><div>New photos<small>off</small></div><div class="tog off"></div></div>
+      <div class="label">PUT HERE, AUTOMATICALLY</div>
+      <div class="setrow"><div>Mac copies<small>on this clipboard</small></div><div class="tog"></div></div>
+      <div class="setrow"><div>Screenshots from other devices<small>in Photos</small></div><div class="tog off"></div></div>
+    </div>
+    <div class="menu">
+      <div class="hd">Arrived <small>notification</small></div>
+      <div class="row"><div class="thumb ss"></div><div class="t"><div>Screenshot from Pixel</div><small>In Downloads › Vitals · copied</small></div><span class="act">Show</span></div>
+      <p style="font-size:11px;color:var(--dim);margin:8px 2px 0">The image is also on the Mac clipboard, so ⌘V pastes it right away.</p>
+    </div>
+    <div class="why"><b>Good</b>Zero taps once set up; feels like Apple's Universal Clipboard and AirDrop.<b>Weak</b>Easy to fill Downloads with screenshots you didn't want. iPhone can only auto-send while Vitals is open. Best as a setting added to A or B, not the main screen.</div>
+  </div>
+</div>
+
+<h2>4. What each device can and can't do</h2>
+<table>
+  <tr><th></th><th>Android</th><th>iPhone</th><th>Mac</th></tr>
+  <tr><td>Others pull its Recent</td><td class="ok">Yes, even when Vitals is closed (the background service from #170)</td><td class="warn">Only while Vitals is open. iOS suspends apps in the background</td><td class="ok">Always</td></tr>
+  <tr><td>Screenshots and photos</td><td class="ok">Yes, MediaStore</td><td class="ok">Yes, with Photos read access (we only ask for "save" today)</td><td class="ok">Yes</td></tr>
+  <tr><td>Documents and Downloads</td><td class="ok">Yes, with All files access</td><td class="warn">Only Files › Vitals. iOS has no app access to other apps' files</td><td class="ok">Yes, shared folders</td></tr>
+  <tr><td>Send its clipboard</td><td class="warn">When Vitals is open, from a Quick Settings tile, or Share › Vitals. Android 10+ blocks background reads</td><td class="warn">When Vitals is open, or Share › Vitals</td><td class="ok">Automatic</td></tr>
+  <tr><td>Receive onto its clipboard</td><td class="ok">Likely in the background through the service (to verify on a real phone)</td><td class="warn">Only while Vitals is open</td><td class="ok">Automatic</td></tr>
+  <tr><td>Auto-send new screenshots</td><td class="ok">Yes, the service watches MediaStore</td><td class="warn">Only while open; a Shortcuts automation can cover the rest</td><td class="ok">Yes, watches the screenshot folder</td></tr>
+</table>
+<p>Short version: <b>Android and Mac can do all of it, all the time. iPhone can do all of it while Vitals is open</b>, and falls back to Share › Vitals when it isn't. That's an iOS rule, not something we can code around without a paid Apple team (and even then only for Files, not background Photos).</p>
+
+<h2>5. How it's built</h2>
+<div class="phase">
+  <div class="k">P1 · Recent RPC<small>~2 days</small></div>
+  <div>One new contract, <code>fs.recent { kinds, limit, before }</code> → <code>{ id, kind, name, size, at, thumb }[]</code>, under the existing <code>files</code> scope. The gateway relays it to phones exactly like <code>fs.list</code> does in #170, and <code>fs.read</code> gets the bytes. Android answers from MediaStore through <code>expo-media-library</code> (already installed) plus a date-sorted Download listing. iPhone answers from PhotoKit while open; we flip <code>photosPermission</code> on in <code>app.config.ts</code>. Mac answers from its shared folders + screenshot location. Gateway test: a phone asks for the other phone's screenshots and gets them newest first.</div>
+  <div class="k">P2 · The picked screen<small>~2 days</small></div>
+  <div>Phone: the direction you pick (A or B) replaces Control › Files as the first thing in Files. Folder browser moves under "All files". Mac: the same in Remote, plus drag-out to Finder (file promises, so the download starts on drop) and ⌘C to copy an image. Space bar Quick Look.</div>
+  <div class="k">P3 · Clipboard everywhere<small>~1–2 days</small></div>
+  <div>Clipboard rows show which device they came from. Android: a "Send clipboard" Quick Settings tile and notification action (a see-through activity reads the clipboard and closes, the same trick KDE Connect uses). "Copy Mac copies here" keeps working with Vitals closed through the service. iPhone: a Share › Vitals text action. Passwords stay skipped everywhere, as today.</div>
+  <div class="k">P4 · Arrives on its own<small>~2 days, optional</small></div>
+  <div>The toggles from direction C, all off by default. Android: the service watches MediaStore for new screenshots and sends them to the Mac (Downloads › Vitals › Screenshots) and onto the Mac clipboard. Mac: watches its screenshot folder and offers the newest to phones. iPhone: sends new screenshots when you open Vitals.</div>
+</div>
+<p>Each phase is its own branch from <code>nightly</code>, verified on the Android emulator against the fake Mac and on Vitals Dev, with an APK for you after each.</p>
+
+<h2>6. What I need from you</h2>
+<ol>
+  <li><b>Pick a direction:</b> A (one feed), B (device then shelves, my pick) or C (arrives on its own, which I'd add as a setting to A or B).</li>
+  <li><b>Auto-send (P4):</b> build it now, or after you've used P1 to P3 for a few days?</li>
+  <li><b>iPhone Photos read access:</b> OK to ask for it? iOS shows a "Allow access to all photos / selected photos" prompt the first time you open Recent.</li>
+  <li><b>Where gotten files land:</b> phone: Downloads › Vitals (Android) and Photos for images (iPhone)? Mac: Downloads › Vitals, as Drop does today?</li>
+</ol>
+
+</main>
+</body>
+</html>

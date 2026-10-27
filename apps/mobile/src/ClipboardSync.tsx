@@ -4,15 +4,18 @@ import { dropLabel, isIncoming } from "@vitals/app/state/drops.ts";
 import type { Clip } from "@vitals/contracts";
 import { type ResolvedSharePayload, type SharePayload, useIncomingShare } from "expo-sharing";
 import { useEffect, useRef } from "react";
-import { AppState, Linking, Platform } from "react-native";
+import { AppState, Linking, Platform, ToastAndroid } from "react-native";
+
+import { androidShare } from "../modules/vitals-share/index.ts";
 
 import { autoCopy } from "./lib/autoCopy.ts";
 import { batchOf, copyToPhone, isFile, nameFromUri, type Picked, textItem } from "./lib/clips.ts";
-import { macFolder, savedTo } from "./lib/drops.ts";
+import { macFolder, relayedTo, savedTo } from "./lib/drops.ts";
 import { checkPhoneCopy, phoneCopy, sendClipboardNow } from "./lib/phoneCopies.ts";
-import { openClipboard, openFiles } from "./navigation.ts";
+import { openClipboard, openFiles, openTransfers } from "./navigation.ts";
 import { sendSheet } from "./sheets/ClipSheets.tsx";
 import { askSheet } from "./sheets/FileSheets.tsx";
+import { sendToSheet } from "./sheets/FsSheets.tsx";
 import { sheet, toast } from "./ui/index.ts";
 
 const SHORT = 26;
@@ -70,7 +73,7 @@ const rawPickedOf = (payload: SharePayload): Picked | null => {
   return { kind, uri: payload.value, name: nameFromUri(payload.value, kind, payload.mimeType ?? null), mime: payload.mimeType ?? null, size: 0 };
 };
 
-/** Something shared into Vitals from another app opens the Send sheet, already filled in. */
+/** Something shared into Vitals from another app opens a send sheet, already filled in: files in Files, text and pictures in Clipboard. */
 function useShareInbox() {
   const { sharedPayloads, resolvedSharedPayloads, isResolving, error, clearSharedPayloads } = useIncomingShare();
   const handled = useRef<string | null>(null);
@@ -89,9 +92,14 @@ function useShareInbox() {
       clearSharedPayloads();
       return toast.show("Vitals can't send that to the Mac", { tone: "bad" });
     }
-    if (items.some(isFile)) openFiles();
-    else openClipboard();
-    sheet.open(sendSheet(batchOf(items, "shared from another app"), clearSharedPayloads));
+    const batch = batchOf(items, "shared from another app");
+    if (batch.to === "downloads" && items.every(isFile)) {
+      openFiles();
+      sheet.open(sendToSheet(batch, clearSharedPayloads));
+      return;
+    }
+    openClipboard();
+    sheet.open(sendSheet(batch, clearSharedPayloads));
   }, [sharedPayloads, resolvedSharedPayloads, isResolving, error, clearSharedPayloads]);
 }
 
@@ -120,19 +128,27 @@ function usePhoneCopies() {
   }, [remote]);
 }
 
-/** `<scheme>://clipboard/send`, from the Quick Settings tile or the Shortcuts action: send what is copied now. */
+/**
+ * `<scheme>://clipboard/send`, from the Quick Settings tile or the Shortcuts action: send what is copied now.
+ * When the link brought Vitals up from the background, it steps back to the app you were in.
+ */
 function useSendLink() {
   const remote = useRemote();
   useEffect(() => {
     let active = true;
-    const handle = (url: string | null | undefined) => {
-      if (active && typeof url === "string" && SEND_LINK.test(url)) void sendClipboardNow(remote);
+    const handle = (url: string | null | undefined, away: boolean) => {
+      if (!active || typeof url !== "string" || !SEND_LINK.test(url)) return;
+      void sendClipboardNow(remote).then((sent) => {
+        if (!sent || !away || androidShare === null) return;
+        ToastAndroid.show("Sent to your Mac", ToastAndroid.SHORT);
+        void androidShare.toBack();
+      });
     };
     if (!launchLinkRead) {
       launchLinkRead = true;
-      void Linking.getInitialURL().then(handle);
+      void Linking.getInitialURL().then((url) => handle(url, true));
     }
-    const subscription = Linking.addEventListener("url", ({ url }) => handle(url));
+    const subscription = Linking.addEventListener("url", ({ url }) => handle(url, AppState.currentState !== "active"));
     return () => {
       active = false;
       subscription.remove();
@@ -150,8 +166,11 @@ function useDropNews() {
       remote.drops.onFinish((finish) => {
         const label = dropLabel(finish.drop);
         const verb = isPlural(label) ? "are" : "is";
-        if (finish._tag === "Received") toast.show(`${label} ${verb} in ${savedTo}`, { action: "Open", onAction: openFiles });
-        else if (finish._tag === "Sent") toast.show(`${label} ${verb} in ${macFolder} on your Mac`);
+        if (finish._tag === "Received") toast.show(`${label} ${verb} in ${savedTo}`, { action: "Open", onAction: openTransfers });
+        else if (finish._tag === "Sent") {
+          const phone = relayedTo(finish.drop.id);
+          toast.show(phone === null ? `${label} ${verb} in ${macFolder} on your Mac` : `${label} ${verb} on the way to ${phone}`);
+        }
         else toast.show(`Your Mac said no to ${label}`, { tone: "bad" });
       }),
     [remote],

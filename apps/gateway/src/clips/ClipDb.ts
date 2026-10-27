@@ -79,6 +79,11 @@ export class ClipDb {
     return this.db.query<ClipRow, [number]>(sql).all(limit).map(toRecord);
   }
 
+  /** Newest first, only what one phone sent. */
+  fromDevice(deviceId: string, limit: number): ReadonlyArray<ClipRecord> {
+    return this.db.query<ClipRow, [string, number]>("SELECT * FROM clips WHERE device_id = ? ORDER BY at DESC, id DESC LIMIT ?").all(deviceId, limit).map(toRecord);
+  }
+
   /** An earlier clip with the same content, by the strongest key the new clip has. */
   findDuplicate(clip: Pick<ClipRecord, "kind" | "text" | "truncated" | "origin" | "sha256">): ClipRecord | null {
     const find = (sql: string, ...params: Array<string>) => {

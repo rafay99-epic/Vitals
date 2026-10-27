@@ -81,7 +81,7 @@ export function Segmented<V extends string>({
             accessibilityState={{ checked: on, disabled }}
             style={styles.segmentItem}
           >
-            <T v="strong" color={on ? color.bg : color.dim}>
+            <T v="strong" color={on ? color.bg : color.dim} numberOfLines={1}>
               {option.label}
             </T>
           </Pressable>
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   thumb: { width: 20, height: 20, borderRadius: 10 },
   segment: { flexDirection: "row", marginHorizontal: 16, marginBottom: 14, backgroundColor: color.s2, borderRadius: 14, padding: 4 },
   segmentIndicator: { position: "absolute", top: 4, bottom: 4, left: 4, borderRadius: 10, backgroundColor: color.yellow },
-  segmentItem: { flex: 1, alignItems: "center", paddingVertical: 9 },
+  segmentItem: { flex: 1, alignItems: "center", paddingVertical: 9, paddingHorizontal: 4 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: color.s2, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 7 },
   chipOn: { backgroundColor: color.yellow },
   chipText: { fontSize: 12.5 },

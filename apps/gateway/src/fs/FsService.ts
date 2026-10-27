@@ -20,6 +20,9 @@ import {
   type FsListResult,
   type FsPathInput,
   type FsPathsInput,
+  type FsRecentInput,
+  type FsRecentKind,
+  type FsRecentResult,
   type FsRoot,
   type FsRootsResult,
   type FsSearchInput,
@@ -27,7 +30,7 @@ import {
   type FsSort,
   type FsThumbsInput,
   type FsThumbsResult,
-  type FsTrashResult,
+  type FsTransferInput,
   type MacDropFile,
   CommandRejected,
   FS_LIMITS,
@@ -46,6 +49,7 @@ import { Bridge, ask } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
 import { type DropCaller, DropStore } from "../drop/DropStore.ts";
 import { Store } from "../persistence/Store.ts";
+import { Connections } from "../ws/Connections.ts";
 
 type FsError = Unavailable | CommandRejected;
 
@@ -62,7 +66,8 @@ export class FsService extends Context.Service<
     readonly thumbs: (input: FsThumbsInput) => Effect.Effect<FsThumbsResult, FsError>;
     readonly get: (caller: DropCaller, input: FsPathsInput) => Effect.Effect<DropOffered, FsError>;
     readonly open: (input: FsPathInput) => Effect.Effect<void, FsError>;
-    readonly trash: (caller: DropCaller, input: FsPathsInput) => Effect.Effect<FsTrashResult, FsError>;
+    readonly recent: (input: FsRecentInput) => Effect.Effect<FsRecentResult, FsError>;
+    readonly transfer: (caller: DropCaller, input: FsTransferInput) => Effect.Effect<FsPulled, FsError>;
     readonly destination: (path: string) => Effect.Effect<string, FsError>;
   }
 >()("@vitals/gateway/FsService") {}
@@ -71,8 +76,6 @@ const FOLDERS: ReadonlyArray<readonly [string, FsRoot["place"]]> = [
   ["Desktop", "desktop"],
   ["Documents", "documents"],
   ["Downloads", "downloads"],
-  ["Movies", "movies"],
-  ["Music", "music"],
   ["Pictures", "pictures"],
 ];
 
@@ -85,12 +88,34 @@ const THUMB_CACHE = 512;
 const STAT_BATCH = 128;
 const SEARCH_MS = 4_000;
 const PHONE_TIMEOUT = "15 seconds";
+const RECENT_MS = 10_000;
+const RECENT_SCAN = 5_000;
+const RECENT_WINDOW = "kMDItemFSContentChangeDate >= $time.today(-365)";
+const DOCUMENT_TYPES = [
+  "com.adobe.pdf",
+  "public.presentation",
+  "public.spreadsheet",
+  "org.openxmlformats.wordprocessingml.document",
+  "com.microsoft.word.doc",
+  "com.apple.iwork.pages.sections",
+  "com.apple.iwork.pages.pages",
+  "public.rtf",
+  "org.idpf.epub-container",
+];
+
+/** Spotlight queries for each kind the Mac answers from its index. Downloads is a plain folder listing. */
+const SPOTLIGHT: Readonly<Record<Exclude<FsRecentKind, "downloads">, string>> = {
+  screenshots: `(kMDItemIsScreenCapture == 1 || kMDItemFSName == "Screenshot*"c || kMDItemFSName == "Screen Shot*"c || kMDItemFSName == "CleanShot*"c) && ${RECENT_WINDOW}`,
+  photos: `kMDItemContentTypeTree == "public.image" && kMDItemIsScreenCapture != 1 && ${RECENT_WINDOW}`,
+  documents: `(${DOCUMENT_TYPES.map((type) => `kMDItemContentTypeTree == "${type}"`).join(" || ")}) && ${RECENT_WINDOW}`,
+};
 
 const answers = <Tag extends FsServeResult["_tag"]>(tag: Tag, result: FsServeResult): result is Extract<FsServeResult, { readonly _tag: Tag }> => result._tag === tag;
 
 interface Server {
   readonly name: string;
   readonly roots: ReadonlyArray<FsRoot>;
+  readonly recent: boolean;
   readonly push: (request: FsServeRequest) => void;
 }
 
@@ -153,6 +178,8 @@ const hiddenName = (name: string): boolean => name.startsWith(".");
 
 const hiddenPath = (path: string, base: string): boolean => relative(base, path).split("/").some(hiddenName);
 
+const inPackage = (path: string): boolean => path.split("/").slice(0, -1).some((part) => PACKAGES.has(extname(part).toLowerCase()));
+
 const exists = (path: string): Promise<boolean> =>
   stat(path).then(
     () => true,
@@ -197,6 +224,7 @@ export const layer = Layer.effect(
     const drops = yield* DropStore;
     const activity = yield* ActivityLog;
     const store = yield* Store;
+    const connections = yield* Connections;
     const servers = new Map<string, Server>();
     const waiting = new Map<string, { readonly deviceId: string; readonly done: Deferred.Deferred<FsServeResult, FsError> }>();
     const homeDir = config.homeDir ?? homedir();
@@ -210,6 +238,7 @@ export const layer = Layer.effect(
     let access: FsAccess = "folders";
     const listings = new Lru<{ readonly at: number; readonly entries: ReadonlyArray<FsEntry> }>(CACHE_DIRS);
     const thumbCache = new Lru<{ readonly modifiedAt: number; readonly jpeg: string | null }>(THUMB_CACHE);
+    const recents = new Map<FsRecentKind, { readonly at: number; readonly entries: ReadonlyArray<FsEntry> }>();
 
     const log = (kind: string, caller: DropCaller, data: Record<string, unknown>) =>
       activity.record({ at: Date.now(), source: "gateway", level: "info", kind, deviceId: caller.deviceId, data });
@@ -248,20 +277,10 @@ export const layer = Layer.effect(
       return (await folderRoots()).some((root) => inside(path, root.path));
     };
 
-    const writableAt = async (path: string): Promise<boolean> =>
-      (await shared(path)) && (inside(path, home) || inside(path, "/Volumes")) && !inside(path, library) && !(await currentRoots()).some((root) => root.path === path);
-
     const resolve = (path: string) =>
       Effect.gen(function* () {
         const real = yield* attempt(() => realpath(path));
         if (!(yield* Effect.promise(() => shared(real)))) return yield* Effect.fail(rejected("Your Mac doesn't share that folder"));
-        return real;
-      });
-
-    const resolveWritable = (path: string) =>
-      Effect.gen(function* () {
-        const real = yield* resolve(path);
-        if (!(yield* Effect.promise(() => writableAt(real)))) return yield* Effect.fail(rejected("Vitals can't change files there"));
         return real;
       });
 
@@ -288,10 +307,11 @@ export const layer = Layer.effect(
         const server = servers.get(device);
         const name = store.device(device)?.name ?? "That device";
         if (server === undefined) return yield* Effect.fail(unavailable(`${name} isn't open. Open Vitals on it to browse.`));
-        const id = newId();
+        const sent = request(newId());
+        if (sent._tag === "Recent" && !server.recent) return yield* Effect.fail(rejected(`Update Vitals on ${name} to see its recent files`));
         const done = yield* Deferred.make<FsServeResult, FsError>();
+        const id = sent.id;
         waiting.set(id, { deviceId: device, done });
-        const sent = request(id);
         server.push(sent);
         const result = yield* Deferred.await(done).pipe(
           Effect.timeoutOrElse({ duration: PHONE_TIMEOUT, orElse: () => Effect.fail(unavailable(`${name} didn't answer. Keep Vitals open on it.`)) }),
@@ -305,7 +325,7 @@ export const layer = Layer.effect(
       Stream.callback<FsServeRequest>((queue) =>
         Effect.acquireRelease(
           Effect.sync(() => {
-            const server: Server = { name: caller.name, roots: input.roots, push: (request) => Queue.offerUnsafe(queue, request) };
+            const server: Server = { name: caller.name, roots: input.roots, recent: input.recent === true, push: (request) => Queue.offerUnsafe(queue, request) };
             servers.set(caller.deviceId, server);
             return server;
           }),
@@ -324,11 +344,11 @@ export const layer = Layer.effect(
       });
 
     const devices = (except: DeviceId | null) =>
-      Effect.sync(() => ({
+      Effect.map(connections.connectedDevices, (connected) => ({
         devices: store
           .devices()
           .filter((device) => device.platform !== "web" && device.id !== except && device.scopes.includes("files"))
-          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id) })),
+          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id), connected: connected.has(device.id) })),
       }));
 
     const pull = (relay: DeviceId | null, input: FsPathsInput) =>
@@ -438,16 +458,21 @@ export const layer = Layer.effect(
       await walk(real);
     };
 
-    const get = (caller: DropCaller, input: FsPathsInput) =>
+    const collect = (paths: ReadonlyArray<string>) =>
       Effect.gen(function* () {
-        const reals = yield* Effect.forEach(input.paths, resolve);
+        const reals = yield* Effect.forEach(paths, resolve);
         const found: Array<MacDropFile> = [];
         yield* Effect.tryPromise({
           try: () => reals.reduce((chain, real) => chain.then(() => expand(real, found)), Promise.resolve()),
           catch: (error) => (codeOf(error) === "ETOOMANY" ? rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick fewer.`) : failure(error)),
         });
         if (found.length === 0) return yield* Effect.fail(rejected("Nothing to send in there"));
-        const files = yield* Effect.promise(() => inBatches(found, async (file) => ({ ...file, size: file.size || ((await lstat(file.origin).catch(() => null))?.size ?? 0) })));
+        return yield* Effect.promise(() => inBatches(found, async (file) => ({ ...file, size: file.size || ((await lstat(file.origin).catch(() => null))?.size ?? 0) })));
+      });
+
+    const get = (caller: DropCaller, input: FsPathsInput) =>
+      Effect.gen(function* () {
+        const files = yield* collect(input.paths);
         const offered = yield* drops.pull(caller, files);
         log("fs.get", caller, { items: input.paths.length, files: files.length, bytes: offered.drop.bytes });
         return offered;
@@ -459,14 +484,62 @@ export const layer = Layer.effect(
         yield* ask(bridge, { _tag: "FsOpen", path: real });
       });
 
-    const trash = (caller: DropCaller, input: FsPathsInput) =>
+    const spotlight = async (query: string, within: ReadonlyArray<string>): Promise<ReadonlyArray<string>> => {
+      const found = await Promise.all(
+        within.map(async (root) => {
+          const proc = Bun.spawn(["/usr/bin/mdfind", "-onlyin", root, query], { stdout: "pipe", stderr: "ignore" });
+          const timer = setTimeout(() => proc.kill(), SEARCH_MS);
+          const text = await new Response(proc.stdout).text().catch(() => "");
+          clearTimeout(timer);
+          return text.split("\n").filter((line) => line.length > 0 && !hiddenPath(line, root) && !inPackage(line));
+        }),
+      );
+      return [...new Set(found.flat())].slice(0, RECENT_SCAN);
+    };
+
+    const recentPaths = async (kind: FsRecentKind): Promise<ReadonlyArray<string>> => {
+      const roots = await folderRoots();
+      if (kind !== "downloads") return spotlight(SPOTLIGHT[kind], roots.map((root) => root.path));
+      const downloads = roots.find((root) => root.place === "downloads");
+      if (downloads === undefined) return [];
+      return (await readListing(downloads.path, false)).filter((entry) => entry.kind === "file").map((entry) => entry.path);
+    };
+
+    const recentMac = (input: FsRecentInput) =>
       Effect.gen(function* () {
-        const reals = yield* Effect.forEach(input.paths, resolveWritable);
-        const reply = yield* ask(bridge, { _tag: "FsTrash", paths: reals, deviceName: caller.name }, "60 seconds");
-        listings.clear();
-        log("fs.trash", caller, { items: reals.length, trashed: reply.trashed });
-        return { trashed: reply.trashed };
+        const cached = recents.get(input.kind);
+        const entries =
+          cached !== undefined && Date.now() - cached.at < RECENT_MS
+            ? cached.entries
+            : yield* Effect.promise(async () => {
+                const paths = (await Promise.all((await recentPaths(input.kind)).map(async (path) => ((await shared(path)) ? path : null)))).filter((path) => path !== null);
+                const found = (await inBatches(paths, statEntry)).filter((entry): entry is FsEntry => entry !== null && entry.kind === "file");
+                const sorted = found.sort((left, right) => right.modifiedAt - left.modifiedAt);
+                recents.set(input.kind, { at: Date.now(), entries: sorted });
+                return sorted;
+              });
+        return { kind: input.kind, entries: entries.slice(input.offset, input.offset + input.limit), more: entries.length > input.offset + input.limit } satisfies FsRecentResult;
       });
+
+    const transfer = (caller: DropCaller, input: FsTransferInput) =>
+      Effect.gen(function* () {
+        if (input.device === undefined) {
+          if (input.to === null) return yield* Effect.fail(rejected("Those files are already on your Mac"));
+          const target = store.device(input.to);
+          if (target === null || target.revokedAt !== null) return yield* Effect.fail(rejected("That device isn't paired with your Mac"));
+          const files = yield* collect(input.paths);
+          yield* drops.send(input.to, files);
+          log("fs.transfer", caller, { items: input.paths.length, files: files.length, to: input.to });
+          return { files: files.length };
+        }
+        if (input.to === input.device) return yield* Effect.fail(rejected("Those files are already there"));
+        return yield* pull(input.to, { device: input.device, paths: input.paths });
+      });
+
+    const recent = (input: FsRecentInput) =>
+      input.device === undefined
+        ? recentMac(input)
+        : askPhone(input.device, (id) => ({ _tag: "Recent", id, kind: input.kind, offset: input.offset, limit: input.limit })).pipe(Effect.map((answer) => answer.result));
 
     const destination = (path: string) =>
       Effect.gen(function* () {
@@ -485,6 +558,7 @@ export const layer = Layer.effect(
           if (message.t !== "fsPolicy" || message.access === access) return;
           access = message.access;
           listings.clear();
+          recents.clear();
         }),
       ),
       Effect.forkScoped,
@@ -509,7 +583,8 @@ export const layer = Layer.effect(
       thumbs,
       get,
       open,
-      trash,
+      recent,
+      transfer,
       destination,
     });
   }),

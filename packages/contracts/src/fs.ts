@@ -9,6 +9,7 @@ export const FS_LIMITS = {
   thumbs: 24,
   pull: 10_000,
   thumbPixels: 192,
+  recent: 120,
 } as const;
 
 export const FsPath = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096), Schema.isPattern(/^\/[^\0]*$/));
@@ -86,6 +87,14 @@ export const FsPathsInput = Schema.Struct({
 });
 export type FsPathsInput = typeof FsPathsInput.Type;
 
+/** Copies files from one device to another. `device` is where they are (none for the Mac); `to` is where they go (null for the Mac). */
+export const FsTransferInput = Schema.Struct({
+  device: Target,
+  paths: Schema.Array(FsPath).check(Schema.isMinLength(1), Schema.isMaxLength(FS_LIMITS.pull)),
+  to: Schema.NullOr(DeviceId),
+});
+export type FsTransferInput = typeof FsTransferInput.Type;
+
 export const FsThumbsInput = Schema.Struct({
   device: Target,
   paths: Schema.Array(FsPath).check(Schema.isMinLength(1), Schema.isMaxLength(FS_LIMITS.thumbs)),
@@ -104,14 +113,34 @@ export type FsThumbsResult = typeof FsThumbsResult.Type;
 export const FsPathInput = Schema.Struct({ path: FsPath });
 export type FsPathInput = typeof FsPathInput.Type;
 
-export const FsTrashResult = Schema.Struct({ trashed: NonNegativeInt });
-export type FsTrashResult = typeof FsTrashResult.Type;
+/** What a device page shows in rows: newest first, files only. */
+export const FsRecentKind = Schema.Literals(["photos", "screenshots", "downloads", "documents"]);
+export type FsRecentKind = typeof FsRecentKind.Type;
+
+export const FsRecentInput = Schema.Struct({
+  device: Target,
+  kind: FsRecentKind,
+  offset: NonNegativeInt,
+  limit: PositiveInt.check(Schema.isLessThanOrEqualTo(FS_LIMITS.recent)),
+});
+export type FsRecentInput = typeof FsRecentInput.Type;
+
+export const FsRecentResult = Schema.Struct({
+  kind: FsRecentKind,
+  entries: Schema.Array(FsEntry),
+  /** True when asking again with a bigger offset finds older items. */
+  more: Schema.Boolean,
+});
+export type FsRecentResult = typeof FsRecentResult.Type;
 
 export const FsDevice = Schema.Struct({
   deviceId: DeviceId,
   name: Schema.String,
   platform: Platform,
+  /** Serving its files right now. */
   online: Schema.Boolean,
+  /** Connected to the Mac, whether or not it shares its files. */
+  connected: Schema.optionalKey(Schema.Boolean),
 });
 export type FsDevice = typeof FsDevice.Type;
 
@@ -120,13 +149,18 @@ export type FsDevicesResult = typeof FsDevicesResult.Type;
 
 const RequestId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
 
-export const FsServeInput = Schema.Struct({ roots: Schema.Array(FsRoot) });
+export const FsServeInput = Schema.Struct({
+  roots: Schema.Array(FsRoot),
+  /** Set by builds that answer `Recent`. Older builds leave it out. */
+  recent: Schema.optionalKey(Schema.Boolean),
+});
 export type FsServeInput = typeof FsServeInput.Type;
 
 export const FsServeRequest = Schema.Union([
   Schema.TaggedStruct("List", { id: RequestId, path: FsPath, sort: FsSort, offset: NonNegativeInt, limit: PositiveInt }),
   Schema.TaggedStruct("Thumbs", { id: RequestId, paths: Schema.Array(FsPath) }),
   Schema.TaggedStruct("Send", { id: RequestId, paths: Schema.Array(FsPath), relay: Schema.NullOr(DeviceId) }),
+  Schema.TaggedStruct("Recent", { id: RequestId, kind: FsRecentKind, offset: NonNegativeInt, limit: PositiveInt }),
 ]);
 export type FsServeRequest = typeof FsServeRequest.Type;
 
@@ -134,6 +168,7 @@ export const FsServeResult = Schema.Union([
   Schema.TaggedStruct("List", { result: FsListResult }),
   Schema.TaggedStruct("Thumbs", { thumbs: Schema.Array(FsThumb) }),
   Schema.TaggedStruct("Send", { files: NonNegativeInt }),
+  Schema.TaggedStruct("Recent", { result: FsRecentResult }),
 ]);
 export type FsServeResult = typeof FsServeResult.Type;
 

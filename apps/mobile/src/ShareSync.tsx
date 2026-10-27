@@ -5,11 +5,14 @@ import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 
 import { holdSharing, releaseSharing, sharesInBackground } from "../modules/vitals-share/index.ts";
-import { PhoneShare, shareFiles } from "./lib/share.ts";
+import { PhoneShare, phoneRoots, sharedFolders, shareFiles, sharePhotos, useLimitedStorage } from "./lib/share.ts";
 
 export function ShareSync() {
   const remote = useRemote();
   const on = useStore(shareFiles);
+  const photos = useStore(sharePhotos);
+  const folders = useStore(sharedFolders);
+  const limited = useLimitedStorage();
   const [active, setActive] = useState(AppState.currentState === "active");
   const serving = on && (active || sharesInBackground);
 
@@ -33,9 +36,9 @@ export function ShareSync() {
   useEffect(() => {
     if (!serving) return;
     const share = new PhoneShare(remote);
-    share.start();
+    share.start(phoneRoots(photos, folders, !limited));
     return () => share.stopServing();
-  }, [remote, serving]);
+  }, [remote, serving, photos, folders, limited]);
 
   return null;
 }

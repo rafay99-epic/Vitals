@@ -179,7 +179,6 @@ enum BridgeQuery: Equatable, Sendable {
     /// Put phone clips on the Mac clipboard or into Downloads.
     case clipPut(items: [ClipPlacement], to: ClipDestination, folder: String?, deviceName: String)
     case fsThumbs(paths: [String], pixels: Int)
-    case fsTrash(paths: [String], deviceName: String)
     case fsOpen(path: String)
 }
 
@@ -208,8 +207,6 @@ extension BridgeQuery: Decodable {
             )
         case "FsThumbs":
             self = .fsThumbs(paths: try c.decode([String].self, forKey: .paths), pixels: try c.decode(Int.self, forKey: .pixels))
-        case "FsTrash":
-            self = .fsTrash(paths: try c.decode([String].self, forKey: .paths), deviceName: try c.decode(String.self, forKey: .deviceName))
         case "FsOpen":
             self = .fsOpen(path: try c.decode(String.self, forKey: .path))
         case let other:
@@ -311,14 +308,22 @@ enum AdminResult: Equatable, Sendable {
     case fsList(PhoneListing)
     case fsThumbs([WireThumb])
     case fsPull(files: Int)
+    case fsRecent(RecentFiles)
+    case clipsFrom([PhoneClip])
 }
 
 struct PhoneDevice: Codable, Equatable, Identifiable, Sendable {
     let deviceId: String
     let name: String
     let platform: String
+    /// Serving its files right now.
     let online: Bool
+    /// Connected to this Mac, whether or not it shares its files. Older gateways leave it out.
+    var connected: Bool?
     var id: String { deviceId }
+
+    /// Connected, but its "Let your Mac and other phones browse" switch is off.
+    var notSharing: Bool { !online && connected == true }
 }
 
 struct PhoneRoot: Codable, Equatable, Identifiable, Sendable {
@@ -344,8 +349,42 @@ struct PhoneListing: Codable, Equatable, Sendable {
     let total: Int
 }
 
+/// One page of a device's newest files of a kind (`FsRecentResult` in fs.ts).
+struct RecentFiles: Codable, Equatable, Sendable {
+    let kind: RecentKind
+    let entries: [PhoneEntry]
+    /// True when a bigger offset finds older items.
+    let more: Bool
+}
+
+/// One clip in the gateway's history (`Clip` in clips.ts).
+struct WireClip: Codable, Equatable, Sendable {
+    let id: String
+    let kind: ClipKind
+    let at: Int64
+    @Nullable var deviceId: String?
+    @Nullable var source: String?
+    /// Text and links; a preview when `truncated`, with the whole text in the stored file.
+    @Nullable var text: String?
+    let truncated: Bool
+    @Nullable var name: String?
+    @Nullable var mime: String?
+    let bytes: Int
+    @Nullable var files: Int?
+    /// Base64 JPEG thumbnail for images.
+    @Nullable var thumb: String?
+    let pinned: Bool
+}
+
+/// A clip one phone sent, and the file inside `clips/` holding its bytes.
+struct PhoneClip: Codable, Equatable, Identifiable, Sendable {
+    let clip: WireClip
+    @Nullable var stored: String?
+    var id: String { clip.id }
+}
+
 extension AdminResult: Decodable {
-    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices, roots, result, thumbs, files }
+    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices, roots, result, thumbs, files, clips }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -365,6 +404,8 @@ extension AdminResult: Decodable {
         case "FsList": self = .fsList(try c.decode(PhoneListing.self, forKey: .result))
         case "FsThumbs": self = .fsThumbs(try c.decode([WireThumb].self, forKey: .thumbs))
         case "FsPull": self = .fsPull(files: try c.decode(Int.self, forKey: .files))
+        case "FsRecent": self = .fsRecent(try c.decode(RecentFiles.self, forKey: .result))
+        case "ClipsFrom": self = .clipsFrom(try c.decode([PhoneClip].self, forKey: .clips))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: ._tag, in: c, debugDescription: "unknown admin result \(other)")
         }

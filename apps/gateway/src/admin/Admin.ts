@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Auth } from "../auth/Auth.ts";
 import { Bridge, type AdminHandler } from "../bridge/Bridge.ts";
+import { ClipStore } from "../clips/ClipStore.ts";
 import { FsService } from "../fs/FsService.ts";
 import { Lan } from "../lan/Lan.ts";
 import { Store } from "../persistence/Store.ts";
@@ -21,6 +22,7 @@ export const layer = Layer.effectDiscard(
     const activity = yield* ActivityLog;
     const lan = yield* Lan;
     const files = yield* FsService;
+    const clips = yield* ClipStore;
 
     const handle: AdminHandler = (op) =>
       Effect.gen(function* () {
@@ -75,8 +77,15 @@ export const layer = Layer.effectDiscard(
             return { _tag: "FsThumbs", thumbs } satisfies AdminResult;
           }
           case "FsPull": {
-            const { files: count } = yield* files.pull(null, { device: op.device, paths: op.paths }).pipe(Effect.mapError((error) => error.message));
+            const { files: count } = yield* files.pull(op.to ?? null, { device: op.device, paths: op.paths }).pipe(Effect.mapError((error) => error.message));
             return { _tag: "FsPull", files: count } satisfies AdminResult;
+          }
+          case "FsRecent": {
+            const result = yield* files.recent({ device: op.device, kind: op.kind, offset: op.offset, limit: FS_LIMITS.recent }).pipe(Effect.mapError((error) => error.message));
+            return { _tag: "FsRecent", result } satisfies AdminResult;
+          }
+          case "ClipsFrom": {
+            return { _tag: "ClipsFrom", clips: yield* clips.fromDevice(op.device) } satisfies AdminResult;
           }
         }
       });

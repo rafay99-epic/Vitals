@@ -58,6 +58,8 @@ export class DropStore extends Context.Service<
     readonly offer: (caller: DropCaller, input: DropOfferInput) => Effect.Effect<DropOffered, DropError>;
     readonly accept: (caller: DropCaller, input: DropIdInput) => Effect.Effect<DropOffered, DropError>;
     readonly pull: (caller: DropCaller, files: ReadonlyArray<MacDropFile>) => Effect.Effect<DropOffered, DropError>;
+    /** Sends Mac files to a device, the same way the Mac's own Send to Phone does. */
+    readonly send: (to: DeviceId, files: ReadonlyArray<MacDropFile>) => Effect.Effect<void>;
     readonly decline: (caller: DropCaller, input: DropIdInput) => Effect.Effect<Drop, DropError>;
     readonly cancel: (caller: DropCaller, input: DropIdInput) => Effect.Effect<Drop, DropError>;
     readonly ticket: (caller: DropCaller, input: DropIdInput) => Effect.Effect<DropTicket, DropError>;
@@ -789,6 +791,6 @@ export const layer = (database: Database) =>
           }),
         );
 
-      return DropStore.of({ watch, offer, accept, pull, decline, cancel, ticket, received, handle });
+      return DropStore.of({ watch, offer, accept, pull, send: (to, list) => sendFromMac([to], list), decline, cancel, ticket, received, handle });
     }),
   );

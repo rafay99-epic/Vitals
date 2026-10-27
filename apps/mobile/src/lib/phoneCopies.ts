@@ -75,13 +75,17 @@ const readCopied = async (): Promise<Copied | null> => {
   return text === "" ? null : { _tag: "Text", text };
 };
 
-export const sendClipboardNow = async (remote: Remote): Promise<void> => {
+/** Sends what is copied now. True once it reached the Mac. */
+export const sendClipboardNow = async (remote: Remote): Promise<boolean> => {
   let copied: Copied | null = null;
   for (let attempt = 0; attempt < FOCUS_TRIES && copied === null; attempt += 1) {
     await wait(FOCUS_WAIT_MS);
     copied = await readCopied();
   }
-  if (copied === null) return toast.show("Nothing to send. Copy something first.");
-  if (copied._tag === "Image") await sendPastedImage(remote, copied.data, "Sent to your Mac");
-  else await sendText(remote, copied.text, "Sent to your Mac");
+  if (copied === null) {
+    toast.show("Nothing to send. Copy something first.");
+    return false;
+  }
+  if (copied._tag === "Image") return sendPastedImage(remote, copied.data, "Sent to your Mac");
+  return sendText(remote, copied.text, "Sent to your Mac");
 };
