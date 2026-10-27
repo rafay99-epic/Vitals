@@ -4,6 +4,7 @@ package tailnet
 
 import (
 	"net"
+	"sync/atomic"
 	"time"
 
 	"tailscale.com/net/netmon"
@@ -16,6 +17,16 @@ import (
 // report one interface carrying the addresses the kernel picks for outbound traffic.
 func init() {
 	netmon.RegisterInterfaceGetter(interfaces)
+}
+
+// defaultIf is the interface Android last reported as the default route.
+var defaultIf atomic.Pointer[string]
+
+// setDefaultInterface records Android's default route. netmon only rebinds when the
+// default interface is up in the list, so the stand-in interface below takes its name.
+func setDefaultInterface(name string) {
+	defaultIf.Store(&name)
+	netmon.UpdateLastKnownDefaultRouteInterface(name)
 }
 
 func interfaces() ([]netmon.Interface, error) {
@@ -40,8 +51,12 @@ func interfaces() ([]netmon.Interface, error) {
 	if len(addrs) > 0 {
 		flags = net.FlagUp | net.FlagRunning
 	}
+	name := "android"
+	if last := defaultIf.Load(); last != nil && *last != "" {
+		name = *last
+	}
 	return []netmon.Interface{{
-		Interface: &net.Interface{Index: 1, MTU: 1500, Name: "android", Flags: flags},
+		Interface: &net.Interface{Index: 1, MTU: 1500, Name: name, Flags: flags},
 		AltAddrs:  addrs,
 	}}, nil
 }

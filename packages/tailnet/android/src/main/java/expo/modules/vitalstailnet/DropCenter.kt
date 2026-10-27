@@ -15,6 +15,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
@@ -58,7 +59,7 @@ object DropCenter : DropListener {
     val job = config.getString("job")
     check(!jobs.containsKey(job)) { "already running" }
     val fd = context.contentResolver.openFileDescriptor(Uri.parse(config.getString("uri")), "r")?.detachFd() ?: error("Can't open the file")
-    start(job, Active(config.getString("title"), config.getLong("size"), null)) { Tailnet.dropUpload(job, json, fd.toLong(), this) }
+    start(job, Active(config.getString("title"), config.getLong("size"), null), fd) { Tailnet.dropUpload(job, json, fd.toLong(), this) }
   }
 
   fun download(context: Context, json: String) {
@@ -69,15 +70,18 @@ object DropCenter : DropListener {
     val resolver = context.contentResolver
     val resumed = partial.remove(job)?.let { uri -> runCatching { uri to resolver.openFileDescriptor(uri, "rw")!!.detachFd() }.getOrNull() }
     val (uri, fd) = resumed ?: create(context, config).let { uri -> uri to (resolver.openFileDescriptor(uri, "rw")?.detachFd() ?: error("Can't save the file")) }
-    start(job, Active(config.getString("title"), config.getLong("size"), uri)) { Tailnet.dropDownload(job, json, fd.toLong(), this) }
+    start(job, Active(config.getString("title"), config.getLong("size"), uri), fd) { Tailnet.dropDownload(job, json, fd.toLong(), this) }
   }
 
-  private fun start(job: String, active: Active, run: () -> Unit) {
+  // Go owns fd once the call runs and closes it on its own errors. A LinkageError (library
+  // missing on this ABI) means it never ran, so the fd is still ours to close.
+  private fun start(job: String, active: Active, fd: Int, run: () -> Unit) {
     jobs[job] = active
     keepAlive()
     try {
       run()
-    } catch (error: Exception) {
+    } catch (error: Throwable) {
+      if (error is LinkageError) runCatching { ParcelFileDescriptor.adoptFd(fd).close() }
       jobs.remove(job)
       active.target?.let { partial[job] = it }
       settle()
