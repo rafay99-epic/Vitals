@@ -23,7 +23,7 @@ import { loadDeviceKey } from "../persistence/deviceKey";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { Remote } from "../state/remote.ts";
 import { localNetwork, macKeyOf, startNearby, stopNearby } from "./nearby.ts";
-import { runTunnelOnDemand } from "./tunnel.ts";
+import { runTunnelOnDemand, signOutTunnel } from "./tunnel.ts";
 
 const SUSPEND_AFTER_MS = 10_000;
 
@@ -260,6 +260,8 @@ class SessionManager {
     }
     if (current.status === "paired") current.remote.discardQueued();
     const forgotten = current.status === "paired" && (await current.remote.connection.call((client) => client["device.forget"]({}))).ok;
+    // Built-in Tailscale signs out too, so pairing a Mac on another tailnet never reuses this login.
+    await signOutTunnel();
     this.close();
     await stopAlertWatch();
     await forgetCalmAction();
