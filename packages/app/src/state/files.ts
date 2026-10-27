@@ -17,7 +17,8 @@ import {
 } from "@vitals/contracts";
 import type * as Effect from "effect/Effect";
 
-export const FILES_PAGE = 200;
+/** Entries per folder page: the most one `fs.list` returns, so a big folder needs few round trips. */
+export const FILES_PAGE = FS_LIMITS.page;
 
 const THUMB_DELAY_MS = 60;
 const THUMB_KEEP = 600;

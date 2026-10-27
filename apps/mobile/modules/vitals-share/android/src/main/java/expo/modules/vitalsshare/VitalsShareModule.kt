@@ -43,6 +43,19 @@ class VitalsShareModule : Module() {
 
     Function("fullStorage") { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else null }
 
+    AsyncFunction("list") { path: String -> Files.list(path) }
+
+    AsyncFunction("readChunk") { path: String, offset: Double, length: Int -> Files.readChunk(path, offset, length) }
+
+    AsyncFunction("pdfPages") { path: String -> Pdf.pages(path) }
+
+    AsyncFunction("pdfPage") { path: String, index: Int, width: Int ->
+      val context = appContext.reactContext ?: throw IllegalStateException("No context")
+      Pdf.page(context, path, index, width)
+    }
+
+    AsyncFunction("pdfClose") { Pdf.close() }
+
     AsyncFunction("toBack") { appContext.currentActivity?.moveTaskToBack(true) ?: false }.runOnQueue(Queues.MAIN)
   }
 

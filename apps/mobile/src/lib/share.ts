@@ -10,7 +10,7 @@ import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import { AppState, Linking, Platform } from "react-native";
 
-import { androidShare, iosShare, type NativeEntry, type NativePage, type PhotosAccess, type SharedFolder } from "../../modules/vitals-share/index.ts";
+import { androidShare, iosShare, nativeFiles, type NativeEntry, type NativePage, type PhotosAccess, type SharedFolder } from "../../modules/vitals-share/index.ts";
 
 const KEY = "vitals.remote.shareFiles";
 const PHOTOS_KEY = "vitals.remote.sharePhotos";
@@ -130,11 +130,11 @@ const probeFullStorage = (): boolean => {
 /** What a caller sees when Android keeps Vitals out of a folder. */
 const NEEDS_ALL_FILES = `${deviceInfo().name} needs All files access to open this. On it: Android Settings › Apps › Special app access › All files access › Vitals.`;
 
-const readable = <A>(read: () => A): A => {
+const readable = async <A>(read: () => A | Promise<A>): Promise<A> => {
   try {
-    return read();
+    return await read();
   } catch (cause) {
-    if (cause instanceof Error && /permission/i.test(cause.message)) throw new Error(NEEDS_ALL_FILES);
+    if (cause instanceof Error && /permission/i.test(cause.message)) throw new Error(NEEDS_ALL_FILES, { cause });
     throw cause;
   }
 };
@@ -187,17 +187,33 @@ const inside = (path: string, roots: ReadonlyArray<FsRoot>): boolean => roots.so
 
 const isPhoto = (path: string): boolean => path.startsWith(`${PHOTOS}/`);
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+/** Case-insensitive with numbers in order ("2" before "10"), as one plain string compare: no Intl call per comparison. */
+const nameKey = (name: string): string => name.toLowerCase().replace(/\d+/g, (digits) => digits.padStart(16, "0"));
 
-const byName = (left: FsEntry, right: FsEntry): number => (left.kind === "folder" ? 0 : 1) - (right.kind === "folder" ? 0 : 1) || collator.compare(left.name, right.name);
+const byKey = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
-const newest = (left: FsEntry, right: FsEntry): number => right.modifiedAt - left.modifiedAt || byName(left, right);
+/** Folders first, then by name. */
+const byName = (keys: ReadonlyMap<FsEntry, string>) => (left: FsEntry, right: FsEntry): number =>
+  (left.kind === "folder" ? 0 : 1) - (right.kind === "folder" ? 0 : 1) || byKey(keys.get(left) ?? "", keys.get(right) ?? "");
 
-const SORTS: Readonly<Record<FsSort, (left: FsEntry, right: FsEntry) => number>> = {
+const SORTS: Readonly<Record<FsSort, (keys: ReadonlyMap<FsEntry, string>) => (left: FsEntry, right: FsEntry) => number>> = {
   name: byName,
-  date: newest,
-  size: (left, right) => right.size - left.size || byName(left, right),
+  date: (keys) => {
+    const name = byName(keys);
+    return (left, right) => right.modifiedAt - left.modifiedAt || name(left, right);
+  },
+  size: (keys) => {
+    const name = byName(keys);
+    return (left, right) => right.size - left.size || name(left, right);
+  },
 };
+
+const sorted = (entries: ReadonlyArray<FsEntry>, sort: FsSort): ReadonlyArray<FsEntry> => {
+  const keys = new Map(entries.map((entry) => [entry, nameKey(entry.name)] as const));
+  return [...entries].sort(SORTS[sort](keys));
+};
+
+const newest = (left: FsEntry, right: FsEntry): number => right.modifiedAt - left.modifiedAt;
 
 const entryOf = (item: Directory | File, dir: string): FsEntry | null => {
   try {
@@ -211,6 +227,27 @@ const entryOf = (item: Directory | File, dir: string): FsEntry | null => {
   }
 };
 
+/**
+ * A folder's visible entries. Natively in one call off the JS thread when this build can; otherwise
+ * through expo-file-system, one `info()` per entry. Throws `NEEDS_ALL_FILES` when Android says no.
+ */
+const listFolder = (dir: string): Promise<ReadonlyArray<FsEntry>> =>
+  readable(async () => {
+    const list = nativeFiles?.list;
+    if (list === undefined) {
+      return new Directory(uriOf(dir))
+        .list()
+        .filter((item) => !item.name.startsWith("."))
+        .map((item) => entryOf(item, dir))
+        .filter((entry) => entry !== null);
+    }
+    const { names, dirs, sizes, times } = await list(dir);
+    return names.map((name, index): FsEntry => {
+      const folder = dirs[index] === true;
+      return { name, path: `${dir}/${name}`, kind: folder ? "folder" : "file", size: folder ? 0 : Math.max(0, Math.round(sizes[index] ?? 0)), modifiedAt: Math.max(0, Math.round(times[index] ?? 0)) };
+    });
+  });
+
 const nativeEntry = (entry: NativeEntry): FsEntry => ({ name: entry.name, path: entry.path, kind: "file", size: Math.max(0, Math.round(entry.size)), modifiedAt: Math.max(0, Math.round(entry.modifiedAt)) });
 
 const walk = (dir: string, prefix: string, out: Array<OutgoingFile>): void => {
@@ -223,22 +260,17 @@ const walk = (dir: string, prefix: string, out: Array<OutgoingFile>): void => {
 };
 
 /** Every visible file under `dir`, a few levels deep and a few thousand at most. */
-const filesUnder = (dir: string, depth: number, out: Array<FsEntry>): void => {
-  let items: ReadonlyArray<Directory | File>;
+const filesUnder = async (dir: string, depth: number, out: Array<FsEntry>): Promise<void> => {
+  let items: ReadonlyArray<FsEntry>;
   try {
-    items = new Directory(uriOf(dir)).list();
+    items = await listFolder(dir);
   } catch {
     return;
   }
   for (const item of items) {
     if (out.length >= WALK_LIMIT) return;
-    if (item.name.startsWith(".")) continue;
-    if (item instanceof Directory) {
-      if (depth > 0) filesUnder(`${dir}/${item.name}`, depth - 1, out);
-      continue;
-    }
-    const entry = entryOf(item, dir);
-    if (entry !== null) out.push(entry);
+    if (item.kind !== "folder") out.push(item);
+    else if (depth > 0) await filesUnder(item.path, depth - 1, out);
   }
 };
 
@@ -311,11 +343,16 @@ export class PhoneShare {
     return uri;
   }
 
-  /** One chunk of a file for a preview elsewhere. Photos on iPhone are exported first, like a send. */
+  /** One chunk of a file for a preview elsewhere, read natively when this build can. Photos on iPhone are exported first, like a send. */
   private async read(path: string, offset: number, length: number): Promise<FsReadResult> {
     this.allowed(path);
-    const uri = isPhoto(path) ? await this.exported(path) : uriOf(path);
-    const handle = readable(() => new File(uri).open(FileMode.ReadOnly));
+    const local = isPhoto(path) ? pathOf(await this.exported(path)) : path;
+    const readChunk = nativeFiles?.readChunk;
+    if (readChunk !== undefined) {
+      const chunk = await readable(() => readChunk(local, offset, length));
+      return { data: chunk.data, offset, total: chunk.total, done: offset + chunk.read >= chunk.total };
+    }
+    const handle = await readable(() => new File(uriOf(local)).open(FileMode.ReadOnly));
     try {
       const total = handle.size ?? 0;
       handle.offset = Math.min(offset, total);
@@ -336,20 +373,18 @@ export class PhoneShare {
       const page = await iosShare.photos("all", offset, limit);
       return { path, parent: null, entries: page.entries.map(nativeEntry), total: page.total };
     }
-    const entries = this.entries(path);
-    const sorted = [...entries].sort(SORTS[sort]);
+    const entries = await this.entries(path, sort);
     const parent = path.slice(0, path.lastIndexOf("/"));
-    return { path, parent: this.roots.some((root) => root.path === path) || !inside(parent, this.roots) ? null : parent, entries: sorted.slice(offset, offset + limit), total: sorted.length };
+    return { path, parent: this.roots.some((root) => root.path === path) || !inside(parent, this.roots) ? null : parent, entries: entries.slice(offset, offset + limit), total: entries.length };
   }
 
-  private entries(path: string): ReadonlyArray<FsEntry> {
-    const cached = this.cache.get(path);
+  /** A folder listed and sorted once, then paged from the cache for a few seconds. */
+  private async entries(path: string, sort: FsSort): Promise<ReadonlyArray<FsEntry>> {
+    const key = `${sort}:${path}`;
+    const cached = this.cache.get(key);
     if (cached !== undefined && Date.now() - cached.at < CACHE_MS) return cached.entries;
-    const entries = readable(() => new Directory(uriOf(path)).list())
-      .filter((item) => !item.name.startsWith("."))
-      .map((item) => entryOf(item, path))
-      .filter((entry) => entry !== null);
-    this.cache.set(path, { at: Date.now(), entries });
+    const entries = sorted(await listFolder(path), sort);
+    this.cache.set(key, { at: Date.now(), entries });
     return entries;
   }
 
@@ -374,13 +409,13 @@ export class PhoneShare {
     return androidShare.recent(kind, offset, limit);
   }
 
-  private newestIn(dir: string, offset: number, limit: number): NativePage {
+  private async newestIn(dir: string, offset: number, limit: number): Promise<NativePage> {
     const key = `recent:${dir}`;
     const cached = this.cache.get(key);
     let entries = cached !== undefined && Date.now() - cached.at < CACHE_MS ? cached.entries : null;
     if (entries === null) {
       const found: Array<FsEntry> = [];
-      filesUnder(dir, WALK_DEPTH, found);
+      await filesUnder(dir, WALK_DEPTH, found);
       entries = found.sort(newest);
       this.cache.set(key, { at: Date.now(), entries });
     }

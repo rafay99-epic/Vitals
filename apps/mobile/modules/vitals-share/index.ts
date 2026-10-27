@@ -27,7 +27,33 @@ export interface SharedFolder {
   readonly path: string;
 }
 
-interface Android {
+/** A folder's visible entries as parallel arrays. Times are epoch ms. */
+export interface NativeListing {
+  readonly names: ReadonlyArray<string>;
+  readonly dirs: ReadonlyArray<boolean>;
+  readonly sizes: ReadonlyArray<number>;
+  readonly times: ReadonlyArray<number>;
+}
+
+/** Part of a file as base64: `read` bytes of a `total`-byte file. */
+export interface NativeChunk {
+  readonly data: string;
+  readonly read: number;
+  readonly total: number;
+}
+
+/** Reading files and drawing PDF pages off the JS thread. Each is missing on builds from before it was added. */
+interface Native {
+  readonly list?: (path: string) => Promise<NativeListing>;
+  readonly readChunk?: (path: string, offset: number, length: number) => Promise<NativeChunk>;
+  /** Each page's height over its width. */
+  readonly pdfPages?: (path: string) => Promise<ReadonlyArray<number>>;
+  /** A `file://` PNG of one page, `width` pixels wide. */
+  readonly pdfPage?: (path: string, index: number, width: number) => Promise<string>;
+  readonly pdfClose?: () => Promise<void>;
+}
+
+interface Android extends Native {
   readonly start: () => Promise<boolean>;
   readonly stop: () => Promise<void>;
   readonly recent: (kind: "photos" | "screenshots" | "documents", offset: number, limit: number) => Promise<NativePage>;
@@ -37,7 +63,7 @@ interface Android {
   readonly fullStorage?: () => boolean | null;
 }
 
-interface Ios {
+interface Ios extends Native {
   readonly photosAccess: () => Promise<PhotosAccess>;
   readonly askPhotos: () => Promise<PhotosAccess>;
   readonly photos: (kind: "photos" | "screenshots" | "all", offset: number, limit: number) => Promise<NativePage & { readonly total: number }>;
@@ -65,6 +91,9 @@ if (androidShare !== null) {
     }),
   );
 }
+
+/** Whichever half this phone has. */
+export const nativeFiles: Native | null = androidShare ?? iosShare;
 
 export const sharesInBackground = androidShare !== null;
 

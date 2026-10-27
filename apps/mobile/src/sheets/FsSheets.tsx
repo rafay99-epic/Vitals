@@ -11,11 +11,12 @@ import { useThumb, whatOf, whereOf } from "../FsRows.tsx";
 import { type Batch, pickFiles, pickPhotos } from "../lib/clips.ts";
 import { BLOCK_NOTE, keepsGoing, macFolder, pickFolder, savedTo, sendDrop, sendToPhone, transferFiles, useFilesBlock } from "../lib/drops.ts";
 import { useAccess } from "../lib/remote.ts";
+import { openPreview } from "../navigation.ts";
 import { ActionRow, BigButton, color, Icon, type IconName, sheet, SheetCancel, SheetHeader, SheetNote, T, Tap, toast } from "../ui/index.ts";
 
 const folderOf = (path: string): string => path.split("/").slice(-3, -1).join(" › ");
 
-/** One file: its preview, Transfer, and Open on the Mac for Mac files. */
+/** One file: its thumbnail, Open (the preview here), Transfer, and Open on the Mac for Mac files. */
 export const fileSheet = (entry: FsEntry, source: FsSource): ComponentType =>
   function FileSheet() {
     const remote = useRemote();
@@ -30,6 +31,15 @@ export const fileSheet = (entry: FsEntry, source: FsSource): ComponentType =>
         {thumb === null ? null : <Image source={{ uri: thumb }} style={styles.preview} resizeMode="contain" accessibilityIgnoresInvertColors />}
         <SheetHeader title={entry.name} detail={[size, `on ${whereOf(source)}`, folderOf(entry.path)].filter((part) => part !== "").join(" · ")} />
         <BigButton label="Transfer" onPress={() => sheet.open(transferSheet([entry], source))} />
+        <ActionRow
+          icon="eye"
+          label="Open"
+          detail="See it here without transferring"
+          onPress={() => {
+            sheet.close();
+            openPreview({ entry, source, parent: entry.path.split("/").at(-2) ?? whereOf(source) });
+          }}
+        />
         {source.device === null ? <ActionRow icon="mac" label="Open on the Mac" onPress={openOnMac} /> : null}
         <SheetCancel label="Close" />
       </>
