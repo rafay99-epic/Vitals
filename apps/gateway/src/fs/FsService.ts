@@ -564,13 +564,10 @@ export const layer = Layer.effect(
 
     const preview = (device: DeviceId, path: string) =>
       Effect.gen(function* () {
-        const dir = join(previews, createHash("sha256").update(`${device}\0${path}`).digest("hex").slice(0, 24));
+        const dir = join(previews, `${createHash("sha256").update(`${device}\0${path}`).digest("hex").slice(0, 16)}-${newId()}`);
         const target = join(dir, basename(path) || "file");
         const partial = `${target}.part`;
-        yield* attempt(async () => {
-          await rm(dir, { recursive: true, force: true });
-          await mkdir(dir, { recursive: true });
-        });
+        yield* attempt(() => mkdir(dir, { recursive: true }));
         let offset = 0;
         for (;;) {
           const chunk = yield* read({ device, path, offset, length: FS_LIMITS.readChunk });
