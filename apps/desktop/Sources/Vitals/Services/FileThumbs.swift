@@ -25,12 +25,6 @@ enum FileThumbs {
         return paths.map { WireThumb(path: $0, jpeg: thumbs[$0] ?? nil) }
     }
 
-    static func trash(_ paths: [String]) -> Int {
-        paths.reduce(0) { count, path in
-            (try? FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)) == nil ? count : count + 1
-        }
-    }
-
     static func opensDirectly(_ url: URL) -> Bool {
         let values = try? url.resourceValues(forKeys: [.contentTypeKey, .isDirectoryKey, .isPackageKey])
         if values?.isPackage == true { return false }

@@ -381,7 +381,6 @@ enum QueryResult: Equatable, Sendable {
     case clipMaterialize(stored: String, bytes: Int, files: Int?)
     case clipPut(placed: Int)
     case fsThumbs([WireThumb])
-    case fsTrash(trashed: Int)
     case fsOpen
 }
 
@@ -391,7 +390,7 @@ struct WireThumb: Codable, Equatable, Sendable {
 }
 
 extension QueryResult: Encodable {
-    private enum Keys: String, CodingKey { case _tag, result, series, text, settings, stored, bytes, files, placed, thumbs, trashed }
+    private enum Keys: String, CodingKey { case _tag, result, series, text, settings, stored, bytes, files, placed, thumbs }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -420,9 +419,6 @@ extension QueryResult: Encodable {
         case let .fsThumbs(thumbs):
             try c.encode("FsThumbs", forKey: ._tag)
             try c.encode(thumbs, forKey: .thumbs)
-        case let .fsTrash(trashed):
-            try c.encode("FsTrash", forKey: ._tag)
-            try c.encode(trashed, forKey: .trashed)
         case .fsOpen:
             try c.encode("FsOpen", forKey: ._tag)
         }
@@ -440,10 +436,15 @@ enum AdminOp: Equatable, Sendable {
     case fsList(device: String, path: String, offset: Int)
     case fsThumbs(device: String, paths: [String])
     case fsPull(device: String, paths: [String])
+    case fsRecent(device: String, kind: RecentKind, offset: Int)
+    case clipsFrom(device: String)
 }
 
+/// What a device page lists newest first (`FsRecentKind` in fs.ts).
+enum RecentKind: String, Codable, CaseIterable, Sendable { case photos, screenshots, downloads, documents }
+
 extension AdminOp: Encodable {
-    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow, device, path, paths, offset }
+    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow, device, path, paths, offset, kind }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -479,6 +480,14 @@ extension AdminOp: Encodable {
             try c.encode("FsPull", forKey: ._tag)
             try c.encode(device, forKey: .device)
             try c.encode(paths, forKey: .paths)
+        case let .fsRecent(device, kind, offset):
+            try c.encode("FsRecent", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(kind, forKey: .kind)
+            try c.encode(offset, forKey: .offset)
+        case let .clipsFrom(device):
+            try c.encode("ClipsFrom", forKey: ._tag)
+            try c.encode(device, forKey: .device)
         }
     }
 }

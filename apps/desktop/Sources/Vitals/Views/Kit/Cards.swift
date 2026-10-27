@@ -18,16 +18,22 @@ struct MetricScroll<Content: View>: View {
 
 // MARK: - Cards
 
-struct SectionCard<Content: View>: View {
+/// A titled card. `accessory` sits at the trailing end of the title row (a "See all").
+struct SectionCard<Content: View, Accessory: View>: View {
     let title: String
     let symbol: String
     @ViewBuilder let content: Content
+    @ViewBuilder let accessory: Accessory
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: symbol)
-                .font(.headline)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Label(title, systemImage: symbol)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                accessory
+            }
             content
         }
         // maxHeight lets paired cards in a row share the row's height. In a vertical
@@ -35,6 +41,12 @@ struct SectionCard<Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .cardBackground()
+    }
+}
+
+extension SectionCard where Accessory == EmptyView {
+    init(title: String, symbol: String, @ViewBuilder content: () -> Content) {
+        self.init(title: title, symbol: symbol, content: content) { EmptyView() }
     }
 }
 

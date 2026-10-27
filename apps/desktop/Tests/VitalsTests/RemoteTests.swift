@@ -355,3 +355,49 @@ struct ProcessControlTests {
         return (String(bytes: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+struct DevicePageBridgeTests {
+    private func json(_ value: some Encodable) throws -> NSDictionary {
+        try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) as? NSDictionary)
+    }
+
+    private func dictionary(_ literal: String) throws -> NSDictionary {
+        try #require(try JSONSerialization.jsonObject(with: Data(literal.utf8)) as? NSDictionary)
+    }
+
+    private func adminResult(_ ok: String) throws -> AdminResult? {
+        let line = #"{"t":"adminResult","id":"a-1","ok":"# + ok + #","error":null}"#
+        guard case let .adminResult(_, result, _) = try JSONDecoder().decode(ToApp.self, from: Data(line.utf8)) else { return nil }
+        return result
+    }
+
+    @Test func recentAndClipsOpsMatchTheContract() throws {
+        #expect(try json(FromApp.admin(id: "a-1", op: .fsRecent(device: "dev-1", kind: .screenshots, offset: 120))) == dictionary(
+            #"{"t":"admin","id":"a-1","op":{"_tag":"FsRecent","device":"dev-1","kind":"screenshots","offset":120}}"#
+        ))
+        #expect(try json(FromApp.admin(id: "a-2", op: .clipsFrom(device: "dev-1"))) == dictionary(
+            #"{"t":"admin","id":"a-2","op":{"_tag":"ClipsFrom","device":"dev-1"}}"#
+        ))
+    }
+
+    @Test func recentResultDecodes() throws {
+        let ok = #"{"_tag":"FsRecent","result":{"kind":"downloads","entries":[{"name":"Invoice.pdf","path":"/storage/emulated/0/Download/Invoice.pdf","kind":"file","size":245760,"modifiedAt":1790000000000}],"more":true}}"#
+        let entry = PhoneEntry(name: "Invoice.pdf", path: "/storage/emulated/0/Download/Invoice.pdf", kind: "file", size: 245_760, modifiedAt: 1_790_000_000_000)
+        #expect(try adminResult(ok) == .fsRecent(RecentFiles(kind: .downloads, entries: [entry], more: true)))
+    }
+
+    @Test func clipsFromDecodesStoredAndInlineClips() throws {
+        let ok = #"""
+        {"_tag":"ClipsFrom","clips":[
+        {"clip":{"id":"0f8fad5b-d9cb","kind":"image","at":1790000000000,"deviceId":"dev-1","source":"Pixel 9","text":null,"truncated":false,
+        "name":"Screenshot.png","mime":"image/png","bytes":1600000,"files":null,"thumb":"/9j/4AAQ","pinned":false},"stored":"0f8fad5b-d9cb.png"},
+        {"clip":{"id":"1a2b3c4d-e5f6","kind":"link","at":1789999990000,"deviceId":"dev-1","source":"Pixel 9","text":"https://maps.app.goo.gl/x7Lr","truncated":false,
+        "name":null,"mime":null,"bytes":0,"files":null,"thumb":null,"pinned":true},"stored":null}]}
+        """#
+        let image = WireClip(id: "0f8fad5b-d9cb", kind: .image, at: 1_790_000_000_000, deviceId: "dev-1", source: "Pixel 9", text: nil, truncated: false,
+                             name: "Screenshot.png", mime: "image/png", bytes: 1_600_000, files: nil, thumb: "/9j/4AAQ", pinned: false)
+        let link = WireClip(id: "1a2b3c4d-e5f6", kind: .link, at: 1_789_999_990_000, deviceId: "dev-1", source: "Pixel 9", text: "https://maps.app.goo.gl/x7Lr",
+                            truncated: false, name: nil, mime: nil, bytes: 0, files: nil, thumb: nil, pinned: true)
+        #expect(try adminResult(ok) == .clipsFrom([PhoneClip(clip: image, stored: "0f8fad5b-d9cb.png"), PhoneClip(clip: link, stored: nil)]))
+    }
+}

@@ -1,10 +1,12 @@
 import SwiftUI
 
 /// Every navigable destination, one flat tier in the sidebar: Overview, then
-/// a read-only Monitor group and a write/maintenance Maintain group.
+/// a read-only Monitor group, one row per sharing phone, and a write/maintenance
+/// Maintain group. `device` is any phone's page; `Navigator.device` says which.
 enum NavSection: String, CaseIterable, Identifiable {
     case overview
     case cpu, gpu, memory, battery, network, sensors, history
+    case device
     case diskHealth, cleanup, applications, remote
     case settings
 
@@ -20,6 +22,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .network:      return "Network"
         case .sensors:      return "Temps & Fans"
         case .history:      return "History"
+        case .device:       return "Device"
         case .diskHealth:   return "Disk Health"
         case .cleanup:      return "Cleanup"
         case .applications: return "Applications"
@@ -38,6 +41,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .network:      return "network"
         case .sensors:      return "thermometer.medium"
         case .history:      return "chart.xyaxis.line"
+        case .device:       return "iphone.gen3"
         case .diskHealth:   return "internaldrive"
         case .cleanup:      return "sparkles"
         case .applications: return "square.grid.2x2"
@@ -54,6 +58,8 @@ enum NavSection: String, CaseIterable, Identifiable {
 @Observable
 final class Navigator {
     var section: NavSection = LaunchOverrides.section ?? .overview
+    /// The phone whose page `.device` shows (a gateway device id). nil shows the first phone.
+    var device: String? = LaunchOverrides.value(for: "--device")
     var remoteTab: RemoteView.Tab = LaunchOverrides.value(for: "--remote-tab").flatMap(RemoteView.Tab.init(rawValue:)) ?? .devices
 }
 

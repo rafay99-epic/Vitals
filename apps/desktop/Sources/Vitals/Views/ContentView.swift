@@ -8,7 +8,11 @@ struct ContentView: View {
     /// Shared app-wide so the ⌘, command and the menu-bar gear can also select
     /// the Settings section.
     @Environment(Navigator.self) private var navigator
+    @Environment(RemoteModel.self) private var remote
+    @Environment(DevicesModel.self) private var phonePages
     private var section: NavSection { navigator.section }
+    /// The phone `.device` shows: the picked one, else the first.
+    private var shownDevice: String? { navigator.device ?? phonePages.phones.first?.id }
 
     // Per-section models, owned here so a scan started in one section survives
     // switching sections.
@@ -51,6 +55,10 @@ struct ContentView: View {
                     groupLabel("Monitor")
                     ForEach(Array(Self.monitor.enumerated()), id: \.element) { index, item in
                         row(item, shortcut: Self.shortcut(index + 2))
+                    }
+                    if remote.isEnabled, !phonePages.phones.isEmpty {
+                        groupLabel("Devices")
+                        ForEach(phonePages.phones) { deviceRow($0) }
                     }
                     groupLabel("Maintain")
                     ForEach(Array(Self.maintain.enumerated()), id: \.element) { index, item in
@@ -114,19 +122,39 @@ struct ContentView: View {
     /// by position; Maintain has its own ⌥⌘1-⌥⌘3 tier. Only the selection fill
     /// changes on switch, never geometry.
     private func row(_ item: NavSection, shortcut: KeyboardShortcut?) -> some View {
-        let selected = section == item
-        return Button {
+        navRow(title: item.title, symbol: item.symbol, selected: section == item, shortcut: shortcut) {
             navigator.section = item
-        } label: {
+        } trailing: {
+            EmptyView()
+        }
+    }
+
+    /// A phone's row: its page, with a dot for whether it answers right now.
+    private func deviceRow(_ phone: PhoneDevice) -> some View {
+        navRow(title: phone.name, symbol: DeviceLook.symbol(phone), selected: section == .device && shownDevice == phone.id, shortcut: nil) {
+            navigator.device = phone.id
+            navigator.section = .device
+        } trailing: {
+            OnlineDot(online: phone.online)
+        }
+    }
+
+    private func navRow<Trailing: View>(
+        title: String, symbol: String, selected: Bool, shortcut: KeyboardShortcut?,
+        action: @escaping () -> Void, @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 9) {
-                Image(systemName: item.symbol)
+                Image(systemName: symbol)
                     .font(.system(size: 13, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     .frame(width: 20)
-                Text(item.title)
+                Text(title)
                     .font(.system(size: 13, weight: selected ? .medium : .regular))
+                    .lineLimit(1)
                 Spacer(minLength: 0)
+                trailing()
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 6)
@@ -139,7 +167,7 @@ struct ContentView: View {
         .buttonStyle(.plain)
         .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
         .keyboardShortcut(shortcut)
-        .help(item.title)
+        .help(title)
     }
 
     // MARK: Content
@@ -165,6 +193,9 @@ struct ContentView: View {
                 SensorsView()
             case .history:
                 HistoryView(model: historyModel)
+            case .device:
+                DevicePage(deviceId: shownDevice)
+                    .id(shownDevice)
             case .diskHealth:
                 DiskHealthView()
             case .cleanup:
