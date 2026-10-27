@@ -12,7 +12,8 @@ import { color, curve, DOCK_BOTTOM, DOCK_HEIGHT, motion } from "./tokens.ts";
 export interface DockTab {
   readonly label: string;
   readonly icon: IconName;
-  readonly badge?: boolean;
+  /** A dot in this color on the icon: red for alerts, yellow for an update waiting. */
+  readonly badge?: string | undefined;
 }
 
 const PAD = 6;
@@ -55,12 +56,12 @@ export function Dock({ state, navigation, tabs }: Pick<BottomTabBarProps, "state
             onPress={press}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
-            accessibilityLabel={tab.badge === true ? `${tab.label}, needs attention` : tab.label}
+            accessibilityLabel={tab.badge === undefined ? tab.label : `${tab.label}, needs attention`}
             style={styles.tab}
           >
             <View>
               <Icon name={tab.icon} size={21} color={on ? color.yellow : color.mute} />
-              {tab.badge === true ? <View style={styles.badge} /> : null}
+              {tab.badge === undefined ? null : <View style={[styles.badge, { backgroundColor: tab.badge }]} />}
             </View>
             <T v="tab" color={on ? color.yellow : color.mute}>
               {tab.label}
@@ -88,5 +89,5 @@ const styles = StyleSheet.create({
   },
   indicator: { position: "absolute", top: PAD, bottom: PAD, left: PAD, borderRadius: 25, backgroundColor: "rgba(242,236,107,0.13)" },
   tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
-  badge: { position: "absolute", top: -2, right: -5, width: 9, height: 9, borderRadius: 5, backgroundColor: color.red, borderWidth: 2, borderColor: "#141414" },
+  badge: { position: "absolute", top: -2, right: -5, width: 9, height: 9, borderRadius: 5, borderWidth: 2, borderColor: "#141414" },
 });

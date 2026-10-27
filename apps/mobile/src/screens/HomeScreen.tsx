@@ -8,7 +8,7 @@ import { useStore } from "@vitals/app/state/useStore.ts";
 import { useLatest, useLink, useNow, useSignal, useWord } from "@vitals/app/state/useVitals.ts";
 import { bytes, fixed, type Reading } from "@vitals/app/state/vitals.ts";
 import type { ConnectionState } from "@vitals/client-runtime";
-import type { KeepAwakeState, LiveSample, MacInfo } from "@vitals/contracts";
+import { type KeepAwakeState, type LiveSample, type MacInfo, PROTOCOL_VERSION } from "@vitals/contracts";
 import { formatClock } from "@vitals/shared";
 import { type Channel, type ChannelSpec, channels, Trace } from "@vitals/ui";
 import { StyleSheet, View } from "react-native";
@@ -16,6 +16,7 @@ import { StyleSheet, View } from "react-native";
 import { ALERT_TITLE, LINK_COLOR, TONE_COLOR, useMac } from "../lib/remote.ts";
 import type { HomeStackParams } from "../navigation.ts";
 import { AlertSheet } from "../sheets/AlertSheet.tsx";
+import { UpdateNeeded } from "./UpdatesScreen.tsx";
 import { PowerSheet } from "../sheets/PowerSheet.tsx";
 import { color, Icon, Page, sheet, T, Tap } from "../ui/index.ts";
 
@@ -203,6 +204,8 @@ export function HomeScreen({ navigation }: Props) {
   const word = useWord();
   const fans = useLatest(fansOf) ?? mac?.hasFans !== false;
   const battery = useLatest(batteryOf) ?? mac?.hasBattery !== false;
+  // A Mac ahead of this app needs the app updated; one behind it keeps the "out of step" page, which says to update the Mac.
+  if (state._tag === "Incompatible" && (state.serverProtocol ?? 0) > PROTOCOL_VERSION) return <UpdateNeeded who={mac?.name ?? "Your Mac"} />;
   if (isBroken(state)) return <LinkState state={state} who={mac?.name ?? "Your Mac"} />;
   const open = (channel: Channel) => navigation.navigate("Channel", { channel });
   const memoryMax = mac?.memoryBytes ?? null;
