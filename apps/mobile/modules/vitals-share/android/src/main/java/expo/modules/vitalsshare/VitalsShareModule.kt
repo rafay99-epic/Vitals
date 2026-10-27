@@ -21,9 +21,22 @@ class VitalsShareModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VitalsShare")
 
+    Events(LINK_STOPPED)
+
+    // The link service may stop on its own (Disconnect in the notification, Android); JS hears it here.
+    OnCreate {
+      LinkService.onStopped = {
+        task = null
+        sendEvent(LINK_STOPPED)
+      }
+    }
+
+    OnDestroy { LinkService.onStopped = null }
+
+    /** Starts the link service and a headless task that keeps JS running while the app is closed. */
     AsyncFunction("start") {
       val context = appContext.reactContext as? ReactContext ?: return@AsyncFunction false
-      val started = runCatching { ContextCompat.startForegroundService(context, Intent(context, ShareService::class.java)) }.isSuccess
+      val started = runCatching { ContextCompat.startForegroundService(context, Intent(context, LinkService::class.java)) }.isSuccess
       if (started && task == null) {
         task = HeadlessJsTaskContext.getInstance(context).startTask(HeadlessJsTaskConfig(TASK, Arguments.createMap(), 0, true))
       }
@@ -33,9 +46,15 @@ class VitalsShareModule : Module() {
     AsyncFunction("stop") {
       task = null
       val context = appContext.reactContext ?: return@AsyncFunction Unit
-      context.stopService(Intent(context, ShareService::class.java))
+      context.stopService(Intent(context, LinkService::class.java))
       Unit
     }.runOnQueue(Queues.MAIN)
+
+    /** The notification's title and line, e.g. the Mac's name and "Connected over Wi-Fi". */
+    Function("update") { title: String, text: String ->
+      val context = appContext.reactContext ?: return@Function Unit
+      LinkService.update(context, title, text)
+    }
 
     AsyncFunction("recent") { kind: String, offset: Int, limit: Int ->
       val context = appContext.reactContext ?: throw IllegalStateException("No context")
@@ -76,5 +95,6 @@ class VitalsShareModule : Module() {
 
   private companion object {
     const val TASK = "VitalsShare"
+    const val LINK_STOPPED = "onLinkStopped"
   }
 }

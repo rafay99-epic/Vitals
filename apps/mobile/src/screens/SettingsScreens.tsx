@@ -22,7 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState, Linking, Platform, StyleSheet, View } from "react-native";
 
 import { LINK_COLOR, useMac } from "../lib/remote.ts";
-import { sharesInBackground } from "../../modules/vitals-share/index.ts";
+import { holdsInBackground } from "../../modules/vitals-share/index.ts";
 import { askFullStorage, hasFullStorage, phoneRoots, pickSharedFolder, removeSharedFolder, setSharePhotos, shareThisPhone, sharedFolders, shareFiles, sharePhotos } from "../lib/share.ts";
 import type { SettingsStackParams } from "../navigation.ts";
 import { UnpairSheet } from "../sheets/SendSheets.tsx";
@@ -214,7 +214,7 @@ function ShareSettings() {
         <Row first label="Let your Mac and other phones browse" control={<Toggle value={sharing} label="Let your Mac and other phones browse" onChange={shareThisPhone} />} />
         <Row label="All files on this phone" value={full ? "Allowed" : "Off"} valueColor={full ? color.green : color.dim} onPress={() => void askFullStorage()} />
       </Group>
-      <Note>{sharing ? `Shared ${sharesInBackground ? "until you turn this off, even with Vitals in the background" : "while Vitals is open"}: ${roots.map((root) => root.label).join(", ")}.` : "Nothing on this phone is shared."}</Note>
+      <Note>{sharing ? `Shared ${holdsInBackground ? "until you turn this off, even with Vitals closed" : "while Vitals is open"}: ${roots.map((root) => root.label).join(", ")}.` : "Nothing on this phone is shared."}</Note>
     </>
   );
 }
