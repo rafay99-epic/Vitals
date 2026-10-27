@@ -128,6 +128,8 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     package: bundleId,
     versionCode: commits,
     permissions: ["CAMERA", "POST_NOTIFICATIONS", "VIBRATE", "ACCESS_LOCAL_NETWORK"],
+    // The Expo template asks to draw over other apps; nothing here does.
+    blockedPermissions: ["android.permission.SYSTEM_ALERT_WINDOW"],
     adaptiveIcon: {
       foregroundImage: `./assets/adaptive-foreground${current.art}.png`,
       monochromeImage: `./assets/adaptive-monochrome${current.art}.png`,
@@ -159,6 +161,8 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
       "expo-build-properties",
       {
         android: {
+          // Built-in Tailscale ships 64-bit libraries only, so the app does too: a 32-bit phone can't install it rather than crash.
+          buildArchs: ["arm64-v8a", "x86_64"],
           usesCleartextTraffic: true,
           extraProguardRules: [
             "-keep class * extends androidx.room.RoomDatabase { <init>(); }",
@@ -169,7 +173,8 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
         },
       },
     ],
-    ["expo-image-picker", { photosPermission: "Pick photos and videos to send to your Mac.", cameraPermission: false, microphonePermission: false }],
+    // `cameraPermission: false` would strip CAMERA from the whole app and break the pairing QR scanner, so it names the same use.
+    ["expo-image-picker", { photosPermission: "Pick photos and videos to send to your Mac.", cameraPermission: "Scan the pairing code shown in Vitals on your Mac.", microphonePermission: false }],
     ["expo-media-library", { photosPermission: "Lets your Mac and other phones get photos and screenshots from this iPhone, when you turn it on.", savePhotosPermission: "Save photos and videos from your Mac to Photos.", granularPermissions: ["photo", "video"] }],
     [
       "expo-sharing",
