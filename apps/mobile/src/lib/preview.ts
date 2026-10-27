@@ -7,9 +7,10 @@ import { Directory, File, FileMode, Paths } from "expo-file-system";
 import { Inflate, strFromU8 } from "fflate";
 
 import { toast } from "../ui/Toast.tsx";
+import { SHEET_BYTES, type Workbook, workbookOf } from "./sheet.ts";
 import { dataStart, findDirectory, LOCAL_HEADER, readDirectory, ZIP_TAIL, type ZipEntry } from "./zip.ts";
 
-export type PreviewKind = "image" | "pdf" | "text" | "video" | "audio" | "zip" | "other";
+export type PreviewKind = "image" | "pdf" | "markdown" | "sheet" | "text" | "video" | "audio" | "zip" | "other";
 
 const KINDS: ReadonlyArray<readonly [RegExp, PreviewKind]> = [
   [/\.(jpe?g|png|gif|webp|heic|heif|bmp|svg)$/i, "image"],
@@ -17,7 +18,9 @@ const KINDS: ReadonlyArray<readonly [RegExp, PreviewKind]> = [
   [/\.(mp4|m4v|mov|webm|mkv|3gp)$/i, "video"],
   [/\.(mp3|m4a|aac|wav|flac|ogg|oga|opus)$/i, "audio"],
   [/\.zip$/i, "zip"],
-  [/\.(txt|text|md|markdown|json|jsonl|ndjson|csv|tsv|log|xml|ya?ml|toml|ini|conf|cfg|env|sh|bash|zsh|fish|js|jsx|mjs|cjs|ts|tsx|py|rb|go|rs|swift|kt|kts|java|c|h|cc|cpp|hpp|m|mm|cs|php|html?|css|scss|sql|gradle|properties|srt|vtt|diff|patch)$/i, "text"],
+  [/\.(md|markdown|mdx)$/i, "markdown"],
+  [/\.(xlsx|xlsm)$/i, "sheet"],
+  [/\.(txt|text|tex|latex|bib|sty|cls|json|jsonl|ndjson|csv|tsv|log|xml|ya?ml|toml|ini|conf|cfg|env|sh|bash|zsh|fish|js|jsx|mjs|cjs|ts|tsx|py|rb|go|rs|swift|kt|kts|java|c|h|cc|cpp|hpp|m|mm|cs|php|html?|css|scss|sql|gradle|properties|srt|vtt|diff|patch)$/i, "text"],
 ];
 
 /** Which viewer opens a file, by its name. */
@@ -165,6 +168,18 @@ export const readText = async (file: File): Promise<{ readonly text: string; rea
       text = strFromU8(shown, true);
     }
     return { text: text.replace(/\r\n?/g, "\n"), cut };
+  } finally {
+    handle.close();
+  }
+};
+
+/** A cached .xlsx, unpacked in memory, so only up to `SHEET_BYTES`. */
+export const readWorkbook = async (file: File): Promise<Workbook> => {
+  const handle = file.open(FileMode.ReadOnly);
+  try {
+    const size = handle.size ?? 0;
+    if (size > SHEET_BYTES) throw new Error("Too big to show here. Open it with another app.");
+    return workbookOf(await handle.readBytes(size));
   } finally {
     handle.close();
   }

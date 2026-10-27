@@ -16,8 +16,12 @@ export type ControlStackParams = {
   Folder: { readonly path: string; readonly source: FsSource; readonly trail: ReadonlyArray<string> };
   /** Everything of one kind on a device, newest first. "images" is screenshots and photos together. */
   Recent: { readonly kind: FsRecentKind | "images"; readonly source: FsSource };
-  /** One file, viewed here. `parent` names the screen Back goes to. `local` is an already-cached copy (a file unpacked from a zip), which can't be transferred. */
-  Preview: { readonly entry: FsEntry; readonly source: FsSource; readonly parent: string; readonly local?: string };
+  /**
+   * One file, viewed here. `parent` names the screen Back goes to. `local` is an already-cached copy (a file
+   * unpacked from a zip), which can't be transferred. `siblings` are the files it was listed with, in order,
+   * to swipe through.
+   */
+  Preview: { readonly entry: FsEntry; readonly source: FsSource; readonly parent: string; readonly local?: string; readonly siblings?: ReadonlyArray<FsEntry> | undefined };
   Transfers: undefined;
   Terminal: undefined;
 };

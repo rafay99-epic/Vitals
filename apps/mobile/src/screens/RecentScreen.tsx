@@ -75,7 +75,8 @@ export function RecentScreen({ navigation, route }: Props) {
     ).then((pages) => setPaged((current) => (current._tag === "loaded" ? { _tag: "loaded", pages, busy: false } : current)));
   };
 
-  const open = (entry: FsEntry) => (selection.selecting ? selection.toggle(entry) : navigation.push("Preview", { entry, source, parent: KIND_TITLE[kind] }));
+  const entries = paged._tag === "loaded" ? mergeNewest(paged.pages).entries : [];
+  const open = (entry: FsEntry) => (selection.selecting ? selection.toggle(entry) : navigation.push("Preview", { entry, source, parent: KIND_TITLE[kind], siblings: entries }));
   const showSheet = (entry: FsEntry) => sheet.open(fileSheet(entry, source));
 
   const onViewable = useCallback(
@@ -84,7 +85,6 @@ export function RecentScreen({ navigation, route }: Props) {
   );
 
   const size = Math.floor((width - EDGE * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
-  const entries = paged._tag === "loaded" ? mergeNewest(paged.pages).entries : [];
   const rows = rowsOf(entries, gallery ? COLUMNS : 1);
 
   const header = (

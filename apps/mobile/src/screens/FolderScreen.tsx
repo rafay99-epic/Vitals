@@ -43,6 +43,9 @@ const linesOf = (entries: ReadonlyArray<FsEntry>): ReadonlyArray<Line> => {
   ];
 };
 
+/** The files in a page, in the order they show: pictures, then everything else. */
+const filesOf = (lines: ReadonlyArray<Line>): ReadonlyArray<FsEntry> => lines.flatMap((line) => (line._tag === "pictures" ? line.entries : isFolder(line.entry) ? [] : [line.entry]));
+
 const keyOf = (line: Line): string => (line._tag === "entry" ? line.entry.path : `pictures:${line.entries[0]?.path ?? ""}`);
 
 const typeOf = (line: Line): Line["_tag"] => line._tag;
@@ -119,10 +122,11 @@ export function FolderScreen({ navigation, route }: Props) {
     });
   };
 
+  const lines = listing._tag === "loaded" ? listing.lines : [];
   const open = (entry: FsEntry) => {
     if (isFolder(entry)) navigation.push("Folder", { path: entry.path, source, trail: [...trail, entry.name] });
     else if (selection.selecting) selection.toggle(entry);
-    else navigation.push("Preview", { entry, source, parent: title });
+    else navigation.push("Preview", { entry, source, parent: title, siblings: filesOf(lines) });
   };
 
   const showSheet = (entry: FsEntry) => sheet.open(fileSheet(entry, source));
@@ -142,7 +146,6 @@ export function FolderScreen({ navigation, route }: Props) {
     [remote, device],
   );
 
-  const lines = listing._tag === "loaded" ? listing.lines : [];
   const size = Math.floor((width - EDGE * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
   const crumbs = [source.name, ...trail];
   const hasFiles = lines.some((line) => line._tag === "pictures" || !isFolder(line.entry));

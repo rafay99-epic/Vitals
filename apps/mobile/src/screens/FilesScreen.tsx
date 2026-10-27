@@ -89,7 +89,7 @@ function MacFolders({ roots, onRoot }: { readonly roots: Loaded<ReadonlyArray<Fs
     setQuery(text);
     if (text.trim().length < 2) setFound(null);
   };
-  const open = (entry: FsEntry) => (isFolder(entry) ? navigation.push("Folder", { path: entry.path, source: MAC, trail: [entry.name] }) : navigation.push("Preview", { entry, source: MAC, parent: "Files" }));
+  const open = (entry: FsEntry) => (isFolder(entry) ? navigation.push("Folder", { path: entry.path, source: MAC, trail: [entry.name] }) : navigation.push("Preview", { entry, source: MAC, parent: "Files", siblings: found?.filter((item) => !isFolder(item)) }));
   const showSheet = (entry: FsEntry) => sheet.open(fileSheet(entry, MAC));
   const searching = query.trim().length >= 2;
 
@@ -172,7 +172,7 @@ function Recents({ source, recents }: { readonly source: FsSource; readonly rece
   const shared = failures.length === KINDS.length && failures.every((item) => item.message === failures[0]?.message) ? failures[0] : undefined;
   if (shared !== undefined) return <Empty title={`Can't see ${source.device === null ? "your Mac" : source.name}'s recent files`} detail={shared.message} />;
   const pictures = recents.screenshots._tag === "loading" && recents.photos._tag === "loading" ? null : mergeNewest([pageOf(recents.screenshots), pageOf(recents.photos)]).entries.slice(0, STRIP);
-  const openFile = (entry: FsEntry) => navigation.push("Preview", { entry, source, parent: "Files" });
+  const openFile = (entry: FsEntry) => navigation.push("Preview", { entry, source, parent: "Files", siblings: pictures ?? undefined });
   const showSheet = (entry: FsEntry) => sheet.open(fileSheet(entry, source));
   return (
     <>

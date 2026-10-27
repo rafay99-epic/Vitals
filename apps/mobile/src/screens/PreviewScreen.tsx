@@ -1,12 +1,13 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
+import type { FsSource } from "@vitals/app/state/files.ts";
 import { type DeviceId, type FsEntry, FS_LIMITS } from "@vitals/contracts";
 import { formatAmount } from "@vitals/app/features/clips/format.ts";
 import { formatBytes } from "@vitals/shared";
 import { File } from "expo-file-system";
 import { Image } from "expo-image";
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { lookOf, useThumb, whereOf } from "../FsRows.tsx";
@@ -15,8 +16,10 @@ import type { ControlStackParams } from "../navigation.ts";
 import { transferSheet } from "../sheets/FsSheets.tsx";
 import { BackBar, Bar, BigButton, color, Empty, Icon, sheet, T, Tap } from "../ui/index.ts";
 import { ImageViewer } from "../viewers/ImageViewer.tsx";
+import { MarkdownViewer } from "../viewers/MarkdownViewer.tsx";
 import { MediaViewer } from "../viewers/MediaViewer.tsx";
 import { PdfViewer } from "../viewers/PdfViewer.tsx";
+import { SheetViewer } from "../viewers/SheetViewer.tsx";
 import { TextViewer } from "../viewers/TextViewer.tsx";
 import { ZipViewer } from "../viewers/ZipViewer.tsx";
 
@@ -28,6 +31,13 @@ type Copy =
   | { readonly _tag: "fetching"; readonly done: number; readonly total: number }
   | { readonly _tag: "ready"; readonly file: File }
   | { readonly _tag: "failed"; readonly message: string };
+
+/** Where a file starts out: already here, not needed yet, or to fetch. */
+const copyOf = (entry: FsEntry, source: FsSource, local: string | undefined): Copy => {
+  const here = local === undefined ? cachedPreview(entry, source) : new File(local);
+  if (here !== null) return { _tag: "ready", file: here };
+  return previewKind(entry.name) === "other" ? { _tag: "waiting" } : { _tag: "fetching", done: 0, total: entry.size };
+};
 
 /** `file:///a%20b` to `/a b`, for native code that wants a path. */
 const pathOf = (uri: string): string => decodeURIComponent(uri.replace(/^file:\/\//, ""));
@@ -76,23 +86,51 @@ function FetchingThumb({ entry, device }: { readonly entry: FsEntry; readonly de
   );
 }
 
+/** A file beside the one showing, while it's swiped in: the picture when it's here, else its thumbnail or icon. */
+function Peek({ entry, source }: { readonly entry: FsEntry; readonly source: FsSource }) {
+  const cached = previewKind(entry.name) === "image" ? cachedPreview(entry, source) : null;
+  if (cached !== null) return <Image source={cached.uri} contentFit="contain" transition={null} style={styles.body} accessibilityIgnoresInvertColors />;
+  return (
+    <View style={styles.card}>
+      <FetchingThumb entry={entry} device={source.device} />
+    </View>
+  );
+}
+
+const pathKey = (entry: FsEntry): string => entry.path;
+
 /**
- * One file from the Mac or another phone, viewed right here: pictures, PDFs, text, video and sound, and
- * what's inside a zip. The file comes over into this phone's cache first; leaving stops it.
+ * One file from the Mac or another phone, viewed right here: pictures, PDFs, Markdown, spreadsheets, text,
+ * video and sound, and what's inside a zip. Swipe sideways for the files next to it. Only the file showing
+ * comes over into this phone's cache; swiping away or leaving stops it.
  */
 export function PreviewScreen({ navigation, route }: Props) {
   const remote = useRemote();
   const insets = useSafeAreaInsets();
-  const { entry, source, parent, local } = route.params;
+  const { entry: opened, source, parent, local, siblings } = route.params;
+  const files = useMemo(() => (siblings?.some((item) => item.path === opened.path) === true ? siblings : [opened]), [siblings, opened]);
+  const [start] = useState(() => Math.max(0, files.findIndex((item) => item.path === opened.path)));
+  const [at, setAt] = useState(start);
+  const entry = files[at] ?? opened;
   const kind = previewKind(entry.name);
-  const [copy, setCopy] = useState<Copy>(() => {
-    const here = local === undefined ? cachedPreview(entry, source) : new File(local);
-    if (here !== null) return { _tag: "ready", file: here };
-    return kind === "other" ? { _tag: "waiting" } : { _tag: "fetching", done: 0, total: entry.size };
-  });
+  const [copy, setCopy] = useState<Copy>(() => copyOf(entry, source, local));
+  /** A zoomed picture pans instead of swiping. */
+  const [zoomed, setZoomed] = useState(false);
+  const [page, setPage] = useState({ width: 0, height: 0 });
   /** Open with was tapped before the file was here: hand it over once it is. */
   const openAfter = useRef(false);
   const fetching = copy._tag === "fetching";
+
+  const measure = (event: LayoutChangeEvent) => setPage({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height });
+  const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = Math.round(event.nativeEvent.contentOffset.x / Math.max(1, page.width));
+    const nextEntry = files[next];
+    if (next === at || nextEntry === undefined) return;
+    openAfter.current = false;
+    setAt(next);
+    setZoomed(false);
+    setCopy(copyOf(nextEntry, source, undefined));
+  };
 
   useEffect(() => {
     if (!fetching) return;
@@ -135,9 +173,13 @@ export function PreviewScreen({ navigation, route }: Props) {
     if (copy._tag === "waiting" || kind === "other") return <FileCard entry={entry} onOpenWith={openElsewhere} onTransfer={transfer} />;
     switch (kind) {
       case "image":
-        return <ImageViewer uri={copy.file.uri} />;
+        return <ImageViewer uri={copy.file.uri} onZoom={setZoomed} />;
       case "pdf":
         return <PdfViewer path={pathOf(copy.file.uri)} bottom={bottom} />;
+      case "markdown":
+        return <MarkdownViewer file={copy.file} bottom={bottom} />;
+      case "sheet":
+        return <SheetViewer file={copy.file} bottom={bottom} />;
       case "text":
         return <TextViewer file={copy.file} bottom={bottom} />;
       case "video":
@@ -180,7 +222,26 @@ export function PreviewScreen({ navigation, route }: Props) {
           </T>
         </View>
       </View>
-      <View style={styles.body}>{body}</View>
+      <View style={styles.body} onLayout={measure}>
+        {page.width === 0 ? null : (
+          <FlatList
+            data={files}
+            keyExtractor={pathKey}
+            horizontal
+            pagingEnabled
+            scrollEnabled={files.length > 1 && !zoomed}
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={start}
+            getItemLayout={(_, index) => ({ length: page.width, offset: page.width * index, index })}
+            initialNumToRender={1}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            extraData={body}
+            onMomentumScrollEnd={settle}
+            renderItem={({ item, index }) => <View style={page}>{index === at ? body : <Peek entry={item} source={source} />}</View>}
+          />
+        )}
+      </View>
     </View>
   );
 }

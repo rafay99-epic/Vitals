@@ -3,6 +3,7 @@ import { useState } from "react";
 import { type LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 
 import { curve } from "../ui/index.ts";
 
@@ -10,9 +11,17 @@ const MAX_SCALE = 6;
 const DOUBLE_TAP_SCALE = 2.5;
 const SETTLE = { duration: 220, easing: curve.out };
 
-/** A picture filling the screen. Pinch to zoom, drag to pan while zoomed, double tap to zoom in or back out. */
-export function ImageViewer({ uri }: { readonly uri: string }) {
+/**
+ * A picture filling the screen. Pinch to zoom, drag to pan while zoomed, double tap to zoom in or back out.
+ * Dragging is off at normal size, so a swipe goes to the screen around it; `onZoom` says when that changes.
+ */
+export function ImageViewer({ uri, onZoom }: { readonly uri: string; readonly onZoom?: (zoomed: boolean) => void }) {
   const [box, setBox] = useState({ width: 0, height: 0 });
+  const [zoomed, setZoomed] = useState(false);
+  const zoomTo = (value: boolean) => {
+    setZoomed(value);
+    onZoom?.(value);
+  };
   const scale = useSharedValue(1);
   const startScale = useSharedValue(1);
   const x = useSharedValue(0);
@@ -43,9 +52,11 @@ export function ImageViewer({ uri }: { readonly uri: string }) {
     })
     .onEnd(() => {
       if (scale.get() < 1) scale.set(withTiming(1, SETTLE));
+      scheduleOnRN(zoomTo, scale.get() > 1.01);
     });
 
   const pan = Gesture.Pan()
+    .enabled(zoomed)
     .averageTouches(true)
     .onStart(() => {
       startX.set(x.get());
@@ -60,12 +71,13 @@ export function ImageViewer({ uri }: { readonly uri: string }) {
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
-      const zoomed = scale.get() > 1.01;
-      scale.set(withTiming(zoomed ? 1 : DOUBLE_TAP_SCALE, SETTLE));
-      if (zoomed) {
+      const wasZoomed = scale.get() > 1.01;
+      scale.set(withTiming(wasZoomed ? 1 : DOUBLE_TAP_SCALE, SETTLE));
+      if (wasZoomed) {
         x.set(withTiming(0, SETTLE));
         y.set(withTiming(0, SETTLE));
       }
+      scheduleOnRN(zoomTo, !wasZoomed);
     });
 
   const moved = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }, { translateY: y.get() }, { scale: scale.get() }] }));
