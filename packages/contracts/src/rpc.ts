@@ -37,6 +37,7 @@ import {
   FsTrashResult,
 } from "./fs.ts";
 import { GuardSettings, GuardState } from "./guard.ts";
+import { TerminalAttachInput, TerminalEvent, TerminalIdInput, TerminalInfo, TerminalList, TerminalSize, TerminalWriteInput } from "./terminal.ts";
 import { LanKey, NonNegativeInt } from "./ids.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, StatsLiveInput } from "./stats.ts";
@@ -154,6 +155,15 @@ export const FsRename = Rpc.make("fs.rename", { payload: FsRenameInput, success:
 export const FsFolder = Rpc.make("fs.folder", { payload: FsFolderInput, success: FsEntry, error: FsError });
 export const FsTrash = Rpc.make("fs.trash", { payload: FsPathsInput, success: FsTrashResult, error: FsError });
 
+const TerminalError = Schema.Union([AuthError, Unavailable, CommandRejected]);
+
+export const TerminalListRpc = Rpc.make("terminal.list", { payload: Empty, success: TerminalList, error: TerminalError });
+export const TerminalOpen = Rpc.make("terminal.open", { payload: TerminalSize, success: TerminalInfo, error: TerminalError });
+export const TerminalAttach = Rpc.make("terminal.attach", { payload: TerminalAttachInput, success: TerminalEvent, error: TerminalError, stream: true });
+export const TerminalWrite = Rpc.make("terminal.write", { payload: TerminalWriteInput, success: Empty, error: TerminalError });
+export const TerminalResize = Rpc.make("terminal.resize", { payload: TerminalAttachInput, success: Empty, error: TerminalError });
+export const TerminalClose = Rpc.make("terminal.close", { payload: TerminalIdInput, success: Empty, error: TerminalError });
+
 export const ActivityIngest = Rpc.make("activity.ingest", {
   payload: ActivityIngestInput,
   success: ActivityIngestResult,
@@ -210,6 +220,12 @@ export const VitalsRpc = RpcGroup.make(
   FsRename,
   FsFolder,
   FsTrash,
+  TerminalListRpc,
+  TerminalOpen,
+  TerminalAttach,
+  TerminalWrite,
+  TerminalResize,
+  TerminalClose,
   ActivityIngest,
   DeviceLanKey,
   DeviceForget,

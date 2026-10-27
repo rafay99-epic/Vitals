@@ -17,6 +17,7 @@ import * as DropStore from "./drop/DropStore.ts";
 import { dropRoutes } from "./drop/routes.ts";
 import * as EventLog from "./events/EventLog.ts";
 import * as FsService from "./fs/FsService.ts";
+import * as TerminalService from "./terminal/TerminalService.ts";
 import { apiRoutes, staticRoutes } from "./http/routes.ts";
 import * as Lan from "./lan/Lan.ts";
 import * as Hubs from "./live/Hubs.ts";
@@ -54,6 +55,7 @@ const makeServices = (config: GatewayConfigShape, deps: AppDependencies) => {
     Serve.layer,
     ClipStore.layer(remoteDb),
     FsService.layer,
+    TerminalService.layer,
   ).pipe(Layer.provideMerge(evented));
   const ready = Layer.effectDiscard(
     Effect.gen(function* () {

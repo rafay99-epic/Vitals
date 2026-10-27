@@ -500,10 +500,11 @@ enum FromApp: Equatable, Sendable {
     case dropPause(id: String, paused: Bool)
     case dropPolicy(DropPolicy)
     case fsPolicy(access: String)
+    case terminalEnd(id: String?, deviceId: String?)
 }
 
 extension FromApp: Encodable {
-    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind, clip, policy, to, files, accept, paused, access }
+    private enum Keys: String, CodingKey { case t, v, mac, keepAwake, data, receipt, event, id, ok, error, op, level, kind, clip, policy, to, files, accept, paused, access, deviceId }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -571,6 +572,10 @@ extension FromApp: Encodable {
         case let .fsPolicy(access):
             try c.encode("fsPolicy", forKey: .t)
             try c.encode(access, forKey: .access)
+        case let .terminalEnd(id, deviceId):
+            try c.encode("terminalEnd", forKey: .t)
+            try c.encode(Nullable(wrappedValue: id), forKey: .id)
+            try c.encode(Nullable(wrappedValue: deviceId), forKey: .deviceId)
         }
     }
 }

@@ -374,6 +374,16 @@ enum ToApp: Equatable, Sendable {
     case drop(Drop)
     case dropRemoved(id: String)
     case dropReceived(id: String, from: DropPeer, files: [ReceivedDropFile], dest: String?)
+    case terminals([MacTerminal])
+}
+
+struct MacTerminal: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let title: String
+    let deviceId: String
+    let deviceName: String
+    let startedAt: Int64
+    let attached: Int
 }
 
 /// What the gateway's clip history holds right now, for Settings.
@@ -384,7 +394,7 @@ struct ClipStats: Codable, Equatable, Sendable {
 }
 
 extension ToApp: Decodable {
-    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt, stats, drop, from, files, dest }
+    private enum Keys: String, CodingKey { case t, v, id, deviceId, deviceName, command, q, ok, error, status, prompt, stats, drop, from, files, dest, sessions }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -419,6 +429,7 @@ extension ToApp: Decodable {
                 files: try c.decode([ReceivedDropFile].self, forKey: .files),
                 dest: try c.decodeIfPresent(String.self, forKey: .dest)
             )
+        case "terminals": self = .terminals(try c.decode([MacTerminal].self, forKey: .sessions))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .t, in: c, debugDescription: "unknown message \(other)")
         }

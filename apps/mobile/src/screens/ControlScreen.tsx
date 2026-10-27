@@ -145,8 +145,9 @@ function Share() {
       )}
       <IncomingLines onOpen={files} />
       <TileGrid>
-        <Tile half icon="clipboard" label="Clipboard" disabled={!access.operate && !access.clipboard} onPress={open} />
-        <Tile half icon="files" label="Files" onPress={files} />
+        <Tile icon="clipboard" label="Clipboard" disabled={!access.operate && !access.clipboard} onPress={open} />
+        <Tile icon="files" label="Files" onPress={files} />
+        <Tile icon="terminal" label="Terminal" onPress={() => navigation.navigate("Terminal")} />
         <Tile half icon="link" label="Open link" disabled={!access.operate} onPress={() => sheet.open(LinkSheet)} />
         <Tile half icon="ping" label="Find Mac" disabled={!access.operate} onPress={() => void send(remote, { _tag: "Locate" }, "Playing a sound on your Mac")} />
       </TileGrid>

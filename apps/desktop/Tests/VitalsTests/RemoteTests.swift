@@ -82,12 +82,14 @@ struct BridgeFixtureTests {
 
     @Test func fileBrowsingMessagesMatchTheContractFixtures() throws {
         let expected = try fixture("from-app.json").compactMap { $0 as? NSDictionary }
-        #expect(try encoded(.fsPolicy(access: "everything")) == expected[expected.count - 2])
+        let message = { (t: String) in expected.first { ($0["t"] as? String) == t && (t != "result" || ($0["id"] as? String) == "q-fs-1") } }
+        #expect(try encoded(.fsPolicy(access: "everything")) == message("fsPolicy"))
+        #expect(try encoded(.terminalEnd(id: nil, deviceId: "dev-1")) == message("terminalEnd"))
         let thumbs: [WireThumb] = [
             WireThumb(path: "/Users/abdul/Downloads/IMG_0042.HEIC", jpeg: "/9j/4AAQ"),
             WireThumb(path: "/Users/abdul/Downloads/notes.bin", jpeg: nil),
         ]
-        #expect(try encoded(.result(id: "q-fs-1", ok: .fsThumbs(thumbs), error: nil)) == expected[expected.count - 1])
+        #expect(try encoded(.result(id: "q-fs-1", ok: .fsThumbs(thumbs), error: nil)) == message("result"))
 
         let line = #"{"t":"dropReceived","id":"d-1","from":{"_tag":"Device","deviceId":"dev-1","name":"Pixel 9"},"files":[],"dest":"/Users/abdul/Documents"}"#
         guard case let .dropReceived(_, _, _, dest) = try JSONDecoder().decode(ToApp.self, from: Data(line.utf8)) else {
