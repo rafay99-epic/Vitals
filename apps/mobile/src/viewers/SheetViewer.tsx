@@ -97,9 +97,10 @@ export function SheetViewer({ file, bottom }: { readonly file: File; readonly bo
   return (
     <View style={styles.fill}>
       {book.book.names.length > 1 ? (
+        // Sheet names are unique within a workbook, so each tab is keyed by its name.
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
           {book.book.names.map((name, index) => (
-            <Tap key={`${name}${String(index)}`} onPress={() => setPicked(index)} accessibilityRole="tab" accessibilityState={{ selected: index === picked }} hitSlop={6}>
+            <Tap key={name} onPress={() => setPicked(index)} accessibilityRole="tab" accessibilityState={{ selected: index === picked }} hitSlop={6}>
               <T v="strong" color={index === picked ? color.ink : color.mute}>
                 {name}
               </T>
