@@ -95,17 +95,20 @@ class SessionManager {
 
   /** A link from outside (a deep link, the system camera). Any app or web page can send one, so it only pairs once the user confirms. */
   receive(link: PairingLink | null): void {
-    if (link !== null && !this.usedCodes.has(link.code)) this.offer.set(link);
+    if (link === null || this.usedCodes.has(link.code)) return;
+    this.pairing.set({ busy: false, error: null });
+    this.offer.set(link);
   }
 
-  acceptOffer(): void {
+  /** Pairs with the offered link. The offer stays up until it works, so a failure shows where the user tapped. */
+  async acceptOffer(): Promise<void> {
     const link = this.offer.get();
-    this.offer.set(null);
-    void this.handleLink(link);
+    if (link !== null && (await this.handleLink(link))) this.offer.set(null);
   }
 
   declineOffer(): void {
     this.offer.set(null);
+    this.pairing.set({ busy: false, error: null });
   }
 
   async handleLink(link: PairingLink | null, quiet = false): Promise<boolean> {

@@ -5,7 +5,7 @@ import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMac } from "./lib/remote.ts";
-import { BigButton, color, SheetCancel, SheetHeader } from "./ui/index.ts";
+import { BigButton, color, SheetCancel, SheetHeader, T } from "./ui/index.ts";
 
 const hostOf = (baseUrl: string): string => {
   try {
@@ -26,6 +26,7 @@ function Replaces() {
  */
 export function PairOffer() {
   const offer = useStore(sessions.offer);
+  const pairing = useStore(sessions.pairing);
   const session = useSession();
   const insets = useSafeAreaInsets();
   if (offer === null) return null;
@@ -34,7 +35,12 @@ export function PairOffer() {
       <Pressable style={styles.scrim} onPress={() => sessions.declineOffer()} accessibilityLabel="Cancel" />
       <View style={[styles.panel, { paddingBottom: insets.bottom + 16 }]}>
         {session.status === "paired" ? <Replaces /> : <SheetHeader title="Pair with this Mac?" detail={`The link points to ${hostOf(offer.baseUrl)}.`} />}
-        <BigButton label="Pair" onPress={() => sessions.acceptOffer()} />
+        {pairing.error === null ? null : (
+          <T v="small" color={color.red} style={styles.error}>
+            {pairing.error}
+          </T>
+        )}
+        <BigButton label={pairing.busy ? "Pairing" : pairing.error === null ? "Pair" : "Try again"} disabled={pairing.busy} onPress={() => void sessions.acceptOffer()} />
         <SheetCancel onPress={() => sessions.declineOffer()} />
       </View>
     </Modal>
@@ -43,5 +49,6 @@ export function PairOffer() {
 
 const styles = StyleSheet.create({
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: color.scrim },
+  error: { paddingHorizontal: 20, paddingBottom: 12 },
   panel: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: color.s2, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 22 },
 });
