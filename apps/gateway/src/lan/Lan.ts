@@ -10,7 +10,7 @@ import {
   type LanPairResult,
   type LanTls,
   type MacRoutes,
-  DEFAULT_PAIRED_SCOPES,
+  pairedScopes,
   DROP_LAN_TLS_OFFSET,
   LAN_PROLOGUE,
   LanOpen,
@@ -187,7 +187,7 @@ export const layer = Layer.effect(
         t: "paired",
         deviceId: created.deviceId,
         token: created.token,
-        scopes: DEFAULT_PAIRED_SCOPES,
+        scopes: pairedScopes(prompt.device.platform),
         expiresAt: created.expiresAt,
         routes: routes(null),
       });

@@ -53,7 +53,14 @@ const CALM = process.env["FAKE_MAC_SCENE"] === "calm";
 const decodeToApp = Schema.decodeUnknownSync(Schema.fromJsonString(ToAppSchema));
 const queue = Effect.runSync(Queue.unbounded<string>());
 const emit = (message: object): void => void Effect.runSync(Queue.offer(queue, JSON.stringify(message)));
-const ALL_SCOPES = ["read", "operate", "destructive", "clipboard", "files", "fsRead", "fsWrite"] as const;
+const ALL_SCOPES = ["read", "operate", "destructive", "clipboard", "files", "fsRead", "fsWrite", "terminal"] as const;
+
+// SIGHUP plays the Mac's own volume keys: it steps the volume so phones can be seen following.
+let audio = { volume: 0.4 as number | null, muted: false as boolean | null };
+process.on("SIGHUP", () => {
+  audio = { ...audio, volume: Math.round((((audio.volume ?? 0) + 0.1) % 1) * 100) / 100 };
+  emit({ t: "audio", data: audio });
+});
 
 const wobble = (base: number, spread: number): number => Math.max(0, base + (Math.random() - 0.5) * spread);
 
@@ -194,8 +201,9 @@ const sample = () => {
       { id: 1, rpm: CALM ? 0 : wobble(calmApplied ? 1300 : 2380, 120), minRpm: 1200, maxRpm: 5800 },
     ],
     memory: { totalBytes: 16 * GB, usedBytes: wobble((CALM ? 12.4 : 14.1) * GB, 0.2 * GB), appBytes: 8 * GB, wiredBytes: 2.5 * GB, compressedBytes: 1.5 * GB, cachedBytes: 2 * GB, freeBytes: 1 * GB, swapUsedBytes: (CALM ? 0.3 : 2.1) * GB, swapTotalBytes: 4 * GB, pressure: CALM ? "normal" : "warning" },
-    battery: { percent: 85, charging: CALM, externalPower: CALM, watts: CALM ? wobble(23, 4) : wobble(-23, 4), timeRemainingMinutes: 190, cycleCount: 212, healthPercent: 94, temperatureC: 33, condition: "Normal", fullyCharged: false, designCapacityMah: 7594, maxCapacityMah: 7139, voltage: 12.7, amperage: CALM ? 1.8 : -1.8, ...(CALM ? { adapter: { watts: 96, name: "96W USB-C Power Adapter", wireless: false, deliveredWatts: 41.2, voltage: 20, amperage: 2.06 } } : {}) },
+    battery: { percent: 85, charging: CALM, externalPower: CALM, watts: CALM ? wobble(23, 4) : wobble(-23, 4), timeRemainingMinutes: 190, cycleCount: 212, healthPercent: 94, temperatureC: 33, condition: "Normal", fullyCharged: false, designCapacityMah: 7594, maxCapacityMah: 7139, remainingCapacityMah: 4420, designCycleCount: 1000, voltage: 12.7, amperage: CALM ? 1.8 : -1.8, ...(CALM ? { adapter: { watts: 96, name: "96W USB-C Power Adapter", wireless: false, deliveredWatts: 41.2, voltage: 20, amperage: 2.06 } } : {}) },
     power: { cpuWatts: wobble(16 * busy, 4), gpuWatts: wobble(4, 2), aneWatts: 0.2 },
+    systemWatts: wobble(28 * busy, 6),
     network: networkSample(wobble(2.1 * MB, MB), wobble(300_000, 200_000)),
     disk: { readBytesPerSec: wobble(4 * MB, 3 * MB), writeBytesPerSec: wobble(2 * MB, 2 * MB), freeBytes: 412 * GB, totalBytes: 994 * GB, volume: "Macintosh HD", health: { model: "APPLE SSD AP1024Z", wearPercent: 3, readBytes: 61e12, writtenBytes: 38e12, powerOnHours: 2140, unsafeShutdowns: 6, sparePercent: 100, celsius: 41, warning: false } },
   };
@@ -258,6 +266,14 @@ const apply = (message: Extract<ToApp, { t: "cmd" }>) => {
       return done();
     case "AllowSleep":
       setKeepAwake({ active: false, display: false, until: null, whileProcess: null });
+      return done();
+    case "SetVolume":
+      audio = { ...audio, volume: command.level };
+      emit({ t: "audio", data: audio });
+      return done();
+    case "SetMuted":
+      audio = { ...audio, muted: command.muted };
+      emit({ t: "audio", data: audio });
       return done();
     case "QuitApp":
     case "ForceQuitApp": {
@@ -412,6 +428,7 @@ const write = (line: string): void => {
   switch (message.t) {
     case "hello":
       emit({ t: "hello", v: 1, mac: MAC, keepAwake });
+      emit({ t: "audio", data: audio });
       // Give the gateway's event log a moment to subscribe before raising the alert.
       if (alertOpen) setTimeout(() => emit({ t: "event", event: { _tag: "AlertRaised", at: Date.now(), alert: agentAlert } }), 3_000);
       seedClips();

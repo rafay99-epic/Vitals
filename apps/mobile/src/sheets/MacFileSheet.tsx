@@ -1,6 +1,6 @@
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
-import type { FsEntry } from "@vitals/contracts";
+import type { DeviceId, FsEntry } from "@vitals/contracts";
 import { formatBytes } from "@vitals/shared";
 import type { ComponentType } from "react";
 import { Image, StyleSheet } from "react-native";
@@ -8,7 +8,7 @@ import { Image, StyleSheet } from "react-native";
 import { savedTo } from "../lib/drops.ts";
 import { ActionRow, Hold, sheet, SheetCancel, SheetHeader, toast } from "../ui/index.ts";
 
-export const macFileSheet = (entry: FsEntry, canChange: boolean): ComponentType =>
+export const macFileSheet = (entry: FsEntry, canChange: boolean, phone: { readonly device: DeviceId; readonly name: string } | null = null): ComponentType =>
   function MacFileSheet() {
     const remote = useRemote();
     const thumb = useStore(remote.files.thumbs).get(entry.path) ?? null;
@@ -16,6 +16,12 @@ export const macFileSheet = (entry: FsEntry, canChange: boolean): ComponentType 
 
     const get = () => {
       sheet.close();
+      if (phone !== null) {
+        void remote.files.pull(phone.device, [entry.path]).then((outcome) =>
+          toast.show(outcome.ok ? `${phone.name} is sending ${entry.name} through your Mac` : outcome.message, { tone: outcome.ok ? "ok" : "bad" }),
+        );
+        return;
+      }
       void remote.drops.pull([entry.path]).then((drop) => {
         if (drop !== null) toast.show(`Getting ${entry.name} from your Mac`);
       });
@@ -35,10 +41,10 @@ export const macFileSheet = (entry: FsEntry, canChange: boolean): ComponentType 
 
     return (
       <>
-        <SheetHeader title={entry.name} detail={`${size} · on your Mac`} />
+        <SheetHeader title={entry.name} detail={`${size} · on ${phone === null ? "your Mac" : phone.name}`} />
         {thumb === null ? null : <Image source={{ uri: thumb }} style={styles.preview} resizeMode="contain" accessibilityIgnoresInvertColors />}
         <ActionRow icon="down" label="Get it" detail={`${size} · to ${savedTo}`} onPress={get} />
-        <ActionRow icon="mac" label="Open on the Mac" onPress={openOnMac} />
+        {phone === null ? <ActionRow icon="mac" label="Open on the Mac" onPress={openOnMac} /> : null}
         {canChange ? <Hold label="Hold to move to the Mac's Trash" onCommit={trash} small /> : null}
         <SheetCancel />
       </>

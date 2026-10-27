@@ -6,6 +6,7 @@ import {
   type DropEvent,
   type DropIdInput,
   type DropOfferInput,
+  type DropPeer,
   type DropOffered,
   type DropPolicy,
   type DropReceivedInput,
@@ -254,8 +255,10 @@ export const layer = (database: Database) =>
         drop.error = error;
         save(drop);
         logEnd(drop);
-        if (drop.incoming && state === "done") deliver(drop);
+        if (drop.incoming && state === "done" && drop.relay !== null) Effect.runFork(relayOut(drop, drop.relay));
+        else if (drop.incoming && state === "done") deliver(drop);
         else if (drop.incoming) void files.removeDrop(drop.id);
+        if (!drop.incoming && drop.source !== null) void files.removeDrop(drop.source);
         retain();
       };
 
@@ -345,15 +348,18 @@ export const layer = (database: Database) =>
         macReady = true;
         for (const drop of drops.values()) {
           tell({ t: "drop", drop: wire(drop) });
-          if (drop.incoming && drop.state === "done" && (yield* Effect.promise(() => files.hasStaged(drop.id)))) deliver(drop);
+          if (!drop.incoming || drop.state !== "done" || !(yield* Effect.promise(() => files.hasStaged(drop.id)))) continue;
+          if (drop.relay === null) deliver(drop);
+          else if (![...drops.values()].some((other) => other.source === drop.id)) yield* relayOut(drop, drop.relay);
         }
       });
 
-      const sendFromMac = (to: ReadonlyArray<DeviceId>, list: ReadonlyArray<MacDropFile>) =>
+      const sendFromMac = (to: ReadonlyArray<DeviceId>, list: ReadonlyArray<MacDropFile>, source: string | null = null, from: DropPeer | null = null) =>
         Effect.gen(function* () {
           const sizes = yield* Effect.promise(() => Promise.all(list.map((file) => files.originSize(file.origin))));
           const missing = list.find((_, index) => sizes[index] === null);
           const online = yield* connections.connectedDevices;
+          let started = false;
           for (const deviceId of new Set(to)) {
             const device = store.device(deviceId);
             if (device === null || device.revokedAt !== null) {
@@ -373,7 +379,7 @@ export const layer = (database: Database) =>
               id: makeDropId(newId()),
               deviceId: device.id,
               incoming: false,
-              from: { _tag: "Mac", name: macName },
+              from: from ?? { _tag: "Mac", name: macName },
               to: { _tag: "Device", deviceId: device.id, name: device.name },
               files: list.map((file, index) => fileRecord(index, file, sizes[index] ?? file.size, null, file.origin)),
               createdAt: now,
@@ -383,11 +389,24 @@ export const layer = (database: Database) =>
               startedAt: null,
               error: refusal,
               dest: null,
+              relay: null,
+              source,
             });
             add(drop);
-            if (refusal === null) for (const file of drop.files) Queue.offerUnsafe(hashJobs, { drop, file });
+            if (refusal !== null) continue;
+            started = true;
+            for (const file of drop.files) Queue.offerUnsafe(hashJobs, { drop, file });
           }
+          if (source !== null && !started) yield* Effect.promise(() => files.removeDrop(source));
         });
+
+      const relayOut = (drop: DropRecord, to: DeviceId) =>
+        sendFromMac(
+          [to],
+          drop.files.map((file) => ({ name: file.name, path: file.path, size: file.size, mime: file.mime, origin: files.staged(drop.id, file.id) })),
+          drop.id,
+          drop.from,
+        );
 
       const decide = (id: string, accept: boolean) => {
         const drop = drops.get(id);
@@ -505,6 +524,8 @@ export const layer = (database: Database) =>
             startedAt: asks ? null : now,
             error: null,
             dest: input.dest ?? null,
+            relay: input.relay ?? null,
+            source: null,
           });
           yield* Effect.tryPromise({ try: () => files.ensure(drop.id), catch: () => rejected("The Mac could not get ready for this drop") });
           add(drop);
@@ -530,6 +551,8 @@ export const layer = (database: Database) =>
             startedAt: now,
             error: null,
             dest: null,
+            relay: null,
+            source: null,
           });
           add(drop);
           for (const file of drop.files) Queue.offerUnsafe(hashJobs, { drop, file });

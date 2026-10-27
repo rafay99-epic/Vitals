@@ -27,6 +27,8 @@ import { runTunnelOnDemand } from "./tunnel.ts";
 
 const SUSPEND_AFTER_MS = 10_000;
 
+export const stayConnected = new Store<boolean>(false);
+
 export type Session =
   | { readonly status: "loading" }
   | { readonly status: "unpaired" }
@@ -283,18 +285,28 @@ class SessionManager {
       });
     });
     let suspendTimer: ReturnType<typeof setTimeout> | null = null;
+    const cancelSuspend = () => {
+      if (suspendTimer !== null) clearTimeout(suspendTimer);
+      suspendTimer = null;
+    };
+    const suspendLater = () => {
+      if (suspendTimer === null && !stayConnected.get()) suspendTimer = setTimeout(() => remote.connection.suspend(), SUSPEND_AFTER_MS);
+    };
     const appState = AppState.addEventListener("change", (next) => {
       if (next === "active") {
         syncShade();
-        if (suspendTimer !== null) clearTimeout(suspendTimer);
-        suspendTimer = null;
+        cancelSuspend();
         remote.record("info", "client.app.fg");
         remote.connection.wake("foreground");
       } else if (suspendTimer === null) {
         remote.record("info", "client.app.bg");
         void remote.flush();
-        suspendTimer = setTimeout(() => remote.connection.suspend(), SUSPEND_AFTER_MS);
+        suspendLater();
       }
+    });
+    const stopHold = stayConnected.subscribe(() => {
+      if (stayConnected.get()) cancelSuspend();
+      else if (AppState.currentState !== "active") suspendLater();
     });
     const network = Network.addNetworkStateListener((next) => {
       trackLocalNetwork(next);
@@ -304,7 +316,8 @@ class SessionManager {
     this.teardown = () => {
       active = false;
       stopTunnelWatch();
-      if (suspendTimer !== null) clearTimeout(suspendTimer);
+      cancelSuspend();
+      stopHold();
       appState.remove();
       network.remove();
       stopCalm();

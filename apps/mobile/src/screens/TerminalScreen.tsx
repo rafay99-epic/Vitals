@@ -1,20 +1,37 @@
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { type Line, type TerminalSession } from "@vitals/app/state/terminal.ts";
+import type { TerminalSession, TerminalSink } from "@vitals/app/state/terminal.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
-import { type TerminalId, type TerminalInfo, TERMINAL_LIMITS } from "@vitals/contracts";
+import { type Line, PALETTE, XtermScreen } from "@vitals/app/state/xtermScreen.ts";
+import { type TerminalId, type TerminalInfo, type TerminalSize, TERMINAL_LIMITS } from "@vitals/contracts";
 import * as Clipboard from "expo-clipboard";
-import * as LocalAuthentication from "expo-local-authentication";
-import { type ComponentRef, memo, useEffect, useRef, useState } from "react";
-import { type LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import { type ComponentRef, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Keyboard, type LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import Animated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { type TerminalSurfaceHandle, TerminalSurface, type TerminalTheme } from "../../modules/vitals-terminal/index.ts";
 import { useAccess } from "../lib/remote.ts";
 import { BackBar, BigButton, color, Empty, font, Icon, Note, T, Tap, toast } from "../ui/index.ts";
 
 const FONT_SIZE = 12;
 const LINE_HEIGHT = 16;
 const CHAR_WIDTH = FONT_SIZE * 0.6;
+const RESIZE_MS = 150;
 const UNLOCK_MS = 5 * 60 * 1000;
+const GATE_KEY = "vitals.remote.terminalGate";
+const GATE = { requireAuthentication: true, authenticationPrompt: "Unlock Terminal" } as const;
+const THEME: TerminalTheme = { background: color.bg, foreground: color.ink2, cursor: color.yellow, palette: PALETTE };
+
+const authenticate = async (): Promise<boolean> => {
+  if (!SecureStore.canUseBiometricAuthentication()) return true;
+  try {
+    if ((await SecureStore.getItemAsync(GATE_KEY, GATE)) === null) await SecureStore.setItemAsync(GATE_KEY, "1", GATE);
+    return true;
+  } catch {
+    return false;
+  }
+};
 const SENTINEL = " ";
 
 let unlockedAt = 0;
@@ -41,6 +58,117 @@ const control = (text: string): string => {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
+function useTyping(session: TerminalSession | null, after: () => void) {
+  const [ctrl, setCtrl] = useState(false);
+  const send = (data: string) => {
+    if (ctrl && data.length === 1) {
+      session?.input(control(data));
+      setCtrl(false);
+    } else {
+      session?.input(data);
+    }
+    after();
+  };
+  return { ctrl, send, toggleCtrl: () => setCtrl((on) => !on) };
+}
+
+function Keys({ onKey, ctrl, onCtrl, onKeyboard }: { readonly onKey: (data: string) => void; readonly ctrl: boolean; readonly onCtrl: () => void; readonly onKeyboard: () => void }) {
+  const paste = () =>
+    void Clipboard.getStringAsync().then((text) => {
+      if (text.length > 0) onKey(text.replace(/\r?\n/g, "\r").slice(0, TERMINAL_LIMITS.write));
+    });
+  return (
+    <View style={styles.keys}>
+      <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerStyle={styles.keysRow}>
+        {KEYS.map((key) => (
+          <Pressable
+            key={key.label}
+            onPress={() => (key.data === null ? onCtrl() : onKey(key.data))}
+            accessibilityRole="button"
+            accessibilityLabel={key.label}
+            style={[styles.key, key.data === null && ctrl ? styles.keyOn : null]}
+          >
+            <Text style={[styles.keyText, key.label === "^C" ? { color: color.red } : null, key.data === null && ctrl ? { color: color.bg } : null]}>{key.label}</Text>
+          </Pressable>
+        ))}
+        <Pressable onPress={paste} accessibilityRole="button" accessibilityLabel="Paste" style={styles.key}>
+          <Text style={styles.keyText}>paste</Text>
+        </Pressable>
+      </ScrollView>
+      <Pressable onPress={onKeyboard} accessibilityRole="button" accessibilityLabel="Show or hide the keyboard" style={[styles.key, styles.keyboardKey]}>
+        <Icon name="keyboard" size={16} color={color.ink2} />
+      </Pressable>
+    </View>
+  );
+}
+
+function AboveKeyboard({ children }: { readonly children: ReactNode }) {
+  const keyboard = useAnimatedKeyboard();
+  const insets = useSafeAreaInsets();
+  const lift = useAnimatedStyle(() => ({ paddingBottom: Math.max(keyboard.height.value, insets.bottom) }));
+  return <Animated.View style={[styles.session, lift]}>{children}</Animated.View>;
+}
+
+function useSessionFor(info: TerminalInfo, size: TerminalSize | null): { readonly session: TerminalSession | null; readonly first: TerminalSize | null } {
+  const remote = useRemote();
+  const [first, setFirst] = useState<TerminalSize | null>(null);
+  if (first === null && size !== null) setFirst(size);
+  const session = useMemo(() => (first === null ? null : remote.terminals.session(info.id, first)), [remote, info.id, first]);
+  useEffect(() => {
+    if (session === null || size === null) return;
+    const timer = setTimeout(() => session.resize(size), RESIZE_MS);
+    return () => clearTimeout(timer);
+  }, [session, size]);
+  return { session, first };
+}
+
+const toggleKeyboard = (show: () => void, hide: () => void) => (Keyboard.isVisible() ? hide() : show());
+
+function NativeSession({ info }: { readonly info: TerminalInfo }) {
+  const surface = useRef<TerminalSurfaceHandle>(null);
+  const [size, setSize] = useState<TerminalSize | null>(null);
+  const { session } = useSessionFor(info, size);
+  const typing = useTyping(session, () => void surface.current?.scrollToBottom());
+
+  useEffect(() => {
+    if (session === null) return;
+    const sink: TerminalSink = { reset: () => void surface.current?.reset(), write: (data) => void surface.current?.feed(data) };
+    session.attach(sink);
+    void surface.current?.focus();
+    return () => session.detach();
+  }, [session]);
+
+  if (TerminalSurface === null) return null;
+  return (
+    <AboveKeyboard>
+      <TerminalSurface
+        ref={surface}
+        style={styles.surface}
+        fontSize={FONT_SIZE}
+        theme={THEME}
+        onInput={(event) => typing.send(event.nativeEvent.data)}
+        onResize={(event) => {
+          const { cols, rows } = event.nativeEvent;
+          setSize((current) => (current?.cols === cols && current.rows === rows ? current : { cols, rows }));
+        }}
+      />
+      <Ended session={session} />
+      <Keys onKey={typing.send} ctrl={typing.ctrl} onCtrl={typing.toggleCtrl} onKeyboard={() => toggleKeyboard(() => void surface.current?.focus(), () => void surface.current?.blur())} />
+    </AboveKeyboard>
+  );
+}
+
+function Ended({ session }: { readonly session: TerminalSession | null }) {
+  if (session === null) return null;
+  return <EndedStatus session={session} />;
+}
+
+function EndedStatus({ session }: { readonly session: TerminalSession }) {
+  const status = useStore(session.status);
+  if (!status.exited) return null;
+  return <T v="mono" color={color.dim} style={styles.exited}>{`Ended${status.exitCode === null ? "" : ` · code ${String(status.exitCode)}`}`}</T>;
+}
+
 const TermLine = memo(function TermLine({ line }: { readonly line: Line }) {
   return (
     <Text style={styles.line} numberOfLines={1}>
@@ -63,59 +191,33 @@ const TermLine = memo(function TermLine({ line }: { readonly line: Line }) {
   );
 });
 
-function Screen({ session }: { readonly session: TerminalSession }) {
-  const frame = useStore(session.frame);
+function Lines({ screen }: { readonly screen: XtermScreen }) {
+  const lines = useStore(screen.lines);
   return (
-    <View style={styles.grid} accessibilityRole="text" accessibilityLabel={frame.lines.map((line) => line.runs.map((run) => run.text).join("")).join("\n")}>
-      {frame.lines.map((line) => (
+    <View style={styles.grid} accessibilityRole="text" accessibilityLabel={lines.map((line) => line.runs.map((run) => run.text).join("")).join("\n")}>
+      {lines.map((line) => (
         <TermLine key={line.key} line={line} />
       ))}
-      {frame.exited ? <T v="mono" color={color.dim} style={styles.exited}>{`Ended${frame.exitCode === null ? "" : ` · code ${String(frame.exitCode)}`}`}</T> : null}
     </View>
   );
 }
 
-function Keys({ onKey, ctrl, onCtrl }: { readonly onKey: (data: string) => void; readonly ctrl: boolean; readonly onCtrl: () => void }) {
-  const paste = () =>
-    void Clipboard.getStringAsync().then((text) => {
-      if (text.length > 0) onKey(text.replace(/\r?\n/g, "\r").slice(0, TERMINAL_LIMITS.write));
-    });
-  return (
-    <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} style={styles.keys} contentContainerStyle={styles.keysRow}>
-      {KEYS.map((key) => (
-        <Pressable
-          key={key.label}
-          onPress={() => (key.data === null ? onCtrl() : onKey(key.data))}
-          accessibilityRole="button"
-          accessibilityLabel={key.label}
-          style={[styles.key, key.data === null && ctrl ? styles.keyOn : null]}
-        >
-          <Text style={[styles.keyText, key.label === "^C" ? { color: color.red } : null, key.data === null && ctrl ? { color: color.bg } : null]}>{key.label}</Text>
-        </Pressable>
-      ))}
-      <Pressable onPress={paste} accessibilityRole="button" accessibilityLabel="Paste" style={styles.key}>
-        <Text style={styles.keyText}>paste</Text>
-      </Pressable>
-    </ScrollView>
-  );
-}
-
-function Session({ info }: { readonly info: TerminalInfo }) {
-  const remote = useRemote();
-  const [size, setSize] = useState<{ readonly cols: number; readonly rows: number } | null>(null);
-  const [ctrl, setCtrl] = useState(false);
+function TextSession({ info }: { readonly info: TerminalInfo }) {
+  const [size, setSize] = useState<TerminalSize | null>(null);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
-  const session = size === null ? null : remote.terminals.session(info.id, size);
+  const { session, first } = useSessionFor(info, size);
+  const screen = useMemo(() => (session === null || first === null ? null : new XtermScreen(first, (data) => session.input(data))), [session, first]);
+  const typing = useTyping(session, () => undefined);
 
   useEffect(() => {
-    if (session === null) return;
-    session.attach();
+    if (session === null || screen === null) return;
+    session.attach(screen);
     return () => session.detach();
-  }, [session]);
+  }, [session, screen]);
 
   useEffect(() => {
-    if (session !== null && size !== null) session.resize(size);
-  }, [session, size]);
+    if (size !== null) screen?.resize(size);
+  }, [screen, size]);
 
   const measure = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -124,30 +226,21 @@ function Session({ info }: { readonly info: TerminalInfo }) {
     setSize((current) => (current?.cols === cols && current.rows === rows ? current : { cols, rows }));
   };
 
-  const send = (data: string) => {
-    if (ctrl && data.length === 1) {
-      session?.input(control(data));
-      setCtrl(false);
-      return;
-    }
-    session?.input(data);
-  };
-
   const typed = (text: string) => {
-    if (text.length < SENTINEL.length) send("\u007f");
-    else if (text.length > SENTINEL.length) send(text.slice(SENTINEL.length));
+    if (text.length < SENTINEL.length) typing.send("\u007f");
+    else if (text.length > SENTINEL.length) typing.send(text.slice(SENTINEL.length));
   };
 
   return (
-    <View style={styles.session}>
-      <Pressable style={styles.surface} onLayout={measure} onPress={() => input.current?.focus()} accessibilityHint="Opens the keyboard">
-        {session === null ? null : <Screen session={session} />}
+    <AboveKeyboard>
+      <Pressable style={styles.textSurface} onLayout={measure} onPress={() => input.current?.focus()} accessibilityHint="Opens the keyboard">
+        {screen === null ? null : <Lines screen={screen} />}
       </Pressable>
       <TextInput
         ref={input}
         value={SENTINEL}
         onChangeText={typed}
-        onSubmitEditing={() => send("\r")}
+        onSubmitEditing={() => typing.send("\r")}
         submitBehavior="submit"
         autoFocus
         autoCorrect={false}
@@ -159,15 +252,18 @@ function Session({ info }: { readonly info: TerminalInfo }) {
         style={styles.hiddenInput}
         accessibilityLabel="Type into the terminal"
       />
-      <Keys onKey={send} ctrl={ctrl} onCtrl={() => setCtrl((on) => !on)} />
-    </View>
+      <Ended session={session} />
+      <Keys onKey={typing.send} ctrl={typing.ctrl} onCtrl={typing.toggleCtrl} onKeyboard={() => toggleKeyboard(() => input.current?.focus(), () => input.current?.blur())} />
+    </AboveKeyboard>
   );
 }
 
+const Session = TerminalSurface === null ? TextSession : NativeSession;
+
 function Locked({ onUnlock }: { readonly onUnlock: () => void }) {
   const unlock = () =>
-    void LocalAuthentication.authenticateAsync({ promptMessage: "Unlock Terminal", disableDeviceFallback: false }).then((result) => {
-      if (!result.success) return;
+    void authenticate().then((ok) => {
+      if (!ok) return;
       unlockedAt = Date.now();
       onUnlock();
     });
@@ -231,7 +327,7 @@ export function TerminalScreen() {
   );
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 6, paddingBottom: insets.bottom }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 6 }]}>
       <View style={styles.bar}>
         <BackBar parent="Control" />
         {unlocked && access.terminal ? (
@@ -259,14 +355,16 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: color.line2, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 5, alignItems: "center", justifyContent: "center" },
   chipOn: { backgroundColor: color.yellow, borderColor: color.yellow },
   session: { flex: 1 },
-  surface: { flex: 1, paddingHorizontal: 8, paddingTop: 6, overflow: "hidden" },
+  surface: { flex: 1 },
+  textSurface: { flex: 1, paddingHorizontal: 8, paddingTop: 6, overflow: "hidden" },
   grid: { flex: 1 },
   line: { fontFamily: font.mono, fontSize: FONT_SIZE, lineHeight: LINE_HEIGHT, color: color.ink2, includeFontPadding: false },
-  exited: { paddingTop: 6 },
+  exited: { paddingHorizontal: 8, paddingVertical: 6 },
   hiddenInput: { position: "absolute", width: 1, height: 1, opacity: 0 },
-  keys: { flexGrow: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line2, backgroundColor: color.s1 },
+  keys: { flexDirection: "row", alignItems: "center", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line2, backgroundColor: color.s1 },
   keysRow: { gap: 6, paddingHorizontal: 8, paddingVertical: 6 },
   key: { minWidth: 36, height: 34, borderRadius: 8, backgroundColor: color.s3, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
+  keyboardKey: { marginHorizontal: 8 },
   keyOn: { backgroundColor: color.yellow },
   keyText: { fontFamily: font.mono, fontSize: 12, color: color.ink2 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 28 },

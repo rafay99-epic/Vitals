@@ -128,6 +128,8 @@ extension VitalsModel {
                     fullyCharged: $0.fullyCharged,
                     designCapacityMah: $0.designCapacity.flatMap { $0 > 0 ? $0 : nil },
                     maxCapacityMah: $0.maxCapacity.flatMap { $0 > 0 ? $0 : nil },
+                    remainingCapacityMah: $0.remainingCapacity.flatMap { $0 >= 0 ? $0 : nil },
+                    designCycleCount: $0.designCycleCount.flatMap { $0 > 0 ? $0 : nil },
                     voltage: $0.voltage,
                     amperage: $0.amperage,
                     adapter: $0.adapter.map {
@@ -139,6 +141,7 @@ extension VitalsModel {
         }
         if topics.contains("power") {
             sample.power = Nullable(wrappedValue: power.map { WirePower(cpuWatts: $0.cpuWatts, gpuWatts: $0.gpuWatts, aneWatts: $0.aneWatts) })
+            sample.systemWatts = systemWatts
         }
         if topics.contains("network"), let network {
             sample.network = WireNetwork(

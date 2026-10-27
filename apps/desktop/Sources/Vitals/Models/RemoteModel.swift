@@ -52,6 +52,7 @@ final class RemoteModel {
     @ObservationIgnored private let vitals: VitalsModel
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let power = PowerControl()
+    @ObservationIgnored private let audio = AudioWatch()
     @ObservationIgnored private lazy var router = CommandRouter(executor: SystemCommandExecutor(model: self))
     @ObservationIgnored private lazy var clipWatcher: ClipWatcher = {
         let watcher = ClipWatcher(directory: Self.clipsDirectory)
@@ -86,6 +87,9 @@ final class RemoteModel {
         share = ShareModel(settings: settings)
         guardEngine = PressureGuard(settings: settings.guardSettings)
         power.onKeepAwakeChange = { [weak self] state in self?.keepAwakeChanged(state) }
+        restoreKeepAwake()
+        audio.onChange = { [weak self] state in self?.send(.audio(WireAudio(volume: state.volume, muted: state.muted))) }
+        audio.start()
         vitals.onSampled = { [weak self] table in self?.sampled(table) }
         NotificationManager.shared.onRemoteAction = { [weak self] action in self?.handleNotificationAction(action) }
         configureRouter()
@@ -258,6 +262,7 @@ final class RemoteModel {
             state = .running
             lastGuardSent = nil
             send(.hello(mac: macInfo(), keepAwake: wireKeepAwake(keepAwake)))
+            send(.audio(WireAudio(volume: audio.state.volume, muted: audio.state.muted)))
             for alert in guardEngine.active { send(.event(.alertRaised(at: alert.raisedAt, alert: alert))) }
             sendClipPolicy()
             sendFsPolicy()
@@ -345,7 +350,7 @@ final class RemoteModel {
                 share.note("\(deviceName) moved \(trashed == 1 ? "1 item" : "\(trashed) items") to the Trash", "Put it back from the Trash in Finder.")
             }
         case let .fsOpen(path):
-            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            FileThumbs.show(path)
             send(.result(id: id, ok: .fsOpen, error: nil))
         }
     }
@@ -457,6 +462,7 @@ final class RemoteModel {
 
     func revoke(_ device: RemoteDevice) async {
         _ = try? await admin(.revokeDevice(device.id))
+        send(.terminalEnd(id: nil, deviceId: device.id))
         await refreshDevices()
     }
 
@@ -473,6 +479,26 @@ final class RemoteModel {
         terminals = sessions
     }
 
+    func phoneDevices() async -> [PhoneDevice] {
+        guard case let .fsDevices(devices)? = try? await admin(.fsDevices) else { return [] }
+        return devices
+    }
+
+    func phoneRoots(_ device: String) async throws -> [PhoneRoot] {
+        guard case let .fsRoots(roots) = try await admin(.fsRoots(device: device)) else { return [] }
+        return roots
+    }
+
+    func phoneList(_ device: String, path: String) async throws -> PhoneListing? {
+        guard case let .fsList(listing) = try await admin(.fsList(device: device, path: path, offset: 0)) else { return nil }
+        return listing
+    }
+
+    func pullFromPhone(_ device: String, paths: [String]) async throws -> Int {
+        guard case let .fsPull(files) = try await admin(.fsPull(device: device, paths: paths)) else { return 0 }
+        return files
+    }
+
     func endTerminal(_ id: String) {
         send(.terminalEnd(id: id, deviceId: nil))
     }
@@ -482,10 +508,16 @@ final class RemoteModel {
     }
 
     func setScope(_ scope: String, enabled: Bool, for device: RemoteDevice) async {
-        if scope == "terminal", !enabled { send(.terminalEnd(id: nil, deviceId: device.id)) }
-        guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
-        var scopes = Set(devices[index].scopes)
+        guard let current = devices.first(where: { $0.id == device.id }) else { return }
+        var scopes = Set(current.scopes)
         if enabled { scopes.insert(scope) } else { scopes.remove(scope) }
+        await setScopes(scopes, for: current)
+    }
+
+    /// Replaces a device's scopes in one admin call. Dropping `terminal` ends its open terminals.
+    func setScopes(_ scopes: Set<String>, for device: RemoteDevice) async {
+        guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
+        if devices[index].scopes.contains("terminal"), !scopes.contains("terminal") { send(.terminalEnd(id: nil, deviceId: device.id)) }
         let next = Array(scopes).sorted()
         devices[index].scopes = next
         _ = try? await admin(.setScopes(deviceId: device.id, scopes: next))
@@ -539,7 +571,7 @@ final class RemoteModel {
             adminWaiters[id] = continuation
             send(.admin(id: id, op: op))
             Task { [weak self] in
-                try? await Task.sleep(for: .seconds(10))
+                try? await Task.sleep(for: .seconds(20))
                 self?.adminWaiters.removeValue(forKey: id)?.resume(throwing: AdminFailure(message: "The gateway did not answer"))
             }
         }
@@ -775,12 +807,32 @@ final class RemoteModel {
         return nil
     }
 
+    /// The saved keep-awake to re-arm at launch: nil when none was saved or it
+    /// already ran out. Stays tied to a process aren't saved.
+    static func savedKeepAwake(_ settings: AppSettings, now: Date = Date()) -> (until: Date?, display: Bool)? {
+        guard settings.keepAwakeActive else { return nil }
+        let until = settings.keepAwakeUntil > 0 ? Date(timeIntervalSince1970: settings.keepAwakeUntil) : nil
+        if let until, until <= now { return nil }
+        return (until, settings.keepAwakeDisplay)
+    }
+
+    private func restoreKeepAwake() {
+        guard let saved = Self.savedKeepAwake(settings) else {
+            settings.keepAwakeActive = false
+            return
+        }
+        _ = power.startKeepAwake(until: saved.until, display: saved.display, whileProcess: nil)
+    }
+
     func toggleKeepAwake() {
         if keepAwake.active { power.stopKeepAwake() } else { _ = power.startKeepAwake(until: nil, display: false, whileProcess: nil) }
     }
 
     private func keepAwakeChanged(_ state: PowerControl.KeepAwake) {
         keepAwake = state
+        settings.keepAwakeActive = state.active && state.whileProcess == nil
+        settings.keepAwakeUntil = state.until?.timeIntervalSince1970 ?? 0
+        settings.keepAwakeDisplay = state.display
         send(.event(.keepAwakeChanged(at: Self.now(), state: wireKeepAwake(state))))
     }
 

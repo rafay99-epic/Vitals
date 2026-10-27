@@ -9,6 +9,7 @@ struct SharingTab: View {
         @Bindable var share = share
         MetricScroll {
             FilesCard()
+            PhoneFilesCard()
             RecentCard()
             ClipboardCard()
         }
@@ -313,5 +314,144 @@ struct PhoneChoices: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+}
+
+private struct PhoneFilesCard: View {
+    @Environment(RemoteModel.self) private var remote
+    @State private var devices: [PhoneDevice] = []
+    @State private var device: PhoneDevice?
+    @State private var roots: [PhoneRoot] = []
+    @State private var trail: [PhoneRoot] = []
+    @State private var listing: PhoneListing?
+    @State private var problem: String?
+    @State private var getting: Set<String> = []
+
+    var body: some View {
+        SectionCard(title: "Phone files", symbol: "iphone.and.arrow.forward") {
+            if devices.isEmpty {
+                Text("No phones are sharing. On a phone, turn on Settings › This phone › Let your Mac and other phones browse.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Phone", selection: Binding(get: { device?.id }, set: { id in pick(devices.first { $0.id == id }) })) {
+                    Text("Pick a phone").tag(String?.none)
+                    ForEach(devices) { phone in
+                        Text(phone.online ? phone.name : "\(phone.name) · not open").tag(Optional(phone.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+                if let problem {
+                    Text(problem).font(.callout).foregroundStyle(.orange)
+                }
+                if device != nil { browser }
+            }
+        }
+        .task { devices = await remote.phoneDevices() }
+    }
+
+    @ViewBuilder private var browser: some View {
+        if !trail.isEmpty {
+            HStack(spacing: 6) {
+                Button { back() } label: { Label("Back", systemImage: "chevron.left") }
+                    .buttonStyle(.borderless)
+                Text(trail.map(\.label).joined(separator: " › "))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            }
+        }
+        if trail.isEmpty {
+            ForEach(roots) { root in
+                row(title: root.label, symbol: "folder", detail: nil) { open(root) }
+            }
+        } else if let listing {
+            if listing.entries.isEmpty {
+                Text("Empty").foregroundStyle(.secondary)
+            }
+            ForEach(listing.entries) { entry in
+                if entry.kind == "folder" {
+                    row(title: entry.name, symbol: "folder", detail: nil) { open(PhoneRoot(label: entry.name, path: entry.path, place: "folder")) }
+                } else {
+                    HStack {
+                        Image(systemName: "doc").foregroundStyle(.secondary).frame(width: 18)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(entry.name).lineLimit(1).truncationMode(.middle)
+                            Text(ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(getting.contains(entry.path) ? "Asked" : "Get") { get(entry) }
+                            .controlSize(.small)
+                            .disabled(getting.contains(entry.path))
+                    }
+                }
+            }
+            if listing.total > listing.entries.count {
+                Text("Showing \(listing.entries.count) of \(listing.total)").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func row(title: String, symbol: String, detail: String?, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: symbol).foregroundStyle(.blue).frame(width: 18)
+                Text(title)
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func pick(_ next: PhoneDevice?) {
+        device = next
+        trail = []
+        listing = nil
+        roots = []
+        problem = nil
+        guard let next else { return }
+        Task {
+            do { roots = try await remote.phoneRoots(next.deviceId) } catch { problem = message(error) }
+        }
+    }
+
+    private func open(_ root: PhoneRoot) {
+        guard let device else { return }
+        Task {
+            do {
+                let next = try await remote.phoneList(device.deviceId, path: root.path)
+                trail.append(root)
+                listing = next
+                problem = nil
+            } catch { problem = message(error) }
+        }
+    }
+
+    private func back() {
+        trail.removeLast()
+        guard let device, let current = trail.last else {
+            listing = nil
+            return
+        }
+        Task { listing = try? await remote.phoneList(device.deviceId, path: current.path) }
+    }
+
+    private func get(_ entry: PhoneEntry) {
+        guard let device else { return }
+        getting.insert(entry.path)
+        Task {
+            do { _ = try await remote.pullFromPhone(device.deviceId, paths: [entry.path]) } catch {
+                getting.remove(entry.path)
+                problem = message(error)
+            }
+        }
+    }
+
+    private func message(_ error: Error) -> String {
+        (error as? RemoteModel.AdminFailure)?.message ?? "That phone didn't answer"
     }
 }

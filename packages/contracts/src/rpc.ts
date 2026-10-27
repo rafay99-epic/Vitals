@@ -22,16 +22,19 @@ import {
 import { DropEvent, DropIdInput, DropOffered, DropOfferInput, DropReceivedInput, DropTicket, Drop } from "./drop.ts";
 import { CommandCancelInput, CommandReceipt, CommandRunInput } from "./commands.ts";
 import {
-  FsEntry,
-  FsFolderInput,
+  FsDevicesResult,
   FsListInput,
   FsListResult,
   FsPathInput,
   FsPathsInput,
-  FsRenameInput,
+  FsPulled,
+  FsReplyInput,
+  FsRootsInput,
   FsRootsResult,
   FsSearchInput,
   FsSearchResult,
+  FsServeInput,
+  FsServeRequest,
   FsThumbsInput,
   FsThumbsResult,
   FsTrashResult,
@@ -41,7 +44,7 @@ import { TerminalAttachInput, TerminalEvent, TerminalIdInput, TerminalInfo, Term
 import { LanKey, NonNegativeInt } from "./ids.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, StatsLiveInput } from "./stats.ts";
-import { Hello, SequencedEvent, SystemEventsInput } from "./system.ts";
+import { AudioState, Hello, SequencedEvent, SystemEventsInput } from "./system.ts";
 
 const Empty = Schema.Struct({});
 
@@ -51,6 +54,13 @@ export const StatsLive = Rpc.make("stats.live", {
   payload: StatsLiveInput,
   success: LiveSample,
   error: Schema.Union([AuthError, Unavailable]),
+  stream: true,
+});
+
+export const SystemAudio = Rpc.make("system.audio", {
+  payload: Empty,
+  success: AudioState,
+  error: AuthError,
   stream: true,
 });
 
@@ -145,14 +155,16 @@ export const DropReceived = Rpc.make("drop.received", { payload: DropReceivedInp
 
 const FsError = Schema.Union([AuthError, Unavailable, CommandRejected]);
 
-export const FsRoots = Rpc.make("fs.roots", { payload: Empty, success: FsRootsResult, error: FsError });
+export const FsRoots = Rpc.make("fs.roots", { payload: FsRootsInput, success: FsRootsResult, error: FsError });
+export const FsDevices = Rpc.make("fs.devices", { payload: Empty, success: FsDevicesResult, error: FsError });
+export const FsServe = Rpc.make("fs.serve", { payload: FsServeInput, success: FsServeRequest, error: FsError, stream: true });
+export const FsReply = Rpc.make("fs.reply", { payload: FsReplyInput, success: Empty, error: FsError });
+export const FsPull = Rpc.make("fs.pull", { payload: FsPathsInput, success: FsPulled, error: FsError });
 export const FsList = Rpc.make("fs.list", { payload: FsListInput, success: FsListResult, error: FsError });
 export const FsSearch = Rpc.make("fs.search", { payload: FsSearchInput, success: FsSearchResult, error: FsError });
 export const FsThumbs = Rpc.make("fs.thumbs", { payload: FsThumbsInput, success: FsThumbsResult, error: FsError });
 export const FsGet = Rpc.make("fs.get", { payload: FsPathsInput, success: DropOffered, error: FsError });
 export const FsOpen = Rpc.make("fs.open", { payload: FsPathInput, success: Empty, error: FsError });
-export const FsRename = Rpc.make("fs.rename", { payload: FsRenameInput, success: FsEntry, error: FsError });
-export const FsFolder = Rpc.make("fs.folder", { payload: FsFolderInput, success: FsEntry, error: FsError });
 export const FsTrash = Rpc.make("fs.trash", { payload: FsPathsInput, success: FsTrashResult, error: FsError });
 
 const TerminalError = Schema.Union([AuthError, Unavailable, CommandRejected]);
@@ -188,6 +200,7 @@ export const VitalsRpc = RpcGroup.make(
   StatsLive,
   HistoryRange,
   SystemEvents,
+  SystemAudio,
   ProcessesWatch,
   AppsList,
   CommandRun,
@@ -212,13 +225,15 @@ export const VitalsRpc = RpcGroup.make(
   DropTicketRefresh,
   DropReceived,
   FsRoots,
+  FsDevices,
+  FsServe,
+  FsReply,
+  FsPull,
   FsList,
   FsSearch,
   FsThumbs,
   FsGet,
   FsOpen,
-  FsRename,
-  FsFolder,
   FsTrash,
   TerminalListRpc,
   TerminalOpen,

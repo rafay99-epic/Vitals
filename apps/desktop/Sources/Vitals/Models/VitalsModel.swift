@@ -65,6 +65,8 @@ final class VitalsModel {
     /// SoC power draw. Nil until the second sample (energy delta) and when
     /// IOReport is unavailable.
     private(set) var power: PowerSnapshot?
+    /// Whole-Mac draw in watts from the SMC. Still live where IOReport stalls.
+    private(set) var systemWatts: Double?
     /// Network throughput plus Wi-Fi link details. Nil until the second sample:
     /// the first reading has no prior byte counters.
     private(set) var network: NetworkSnapshot?
@@ -374,7 +376,10 @@ final class VitalsModel {
         // missing sensor); a skipped read holds the last one for display. History
         // below logs only fresh readings, so a skip is a gap, not a stale value.
         if sampled.gpu { assignIfChanged(&gpu, to: snapshot.gpu) }
-        if sampled.power { assignIfChanged(&power, to: snapshot.power) }
+        if sampled.power {
+            assignIfChanged(&power, to: snapshot.power)
+            assignIfChanged(&systemWatts, to: snapshot.systemWatts)
+        }
         assignIfChanged(&hasLoaded, to: true)
 
         let freshGPU = sampled.gpu ? snapshot.gpu : nil

@@ -22,6 +22,12 @@ struct WireKeepAwake: Codable, Equatable, Sendable {
     static let off = WireKeepAwake(active: false, display: false, until: nil, whileProcess: nil)
 }
 
+/// The Mac's output volume (0...1) and mute. Nil when the output doesn't expose one.
+struct WireAudio: Codable, Equatable, Sendable {
+    @Nullable var volume: Double?
+    @Nullable var muted: Bool?
+}
+
 struct WireCore: Codable, Equatable, Sendable {
     let id: Int
     let percent: Double
@@ -93,6 +99,8 @@ struct WireBattery: Codable, Equatable, Sendable {
     var fullyCharged: Bool?
     var designCapacityMah: Int?
     var maxCapacityMah: Int?
+    var remainingCapacityMah: Int?
+    var designCycleCount: Int?
     var voltage: Double?
     var amperage: Double?
     var adapter: WireAdapter?
@@ -173,6 +181,7 @@ struct WireSample: Codable, Equatable, Sendable {
     var memory: WireMemory?
     var battery: Nullable<WireBattery>?
     var power: Nullable<WirePower>?
+    var systemWatts: Double?
     var network: WireNetwork?
     var disk: WireDisk?
 }
@@ -426,10 +435,15 @@ enum AdminOp: Equatable, Sendable {
     case revokeDevice(String)
     case setScopes(deviceId: String, scopes: [String])
     case resolvePairPrompt(id: String, allow: Bool)
+    case fsDevices
+    case fsRoots(device: String)
+    case fsList(device: String, path: String, offset: Int)
+    case fsThumbs(device: String, paths: [String])
+    case fsPull(device: String, paths: [String])
 }
 
 extension AdminOp: Encodable {
-    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow }
+    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow, device, path, paths, offset }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -447,6 +461,24 @@ extension AdminOp: Encodable {
             try c.encode("ResolvePairPrompt", forKey: ._tag)
             try c.encode(id, forKey: .id)
             try c.encode(allow, forKey: .allow)
+        case .fsDevices:
+            try c.encode("FsDevices", forKey: ._tag)
+        case let .fsRoots(device):
+            try c.encode("FsRoots", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+        case let .fsList(device, path, offset):
+            try c.encode("FsList", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(path, forKey: .path)
+            try c.encode(offset, forKey: .offset)
+        case let .fsThumbs(device, paths):
+            try c.encode("FsThumbs", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(paths, forKey: .paths)
+        case let .fsPull(device, paths):
+            try c.encode("FsPull", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(paths, forKey: .paths)
         }
     }
 }
@@ -486,6 +518,7 @@ enum FromApp: Equatable, Sendable {
     case sample(WireSample)
     case processes(WireProcesses)
     case guardState(WireGuardState)
+    case audio(WireAudio)
     case receipt(WireReceipt)
     case event(WireEvent)
     case result(id: String, ok: QueryResult?, error: String?)
@@ -522,6 +555,9 @@ extension FromApp: Encodable {
             try c.encode(snapshot, forKey: .data)
         case let .guardState(state):
             try c.encode("guard", forKey: .t)
+            try c.encode(state, forKey: .data)
+        case let .audio(state):
+            try c.encode("audio", forKey: .t)
             try c.encode(state, forKey: .data)
         case let .receipt(receipt):
             try c.encode("receipt", forKey: .t)

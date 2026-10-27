@@ -7,11 +7,11 @@ import { CommandId, DeviceId, LanKey, NonNegativeInt, PositiveInt } from "./ids.
 import { PairPrompt } from "./lan.ts";
 import { AppsSnapshot, ProcessesSnapshot, ProcessesWatchInput } from "./processes.ts";
 import { HistoryRangeInput, HistoryRangeResult, LiveSample, Topic } from "./stats.ts";
-import { BRIDGE_VERSION, KeepAwakeState, MacInfo, SystemEvent } from "./system.ts";
+import { AudioState, BRIDGE_VERSION, KeepAwakeState, MacInfo, SystemEvent } from "./system.ts";
 import { ActivityLevel } from "./activity.ts";
 import { ClipDestination, ClipFileName, ClipId, ClipPlacement, ClipPolicy, ClipStats, MacClip } from "./clips.ts";
 import { Drop, DropId, DropPeer, DropPolicy, MacDropFile, ReceivedDropFile } from "./drop.ts";
-import { FsAccess, FsPath, FsThumb } from "./fs.ts";
+import { FsAccess, FsDevice, FsListResult, FsPath, FsRoot, FsThumb } from "./fs.ts";
 import { MacTerminal, TerminalId } from "./terminal.ts";
 import { Device } from "./auth.ts";
 
@@ -56,6 +56,11 @@ export const AdminOp = Schema.Union([
   Schema.TaggedStruct("RevokeDevice", { deviceId: DeviceId }),
   Schema.TaggedStruct("SetScopes", { deviceId: DeviceId, scopes: Schema.Array(Scope) }),
   Schema.TaggedStruct("ResolvePairPrompt", { id: Schema.String, allow: Schema.Boolean }),
+  Schema.TaggedStruct("FsDevices", {}),
+  Schema.TaggedStruct("FsRoots", { device: DeviceId }),
+  Schema.TaggedStruct("FsList", { device: DeviceId, path: FsPath, offset: NonNegativeInt }),
+  Schema.TaggedStruct("FsThumbs", { device: DeviceId, paths: Schema.Array(FsPath) }),
+  Schema.TaggedStruct("FsPull", { device: DeviceId, paths: Schema.Array(FsPath) }),
 ]);
 export type AdminOp = typeof AdminOp.Type;
 
@@ -65,6 +70,11 @@ export const AdminResult = Schema.Union([
   Schema.TaggedStruct("RevokeDevice", {}),
   Schema.TaggedStruct("SetScopes", {}),
   Schema.TaggedStruct("ResolvePairPrompt", {}),
+  Schema.TaggedStruct("FsDevices", { devices: Schema.Array(FsDevice) }),
+  Schema.TaggedStruct("FsRoots", { roots: Schema.Array(FsRoot) }),
+  Schema.TaggedStruct("FsList", { result: FsListResult }),
+  Schema.TaggedStruct("FsThumbs", { thumbs: Schema.Array(FsThumb) }),
+  Schema.TaggedStruct("FsPull", { files: NonNegativeInt }),
 ]);
 export type AdminResult = typeof AdminResult.Type;
 
@@ -130,6 +140,7 @@ export const FromApp = Schema.Union([
   Schema.Struct({ t: Schema.Literal("sample"), data: LiveSample }),
   Schema.Struct({ t: Schema.Literal("processes"), data: ProcessesSnapshot }),
   Schema.Struct({ t: Schema.Literal("guard"), data: GuardState }),
+  Schema.Struct({ t: Schema.Literal("audio"), data: AudioState }),
   Schema.Struct({ t: Schema.Literal("receipt"), receipt: CommandReceipt }),
   Schema.Struct({ t: Schema.Literal("event"), event: SystemEvent }),
   Schema.Struct({

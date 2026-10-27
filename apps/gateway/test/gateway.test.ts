@@ -38,7 +38,7 @@ describe("pairing and auth", () => {
     const first = await fetch(`${gateway.base}/api/pair`, { method: "POST", headers: ownerHeaders, body });
     expect(first.status).toBe(200);
     const paired = (await first.json()) as { scopes: Array<string> };
-    expect(paired.scopes).toEqual(["read", "operate", "files"]);
+    expect(paired.scopes).toEqual(["read", "operate", "files", "fsRead"]);
     const second = await fetch(`${gateway.base}/api/pair`, { method: "POST", headers: ownerHeaders, body });
     expect(second.status).toBe(401);
   });
@@ -176,6 +176,27 @@ describe("rpc over websocket", () => {
     expect(gateway.app.needs().some((need) => need.topics.includes("cpu"))).toBe(true);
     await Bun.sleep(50);
     expect(gateway.app.needs().at(-1)?.topics).toEqual([]);
+  });
+
+  test("the Mac's volume and mute reach phones, latest first", async () => {
+    gateway = await startGateway();
+    const { token } = await pairDevice(gateway);
+    const app = gateway.app;
+    app.emit({ t: "audio", data: { volume: 0.3, muted: false } });
+    await Bun.sleep(50);
+    const result = await withClient(token, (client) =>
+      Effect.gen(function* () {
+        const hello = yield* client["server.hello"]({});
+        yield* Effect.sync(() => setTimeout(() => app.emit({ t: "audio", data: { volume: 0.8, muted: true } }), 50));
+        const states = yield* client["system.audio"]({}).pipe(Stream.take(2), Stream.runCollect);
+        return { hello, states: [...states] };
+      }),
+    );
+    expect(result.hello.audio).toBe(true);
+    expect(result.states).toEqual([
+      { volume: 0.3, muted: false },
+      { volume: 0.8, muted: true },
+    ]);
   });
 
   test("commands are idempotent and destructive ones need the scope", async () => {

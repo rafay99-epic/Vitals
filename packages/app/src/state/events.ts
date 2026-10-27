@@ -1,5 +1,5 @@
 import { type Connection, Store } from "@vitals/client-runtime";
-import type { Alert, CommandReceipt, KeepAwakeState, SequencedEvent } from "@vitals/contracts";
+import type { Alert, AudioState, CommandReceipt, KeepAwakeState, SequencedEvent } from "@vitals/contracts";
 
 const RECEIPTS_KEPT = 50;
 const LOG_KEPT = 50;
@@ -17,6 +17,8 @@ const entryOf = (alert: Alert): AlarmEntry => ({ id: alert.id, summary: alert.su
 
 export class MacEvents {
   readonly keepAwake = new Store<KeepAwakeState | null>(null);
+  /** The Mac's volume and mute as the Mac reports them. Null until it does, or on Macs too old to say. */
+  readonly audio = new Store<AudioState | null>(null);
   readonly asleepSince = new Store<number | null>(null);
   readonly poweringOff = new Store<number | null>(null);
   readonly alerts = new Store<ReadonlyArray<Alert>>([]);
@@ -41,11 +43,17 @@ export class MacEvents {
     // Heartbeats re-emit Ready with the hello from connect time. Apply that snapshot once per
     // connection, or later alerts vanish and cleared ones come back on every beat.
     let applied: object | null = null;
+    // The watch reconnects on its own, so it starts once: the first time a connection allows it.
+    let watchingAudio = false;
     this.stops.push(
       connection.state.subscribe(() => {
         const state = connection.state.get();
         if (state._tag !== "Ready" || state.hello === applied) return;
         applied = state.hello;
+        if (!watchingAudio && state.hello.audio === true) {
+          watchingAudio = true;
+          this.stops.push(connection.watch((client) => client["system.audio"]({}), (audio) => this.audio.set(audio)));
+        }
         this.keepAwake.set(state.hello.keepAwake);
         this.alerts.set(state.hello.alerts);
         for (const alert of state.hello.alerts) this.logRaised(alert);

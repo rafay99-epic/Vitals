@@ -1,4 +1,6 @@
 .expo/
-android/
-ios/
+/android/
+/ios/
 credentials.json
+modules/*/android/.cxx/
+modules/*/android/build/

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DeviceId } from "@vitals/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { type Gateway, adminOp, pairDevice, startGateway, withClient } from "./harness.ts";
 
@@ -63,8 +64,6 @@ describe("fs: browse the Mac", () => {
         return { roots, byName, byDate, hidden, nested };
       }),
     );
-    expect(result.roots.access).toBe("folders");
-    expect(result.roots.writable).toBe(false);
     expect(result.roots.roots.map((root) => root.label)).toEqual(["Desktop", "Downloads"]);
     expect(result.byName.entries.map((entry) => entry.name)).toEqual(["Trip", "a.txt", "b.mov", "Escape", "file 9.txt", "file 10.txt"]);
     expect(result.byName.entries.find((entry) => entry.name === "Escape")?.kind).toBe("link");
@@ -110,7 +109,7 @@ describe("fs: browse the Mac", () => {
     expect(everything.data).toMatchObject({ _tag: "CommandRejected" });
   });
 
-  test("getting a folder sends every file with its structure, byte-exact", async () => {
+  test("getting a folder sends every file with its structure, byte-exact, and never follows links out", async () => {
     const { gateway: target, token, deviceId } = await paired();
     const result = await withClient(target, token, (client) =>
       Effect.gen(function* () {
@@ -120,7 +119,8 @@ describe("fs: browse the Mac", () => {
           fetch(`${target.base}/api/drop/${offered.drop.id}/${file?.id ?? "x"}`, { headers: { authorization: `Drop ${offered.ticket.ticket}` } }),
         );
         const text = yield* Effect.promise(() => response.text());
-        return { offered, text };
+        const whole = yield* client["fs.get"]({ paths: [join(home, "Downloads")] });
+        return { offered, text, whole };
       }),
     );
     expect(result.offered.drop.state).toBe("running");
@@ -131,26 +131,64 @@ describe("fs: browse the Mac", () => {
       ["Trip/day 2", "two.jpg"],
     ]);
     expect(result.text).toBe("jpeg-two");
+    expect(result.whole.drop.files.map((file) => file.name)).not.toContain("elsewhere.txt");
   });
 
-  test("changing files needs its own permission and stays out of Library", async () => {
+  test("moving to the Trash needs its own permission and stays out of Library and the shared roots", async () => {
     const { gateway: target, token, deviceId } = await paired();
-    const denied = await withClient(target, token, (client) => Effect.flip(client["fs.folder"]({ parent: join(home, "Downloads"), name: "New" })));
+    target.app.answer = (q) => (q._tag === "FsTrash" ? { _tag: "FsTrash", trashed: q.paths.length } : null);
+    const denied = await withClient(target, token, (client) => Effect.flip(client["fs.trash"]({ paths: [join(home, "Downloads", "a.txt")] })));
     expect(denied).toMatchObject({ _tag: "AuthError" });
 
     await adminOp(target.app, { _tag: "SetScopes", deviceId: deviceIdOf(deviceId), scopes: ["read", "operate", "files", "fsRead", "fsWrite"] });
     const allowed = await withClient(target, token, (client) =>
       Effect.gen(function* () {
-        const made = yield* client["fs.folder"]({ parent: join(home, "Downloads"), name: "New" });
-        const renamed = yield* client["fs.rename"]({ path: made.path, name: "Renamed" });
-        const clash = yield* Effect.flip(client["fs.rename"]({ path: renamed.path, name: "a.txt" }));
-        const root = yield* Effect.flip(client["fs.rename"]({ path: join(home, "Downloads"), name: "Gone" }));
-        return { made, renamed, clash, root };
+        const trashed = yield* client["fs.trash"]({ paths: [join(home, "Downloads", "a.txt")] });
+        const root = yield* Effect.flip(client["fs.trash"]({ paths: [join(home, "Downloads")] }));
+        return { trashed, root };
       }),
     );
-    expect(allowed.made).toMatchObject({ name: "New", kind: "folder" });
-    expect(allowed.renamed).toMatchObject({ name: "Renamed", path: join(home, "Downloads", "Renamed") });
-    expect(allowed.clash).toMatchObject({ _tag: "CommandRejected" });
+    expect(allowed.trashed).toEqual({ trashed: 1 });
     expect(allowed.root).toMatchObject({ _tag: "CommandRejected" });
+    const asked = target.app.received.filter((message) => message.t === "query" && message.q._tag === "FsTrash");
+    expect(asked).toHaveLength(1);
+  });
+});
+
+describe("fs: browse a phone", () => {
+  test("a phone that serves its files can be browsed by another device, and goes away when it stops", async () => {
+    gateway = await startGateway(join(mkdtempSync(join(tmpdir(), "vitals-data-")), "remote"), home);
+    const target = gateway;
+    const phone = await pairDevice(target);
+    const other = await pairDevice(target);
+    const phoneId = deviceIdOf(phone.deviceId);
+    const roots = [{ label: "Downloads", path: "/storage/emulated/0/Download", place: "downloads" as const }];
+    const listing = { path: "/storage/emulated/0/Download", parent: null, entries: [{ name: "a.jpg", path: "/storage/emulated/0/Download/a.jpg", kind: "file" as const, size: 3, modifiedAt: 1 }], total: 1 };
+
+    const serving = withClient(target, phone.token, (client) =>
+      client["fs.serve"]({ roots }).pipe(
+        Stream.take(1),
+        Stream.runForEach((request) => (request._tag === "List" ? client["fs.reply"]({ id: request.id, result: { _tag: "List", result: listing }, error: null }) : Effect.void)),
+      ),
+    );
+    await Bun.sleep(300);
+    const seen = await withClient(target, other.token, (client) =>
+      Effect.gen(function* () {
+        const devices = yield* client["fs.devices"]({});
+        const phoneRoots = yield* client["fs.roots"]({ device: phoneId });
+        const listed = yield* client["fs.list"]({ device: phoneId, path: "/storage/emulated/0/Download", sort: "name", hidden: false, offset: 0, limit: 50 });
+        return { devices, phoneRoots, listed };
+      }),
+    );
+    await serving;
+    expect(seen.devices.devices).toContainEqual({ deviceId: phoneId, name: "Pixel 9", platform: "android", online: true });
+    expect(seen.devices.devices.map((device) => device.deviceId)).not.toContain(deviceIdOf(other.deviceId));
+    expect(seen.phoneRoots.roots).toEqual(roots);
+    expect(seen.listed).toEqual(listing);
+
+    await Bun.sleep(200);
+    const gone = await withClient(target, other.token, (client) => Effect.flip(client["fs.list"]({ device: phoneId, path: "/", sort: "name", hidden: false, offset: 0, limit: 10 })));
+    expect(gone).toMatchObject({ _tag: "Unavailable" });
+    expect(gone.message).toContain("isn't open");
   });
 });

@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
-import { EpochMs, NonNegativeInt, PositiveInt } from "./ids.ts";
+import { Platform } from "./auth.ts";
+import { DeviceId, EpochMs, NonNegativeInt, PositiveInt } from "./ids.ts";
 
 export const FS_LIMITS = {
   page: 500,
@@ -12,9 +13,6 @@ export const FS_LIMITS = {
 
 export const FsPath = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096), Schema.isPattern(/^\/[^\0]*$/));
 export type FsPath = typeof FsPath.Type;
-
-export const FsName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(255), Schema.isPattern(/^(?!\.\.?$)[^/\0]+$/));
-export type FsName = typeof FsName.Type;
 
 export const FsKind = Schema.Literals(["folder", "file", "package", "link"]);
 export type FsKind = typeof FsKind.Type;
@@ -28,7 +26,7 @@ export const FsEntry = Schema.Struct({
 });
 export type FsEntry = typeof FsEntry.Type;
 
-export const FsPlace = Schema.Literals(["home", "desktop", "documents", "downloads", "movies", "music", "pictures", "disk", "volume"]);
+export const FsPlace = Schema.Literals(["home", "desktop", "documents", "downloads", "movies", "music", "pictures", "disk", "volume", "photos", "storage", "folder"]);
 export type FsPlace = typeof FsPlace.Type;
 
 export const FsRoot = Schema.Struct({
@@ -41,17 +39,19 @@ export type FsRoot = typeof FsRoot.Type;
 export const FsAccess = Schema.Literals(["folders", "everything"]);
 export type FsAccess = typeof FsAccess.Type;
 
-export const FsRootsResult = Schema.Struct({
-  roots: Schema.Array(FsRoot),
-  access: FsAccess,
-  writable: Schema.Boolean,
-});
+export const FsRootsResult = Schema.Struct({ roots: Schema.Array(FsRoot) });
 export type FsRootsResult = typeof FsRootsResult.Type;
 
 export const FsSort = Schema.Literals(["name", "date", "size"]);
 export type FsSort = typeof FsSort.Type;
 
+const Target = Schema.optionalKey(DeviceId);
+
+export const FsRootsInput = Schema.Struct({ device: Target });
+export type FsRootsInput = typeof FsRootsInput.Type;
+
 export const FsListInput = Schema.Struct({
+  device: Target,
   path: FsPath,
   sort: FsSort,
   hidden: Schema.Boolean,
@@ -81,11 +81,13 @@ export const FsSearchResult = Schema.Struct({
 export type FsSearchResult = typeof FsSearchResult.Type;
 
 export const FsPathsInput = Schema.Struct({
+  device: Target,
   paths: Schema.Array(FsPath).check(Schema.isMinLength(1), Schema.isMaxLength(FS_LIMITS.pull)),
 });
 export type FsPathsInput = typeof FsPathsInput.Type;
 
 export const FsThumbsInput = Schema.Struct({
+  device: Target,
   paths: Schema.Array(FsPath).check(Schema.isMinLength(1), Schema.isMaxLength(FS_LIMITS.thumbs)),
 });
 export type FsThumbsInput = typeof FsThumbsInput.Type;
@@ -99,14 +101,48 @@ export type FsThumb = typeof FsThumb.Type;
 export const FsThumbsResult = Schema.Struct({ thumbs: Schema.Array(FsThumb) });
 export type FsThumbsResult = typeof FsThumbsResult.Type;
 
-export const FsRenameInput = Schema.Struct({ path: FsPath, name: FsName });
-export type FsRenameInput = typeof FsRenameInput.Type;
-
-export const FsFolderInput = Schema.Struct({ parent: FsPath, name: FsName });
-export type FsFolderInput = typeof FsFolderInput.Type;
-
 export const FsPathInput = Schema.Struct({ path: FsPath });
 export type FsPathInput = typeof FsPathInput.Type;
 
 export const FsTrashResult = Schema.Struct({ trashed: NonNegativeInt });
 export type FsTrashResult = typeof FsTrashResult.Type;
+
+export const FsDevice = Schema.Struct({
+  deviceId: DeviceId,
+  name: Schema.String,
+  platform: Platform,
+  online: Schema.Boolean,
+});
+export type FsDevice = typeof FsDevice.Type;
+
+export const FsDevicesResult = Schema.Struct({ devices: Schema.Array(FsDevice) });
+export type FsDevicesResult = typeof FsDevicesResult.Type;
+
+const RequestId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64));
+
+export const FsServeInput = Schema.Struct({ roots: Schema.Array(FsRoot) });
+export type FsServeInput = typeof FsServeInput.Type;
+
+export const FsServeRequest = Schema.Union([
+  Schema.TaggedStruct("List", { id: RequestId, path: FsPath, sort: FsSort, offset: NonNegativeInt, limit: PositiveInt }),
+  Schema.TaggedStruct("Thumbs", { id: RequestId, paths: Schema.Array(FsPath) }),
+  Schema.TaggedStruct("Send", { id: RequestId, paths: Schema.Array(FsPath), relay: Schema.NullOr(DeviceId) }),
+]);
+export type FsServeRequest = typeof FsServeRequest.Type;
+
+export const FsServeResult = Schema.Union([
+  Schema.TaggedStruct("List", { result: FsListResult }),
+  Schema.TaggedStruct("Thumbs", { thumbs: Schema.Array(FsThumb) }),
+  Schema.TaggedStruct("Send", { files: NonNegativeInt }),
+]);
+export type FsServeResult = typeof FsServeResult.Type;
+
+export const FsReplyInput = Schema.Struct({
+  id: RequestId,
+  result: Schema.NullOr(FsServeResult),
+  error: Schema.NullOr(Schema.String.check(Schema.isMaxLength(500))),
+});
+export type FsReplyInput = typeof FsReplyInput.Type;
+
+export const FsPulled = Schema.Struct({ files: NonNegativeInt });
+export type FsPulled = typeof FsPulled.Type;

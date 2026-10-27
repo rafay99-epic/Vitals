@@ -27,6 +27,7 @@ import * as Stream from "effect/Stream";
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Bridge } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
+import { Store } from "../persistence/Store.ts";
 
 export interface TerminalCaller {
   readonly deviceId: DeviceId;
@@ -114,6 +115,7 @@ export const layer = Layer.effect(
     const config = yield* GatewayConfig;
     const bridge = yield* Bridge;
     const activity = yield* ActivityLog;
+    const store = yield* Store;
     const home = config.homeDir ?? homedir();
     const shell = process.env["SHELL"] ?? "/bin/zsh";
     const sessions = new Map<string, Session>();
@@ -154,7 +156,6 @@ export const layer = Layer.effect(
       if (text.length === 0) return;
       session.history = trimHistory(session.history + text);
       session.pending += text;
-      session.lastActivity = Date.now();
       if (session.pending.length >= FLUSH_BYTES) flush(session);
       else session.timer ??= setTimeout(() => flush(session), FLUSH_MS);
     };
@@ -301,7 +302,11 @@ export const layer = Layer.effect(
 
     const reap = Effect.sync(() => {
       const cutoff = Date.now() - IDLE_MS;
-      for (const session of sessions.values()) if (session.listeners.size === 0 && session.lastActivity < cutoff) stop(session);
+      for (const session of sessions.values()) {
+        const device = store.device(session.deviceId);
+        const allowed = device !== null && device.revokedAt === null && device.scopes.includes("terminal");
+        if (!allowed || (session.listeners.size === 0 && session.lastActivity < cutoff)) stop(session);
+      }
     });
     yield* Effect.sleep(REAP_EVERY).pipe(Effect.andThen(reap), Effect.forever, Effect.forkScoped);
 

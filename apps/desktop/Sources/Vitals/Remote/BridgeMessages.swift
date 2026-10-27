@@ -306,10 +306,46 @@ enum AdminResult: Equatable, Sendable {
     case revokeDevice
     case setScopes
     case resolvePairPrompt
+    case fsDevices([PhoneDevice])
+    case fsRoots([PhoneRoot])
+    case fsList(PhoneListing)
+    case fsThumbs([WireThumb])
+    case fsPull(files: Int)
+}
+
+struct PhoneDevice: Codable, Equatable, Identifiable, Sendable {
+    let deviceId: String
+    let name: String
+    let platform: String
+    let online: Bool
+    var id: String { deviceId }
+}
+
+struct PhoneRoot: Codable, Equatable, Identifiable, Sendable {
+    let label: String
+    let path: String
+    let place: String
+    var id: String { path }
+}
+
+struct PhoneEntry: Codable, Equatable, Identifiable, Sendable {
+    let name: String
+    let path: String
+    let kind: String
+    let size: Int64
+    let modifiedAt: Int64
+    var id: String { path }
+}
+
+struct PhoneListing: Codable, Equatable, Sendable {
+    let path: String
+    @Nullable var parent: String?
+    let entries: [PhoneEntry]
+    let total: Int
 }
 
 extension AdminResult: Decodable {
-    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices }
+    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices, roots, result, thumbs, files }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -324,6 +360,11 @@ extension AdminResult: Decodable {
         case "RevokeDevice": self = .revokeDevice
         case "SetScopes": self = .setScopes
         case "ResolvePairPrompt": self = .resolvePairPrompt
+        case "FsDevices": self = .fsDevices(try c.decode([PhoneDevice].self, forKey: .devices))
+        case "FsRoots": self = .fsRoots(try c.decode([PhoneRoot].self, forKey: .roots))
+        case "FsList": self = .fsList(try c.decode(PhoneListing.self, forKey: .result))
+        case "FsThumbs": self = .fsThumbs(try c.decode([WireThumb].self, forKey: .thumbs))
+        case "FsPull": self = .fsPull(files: try c.decode(Int.self, forKey: .files))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: ._tag, in: c, debugDescription: "unknown admin result \(other)")
         }

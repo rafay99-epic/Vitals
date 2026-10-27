@@ -64,7 +64,7 @@ export const BLOCK_NOTE: Readonly<Record<Exclude<FilesBlock, null>, string>> = {
 
 export const sendDrop = async (remote: Remote, batch: Batch, dest?: string): Promise<boolean> => {
   const files = batch.items.filter(isFile).map(outgoingOf);
-  return (await remote.drops.send(files, dest)) !== null;
+  return (await remote.drops.send(files, dest === undefined ? {} : { dest })) !== null;
 };
 
 const walk = (folder: Directory, prefix: string): ReadonlyArray<PickedFile> =>

@@ -48,6 +48,7 @@ function KeepAwake() {
   const access = useAccess();
   const state = useStore(remote.events.keepAwake);
   const [chosen, setChosen] = useState<Awake | null>(null);
+  const screen = state?.active === true && state.display;
   // Remember the pick only once the Mac accepts it, so a failed request can't show a state the Mac isn't in.
   const choose = (next: Awake) => {
     if (next === "off") {
@@ -56,12 +57,23 @@ function KeepAwake() {
     }
     const until = next === "always" ? null : Date.now() + (next === "1h" ? HOUR : 4 * HOUR);
     const done = next === "always" ? "Keeping your Mac awake until you stop it" : `Keeping your Mac awake for ${next === "1h" ? "1 hour" : "4 hours"}`;
-    void send(remote, { _tag: "KeepAwake", until, display: false, whileProcess: null }, done).then((ok) => ok && setChosen(next));
+    void send(remote, { _tag: "KeepAwake", until, display: screen, whileProcess: null }, done).then((ok) => ok && setChosen(next));
+  };
+  const keepScreen = (display: boolean) => {
+    if (state?.active !== true) return;
+    void send(remote, { _tag: "KeepAwake", until: state.until, display, whileProcess: null }, display ? "The Mac's screen stays on" : "The Mac's screen can turn off");
   };
   return (
     <>
       <Label right={awakeLine(state)}>Keep awake</Label>
       <Segmented options={AWAKE_OPTIONS} value={awakeOf(state, chosen)} onChange={choose} disabled={!access.operate} />
+      <Group>
+        <Row
+          first
+          label="Keep the screen on"
+          control={<Toggle value={screen} label="Keep the Mac's screen on" disabled={!access.operate || state?.active !== true} onChange={keepScreen} />}
+        />
+      </Group>
     </>
   );
 }
@@ -69,15 +81,19 @@ function KeepAwake() {
 function Sound() {
   const remote = useRemote();
   const access = useAccess();
+  const audio = useStore(remote.events.audio);
   const [volume, setVolume] = useState(0.5);
   const [muted, setMuted] = useState(false);
+  // Macs that report their audio drive these controls; older ones only know what this phone last set.
+  const shownVolume = audio?.volume ?? volume;
+  const shownMuted = audio?.muted ?? muted;
   return (
     <>
-      <Label right="last set from this phone">Sound</Label>
+      <Label right={audio === null ? "last set from this phone" : undefined}>Sound</Label>
       <View style={[styles.slider, access.operate ? null : styles.off]}>
         <Slider
-          value={volume}
-          disabled={!access.operate}
+          value={shownVolume}
+          disabled={!access.operate || audio?.volume === null}
           accessibilityLabel="Mac volume"
           format={(level) => String(Math.round(level * 100))}
           onCommit={(level) => {
@@ -92,9 +108,9 @@ function Sound() {
           label="Mute"
           control={
             <Toggle
-              value={muted}
+              value={shownMuted}
               label="Mute the Mac"
-              disabled={!access.operate}
+              disabled={!access.operate || audio?.muted === null}
               onChange={(next) => {
                 setMuted(next);
                 void send(remote, { _tag: "SetMuted", muted: next }, next ? "Mac muted" : "Mac unmuted");

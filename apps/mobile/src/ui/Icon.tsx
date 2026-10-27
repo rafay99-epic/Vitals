@@ -51,6 +51,7 @@ const PATHS = {
   files: "M9 3h6l4 4v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM15 3v4h4M4 8v11a3 3 0 0 0 3 3h8",
   terminal: `${box(3, 4, 18, 16, 2)}M7 9l3 3-3 3M12 15h5`,
   plus: "M12 5v14M5 12h14",
+  keyboard: `${box(2, 6, 20, 12, 2)}M6 10h1M10 10h1M14 10h1M18 10h1M8 14h8`,
 } as const;
 
 export type IconName = keyof typeof PATHS;

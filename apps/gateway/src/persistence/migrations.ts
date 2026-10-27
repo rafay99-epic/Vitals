@@ -140,6 +140,13 @@ export const REMOTE_MIGRATIONS: ReadonlyArray<Migration> = [
         AND NOT EXISTS (SELECT 1 FROM json_each(devices.scopes) WHERE value = 'fsRead');
     `,
   },
+  {
+    id: 8,
+    sql: `
+      ALTER TABLE drops ADD COLUMN relay TEXT;
+      ALTER TABLE drops ADD COLUMN source TEXT;
+    `,
+  },
 ];
 
 export const ACTIVITY_MIGRATIONS: ReadonlyArray<Migration> = [

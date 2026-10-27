@@ -15,6 +15,8 @@ actor SensorSampler {
         let battery: BatterySnapshot?
         let gpu: GPUSnapshot?
         let power: PowerSnapshot?
+        /// Whole-Mac draw in watts from the SMC, read alongside `power`.
+        let systemWatts: Double?
         let diskHealth: DiskHealthSnapshot?
         let network: NetworkSnapshot?
         let diskIO: DiskIOSnapshot?
@@ -95,6 +97,7 @@ actor SensorSampler {
                 battery: battery,
                 gpu: needs.gpu ? gpu.sample() : nil,
                 power: powerReading,
+                systemWatts: needs.power ? smc?.read("PSTR").flatMap { $0 > 0 ? $0 : nil } : nil,
                 diskHealth: diskHealth,
                 // Byte counters are one sysctl, read every tick so the menu bar
                 // and history get a continuous series.
@@ -109,7 +112,8 @@ actor SensorSampler {
         let now = Date()
         guard live || now.timeIntervalSince(batteryReadAt) >= Self.idleBatteryInterval else { return battery }
         batteryReadAt = now
-        battery = Battery.read(officialHealth: batteryHealth)
+        let packTemperature = smc?.read("TB0T").flatMap { (1..<100).contains($0) ? $0 : nil }
+        battery = Battery.read(officialHealth: batteryHealth, fallbackTemperature: packTemperature)
         if battery != nil { refreshBatteryHealthIfStale() }
         return battery
     }

@@ -39,6 +39,8 @@ export interface DropRecord {
   readonly byId: ReadonlyMap<string, DropFileRecord>;
   readonly createdAt: number;
   readonly dest: string | null;
+  readonly relay: DeviceId | null;
+  readonly source: string | null;
   state: DropState;
   route: DropRoute | null;
   updatedAt: number;
@@ -65,6 +67,8 @@ interface DropRow {
   readonly started_at: number | null;
   readonly error: string | null;
   readonly dest: string | null;
+  readonly relay: string | null;
+  readonly source: string | null;
 }
 
 interface FileRow {
@@ -152,8 +156,8 @@ export class DropDb {
     const prepare = (sql: string) => db.prepare(sql);
     this.statements = {
       insertDrop: prepare(
-        `INSERT INTO drops (id, device_id, incoming, from_json, to_json, state, route, created_at, updated_at, started_at, error, dest)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO drops (id, device_id, incoming, from_json, to_json, state, route, created_at, updated_at, started_at, error, dest, relay, source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ),
       insertFile: prepare(
         `INSERT INTO drop_files (drop_id, id, ord, name, path, size, mime, sha256, done, complete, parts, origin)
@@ -187,6 +191,8 @@ export class DropDb {
         drop.startedAt,
         drop.error,
         drop.dest,
+        drop.relay,
+        drop.source,
       );
       drop.files.forEach((file, order) => {
         this.statements.insertFile.run(
@@ -244,6 +250,8 @@ export class DropDb {
           startedAt: row.started_at,
           error: row.error,
           dest: row.dest,
+          relay: row.relay === null ? null : decodeDeviceId(row.relay),
+          source: row.source,
         }),
       );
   }

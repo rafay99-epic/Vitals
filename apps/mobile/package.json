@@ -45,7 +45,6 @@
     "expo-haptics": "~58.0.7",
     "expo-image-picker": "~58.0.10",
     "expo-in-app-updates": "~0.13.0",
-    "expo-local-authentication": "~58.0.2",
     "expo-media-library": "~58.0.11",
     "expo-network": "~58.0.3",
     "expo-notifications": "~58.1.5",

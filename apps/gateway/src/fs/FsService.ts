@@ -1,19 +1,25 @@
 import type { Dirent, Stats } from "node:fs";
-import { lstat, mkdir, readdir, realpath, rename, stat } from "node:fs/promises";
+import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 
 import {
+  type DeviceId,
   type DropOffered,
+  type FsDevicesResult,
+  type FsPulled,
+  type FsReplyInput,
+  type FsRootsInput,
+  type FsServeInput,
+  type FsServeRequest,
+  type FsServeResult,
   type FsAccess,
   type FsEntry,
-  type FsFolderInput,
   type FsKind,
   type FsListInput,
   type FsListResult,
   type FsPathInput,
   type FsPathsInput,
-  type FsRenameInput,
   type FsRoot,
   type FsRootsResult,
   type FsSearchInput,
@@ -27,29 +33,35 @@ import {
   FS_LIMITS,
   Unavailable,
 } from "@vitals/contracts";
+import { newId } from "@vitals/shared";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
 import { ActivityLog } from "../activity/ActivityLog.ts";
 import { Bridge, ask } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
 import { type DropCaller, DropStore } from "../drop/DropStore.ts";
+import { Store } from "../persistence/Store.ts";
 
 type FsError = Unavailable | CommandRejected;
 
 export class FsService extends Context.Service<
   FsService,
   {
-    readonly roots: (writable: boolean) => Effect.Effect<FsRootsResult>;
+    readonly roots: (input: FsRootsInput) => Effect.Effect<FsRootsResult, FsError>;
+    readonly devices: (except: DeviceId | null) => Effect.Effect<FsDevicesResult>;
+    readonly serve: (caller: DropCaller, input: FsServeInput) => Stream.Stream<FsServeRequest>;
+    readonly reply: (caller: DropCaller, input: FsReplyInput) => Effect.Effect<void>;
+    readonly pull: (relay: DeviceId | null, input: FsPathsInput) => Effect.Effect<FsPulled, FsError>;
     readonly list: (input: FsListInput) => Effect.Effect<FsListResult, FsError>;
     readonly search: (input: FsSearchInput) => Effect.Effect<FsSearchResult, FsError>;
     readonly thumbs: (input: FsThumbsInput) => Effect.Effect<FsThumbsResult, FsError>;
     readonly get: (caller: DropCaller, input: FsPathsInput) => Effect.Effect<DropOffered, FsError>;
     readonly open: (input: FsPathInput) => Effect.Effect<void, FsError>;
-    readonly rename: (caller: DropCaller, input: FsRenameInput) => Effect.Effect<FsEntry, FsError>;
-    readonly folder: (caller: DropCaller, input: FsFolderInput) => Effect.Effect<FsEntry, FsError>;
     readonly trash: (caller: DropCaller, input: FsPathsInput) => Effect.Effect<FsTrashResult, FsError>;
     readonly destination: (path: string) => Effect.Effect<string, FsError>;
   }
@@ -66,11 +78,21 @@ const FOLDERS: ReadonlyArray<readonly [string, FsRoot["place"]]> = [
 
 const PACKAGES = new Set([".app", ".bundle", ".framework", ".photoslibrary", ".musiclibrary", ".tvlibrary", ".pkg", ".rtfd", ".key", ".pages", ".numbers", ".xcodeproj", ".xcworkspace", ".xcarchive", ".playground", ".sparsebundle", ".band", ".logicx", ".fcpbundle", ".imovielibrary"]);
 
+const CHANNEL_DIRS = [".vitals", ".vitals-nightly", ".vitals-dev"];
 const CACHE_MS = 5_000;
 const CACHE_DIRS = 16;
 const THUMB_CACHE = 512;
 const STAT_BATCH = 128;
 const SEARCH_MS = 4_000;
+const PHONE_TIMEOUT = "15 seconds";
+
+const answers = <Tag extends FsServeResult["_tag"]>(tag: Tag, result: FsServeResult): result is Extract<FsServeResult, { readonly _tag: Tag }> => result._tag === tag;
+
+interface Server {
+  readonly name: string;
+  readonly roots: ReadonlyArray<FsRoot>;
+  readonly push: (request: FsServeRequest) => void;
+}
 
 const rejected = (message: string) => new CommandRejected({ message });
 const unavailable = (message: string) => new Unavailable({ message });
@@ -174,10 +196,15 @@ export const layer = Layer.effect(
     const bridge = yield* Bridge;
     const drops = yield* DropStore;
     const activity = yield* ActivityLog;
+    const store = yield* Store;
+    const servers = new Map<string, Server>();
+    const waiting = new Map<string, { readonly deviceId: string; readonly done: Deferred.Deferred<FsServeResult, FsError> }>();
     const homeDir = config.homeDir ?? homedir();
     const home = yield* Effect.promise(() => realpath(homeDir).catch(() => homeDir));
     const denied = yield* Effect.promise(() =>
-      Promise.all([config.dataDir, dirname(config.dataDir), join(home, "Library", "Keychains")].map((path) => realpath(path).catch(() => path))),
+      Promise.all(
+        [config.dataDir, dirname(config.dataDir), ...CHANNEL_DIRS.map((name) => join(home, name)), join(home, "Library", "Keychains")].map((path) => realpath(path).catch(() => path)),
+      ),
     );
     const library = join(home, "Library");
     let access: FsAccess = "folders";
@@ -256,7 +283,62 @@ export const layer = Layer.effect(
       return (await shared(parent)) ? parent : null;
     };
 
-    const list = (input: FsListInput) =>
+    const askPhone = <Tag extends FsServeResult["_tag"]>(device: DeviceId, request: (id: string) => Extract<FsServeRequest, { readonly _tag: Tag }>) =>
+      Effect.gen(function* () {
+        const server = servers.get(device);
+        const name = store.device(device)?.name ?? "That device";
+        if (server === undefined) return yield* Effect.fail(unavailable(`${name} isn't open. Open Vitals on it to browse.`));
+        const id = newId();
+        const done = yield* Deferred.make<FsServeResult, FsError>();
+        waiting.set(id, { deviceId: device, done });
+        const sent = request(id);
+        server.push(sent);
+        const result = yield* Deferred.await(done).pipe(
+          Effect.timeoutOrElse({ duration: PHONE_TIMEOUT, orElse: () => Effect.fail(unavailable(`${name} didn't answer. Keep Vitals open on it.`)) }),
+          Effect.ensuring(Effect.sync(() => waiting.delete(id))),
+        );
+        if (!answers(sent._tag, result)) return yield* Effect.fail(unavailable(`${name} sent back the wrong answer`));
+        return result;
+      });
+
+    const serve = (caller: DropCaller, input: FsServeInput): Stream.Stream<FsServeRequest> =>
+      Stream.callback<FsServeRequest>((queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            const server: Server = { name: caller.name, roots: input.roots, push: (request) => Queue.offerUnsafe(queue, request) };
+            servers.set(caller.deviceId, server);
+            return server;
+          }),
+          (server) =>
+            Effect.sync(() => {
+              if (servers.get(caller.deviceId) === server) servers.delete(caller.deviceId);
+            }),
+        ),
+      );
+
+    const reply = (caller: DropCaller, input: FsReplyInput) =>
+      Effect.suspend(() => {
+        const entry = waiting.get(input.id);
+        if (entry === undefined || entry.deviceId !== caller.deviceId) return Effect.void;
+        return (input.result === null ? Deferred.fail(entry.done, rejected(input.error ?? "That device couldn't do it")) : Deferred.succeed(entry.done, input.result)).pipe(Effect.asVoid);
+      });
+
+    const devices = (except: DeviceId | null) =>
+      Effect.sync(() => ({
+        devices: store
+          .devices()
+          .filter((device) => device.platform !== "web" && device.id !== except && device.scopes.includes("files"))
+          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id) })),
+      }));
+
+    const pull = (relay: DeviceId | null, input: FsPathsInput) =>
+      Effect.gen(function* () {
+        if (input.device === undefined) return yield* Effect.fail(rejected("Pick a device to get files from"));
+        const answer = yield* askPhone(input.device, (id) => ({ _tag: "Send", id, paths: input.paths, relay }));
+        return { files: answer.files };
+      });
+
+    const listMac = (input: FsListInput) =>
       Effect.gen(function* () {
         const dir = yield* resolve(input.path);
         const entries = yield* attempt(() => readListing(dir, input.hidden));
@@ -298,7 +380,17 @@ export const layer = Layer.effect(
         return { entries: entries.filter((entry) => entry !== null), truncated: found.truncated || allowed.length > input.limit } satisfies FsSearchResult;
       });
 
+    const list = (input: FsListInput) =>
+      input.device === undefined
+        ? listMac(input)
+        : askPhone(input.device, (id) => ({ _tag: "List", id, path: input.path, sort: input.sort, offset: input.offset, limit: input.limit })).pipe(Effect.map((answer) => answer.result));
+
     const thumbs = (input: FsThumbsInput) =>
+      input.device === undefined
+        ? thumbsMac(input)
+        : askPhone(input.device, (id) => ({ _tag: "Thumbs", id, paths: input.paths })).pipe(Effect.map((answer) => ({ thumbs: answer.thumbs })));
+
+    const thumbsMac = (input: FsThumbsInput) =>
       Effect.gen(function* () {
         const known = yield* Effect.promise(() =>
           Promise.all(
@@ -321,33 +413,41 @@ export const layer = Layer.effect(
         return { thumbs: known.map((item) => ({ path: item.path, jpeg: item.real === null ? null : (thumbCache.get(item.real)?.jpeg ?? null) })) } satisfies FsThumbsResult;
       });
 
-    const expand = async (real: string): Promise<Array<MacDropFile>> => {
+    const tooMany = () => Object.assign(new Error("too many"), { code: "ETOOMANY" });
+
+    const expand = async (real: string, out: Array<MacDropFile>): Promise<void> => {
       const info = await stat(real);
-      if (!info.isDirectory()) return [{ name: basename(real), path: null, size: info.size, mime: null, origin: real }];
+      if (!info.isDirectory()) {
+        if (out.length >= FS_LIMITS.pull) throw tooMany();
+        out.push({ name: basename(real), path: null, size: info.size, mime: null, origin: real });
+        return;
+      }
       const top = basename(real);
-      const dirents = await readdir(real, { withFileTypes: true, recursive: true });
-      const files = dirents.filter((dirent) => dirent.isFile());
-      if (files.length > FS_LIMITS.pull) throw Object.assign(new Error("too many"), { code: "ETOOMANY" });
-      return inBatches(files, async (dirent) => {
-        const origin = join(dirent.parentPath, dirent.name);
-        const size = (await stat(origin).catch(() => null))?.size ?? 0;
-        const folder = relative(real, dirent.parentPath);
-        return { name: dirent.name, path: folder === "" ? top : join(top, folder), size, mime: null, origin };
-      });
+      const walk = async (dir: string): Promise<void> => {
+        const folder = relative(real, dir);
+        for (const dirent of await readdir(dir, { withFileTypes: true })) {
+          const origin = join(dir, dirent.name);
+          if (denied.some((base) => inside(origin, base))) continue;
+          if (dirent.isDirectory()) await walk(origin);
+          else if (dirent.isFile()) {
+            if (out.length >= FS_LIMITS.pull) throw tooMany();
+            out.push({ name: dirent.name, path: folder === "" ? top : join(top, folder), size: 0, mime: null, origin });
+          }
+        }
+      };
+      await walk(real);
     };
 
     const get = (caller: DropCaller, input: FsPathsInput) =>
       Effect.gen(function* () {
         const reals = yield* Effect.forEach(input.paths, resolve);
-        const lists = yield* Effect.forEach(reals, (real) =>
-          Effect.tryPromise({
-            try: () => expand(real),
-            catch: (error) => (codeOf(error) === "ETOOMANY" ? rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick a smaller folder.`) : failure(error)),
-          }),
-        );
-        const files = lists.flat();
-        if (files.length === 0) return yield* Effect.fail(rejected("Nothing to send in there"));
-        if (files.length > FS_LIMITS.pull) return yield* Effect.fail(rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick fewer.`));
+        const found: Array<MacDropFile> = [];
+        yield* Effect.tryPromise({
+          try: () => reals.reduce((chain, real) => chain.then(() => expand(real, found)), Promise.resolve()),
+          catch: (error) => (codeOf(error) === "ETOOMANY" ? rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick fewer.`) : failure(error)),
+        });
+        if (found.length === 0) return yield* Effect.fail(rejected("Nothing to send in there"));
+        const files = yield* Effect.promise(() => inBatches(found, async (file) => ({ ...file, size: file.size || ((await lstat(file.origin).catch(() => null))?.size ?? 0) })));
         const offered = yield* drops.pull(caller, files);
         log("fs.get", caller, { items: input.paths.length, files: files.length, bytes: offered.drop.bytes });
         return offered;
@@ -357,30 +457,6 @@ export const layer = Layer.effect(
       Effect.gen(function* () {
         const real = yield* resolve(path);
         yield* ask(bridge, { _tag: "FsOpen", path: real });
-      });
-
-    const rename_ = (caller: DropCaller, input: FsRenameInput) =>
-      Effect.gen(function* () {
-        const real = yield* resolveWritable(input.path);
-        const target = join(dirname(real), input.name);
-        if (yield* Effect.promise(() => exists(target))) return yield* Effect.fail(rejected("Something with that name is already there"));
-        yield* attempt(() => rename(real, target));
-        listings.clear();
-        log("fs.rename", caller, {});
-        const entry = yield* Effect.promise(() => statEntry(target));
-        return entry ?? (yield* Effect.fail(unavailable("That's no longer on your Mac")));
-      });
-
-    const folder = (caller: DropCaller, input: FsFolderInput) =>
-      Effect.gen(function* () {
-        const parent = yield* resolve(input.parent);
-        if (!(inside(parent, home) || inside(parent, "/Volumes")) || inside(parent, library)) return yield* Effect.fail(rejected("Vitals can't change files there"));
-        const target = join(parent, input.name);
-        yield* attempt(() => mkdir(target));
-        listings.clear();
-        log("fs.folder", caller, {});
-        const entry = yield* Effect.promise(() => statEntry(target));
-        return entry ?? (yield* Effect.fail(unavailable("Your Mac couldn't make that folder")));
       });
 
     const trash = (caller: DropCaller, input: FsPathsInput) =>
@@ -397,7 +473,8 @@ export const layer = Layer.effect(
         const real = yield* resolve(path);
         const info = yield* attempt(() => stat(real));
         if (!info.isDirectory()) return yield* Effect.fail(rejected("That isn't a folder"));
-        if (!(inside(real, home) || inside(real, "/Volumes")) || inside(real, library)) return yield* Effect.fail(rejected("Vitals can't put files there"));
+        const hidden = inside(real, home) && relative(home, real).split("/").some((part) => part.startsWith("."));
+        if (!(inside(real, home) || inside(real, "/Volumes")) || real === home || hidden || inside(real, library)) return yield* Effect.fail(rejected("Vitals can't put files there"));
         return real;
       });
 
@@ -414,14 +491,24 @@ export const layer = Layer.effect(
     );
 
     return FsService.of({
-      roots: (writable) => Effect.promise(async () => ({ roots: await currentRoots(), access, writable })),
+      roots: (input) =>
+        input.device === undefined
+          ? Effect.promise(async () => ({ roots: await currentRoots() }))
+          : Effect.suspend(() => {
+              const server = servers.get(input.device ?? "");
+              return server === undefined
+                ? Effect.fail(unavailable(`${store.device(input.device ?? "")?.name ?? "That device"} isn't open. Open Vitals on it to browse.`))
+                : Effect.succeed({ roots: server.roots });
+            }),
+      devices,
+      serve,
+      reply,
+      pull,
       list,
       search,
       thumbs,
       get,
       open,
-      rename: rename_,
-      folder,
       trash,
       destination,
     });
