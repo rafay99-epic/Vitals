@@ -176,7 +176,7 @@ describe("fs: browse a phone", () => {
       }),
     );
     await serving;
-    expect(seen.devices.devices).toContainEqual({ deviceId: phoneId, name: "Pixel 9", platform: "android", online: true });
+    expect(seen.devices.devices).toContainEqual({ deviceId: phoneId, name: "Pixel 9", platform: "android", online: true, connected: true });
     expect(seen.devices.devices.map((device) => device.deviceId)).not.toContain(deviceIdOf(other.deviceId));
     expect(seen.phoneRoots.roots).toEqual(roots);
     expect(seen.listed).toEqual(listing);

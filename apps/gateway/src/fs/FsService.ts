@@ -48,6 +48,7 @@ import { Bridge, ask } from "../bridge/Bridge.ts";
 import { GatewayConfig } from "../config.ts";
 import { type DropCaller, DropStore } from "../drop/DropStore.ts";
 import { Store } from "../persistence/Store.ts";
+import { Connections } from "../ws/Connections.ts";
 
 type FsError = Unavailable | CommandRejected;
 
@@ -221,6 +222,7 @@ export const layer = Layer.effect(
     const drops = yield* DropStore;
     const activity = yield* ActivityLog;
     const store = yield* Store;
+    const connections = yield* Connections;
     const servers = new Map<string, Server>();
     const waiting = new Map<string, { readonly deviceId: string; readonly done: Deferred.Deferred<FsServeResult, FsError> }>();
     const homeDir = config.homeDir ?? homedir();
@@ -340,11 +342,11 @@ export const layer = Layer.effect(
       });
 
     const devices = (except: DeviceId | null) =>
-      Effect.sync(() => ({
+      Effect.map(connections.connectedDevices, (connected) => ({
         devices: store
           .devices()
           .filter((device) => device.platform !== "web" && device.id !== except && device.scopes.includes("files"))
-          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id) })),
+          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id), connected: connected.has(device.id) })),
       }));
 
     const pull = (relay: DeviceId | null, input: FsPathsInput) =>

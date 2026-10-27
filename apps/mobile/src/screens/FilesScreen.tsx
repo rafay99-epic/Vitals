@@ -355,7 +355,11 @@ function DeviceHub() {
         />
       ) : null}
       {device !== null && !device.online ? (
-        <Empty title={`Open Vitals on ${device.name}`} detail={device.platform === "ios" ? "An iPhone shares only while Vitals is open on it." : "Then turn on Let your Mac and other phones browse, in Settings › This phone."} />
+        device.connected === true ? (
+          <Empty title={`${device.name} isn't sharing its files`} detail="On it, turn on Let your Mac and other phones browse, in Settings › This phone." />
+        ) : (
+          <Empty title={`Open Vitals on ${device.name}`} detail={device.platform === "ios" ? "An iPhone shares only while Vitals is open on it." : "Then turn on Let your Mac and other phones browse, in Settings › This phone."} />
+        )
       ) : (
         <DeviceRows key={device?.deviceId ?? "mac"} device={device} />
       )}

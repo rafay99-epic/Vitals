@@ -129,7 +129,10 @@ export const FsDevice = Schema.Struct({
   deviceId: DeviceId,
   name: Schema.String,
   platform: Platform,
+  /** Serving its files right now. */
   online: Schema.Boolean,
+  /** Connected to the Mac, whether or not it shares its files. */
+  connected: Schema.optionalKey(Schema.Boolean),
 });
 export type FsDevice = typeof FsDevice.Type;
 

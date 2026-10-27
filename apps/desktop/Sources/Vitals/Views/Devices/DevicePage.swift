@@ -75,6 +75,7 @@ enum DeviceLook {
     static func status(_ phone: PhoneDevice) -> String {
         let platform = phone.platform == "ios" ? "iPhone" : "Android"
         if phone.online { return "\(platform) · Online" }
+        if phone.notSharing { return "\(platform) · Connected, not sharing files" }
         return "\(platform) · \(phone.platform == "ios" ? "Not open" : "Offline")"
     }
 }
@@ -132,11 +133,9 @@ private struct OfflineCard: View {
         HStack(alignment: .top, spacing: 12) {
             IconTile(symbol: "exclamationmark.circle", tint: .orange, size: 28, font: .system(size: 13, weight: .medium))
             VStack(alignment: .leading, spacing: 3) {
-                Text(phone.platform == "ios" ? "Open Vitals on your iPhone" : "\(phone.name) isn't reachable")
+                Text(title)
                     .font(.body.weight(.medium))
-                Text(phone.platform == "ios"
-                     ? "iOS only lets it share while Vitals is open. This page fills in the moment it is."
-                     : "Open Vitals on it, or check it's on Wi-Fi or Tailscale. This page fills in the moment it's back.")
+                Text(detail)
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -144,6 +143,17 @@ private struct OfflineCard: View {
         }
         .padding(16)
         .cardBackground()
+    }
+
+    private var title: String {
+        if phone.notSharing { return "\(phone.name) isn't sharing its files" }
+        return phone.platform == "ios" ? "Open Vitals on your iPhone" : "\(phone.name) isn't reachable"
+    }
+
+    private var detail: String {
+        if phone.notSharing { return "On the phone, open Vitals › Settings › This phone and turn on Let your Mac and other phones browse. This page fills in right away." }
+        if phone.platform == "ios" { return "iOS only lets it share while Vitals is open. This page fills in the moment it is." }
+        return "Open Vitals on it, or check it's on Wi-Fi or Tailscale. This page fills in the moment it's back."
     }
 }
 

@@ -316,8 +316,14 @@ struct PhoneDevice: Codable, Equatable, Identifiable, Sendable {
     let deviceId: String
     let name: String
     let platform: String
+    /// Serving its files right now.
     let online: Bool
+    /// Connected to this Mac, whether or not it shares its files. Older gateways leave it out.
+    var connected: Bool?
     var id: String { deviceId }
+
+    /// Connected, but its "Let your Mac and other phones browse" switch is off.
+    var notSharing: Bool { !online && connected == true }
 }
 
 struct PhoneRoot: Codable, Equatable, Identifiable, Sendable {
