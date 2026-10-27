@@ -1,10 +1,12 @@
 import {
+  BACKGROUND_RETRY_MAX_DELAY_MS,
   type Connection,
   type ConnectionOptions,
   type ConnectionState,
   createConnection,
   deviceKeyText,
   type Route,
+  RETRY_MAX_DELAY_MS,
   type RouteKind,
   Store,
 } from "@vitals/client-runtime";
@@ -13,6 +15,7 @@ import type { KeyPair } from "@vitals/noise";
 import { newId } from "@vitals/shared";
 import { motion, type ToastTone } from "@vitals/ui";
 import * as Schema from "effect/Schema";
+import { AppState } from "react-native";
 
 import { localNetwork, nearby, nearbyEndpoints } from "../connection/nearby.ts";
 import { tunnel } from "../connection/tunnel.ts";
@@ -121,6 +124,7 @@ export class Remote {
         lanEnrolled: () => this.link.get().lanBound === true,
         onLanUnknown: () => relink({ ...this.link.get(), lanBound: false }),
         clientVersion: CLIENT_VERSION,
+        retryCapMs: () => (AppState.currentState === "active" ? RETRY_MAX_DELAY_MS : BACKGROUND_RETRY_MAX_DELAY_MS),
         webSocket,
         onTransition: (from, to) => {
           if (sameShape(from, to)) return;

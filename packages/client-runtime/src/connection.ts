@@ -59,6 +59,8 @@ export interface ConnectionOptions {
   readonly macKey?: () => string | null;
   readonly deviceKey?: KeyPair | null;
   readonly clientVersion: string;
+  /** The longest wait between reconnect tries; read before each wait. RETRY_MAX_DELAY_MS when absent. */
+  readonly retryCapMs?: () => number;
   readonly webSocket: Socket.WebSocketConstructor["Service"];
   readonly fetch?: typeof globalThis.fetch;
   readonly random?: () => number;
@@ -455,7 +457,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
    */
   const backoff = (failures: number, reason: string, routes: ReadonlyArray<RouteFailure>): Effect.Effect<number> =>
     Effect.gen(function* () {
-      const delay = retryDelayMs(failures, random());
+      const delay = retryDelayMs(failures, random(), options.retryCapMs?.());
       // Wakes queued while connecting are already answered by this attempt.
       yield* Queue.clear(signals);
       transition({ _tag: "Backoff", attempt: failures + 1, retryAt: Date.now() + delay, reason, failures: routes });
