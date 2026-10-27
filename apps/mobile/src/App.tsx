@@ -20,10 +20,10 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ClipboardSync } from "./ClipboardSync.tsx";
-import { LinkSync } from "./LinkSync.tsx";
 import { ShareSync } from "./ShareSync.tsx";
 import { CopyStrip } from "./CopyStrip.tsx";
 import { DropStrips } from "./DropTransfers.tsx";
+import { watchLink } from "./lib/link.ts";
 import { checkPlay } from "./lib/play.ts";
 import { checkForUpdate } from "./lib/updates.ts";
 import { type ControlStackParams, type HomeStackParams, navigationRef, type SettingsStackParams, type TabParams } from "./navigation.ts";
@@ -46,6 +46,9 @@ import { UpdatesScreen } from "./screens/UpdatesScreen.tsx";
 import { TransferStrip } from "./Transfers.tsx";
 import { UpdateSync, useUpdateStatus } from "./UpdateSync.tsx";
 import { color, Dock, type DockTab, SheetHost, toast, ToastHost } from "./ui/index.ts";
+
+// Once per JS runtime, not per screen: the link outlives the UI when the app is closed.
+watchLink();
 
 const theme: Theme = {
   ...DarkTheme,
@@ -183,7 +186,6 @@ function Shell() {
       <SheetHost />
       <ClipboardSync />
       <ShareSync />
-      <LinkSync />
       <UpdateSync />
     </View>
   );
