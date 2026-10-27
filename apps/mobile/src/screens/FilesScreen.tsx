@@ -27,6 +27,8 @@ const KINDS: ReadonlyArray<FsRecentKind> = ["screenshots", "photos", "downloads"
 const STRIP = 12;
 /** Pictures fill the strip, so they load a strip's worth; files only need their newest one for the tile. */
 const LIMIT: Readonly<Record<FsRecentKind, number>> = { screenshots: STRIP, photos: STRIP, downloads: 1, documents: 1 };
+/** One at a time, cheapest first, so the device isn't asked five things at once. Downloads walks a folder tree, so it goes last. */
+const LOAD_ORDER: ReadonlyArray<FsRecentKind> = ["screenshots", "photos", "documents", "downloads"];
 const THUMB = 100;
 const SEARCH_DELAY_MS = 250;
 
@@ -116,8 +118,12 @@ function Roots({ roots, onRoot }: { readonly roots: Loaded<ReadonlyArray<FsRoot>
   return roots.value.map((root) => <RootRow key={root.path} root={root} onPress={onRoot} />);
 }
 
-/** One device's page: four kinds, the newest images, then its folders. Reloads each time Files comes back into view. */
-function DeviceTab({ source }: { readonly source: FsSource }) {
+/**
+ * One device's page: four kinds, the newest images, then its folders. Shows at once, then fills in one
+ * section at a time. Reloads each time Files comes back into view. `limited` is a phone without All files
+ * access, which can't show its recent files.
+ */
+function DeviceTab({ source, limited }: { readonly source: FsSource; readonly limited: boolean }) {
   const remote = useRemote();
   const navigation = useNavigation<Nav>();
   const [recents, setRecents] = useState<Readonly<Record<FsRecentKind, Loaded<RecentPage>>>>({ screenshots: LOADING, photos: LOADING, downloads: LOADING, documents: LOADING });
@@ -127,27 +133,29 @@ function DeviceTab({ source }: { readonly source: FsSource }) {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      for (const kind of KINDS) {
-        void remote.files.recent(kind, 0, LIMIT[kind], device).then((outcome) => {
+      void (async () => {
+        const listed = await remote.files.roots(device);
+        if (cancelled) return;
+        setRoots(listed.ok ? { _tag: "loaded", value: listed.value.roots } : { _tag: "failed", message: listed.message });
+        if (limited) return;
+        for (const kind of LOAD_ORDER) {
+          const outcome = await remote.files.recent(kind, 0, LIMIT[kind], device);
           if (cancelled) return;
           setRecents((current) => ({ ...current, [kind]: outcome.ok ? { _tag: "loaded", value: outcome.value } : { _tag: "failed", message: outcome.message } }));
           if (outcome.ok) remote.files.want(outcome.value.entries, device);
-        });
-      }
-      void remote.files.roots(device).then((outcome) => {
-        if (!cancelled) setRoots(outcome.ok ? { _tag: "loaded", value: outcome.value.roots } : { _tag: "failed", message: outcome.message });
-      });
+        }
+      })();
       return () => {
         cancelled = true;
       };
-    }, [remote, device]),
+    }, [remote, device, limited]),
   );
 
   const openRoot = (root: FsRoot) => navigation.push("Folder", { path: root.path, source, trail: [root.label] });
 
   return (
     <View>
-      <Recents source={source} recents={recents} />
+      {limited ? <Empty title={`${source.name} needs All files access`} detail="Until then it shares only Downloads › Vitals. Open Vitals on it and tap Turn it on." /> : <Recents source={source} recents={recents} />}
       <Head title="Folders" />
       {source.device === null ? <MacFolders roots={roots} onRoot={openRoot} /> : <Roots roots={roots} onRoot={openRoot} />}
     </View>
@@ -268,7 +276,7 @@ export function FilesScreen() {
       <ThisPhone />
       <DropCards />
       <Segmented options={tabs} value={phone?.deviceId ?? "mac"} onChange={setPicked} />
-      {blocked === null ? <DeviceTab key={source.device ?? "mac"} source={source} /> : <Empty title={blocked.title} detail={blocked.detail} />}
+      {blocked === null ? <DeviceTab key={source.device ?? "mac"} source={source} limited={phone?.limited === true} /> : <Empty title={blocked.title} detail={blocked.detail} />}
       <View style={styles.transfers}>
         <Group>
           <Row first label="Transfers" detail={`${String(received.length)} received · ${String(sent.length)} sent`} onPress={() => navigation.navigate("Transfers")} />

@@ -61,6 +61,8 @@ interface Android extends Native {
   readonly toBack: () => Promise<boolean>;
   /** All files access; null before Android 11. Missing on builds from before it was added. */
   readonly fullStorage?: () => boolean | null;
+  /** Opens Vitals' own All files access switch. False when it couldn't. Missing on builds from before it was added. */
+  readonly openFullStorage?: () => Promise<boolean>;
 }
 
 interface Ios extends Native {

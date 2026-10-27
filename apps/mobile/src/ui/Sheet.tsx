@@ -28,6 +28,7 @@ export const sheet = {
     wanted.set({ id: ++nextId, Content });
   },
   close: (): void => wanted.set(null),
+  showing: (): boolean => wanted.get() !== null,
 };
 
 const DISMISS_DISTANCE = 90;
@@ -60,6 +61,8 @@ export function SheetHost() {
       setShown(entry);
     };
     const settle = () => show(wanted.get());
+    // A sheet opened before this mounted, like one asked for at launch.
+    if (wanted.get() !== null) show(wanted.get());
     return wanted.subscribe(() => {
       const next = wanted.get();
       if (current.current === null) {

@@ -127,19 +127,29 @@ const probeFullStorage = (): boolean => {
   }
 };
 
-/** What a caller sees when Android keeps Vitals out of a folder. */
-const NEEDS_ALL_FILES = `${deviceInfo().name} needs All files access to open this. On it: Android Settings › Apps › Special app access › All files access › Vitals.`;
+/** When another device last asked for something only All files access would let Vitals read. 0 until then. */
+export const allFilesWanted = new Store<number>(0);
+
+/** What a caller sees when Android keeps Vitals out of a folder. This phone asks for access at the same time. */
+const needsAllFiles = (what: string, cause?: unknown): Error => {
+  allFilesWanted.set(Date.now());
+  return new Error(`${deviceInfo().name} needs All files access ${what}. Open Vitals on it and tap Turn it on.`, { cause });
+};
 
 const readable = async <A>(read: () => A | Promise<A>): Promise<A> => {
   try {
     return await read();
   } catch (cause) {
-    if (cause instanceof Error && /permission/i.test(cause.message)) throw new Error(NEEDS_ALL_FILES, { cause });
+    if (cause instanceof Error && /permission/i.test(cause.message)) throw hasFullStorage() ? new Error("Android keeps this folder to itself", { cause }) : needsAllFiles("to open this", cause);
     throw cause;
   }
 };
 
-export const askFullStorage = (): Promise<void> => Linking.sendIntent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION").catch(() => Linking.openSettings());
+/** Opens Vitals' own All files access switch. Builds without the native call open the list of every app instead. */
+export const askFullStorage = async (): Promise<void> => {
+  if (await (androidShare?.openFullStorage?.() ?? Promise.resolve(false)).catch(() => false)) return;
+  await Linking.sendIntent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION").catch(() => Linking.openSettings());
+};
 
 /** Android without All files access, where only Downloads › Vitals is shared. Never on iPhone. */
 const limitedStorage = (): boolean => Platform.OS === "android" && !hasFullStorage();
@@ -288,11 +298,12 @@ export class PhoneShare {
     this.remote = remote;
   }
 
-  start(roots: ReadonlyArray<FsRoot> = phoneRoots()): void {
+  /** `limited` tells the other devices Android hasn't allowed All files access yet. */
+  start(roots: ReadonlyArray<FsRoot>, limited: boolean): void {
     if (this.stop !== null) return;
     this.roots = roots;
     this.stop = this.remote.connection.watch(
-      (client) => client["fs.serve"]({ roots, recent: true, read: true }),
+      (client) => client["fs.serve"]({ roots, recent: true, read: true, limited }),
       (request) => void this.answer(request),
     );
   }
@@ -404,7 +415,7 @@ export class PhoneShare {
       if (folder === undefined) throw new Error(`${this.name} doesn't share a ${KIND_WORD[kind]} folder yet. Pick one there in Settings › This phone.`);
       return this.newestIn(folder.path, offset, limit);
     }
-    if (androidShare === null || !hasFullStorage()) throw new Error(`${this.name} needs All files access. Turn it on there in Settings › This phone.`);
+    if (androidShare === null || !hasFullStorage()) throw needsAllFiles(`to show its ${KIND_WORD[kind]}`);
     if (kind === "downloads") return this.newestIn(`${STORAGE}/Download`, offset, limit);
     return androidShare.recent(kind, offset, limit);
   }
