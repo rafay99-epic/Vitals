@@ -87,6 +87,14 @@ export const FsPathsInput = Schema.Struct({
 });
 export type FsPathsInput = typeof FsPathsInput.Type;
 
+/** Copies files from one device to another. `device` is where they are (none for the Mac); `to` is where they go (null for the Mac). */
+export const FsTransferInput = Schema.Struct({
+  device: Target,
+  paths: Schema.Array(FsPath).check(Schema.isMinLength(1), Schema.isMaxLength(FS_LIMITS.pull)),
+  to: Schema.NullOr(DeviceId),
+});
+export type FsTransferInput = typeof FsTransferInput.Type;
+
 export const FsThumbsInput = Schema.Struct({
   device: Target,
   paths: Schema.Array(FsPath).check(Schema.isMinLength(1), Schema.isMaxLength(FS_LIMITS.thumbs)),

@@ -66,6 +66,11 @@ export class MacFiles {
     return this.run((client) => client["fs.open"]({ path }));
   }
 
+  /** Copies `paths` from `device` (the Mac when unset) to `to` (the Mac when null). Files never move off their device. */
+  transfer(paths: ReadonlyArray<string>, to: DeviceId | null, device?: DeviceId): Promise<Outcome<FsPulled>> {
+    return this.run((client) => client["fs.transfer"]({ paths, to, ...(device === undefined ? {} : { device }) }));
+  }
+
   /** Newest photos, screenshots, downloads or documents on the Mac, or on `device` when set. */
   recent(kind: FsRecentKind, offset: number, limit: number, device?: DeviceId): Promise<Outcome<FsRecentResult>> {
     return this.run((client) => client["fs.recent"]({ kind, offset, limit, ...(device === undefined ? {} : { device }) }));

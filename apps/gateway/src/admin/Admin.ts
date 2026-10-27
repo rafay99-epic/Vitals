@@ -77,7 +77,7 @@ export const layer = Layer.effectDiscard(
             return { _tag: "FsThumbs", thumbs } satisfies AdminResult;
           }
           case "FsPull": {
-            const { files: count } = yield* files.pull(null, { device: op.device, paths: op.paths }).pipe(Effect.mapError((error) => error.message));
+            const { files: count } = yield* files.pull(op.to ?? null, { device: op.device, paths: op.paths }).pipe(Effect.mapError((error) => error.message));
             return { _tag: "FsPull", files: count } satisfies AdminResult;
           }
           case "FsRecent": {

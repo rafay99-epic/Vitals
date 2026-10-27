@@ -58,7 +58,8 @@ export const AdminOp = Schema.Union([
   Schema.TaggedStruct("FsRoots", { device: DeviceId }),
   Schema.TaggedStruct("FsList", { device: DeviceId, path: FsPath, offset: NonNegativeInt }),
   Schema.TaggedStruct("FsThumbs", { device: DeviceId, paths: Schema.Array(FsPath) }),
-  Schema.TaggedStruct("FsPull", { device: DeviceId, paths: Schema.Array(FsPath) }),
+  /** `to` sends them on to another phone instead of this Mac. */
+  Schema.TaggedStruct("FsPull", { device: DeviceId, paths: Schema.Array(FsPath), to: Schema.optionalKey(DeviceId) }),
   Schema.TaggedStruct("FsRecent", { device: DeviceId, kind: FsRecentKind, offset: NonNegativeInt }),
   /** What one phone sent to the clipboard history, newest first. */
   Schema.TaggedStruct("ClipsFrom", { device: DeviceId }),

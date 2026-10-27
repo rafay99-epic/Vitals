@@ -223,3 +223,62 @@ describe("fs: recent on a phone", () => {
     expect(seen.stale.message).toContain("Update Vitals");
   });
 });
+
+describe("fs: transfer between devices", () => {
+  test("Mac files go to another device as a drop to it, and never back to the Mac", async () => {
+    const { gateway: target, token } = await paired();
+    const other = await pairDevice(target);
+    const otherId = deviceIdOf(other.deviceId);
+    const result = await withClient(target, token, (client) =>
+      Effect.gen(function* () {
+        const sent = yield* client["fs.transfer"]({ paths: [join(home, "Downloads", "a.txt")], to: otherId });
+        const toMac = yield* Effect.flip(client["fs.transfer"]({ paths: [join(home, "Downloads", "a.txt")], to: null }));
+        return { sent, toMac };
+      }),
+    );
+    expect(result.sent).toEqual({ files: 1 });
+    expect(result.toMac).toMatchObject({ _tag: "CommandRejected" });
+    const drops = await withClient(target, other.token, (client) =>
+      client["drop.watch"]({}).pipe(
+        Stream.take(1),
+        Stream.runHead,
+        Effect.map((event) => (event._tag === "Some" && event.value._tag === "Snapshot" ? event.value.drops : [])),
+      ),
+    );
+    expect(drops.map((drop) => [drop.files.map((file) => file.name), drop.to])).toContainEqual([["a.txt"], { _tag: "Device", deviceId: otherId, name: "Pixel 9" }]);
+  });
+
+  test("a phone's files go to the Mac or a third device through the phone, not to itself", async () => {
+    gateway = await startGateway(join(mkdtempSync(join(tmpdir(), "vitals-data-")), "remote"), home);
+    const target = gateway;
+    const phone = await pairDevice(target);
+    const asker = await pairDevice(target);
+    const third = await pairDevice(target);
+    const phoneId = deviceIdOf(phone.deviceId);
+    const relays: Array<string | null> = [];
+    const serving = withClient(target, phone.token, (client) =>
+      client["fs.serve"]({ roots: [{ label: "Download", path: "/storage/emulated/0/Download", place: "downloads" }], recent: true }).pipe(
+        Stream.take(2),
+        Stream.runForEach((request) => {
+          if (request._tag !== "Send") return Effect.void;
+          relays.push(request.relay);
+          return client["fs.reply"]({ id: request.id, result: { _tag: "Send", files: request.paths.length }, error: null });
+        }),
+      ),
+    );
+    await Bun.sleep(300);
+    const asked = await withClient(target, asker.token, (client) =>
+      Effect.gen(function* () {
+        const toMac = yield* client["fs.transfer"]({ device: phoneId, paths: ["/storage/emulated/0/Download/a.pdf"], to: null });
+        const toThird = yield* client["fs.transfer"]({ device: phoneId, paths: ["/storage/emulated/0/Download/a.pdf"], to: deviceIdOf(third.deviceId) });
+        const toItself = yield* Effect.flip(client["fs.transfer"]({ device: phoneId, paths: ["/storage/emulated/0/Download/a.pdf"], to: phoneId }));
+        return { toMac, toThird, toItself };
+      }),
+    );
+    await serving;
+    expect(asked.toMac).toEqual({ files: 1 });
+    expect(asked.toThird).toEqual({ files: 1 });
+    expect(asked.toItself).toMatchObject({ _tag: "CommandRejected" });
+    expect(relays).toEqual([null, third.deviceId]);
+  });
+});

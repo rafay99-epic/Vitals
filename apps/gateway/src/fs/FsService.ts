@@ -30,6 +30,7 @@ import {
   type FsSort,
   type FsThumbsInput,
   type FsThumbsResult,
+  type FsTransferInput,
   type MacDropFile,
   CommandRejected,
   FS_LIMITS,
@@ -66,6 +67,7 @@ export class FsService extends Context.Service<
     readonly get: (caller: DropCaller, input: FsPathsInput) => Effect.Effect<DropOffered, FsError>;
     readonly open: (input: FsPathInput) => Effect.Effect<void, FsError>;
     readonly recent: (input: FsRecentInput) => Effect.Effect<FsRecentResult, FsError>;
+    readonly transfer: (caller: DropCaller, input: FsTransferInput) => Effect.Effect<FsPulled, FsError>;
     readonly destination: (path: string) => Effect.Effect<string, FsError>;
   }
 >()("@vitals/gateway/FsService") {}
@@ -456,16 +458,21 @@ export const layer = Layer.effect(
       await walk(real);
     };
 
-    const get = (caller: DropCaller, input: FsPathsInput) =>
+    const collect = (paths: ReadonlyArray<string>) =>
       Effect.gen(function* () {
-        const reals = yield* Effect.forEach(input.paths, resolve);
+        const reals = yield* Effect.forEach(paths, resolve);
         const found: Array<MacDropFile> = [];
         yield* Effect.tryPromise({
           try: () => reals.reduce((chain, real) => chain.then(() => expand(real, found)), Promise.resolve()),
           catch: (error) => (codeOf(error) === "ETOOMANY" ? rejected(`That's more than ${FS_LIMITS.pull.toLocaleString("en-US")} files. Pick fewer.`) : failure(error)),
         });
         if (found.length === 0) return yield* Effect.fail(rejected("Nothing to send in there"));
-        const files = yield* Effect.promise(() => inBatches(found, async (file) => ({ ...file, size: file.size || ((await lstat(file.origin).catch(() => null))?.size ?? 0) })));
+        return yield* Effect.promise(() => inBatches(found, async (file) => ({ ...file, size: file.size || ((await lstat(file.origin).catch(() => null))?.size ?? 0) })));
+      });
+
+    const get = (caller: DropCaller, input: FsPathsInput) =>
+      Effect.gen(function* () {
+        const files = yield* collect(input.paths);
         const offered = yield* drops.pull(caller, files);
         log("fs.get", caller, { items: input.paths.length, files: files.length, bytes: offered.drop.bytes });
         return offered;
@@ -512,6 +519,21 @@ export const layer = Layer.effect(
                 return sorted;
               });
         return { kind: input.kind, entries: entries.slice(input.offset, input.offset + input.limit), more: entries.length > input.offset + input.limit } satisfies FsRecentResult;
+      });
+
+    const transfer = (caller: DropCaller, input: FsTransferInput) =>
+      Effect.gen(function* () {
+        if (input.device === undefined) {
+          if (input.to === null) return yield* Effect.fail(rejected("Those files are already on your Mac"));
+          const target = store.device(input.to);
+          if (target === null || target.revokedAt !== null) return yield* Effect.fail(rejected("That device isn't paired with your Mac"));
+          const files = yield* collect(input.paths);
+          yield* drops.send(input.to, files);
+          log("fs.transfer", caller, { items: input.paths.length, files: files.length, to: input.to });
+          return { files: files.length };
+        }
+        if (input.to === input.device) return yield* Effect.fail(rejected("Those files are already there"));
+        return yield* pull(input.to, { device: input.device, paths: input.paths });
       });
 
     const recent = (input: FsRecentInput) =>
@@ -562,6 +584,7 @@ export const layer = Layer.effect(
       get,
       open,
       recent,
+      transfer,
       destination,
     });
   }),

@@ -111,6 +111,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
         "fs.get": (input) => (session.device.scopes.includes("files") ? files.get(dropCaller, input) : Effect.fail(new CommandRejected({ message: "This device can't receive files. Allow it on your Mac." }))),
         "fs.open": (input) => files.open(input).pipe(Effect.as({})),
         "fs.recent": (input) => files.recent(input),
+        "fs.transfer": (input) => (session.device.scopes.includes("files") ? files.transfer(dropCaller, input) : Effect.fail(new CommandRejected({ message: "This device can't send files. Allow it on your Mac." }))),
         "terminal.list": () => terminals.list,
         "terminal.open": (input) => terminals.open(clipCaller, input),
         "terminal.attach": (input) => terminals.attach(clipCaller, input),
