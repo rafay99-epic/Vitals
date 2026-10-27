@@ -161,7 +161,7 @@ describe("fs: browse a phone", () => {
     const listing = { path: "/storage/emulated/0/Download", parent: null, entries: [{ name: "a.jpg", path: "/storage/emulated/0/Download/a.jpg", kind: "file" as const, size: 3, modifiedAt: 1 }], total: 1 };
 
     const serving = withClient(target, phone.token, (client) =>
-      client["fs.serve"]({ roots }).pipe(
+      client["fs.serve"]({ roots, limited: true }).pipe(
         Stream.take(1),
         Stream.runForEach((request) => (request._tag === "List" ? client["fs.reply"]({ id: request.id, result: { _tag: "List", result: listing }, error: null }) : Effect.void)),
       ),
@@ -176,7 +176,7 @@ describe("fs: browse a phone", () => {
       }),
     );
     await serving;
-    expect(seen.devices.devices).toContainEqual({ deviceId: phoneId, name: "Pixel 9", platform: "android", online: true, connected: true });
+    expect(seen.devices.devices).toContainEqual({ deviceId: phoneId, name: "Pixel 9", platform: "android", online: true, connected: true, limited: true });
     expect(seen.devices.devices.map((device) => device.deviceId)).not.toContain(deviceIdOf(other.deviceId));
     expect(seen.phoneRoots.roots).toEqual(roots);
     expect(seen.listed).toEqual(listing);

@@ -123,6 +123,7 @@ interface Server {
   readonly roots: ReadonlyArray<FsRoot>;
   readonly recent: boolean;
   readonly read: boolean;
+  readonly limited: boolean;
   readonly push: (request: FsServeRequest) => void;
 }
 
@@ -333,7 +334,7 @@ export const layer = Layer.effect(
       Stream.callback<FsServeRequest>((queue) =>
         Effect.acquireRelease(
           Effect.sync(() => {
-            const server: Server = { name: caller.name, roots: input.roots, recent: input.recent === true, read: input.read === true, push: (request) => Queue.offerUnsafe(queue, request) };
+            const server: Server = { name: caller.name, roots: input.roots, recent: input.recent === true, read: input.read === true, limited: input.limited === true, push: (request) => Queue.offerUnsafe(queue, request) };
             servers.set(caller.deviceId, server);
             return server;
           }),
@@ -356,7 +357,10 @@ export const layer = Layer.effect(
         devices: store
           .devices()
           .filter((device) => device.platform !== "web" && device.id !== except && device.scopes.includes("files"))
-          .map((device) => ({ deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id), connected: connected.has(device.id) })),
+          .map((device) => {
+            const limited = servers.get(device.id)?.limited === true;
+            return { deviceId: device.id, name: device.name, platform: device.platform, online: servers.has(device.id), connected: connected.has(device.id), ...(limited ? { limited } : {}) };
+          }),
       }));
 
     const pull = (relay: DeviceId | null, input: FsPathsInput) =>

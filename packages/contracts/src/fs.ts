@@ -163,6 +163,8 @@ export const FsDevice = Schema.Struct({
   online: Schema.Boolean,
   /** Connected to the Mac, whether or not it shares its files. */
   connected: Schema.optionalKey(Schema.Boolean),
+  /** Android without All files access: it shares only Downloads › Vitals until it's allowed. */
+  limited: Schema.optionalKey(Schema.Boolean),
 });
 export type FsDevice = typeof FsDevice.Type;
 
@@ -177,6 +179,8 @@ export const FsServeInput = Schema.Struct({
   recent: Schema.optionalKey(Schema.Boolean),
   /** Set by builds that answer `Read`, for previews. */
   read: Schema.optionalKey(Schema.Boolean),
+  /** Android without All files access. */
+  limited: Schema.optionalKey(Schema.Boolean),
 });
 export type FsServeInput = typeof FsServeInput.Type;
 
