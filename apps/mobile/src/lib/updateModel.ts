@@ -60,7 +60,7 @@ export const playVersion = (version: number): string => `0.${String(version)}`;
 /** The one thing the Updates page says, most urgent first. */
 export type UpdateView =
   | { readonly kind: "off" }
-  | { readonly kind: "current"; readonly checked: boolean }
+  | { readonly kind: "current"; readonly checkedAt: number | null }
   | { readonly kind: "checking" }
   | { readonly kind: "found"; readonly notes: string }
   | { readonly kind: "downloading"; readonly progress: number }
@@ -84,7 +84,7 @@ export const updateView = (quick: UpdateState, play: PlayState, rolledBack: bool
   if (quick._tag === "Found") return { kind: "found", notes: quick.notes };
   if (rolledBack) return { kind: "rolled-back" };
   if (quick._tag === "Off" && play._tag === "Off") return { kind: "off" };
-  return { kind: "current", checked: quick._tag === "Current" };
+  return { kind: "current", checkedAt: quick._tag === "Current" ? quick.at : null };
 };
 
 /** The Settings row's word for a view, and whether it waits on the user (yellow, plus a dot on the tab). */

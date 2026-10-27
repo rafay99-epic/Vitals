@@ -23,7 +23,7 @@ const copyOf = (view: UpdateView): Copy => {
     case "off":
       return { title: "Updates are off in this build", detail: "Store and Nightly builds update themselves." };
     case "current":
-      return { title: "You're up to date", detail: view.checked ? "Checked just now." : "Vitals checks by itself when you open it." };
+      return { title: "You're up to date", detail: view.checkedAt === null ? "Vitals checks by itself when you open it." : `Checked ${formatDateTime(view.checkedAt)}.` };
     case "checking":
       return { title: "Checking for updates", detail: playSupported ? "Quick updates and Google Play." : "Quick updates." };
     case "found":
