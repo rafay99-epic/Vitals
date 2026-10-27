@@ -309,6 +309,8 @@ enum AdminResult: Equatable, Sendable {
     case fsThumbs([WireThumb])
     case fsPull(files: Int)
     case fsRecent(RecentFiles)
+    /// Where the gateway put its copy of the phone's file.
+    case fsPreview(path: String)
     case clipsFrom([PhoneClip])
 }
 
@@ -384,7 +386,7 @@ struct PhoneClip: Codable, Equatable, Identifiable, Sendable {
 }
 
 extension AdminResult: Decodable {
-    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices, roots, result, thumbs, files, clips }
+    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices, roots, result, thumbs, files, clips, path }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -405,6 +407,7 @@ extension AdminResult: Decodable {
         case "FsThumbs": self = .fsThumbs(try c.decode([WireThumb].self, forKey: .thumbs))
         case "FsPull": self = .fsPull(files: try c.decode(Int.self, forKey: .files))
         case "FsRecent": self = .fsRecent(try c.decode(RecentFiles.self, forKey: .result))
+        case "FsPreview": self = .fsPreview(path: try c.decode(String.self, forKey: .path))
         case "ClipsFrom": self = .clipsFrom(try c.decode([PhoneClip].self, forKey: .clips))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: ._tag, in: c, debugDescription: "unknown admin result \(other)")

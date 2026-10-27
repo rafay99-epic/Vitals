@@ -438,6 +438,8 @@ enum AdminOp: Equatable, Sendable {
     /// `to` sends the files on to another phone instead of this Mac.
     case fsPull(device: String, paths: [String], to: String? = nil)
     case fsRecent(device: String, kind: RecentKind, offset: Int)
+    /// Copies a phone's file into the gateway's preview cache for Quick Look.
+    case fsPreview(device: String, path: String)
     case clipsFrom(device: String)
 }
 
@@ -487,6 +489,10 @@ extension AdminOp: Encodable {
             try c.encode(device, forKey: .device)
             try c.encode(kind, forKey: .kind)
             try c.encode(offset, forKey: .offset)
+        case let .fsPreview(device, path):
+            try c.encode("FsPreview", forKey: ._tag)
+            try c.encode(device, forKey: .device)
+            try c.encode(path, forKey: .path)
         case let .clipsFrom(device):
             try c.encode("ClipsFrom", forKey: ._tag)
             try c.encode(device, forKey: .device)

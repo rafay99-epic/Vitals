@@ -395,6 +395,14 @@ struct DevicePageBridgeTests {
         #expect(try adminResult(ok) == .fsRecent(RecentFiles(kind: .downloads, entries: [entry], more: true)))
     }
 
+    @Test func previewMatchesTheContract() throws {
+        #expect(try json(FromApp.admin(id: "a-1", op: .fsPreview(device: "dev-1", path: "/storage/emulated/0/Download/Statement.pdf"))) == dictionary(
+            #"{"t":"admin","id":"a-1","op":{"_tag":"FsPreview","device":"dev-1","path":"/storage/emulated/0/Download/Statement.pdf"}}"#
+        ))
+        let ok = #"{"_tag":"FsPreview","path":"/Users/me/.vitals/remote/preview/3f2a9c/Statement.pdf"}"#
+        #expect(try adminResult(ok) == .fsPreview(path: "/Users/me/.vitals/remote/preview/3f2a9c/Statement.pdf"))
+    }
+
     @Test func clipsFromDecodesStoredAndInlineClips() throws {
         let ok = #"""
         {"_tag":"ClipsFrom","clips":[

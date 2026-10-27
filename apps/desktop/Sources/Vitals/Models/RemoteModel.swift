@@ -504,9 +504,17 @@ final class RemoteModel {
         return roots
     }
 
-    func phoneList(_ device: String, path: String) async throws -> PhoneListing? {
-        guard case let .fsList(listing) = try await admin(.fsList(device: device, path: path, offset: 0)) else { return nil }
+    /// One page of a folder, from `offset`.
+    func phoneList(_ device: String, path: String, offset: Int) async throws -> PhoneListing? {
+        guard case let .fsList(listing) = try await admin(.fsList(device: device, path: path, offset: offset)) else { return nil }
         return listing
+    }
+
+    /// Copies one of `device`'s files to this Mac for Quick Look and returns where. A big file
+    /// comes over in many chunks, so it waits longer than other admin calls.
+    func phonePreview(_ device: String, path: String) async throws -> URL? {
+        guard case let .fsPreview(local) = try await admin(.fsPreview(device: device, path: path), timeout: .seconds(600)) else { return nil }
+        return URL(fileURLWithPath: local)
     }
 
     /// Asks `device` to send `paths` to this Mac, or on to the phone `to`.
@@ -595,16 +603,21 @@ final class RemoteModel {
         if allow { await refreshDevices() }
     }
 
-    private func admin(_ op: AdminOp) async throws -> AdminResult {
+    /// Cancelling the calling task stops waiting and throws `CancellationError`.
+    private func admin(_ op: AdminOp, timeout: Duration = .seconds(20)) async throws -> AdminResult {
         guard gateway != nil else { throw AdminFailure(message: "Remote access is off") }
         let id = UUID().uuidString
-        return try await withCheckedThrowingContinuation { continuation in
-            adminWaiters[id] = continuation
-            send(.admin(id: id, op: op))
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(20))
-                self?.adminWaiters.removeValue(forKey: id)?.resume(throwing: AdminFailure(message: "The gateway did not answer"))
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                adminWaiters[id] = continuation
+                send(.admin(id: id, op: op))
+                Task { [weak self] in
+                    try? await Task.sleep(for: timeout)
+                    self?.adminWaiters.removeValue(forKey: id)?.resume(throwing: AdminFailure(message: "The gateway did not answer"))
+                }
             }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.adminWaiters.removeValue(forKey: id)?.resume(throwing: CancellationError()) }
         }
     }
 

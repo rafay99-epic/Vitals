@@ -41,6 +41,7 @@ struct DevicePage: View {
         return MetricScroll {
             PageHero(value: phone.name, subtitle: DeviceLook.status(phone)) { EmptyView() }
             if let notice = page.notice { NoticeLine(text: notice) }
+            PreviewLine(phone: phone)
             if !phone.online { OfflineCard(phone: phone) }
             if phone.online || !page.recent.isEmpty {
                 KindTiles(phone: phone) { open(.recent([$0])) }
@@ -59,6 +60,7 @@ struct DevicePage: View {
     private func open(_ next: DeviceDrill?) {
         selection = []
         drill = next
+        if let deviceId, case .failed = pages.page(deviceId).preview { pages.cancelPreview(deviceId) }
     }
 }
 
@@ -138,6 +140,29 @@ struct OnlineDot: View {
     }
 }
 
+/// "Getting Statement.pdf from Pixel…" with Cancel while a preview copies over, or why it couldn't.
+struct PreviewLine: View {
+    @Environment(DevicesModel.self) private var pages
+    let phone: PhoneDevice
+
+    var body: some View {
+        if let preview = pages.page(phone.id).preview {
+            HStack(spacing: 8) {
+                switch preview {
+                case let .getting(name):
+                    Text("Getting \(name) from \(phone.name)…").foregroundStyle(.secondary)
+                    Button("Cancel") { pages.cancelPreview(phone.id) }.buttonStyle(.borderless)
+                case let .failed(message):
+                    Text(message).foregroundStyle(.secondary)
+                    Button("OK") { pages.cancelPreview(phone.id) }.buttonStyle(.borderless)
+                }
+            }
+            .font(.callout)
+            .lineLimit(1)
+        }
+    }
+}
+
 private struct NoticeLine: View {
     let text: String
 
@@ -191,23 +216,26 @@ private struct KindTiles: View {
 
     var body: some View {
         let recent = pages.page(phone.id).recent
-        let newest = Self.kinds.compactMap { recent[$0]?.entries.first?.path }
         LazyVGrid(columns: Self.columns, spacing: 12) {
             ForEach(Self.kinds, id: \.self) { kind in
+                let newest = recent[kind]?.entries.first
                 Button { open(kind) } label: {
                     KindTile(phone: phone, kind: kind, recent: recent[kind] ?? DevicesModel.Recent())
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    if let newest {
+                        Button("Preview \(newest.name)") { pages.preview(phone.id, [newest]) }
+                    }
+                }
             }
         }
-        .task(id: "\(phone.online)\(newest)") { await pages.loadThumbs(phone.id, paths: newest) }
         .opacity(phone.online ? 1 : 0.55)
         .disabled(!phone.online)
     }
 }
 
 private struct KindTile: View {
-    @Environment(DevicesModel.self) private var pages
     let phone: PhoneDevice
     let kind: RecentKind
     let recent: DevicesModel.Recent
@@ -221,7 +249,7 @@ private struct KindTile: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 1) {
                 Text(kind.title).font(.body.weight(.medium))
-                Text(newest.map(DeviceLook.age) ?? DeviceLook.empty([recent]))
+                Text(newest.map { DeviceLook.age($0.entry) } ?? DeviceLook.empty([recent]))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -234,15 +262,20 @@ private struct KindTile: View {
         .help(newest?.name ?? kind.title)
     }
 
-    @ViewBuilder private func preview(_ newest: PhoneEntry?) -> some View {
-        if let newest, let image = pages.thumb(phone.id, newest.path) {
-            Color.clear.overlay { Image(nsImage: image).resizable().scaledToFill() }
+    @ViewBuilder private func preview(_ newest: DevicesModel.Item?) -> some View {
+        if let newest {
+            Color.clear.overlay {
+                PhoneThumb(device: phone.id, path: newest.path) { placeholder(newest.symbol, tint: DropLook.tint(symbol: newest.symbol)) }
+            }
         } else {
-            let symbol = newest.map { DropLook.symbol(name: $0.name) } ?? kind.symbol
-            Rectangle()
-                .fill(.quaternary.opacity(0.35))
-                .overlay { IconTile(symbol: symbol, tint: newest == nil ? .secondary : DropLook.tint(symbol: symbol), size: 28, font: .system(size: 13, weight: .medium)) }
+            placeholder(kind.symbol, tint: .secondary)
         }
+    }
+
+    private func placeholder(_ symbol: String, tint: Color) -> some View {
+        Rectangle()
+            .fill(.quaternary.opacity(0.35))
+            .overlay { IconTile(symbol: symbol, tint: tint, size: 28, font: .system(size: 13, weight: .medium)) }
     }
 }
 
@@ -262,16 +295,16 @@ private struct NewestImages: View {
                 Text(DeviceLook.empty(RecentKind.images.map { recent[$0] ?? DevicesModel.Recent() })).foregroundStyle(.secondary)
             } else {
                 LazyVGrid(columns: ThumbGrid.columns, spacing: 8) {
-                    ForEach(entries) { entry in
-                        Button { pick(entry.path) } label: {
-                            ThumbTile(image: pages.thumb(phone.id, entry.path), selected: nil)
+                    ForEach(entries) { item in
+                        Button { pick(item.path) } label: {
+                            ThumbTile(device: phone.id, path: item.path, selected: nil)
                         }
                         .buttonStyle(.plain)
-                        .help(entry.name)
-                        .accessibilityLabel(entry.name)
+                        .contextMenu { Button("Preview") { pages.preview(phone.id, [item]) } }
+                        .help(item.name)
+                        .accessibilityLabel(item.name)
                     }
                 }
-                .task(id: "\(phone.online)\(entries.map(\.path))") { await pages.loadThumbs(phone.id, paths: entries.map(\.path)) }
             }
         } accessory: {
             if !all.isEmpty {
@@ -289,7 +322,8 @@ enum ThumbGrid {
 }
 
 struct ThumbTile: View {
-    let image: NSImage?
+    let device: String
+    let path: String
     /// nil hides the selection mark.
     let selected: Bool?
 
@@ -298,11 +332,7 @@ struct ThumbTile: View {
         Color.clear
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-                if let image {
-                    Image(nsImage: image).resizable().scaledToFill()
-                } else {
-                    Image(systemName: "photo").foregroundStyle(.tertiary)
-                }
+                PhoneThumb(device: device, path: path) { Image(systemName: "photo").foregroundStyle(.tertiary) }
             }
             .clipShape(shape)
             .background(shape.fill(.quaternary.opacity(0.35)))
@@ -318,17 +348,41 @@ struct ThumbTile: View {
     }
 }
 
+/// A phone thumbnail once it's here, else `placeholder`. Asks for it only while on screen, and
+/// redraws alone when it lands.
+struct PhoneThumb<Placeholder: View>: View {
+    @Environment(DevicesModel.self) private var pages
+    let device: String
+    let path: String
+    @ViewBuilder let placeholder: Placeholder
+
+    var body: some View {
+        ZStack {
+            if let image = pages.thumb(device, path) {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                placeholder
+            }
+        }
+        .onAppear { pages.showThumb(device, path) }
+        .onDisappear { pages.hideThumb(device, path) }
+        .onChange(of: path) { old, new in
+            pages.hideThumb(device, old)
+            pages.showThumb(device, new)
+        }
+    }
+}
+
 struct EntryRow<Trailing: View>: View {
-    let entry: PhoneEntry
+    let item: DevicesModel.Item
     @ViewBuilder let trailing: Trailing
 
     var body: some View {
         HStack(spacing: 10) {
-            let symbol = DropLook.symbol(name: entry.name)
-            IconTile(symbol: symbol, tint: DropLook.tint(symbol: symbol), size: 26)
+            IconTile(symbol: item.symbol, tint: DropLook.tint(symbol: item.symbol), size: 26)
             VStack(alignment: .leading, spacing: 1) {
-                Text(entry.name).lineLimit(1).truncationMode(.middle)
-                Text("\(ShareFormat.size(Int(entry.size))) · \(DropLook.when(Date(timeIntervalSince1970: TimeInterval(entry.modifiedAt) / 1000)))")
+                Text(item.name).lineLimit(1).truncationMode(.middle)
+                Text(item.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
