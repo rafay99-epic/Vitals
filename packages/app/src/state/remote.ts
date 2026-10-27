@@ -1,10 +1,12 @@
 import {
+  BACKGROUND_RETRY_MAX_DELAY_MS,
   type Connection,
   type ConnectionOptions,
   type ConnectionState,
   createConnection,
   deviceKeyText,
   type Route,
+  RETRY_MAX_DELAY_MS,
   type RouteKind,
   Store,
 } from "@vitals/client-runtime";
@@ -13,6 +15,7 @@ import type { KeyPair } from "@vitals/noise";
 import { newId } from "@vitals/shared";
 import { motion, type ToastTone } from "@vitals/ui";
 import * as Schema from "effect/Schema";
+import { AppState } from "react-native";
 
 import { localNetwork, nearby, nearbyEndpoints } from "../connection/nearby.ts";
 import { tunnel } from "../connection/tunnel.ts";
@@ -121,6 +124,7 @@ export class Remote {
         lanEnrolled: () => this.link.get().lanBound === true,
         onLanUnknown: () => relink({ ...this.link.get(), lanBound: false }),
         clientVersion: CLIENT_VERSION,
+        retryCapMs: () => (AppState.currentState === "active" ? RETRY_MAX_DELAY_MS : BACKGROUND_RETRY_MAX_DELAY_MS),
         webSocket,
         onTransition: (from, to) => {
           if (sameShape(from, to)) return;
@@ -145,14 +149,15 @@ export class Remote {
       if (state._tag === "Ready" && state.route === "lan") return;
       if (nearbyEndpoints(this.link.get().macKey).length > 0) this.connection.wake("network");
     });
-    let binding = false;
+    // Binds the Wi-Fi key once per Tailscale session. Heartbeats re-emit Ready with the same hello,
+    // so a Mac that refuses the key is asked again on the next session, not every beat.
+    let triedFor: object | null = null;
     this.stopBind = this.connection.state.subscribe(() => {
       const state = this.connection.state.get();
-      if (binding || deviceKey === null || this.link.get().lanBound === true) return;
-      if (state._tag !== "Ready" || state.route !== "tailnet" || state.hello.routes === undefined) return;
-      binding = true;
+      if (deviceKey === null || this.link.get().lanBound === true) return;
+      if (state._tag !== "Ready" || state.route !== "tailnet" || state.hello.routes === undefined || state.hello === triedFor) return;
+      triedFor = state.hello;
       void this.connection.call((client) => client["device.lanKey"]({ key: deviceKeyText(deviceKey) })).then((result) => {
-        binding = false;
         if (!result.ok) return;
         relink({ ...this.link.get(), lanBound: true });
         this.connection.wake("network");

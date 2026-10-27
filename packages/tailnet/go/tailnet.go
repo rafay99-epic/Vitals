@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
 )
 
@@ -44,6 +45,46 @@ func Start(dir, hostname string) error {
 	}
 	server = s
 	return nil
+}
+
+// localClient returns the running node's LocalAPI client.
+func localClient() (*local.Client, error) {
+	mu.Lock()
+	s := server
+	mu.Unlock()
+	if s == nil {
+		return nil, errors.New("tailnet not started")
+	}
+	return s.LocalClient()
+}
+
+// Login asks the control server for a new sign-in URL, which State then reports.
+// tsnet does this itself only for a node that starts signed out; a saved node whose
+// key expired or that was removed from the tailnet sits in NeedsLogin without one.
+func Login() error {
+	lc, err := localClient()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return lc.StartLoginInteractive(ctx)
+}
+
+// NetworkChanged tells the node the phone switched networks (Wi-Fi, cellular, none).
+// ifName is the new default interface, "" when offline. Android gives netmon no change
+// feed, only a 10-minute poll, so without this the node keeps its old path.
+func NetworkChanged(ifName string) {
+	setDefaultInterface(ifName)
+	mu.Lock()
+	s := server
+	mu.Unlock()
+	if s == nil {
+		return
+	}
+	if mon, ok := s.Sys().NetMon.GetOK(); ok {
+		mon.InjectEvent()
+	}
 }
 
 // State returns the backend state ("NeedsLogin", "Running", ...) and, when a
@@ -110,6 +151,18 @@ func pipe(s *tsnet.Server, local net.Conn, target string) {
 	go func() { io.Copy(remote, local); done <- struct{}{} }()
 	go func() { io.Copy(local, remote); done <- struct{}{} }()
 	<-done
+}
+
+// SignOut logs the node out of its tailnet, stops it and deletes its state in dir, so
+// the next Start signs in from scratch. Logging out is best effort; the state goes anyway.
+func SignOut(dir string) error {
+	if lc, err := localClient(); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		lc.Logout(ctx)
+		cancel()
+	}
+	Stop()
+	return os.RemoveAll(dir)
 }
 
 // Stop tears the node down and the forward with it.

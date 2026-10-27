@@ -1,5 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { secondsLeft } from "@vitals/app/state/countdown.ts";
+import { sessions } from "@vitals/app/connection/session.ts";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { CHANNELS, LIVE_TOPICS } from "@vitals/app/features/chart/channels.ts";
 import { useLiveTopics } from "@vitals/app/features/chart/hooks.ts";
@@ -13,12 +14,13 @@ import { formatClock } from "@vitals/shared";
 import { type Channel, type ChannelSpec, channels, Trace } from "@vitals/ui";
 import { StyleSheet, View } from "react-native";
 
+import { useMacReset } from "../lib/macReset.ts";
 import { ALERT_TITLE, LINK_COLOR, TONE_COLOR, useMac } from "../lib/remote.ts";
 import type { HomeStackParams } from "../navigation.ts";
 import { AlertSheet } from "../sheets/AlertSheet.tsx";
 import { UpdateNeeded } from "./UpdatesScreen.tsx";
 import { PowerSheet } from "../sheets/PowerSheet.tsx";
-import { color, Icon, Page, sheet, T, Tap } from "../ui/index.ts";
+import { BigButton, color, Icon, Page, sheet, SheetCancel, SheetHeader, T, Tap } from "../ui/index.ts";
 
 type Props = NativeStackScreenProps<HomeStackParams, "Home">;
 
@@ -126,6 +128,24 @@ function StatusLine({ text, tint, trailing = "›", onPress }: { readonly text: 
   );
 }
 
+/** Asks before forgetting the pairing: the Mac's old key is gone, so only pairing again reconnects. */
+const resetSheet = (name: string) =>
+  function ResetSheet() {
+    return (
+      <>
+        <SheetHeader title={`Pair again with ${name}?`} detail="Its Wi-Fi key changed, which happens when Vitals on it is reset or reinstalled. This phone forgets the old pairing, then you pick the Mac on the next screen." />
+        <BigButton
+          label="Pair again"
+          onPress={() => {
+            sheet.close();
+            void sessions.forget();
+          }}
+        />
+        <SheetCancel />
+      </>
+    );
+  };
+
 /** One line for anything that needs attention. Problems collapse here; they never stack. */
 function Attention() {
   const remote = useRemote();
@@ -133,6 +153,8 @@ function Attention() {
   const alerts = useStore(remote.events.alerts);
   const calmed = useStore(remote.events.calmed);
   const signal = useSignal();
+  const reset = useMacReset();
+  if (reset !== null) return <StatusLine text={`○ ${reset} has a new key`} tint={color.orange} trailing="Pair again" onPress={() => sheet.open(resetSheet(reset))} />;
   if (state._tag === "Backoff") return <Retry state={state} />;
   if (!signal) return <StatusLine text="○ No signal from the Mac yet" tint={color.dim} />;
   // A critical alert outranks newer warnings.

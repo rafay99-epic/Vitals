@@ -23,7 +23,7 @@ import { loadDeviceKey } from "../persistence/deviceKey";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { Remote } from "../state/remote.ts";
 import { localNetwork, macKeyOf, startNearby, stopNearby } from "./nearby.ts";
-import { runTunnelOnDemand } from "./tunnel.ts";
+import { runTunnelOnDemand, signOutTunnel } from "./tunnel.ts";
 
 const SUSPEND_AFTER_MS = 10_000;
 
@@ -72,13 +72,18 @@ const launchPairingLink = async (): Promise<PairingLink | null> => {
   return typeof initial === "string" ? parsePairingDeepLink(initial) : null;
 };
 
+/** True when a link points at the Mac this phone is already paired with. */
+const sameMac = (link: PairingLink, credentials: Credentials | null): boolean =>
+  credentials !== null && ((link.macKey !== null && link.macKey === credentials.macKey) || link.baseUrl === credentials.baseUrl);
+
 class SessionManager {
   readonly session = new Store<Session>({ status: "loading" });
   readonly pairing = new Store<PairingState>({ busy: false, error: null });
   readonly welcome = new Store<boolean>(false);
   private teardown: (() => void) | null = null;
   private started = false;
-  private queued: PairingLink | null = null;
+  /** A pairing link opened from outside the app. It waits here until the user confirms it. */
+  readonly offer = new Store<PairingLink | null>(null);
   private readonly usedCodes = new Set<string>();
   private keys: Promise<KeyPair | null> | null = null;
   private cancelNearby: (() => void) | null = null;
@@ -88,10 +93,19 @@ class SessionManager {
     return this.keys;
   }
 
+  /** A link from outside (a deep link, the system camera). Any app or web page can send one, so it only pairs once the user confirms. */
   receive(link: PairingLink | null): void {
-    if (link === null) return;
-    if (this.started) void this.handleLink(link);
-    else this.queued = link;
+    if (link !== null && !this.usedCodes.has(link.code)) this.offer.set(link);
+  }
+
+  acceptOffer(): void {
+    const link = this.offer.get();
+    this.offer.set(null);
+    void this.handleLink(link);
+  }
+
+  declineOffer(): void {
+    this.offer.set(null);
   }
 
   async handleLink(link: PairingLink | null, quiet = false): Promise<boolean> {
@@ -106,13 +120,16 @@ class SessionManager {
     if (this.started) return;
     this.started = true;
     void (async () => {
-      const early = this.queued;
-      this.queued = null;
       const credentials = await loadCredentials();
-      // A paired app that restarts (an update, a reload) still sees the pairing link it was
-      // opened with. If that stale link fails, keep the saved pairing instead of flashing the
-      // pairing screen.
-      if (await this.handleLink(early ?? (await launchPairingLink()), credentials !== null)) return;
+      const launched = await launchPairingLink();
+      if (Platform.OS === "web") {
+        // The browser opened this page on the pairing link the user followed. If that stale link
+        // fails on a reload, keep the saved pairing instead of flashing the pairing screen.
+        if (await this.handleLink(launched, credentials !== null)) return;
+      } else if (launched !== null && !sameMac(launched, credentials)) {
+        // A paired app that restarts (an update, a reload) still sees the link it was first opened with; that one is old news.
+        this.receive(launched);
+      }
       if (this.session.get().status === "paired") return;
       if (credentials === null) this.session.set({ status: "unpaired" });
       else this.open(credentials, await this.deviceKey());
@@ -243,6 +260,8 @@ class SessionManager {
     }
     if (current.status === "paired") current.remote.discardQueued();
     const forgotten = current.status === "paired" && (await current.remote.connection.call((client) => client["device.forget"]({}))).ok;
+    // Built-in Tailscale signs out too, so pairing a Mac on another tailnet never reuses this login.
+    await signOutTunnel();
     this.close();
     await stopAlertWatch();
     await forgetCalmAction();
@@ -310,7 +329,8 @@ class SessionManager {
     });
     const network = Network.addNetworkStateListener((next) => {
       trackLocalNetwork(next);
-      if (AppState.currentState === "active") remote.connection.wake("network");
+      // With the link held in the background (Android), a Wi-Fi to cellular switch reconnects now, not after the backoff.
+      if (AppState.currentState === "active" || stayConnected.get()) remote.connection.wake("network");
     });
     const stopTunnelWatch = runTunnelOnDemand(remote.connection, () => remote.credentials);
     this.teardown = () => {
@@ -343,6 +363,5 @@ if (Platform.OS !== "web") {
   AppState.addEventListener("change", (state) => {
     if (state !== "active") return stopNearby();
     startNearby();
-    void launchPairingLink().then((link) => sessions.receive(link));
   });
 }

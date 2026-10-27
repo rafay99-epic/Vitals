@@ -1,3 +1,4 @@
+import { Store } from "@vitals/client-runtime";
 import { requireOptionalNativeModule } from "expo";
 import { AppRegistry, Platform } from "react-native";
 
@@ -56,6 +57,9 @@ interface Native {
 interface Android extends Native {
   readonly start: () => Promise<boolean>;
   readonly stop: () => Promise<void>;
+  /** Sets the link notification's text. Missing on builds from before it was added. */
+  readonly update?: (title: string, text: string) => void;
+  readonly addListener?: (event: "onLinkStopped", listener: () => void) => { readonly remove: () => void };
   readonly recent: (kind: "photos" | "screenshots" | "documents", offset: number, limit: number) => Promise<NativePage>;
   readonly thumbnail: (path: string, px: number) => Promise<string | null>;
   readonly toBack: () => Promise<boolean>;
@@ -85,6 +89,9 @@ export const iosShare = Platform.OS === "ios" ? requireOptionalNativeModule<Ios>
 let wanted = false;
 let release: (() => void) | null = null;
 
+/** True while the link service runs. It turns false on its own when Disconnect is tapped or Android stops it. */
+export const linkHeld = new Store<boolean>(false);
+
 if (androidShare !== null) {
   AppRegistry.registerHeadlessTask(TASK, () => () =>
     new Promise<void>((resolve) => {
@@ -97,26 +104,41 @@ if (androidShare !== null) {
 /** Whichever half this phone has. */
 export const nativeFiles: Native | null = androidShare ?? iosShare;
 
-export const sharesInBackground = androidShare !== null;
+/** Android keeps the link (and sharing) going after the app closes; iPhone pauses it. */
+export const holdsInBackground = androidShare !== null;
 
-const finish = (): void => {
+const ended = (): void => {
+  wanted = false;
   release?.();
   release = null;
-  void androidShare?.stop();
+  linkHeld.set(false);
 };
 
-export const holdSharing = async (): Promise<boolean> => {
+androidShare?.addListener?.("onLinkStopped", ended);
+
+/**
+ * Starts the foreground service that keeps the link to the Mac alive while the app is closed,
+ * with its ongoing notification. Only works while the app is on screen (Android rule).
+ */
+export const holdLink = async (): Promise<boolean> => {
   if (androidShare === null) return false;
   if (wanted) return true;
   wanted = true;
   const started = await androidShare.start();
-  if (!started) wanted = false;
-  else if (!wanted) finish();
-  return started && wanted;
+  if (!started || !wanted) {
+    if (started) void androidShare.stop();
+    ended();
+    return false;
+  }
+  linkHeld.set(true);
+  return true;
 };
 
-export const releaseSharing = (): void => {
+export const releaseLink = (): void => {
   if (!wanted) return;
-  wanted = false;
-  finish();
+  ended();
+  void androidShare?.stop();
 };
+
+/** The link notification: the Mac's name and how it's connected. */
+export const describeLink = (title: string, text: string): void => androidShare?.update?.(title, text);

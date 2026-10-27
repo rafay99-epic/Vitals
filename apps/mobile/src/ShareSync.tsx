@@ -1,10 +1,9 @@
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { stayConnected } from "@vitals/app/connection/session.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 
-import { holdSharing, releaseSharing, sharesInBackground } from "../modules/vitals-share/index.ts";
+import { linkHeld } from "../modules/vitals-share/index.ts";
 import { allFilesWanted, askFullStorage, PhoneShare, phoneRoots, sharedFolders, shareFiles, sharePhotos, useLimitedStorage } from "./lib/share.ts";
 import { BigButton, sheet, SheetCancel, SheetHeader } from "./ui/index.ts";
 
@@ -38,24 +37,14 @@ export function ShareSync() {
   const wantedAt = useStore(allFilesWanted);
   const limited = useLimitedStorage();
   const [active, setActive] = useState(AppState.currentState === "active");
-  const serving = on && (active || sharesInBackground);
+  const held = useStore(linkHeld);
+  // Sharing rides on the link service: it keeps serving with the app closed for as long as that runs.
+  const serving = on && (active || held);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => setActive(state === "active"));
     return () => subscription.remove();
   }, []);
-
-  useEffect(() => {
-    if (on && active) void holdSharing().then((held) => held && stayConnected.set(true));
-  }, [on, active]);
-
-  useEffect(() => {
-    if (!on) return;
-    return () => {
-      releaseSharing();
-      stayConnected.set(false);
-    };
-  }, [on]);
 
   useEffect(() => {
     if (!serving) return;

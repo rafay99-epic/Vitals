@@ -290,7 +290,9 @@ export const layer = Layer.effect(
               if (pathname === "/lan" && srv.upgrade(request, { data: { address, phase: { _tag: "Handshake" } } })) return undefined;
               return new Response(null, { status: 404 });
             },
-            websocket: { message, close, idleTimeout: IDLE_TIMEOUT_SECONDS, maxPayloadLength: MAX_FRAME_BYTES + 64, perMessageDeflate: false },
+            // A frame Bun drops under backpressure desyncs the Noise counters, and the phone then reads every later frame as a
+            // key mismatch. Closing instead lets it reconnect cleanly.
+            websocket: { message, close, idleTimeout: IDLE_TIMEOUT_SECONDS, maxPayloadLength: MAX_FRAME_BYTES + 64, perMessageDeflate: false, closeOnBackpressureLimit: true },
           });
         } catch (error) {
           log("warn", "lan.listen.failed", { port, error: String(error) });

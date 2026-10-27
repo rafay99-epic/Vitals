@@ -20,12 +20,14 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ClipboardSync } from "./ClipboardSync.tsx";
+import { LinkSync } from "./LinkSync.tsx";
 import { ShareSync } from "./ShareSync.tsx";
 import { CopyStrip } from "./CopyStrip.tsx";
 import { DropStrips } from "./DropTransfers.tsx";
 import { checkPlay } from "./lib/play.ts";
 import { checkForUpdate } from "./lib/updates.ts";
 import { type ControlStackParams, type HomeStackParams, navigationRef, type SettingsStackParams, type TabParams } from "./navigation.ts";
+import { PairOffer } from "./PairOffer.tsx";
 import { PendingStrip } from "./PendingStrip.tsx";
 import { ClipboardScreen } from "./screens/ClipboardScreen.tsx";
 import { AlertsScreen } from "./screens/AlertsScreen.tsx";
@@ -181,6 +183,7 @@ function Shell() {
       <SheetHost />
       <ClipboardSync />
       <ShareSync />
+      <LinkSync />
       <UpdateSync />
     </View>
   );
@@ -230,6 +233,7 @@ export function App() {
         <NavigationContainer ref={navigationRef} theme={theme} linking={linking}>
           <Root />
         </NavigationContainer>
+        <PairOffer />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
