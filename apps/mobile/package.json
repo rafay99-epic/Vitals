@@ -12,9 +12,9 @@
     "android:nightly": "APP_VARIANT=nightly expo prebuild --clean --platform android && APP_VARIANT=nightly expo run:android --variant release",
     "android:stable": "APP_VARIANT=stable expo prebuild --clean --platform android && APP_VARIANT=stable expo run:android --variant release",
     "release:nightly": "scripts/release-nightly.sh",
-    "update:dev": "APP_VARIANT=dev npx -y eas-cli@latest update --channel dev --environment development --platform all --message \"$(git log -1 --pretty=%s)\"",
-    "update:nightly": "APP_VARIANT=nightly npx -y eas-cli@latest update --channel nightly --environment preview --platform all --message \"$(git log -1 --pretty=%s)\"",
-    "update:stable": "APP_VARIANT=stable npx -y eas-cli@latest update --channel production --environment production --platform all --message \"$(git log -1 --pretty=%s)\""
+    "update:dev": "APP_VARIANT=dev VITALS_UPDATE_NOTES=\"${NOTES:-$(git log -1 --pretty=%s)}\" npx -y eas-cli@latest update --channel dev --environment development --platform all --message \"${NOTES:-$(git log -1 --pretty=%s)}\"",
+    "update:nightly": "APP_VARIANT=nightly VITALS_UPDATE_NOTES=\"${NOTES:-$(git log -1 --pretty=%s)}\" npx -y eas-cli@latest update --channel nightly --environment preview --platform all --message \"${NOTES:-$(git log -1 --pretty=%s)}\"",
+    "update:stable": "APP_VARIANT=stable VITALS_UPDATE_NOTES=\"${NOTES:-$(git log -1 --pretty=%s)}\" npx -y eas-cli@latest update --channel production --environment production --platform all --message \"${NOTES:-$(git log -1 --pretty=%s)}\""
   },
   "dependencies": {
     "@expo/metro-runtime": "~58.0.0",
@@ -46,7 +46,6 @@
     "expo-haptics": "~58.0.7",
     "expo-image": "58.0.16",
     "expo-image-picker": "~58.0.10",
-    "expo-in-app-updates": "~0.13.0",
     "expo-media-library": "~58.0.11",
     "expo-network": "~58.0.3",
     "expo-notifications": "~58.1.5",

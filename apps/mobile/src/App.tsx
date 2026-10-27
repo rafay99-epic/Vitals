@@ -7,7 +7,6 @@ import { OnboardingScreen } from "@vitals/app/features/onboarding/OnboardingScre
 import { FindMacScreen } from "@vitals/app/features/pairing/FindMacScreen.tsx";
 import { PairScreen } from "@vitals/app/features/pairing/PairScreen.tsx";
 import { WelcomeFlow } from "@vitals/app/features/pairing/WelcomeFlow.tsx";
-import { checkPlay, startPlayUpdate } from "@vitals/app/features/updates/playUpdate.ts";
 import { hideSplash } from "@vitals/app/lib/splash.ts";
 import { isStoreBuild } from "@vitals/app/lib/variant.ts";
 import { finishOnboarding, onboarded } from "@vitals/app/persistence/onboarding.ts";
@@ -24,8 +23,9 @@ import { ClipboardSync } from "./ClipboardSync.tsx";
 import { ShareSync } from "./ShareSync.tsx";
 import { CopyStrip } from "./CopyStrip.tsx";
 import { DropStrips } from "./DropTransfers.tsx";
-import { checkForUpdate, launchedNewUpdate, updateState } from "./lib/updates.ts";
-import { type ControlStackParams, type HomeStackParams, navigationRef, openUpdates, type SettingsStackParams, type TabParams } from "./navigation.ts";
+import { checkPlay } from "./lib/play.ts";
+import { checkForUpdate } from "./lib/updates.ts";
+import { type ControlStackParams, type HomeStackParams, navigationRef, type SettingsStackParams, type TabParams } from "./navigation.ts";
 import { PendingStrip } from "./PendingStrip.tsx";
 import { ClipboardScreen } from "./screens/ClipboardScreen.tsx";
 import { AlertsScreen } from "./screens/AlertsScreen.tsx";
@@ -39,8 +39,10 @@ import { TerminalScreen } from "./screens/TerminalScreen.tsx";
 import { TransfersScreen } from "./screens/TransfersScreen.tsx";
 import { HomeScreen } from "./screens/HomeScreen.tsx";
 import { PreviewScreen } from "./screens/PreviewScreen.tsx";
-import { ConnectionScreen, DiagnosticsRoute, HelpScreen, NotificationsScreen, PhoneScreen, SettingsScreen, UpdatesScreen } from "./screens/SettingsScreens.tsx";
+import { ConnectionScreen, DiagnosticsRoute, HelpScreen, NotificationsScreen, PhoneScreen, SettingsScreen } from "./screens/SettingsScreens.tsx";
+import { UpdatesScreen } from "./screens/UpdatesScreen.tsx";
 import { TransferStrip } from "./Transfers.tsx";
+import { UpdateSync, useUpdateStatus } from "./UpdateSync.tsx";
 import { color, Dock, type DockTab, SheetHost, toast, ToastHost } from "./ui/index.ts";
 
 const theme: Theme = {
@@ -143,32 +145,17 @@ function useRemoteToasts() {
 
 function DockBar({ state, navigation }: BottomTabBarProps) {
   const alerted = useStore(useRemote().events.alerts).length > 0;
+  const update = useUpdateStatus();
   const tab = state.routes[state.index];
   const focused = tab === undefined ? undefined : getFocusedRouteNameFromRoute(tab);
   if (focused === "Terminal" || focused === "Preview") return null;
-  return <Dock state={state} navigation={navigation} tabs={{ ...TAB_BASE, Alerts: { ...TAB_BASE.Alerts, badge: alerted } }} />;
+  return <Dock state={state} navigation={navigation} tabs={{ ...TAB_BASE, Alerts: { ...TAB_BASE.Alerts, badge: alerted ? color.red : undefined }, SettingsTab: { ...TAB_BASE.SettingsTab, badge: update.waiting ? color.yellow : undefined } }} />;
 }
 
 const renderDock = (props: BottomTabBarProps) => <DockBar {...props} />;
 
-/** Tells the user, quietly, when an update is ready and after it has installed. */
-function useUpdateToasts() {
-  useEffect(() => {
-    void launchedNewUpdate().then((updated) => {
-      if (updated) toast.show("Vitals is up to date", { action: "View", onAction: openUpdates });
-    });
-    let previous = updateState.get()._tag;
-    return updateState.subscribe(() => {
-      const next = updateState.get()._tag;
-      if (next === "Ready" && previous !== "Ready") toast.show("A new version is ready", { action: "View", onAction: openUpdates });
-      previous = next;
-    });
-  }, []);
-}
-
 function Shell() {
   useRemoteToasts();
-  useUpdateToasts();
   return (
     <View style={styles.fill}>
       <Tabs.Navigator
@@ -194,6 +181,7 @@ function Shell() {
       <SheetHost />
       <ClipboardSync />
       <ShareSync />
+      <UpdateSync />
     </View>
   );
 }
@@ -218,15 +206,15 @@ function Root() {
   return welcome ? <WelcomeFlow /> : <Shell />;
 }
 
-/** Background update checks. Nothing here ever blocks the app or swaps the screen. */
+/** Background update checks on launch and on coming back. Nothing here blocks the app; UpdateSync asks. */
 function useQuietUpdates() {
   useEffect(() => {
     void checkForUpdate();
-    void checkPlay().then((play) => {
-      if (play._tag === "Available") toast.show(`Vitals ${play.version} is on Google Play`, { action: "Update", onAction: () => void startPlayUpdate() });
-    });
+    void checkPlay();
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void checkForUpdate();
+      if (state !== "active") return;
+      void checkForUpdate();
+      void checkPlay();
     });
     return () => subscription.remove();
   }, []);

@@ -192,6 +192,8 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     variant,
     eas: { projectId: PROJECT_ID },
+    // What a quick update brings, shown on its update sheet. Set by the update:* scripts.
+    ...(process.env["VITALS_UPDATE_NOTES"] ? { updateNotes: process.env["VITALS_UPDATE_NOTES"] } : {}),
   },
 });
 

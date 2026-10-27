@@ -4,8 +4,6 @@ import { nearby, nearbyEndpoints } from "@vitals/app/connection/nearby.ts";
 import { startTunnel, tailnetSupported, tunnel } from "@vitals/app/connection/tunnel.ts";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { Diagnostics } from "@vitals/app/features/diagnostics/DiagnosticsScreen.tsx";
-import { checkPlay, playState, playSupported, startPlayUpdate } from "@vitals/app/features/updates/playUpdate.ts";
-import { updateInfo } from "@vitals/app/features/updates/updateInfo.ts";
 import { deviceInfo } from "@vitals/app/lib/device.ts";
 import { hostOf } from "@vitals/app/lib/host.ts";
 import { TAILSCALE_STORE_URL } from "@vitals/app/lib/links.ts";
@@ -26,10 +24,9 @@ import { AppState, Linking, Platform, StyleSheet, View } from "react-native";
 import { LINK_COLOR, useMac } from "../lib/remote.ts";
 import { sharesInBackground } from "../../modules/vitals-share/index.ts";
 import { askFullStorage, hasFullStorage, phoneRoots, pickSharedFolder, removeSharedFolder, setSharePhotos, shareThisPhone, sharedFolders, shareFiles, sharePhotos } from "../lib/share.ts";
-import { checkNightly, installedBuild, nightlyState, nightlySupported } from "../lib/nightly.ts";
-import { checkForUpdate, restartIntoUpdate, type UpdateState, updateState } from "../lib/updates.ts";
 import type { SettingsStackParams } from "../navigation.ts";
 import { UnpairSheet } from "../sheets/SendSheets.tsx";
+import { useUpdateStatus } from "../UpdateSync.tsx";
 import { BackBar, BigButton, color, Group, Label, Note, Page, Row, sheet, T, Title, toast, Toggle } from "../ui/index.ts";
 
 type Props<K extends keyof SettingsStackParams> = NativeStackScreenProps<SettingsStackParams, K>;
@@ -50,21 +47,11 @@ const usePermission = (): [PermissionState | null, () => void] => {
   return [permission, refresh];
 };
 
-const UPDATE_WORD: Record<UpdateState["_tag"], string> = {
-  Off: "Off in this build",
-  Idle: "Not checked yet",
-  Checking: "Checking",
-  Downloading: "Downloading",
-  Ready: "Ready to install",
-  Current: "Up to date",
-  Failed: "Update failed",
-};
-
 export function SettingsScreen({ navigation }: Props<"Settings">) {
   const remote = useRemote();
   const mac = useMac();
   const link = useLink();
-  const update = useStore(updateState);
+  const update = useUpdateStatus();
   const [permission] = usePermission();
   return (
     <Page>
@@ -76,7 +63,7 @@ export function SettingsScreen({ navigation }: Props<"Settings">) {
       <Group>
         <Row first label="Connection" value={link.label} valueColor={LINK_COLOR[link.tone]} onPress={() => navigation.navigate("Connection")} />
         <Row label="Notifications" value={permission === null ? "" : PERMISSION[permission]} onPress={() => navigation.navigate("Notifications")} />
-        <Row label="Updates" value={UPDATE_WORD[update._tag]} valueColor={update._tag === "Ready" ? color.yellow : color.dim} onPress={() => navigation.navigate("Updates")} />
+        <Row label="Updates" value={update.word} valueColor={update.waiting ? color.yellow : color.dim} onPress={() => navigation.navigate("Updates")} />
       </Group>
       <Group>
         <Row first label="This phone" value={deviceInfo().name} onPress={() => navigation.navigate("Phone")} />
@@ -173,64 +160,6 @@ export function NotificationsScreen() {
         </>
       ) : null}
       <Note>Which problems raise an alert is set in Alerts, under Tell me when.</Note>
-    </Page>
-  );
-}
-
-function PlayRow() {
-  const play = useStore(playState);
-  useEffect(() => {
-    void checkPlay();
-  }, []);
-  if (!playSupported) return null;
-  const value = { Unchecked: "Checking", Current: "Up to date", Available: "Update available", Downloading: "Downloading", Unavailable: "Not available" }[play._tag];
-  return (
-    <>
-      <Row label="Google Play" detail={play._tag === "Unavailable" ? play.reason : "Bigger updates come from the store"} value={value} valueColor={play._tag === "Available" ? color.yellow : color.dim} />
-      {play._tag === "Available" ? <BigButton label="Update from Google Play" onPress={() => void startPlayUpdate().then((ok) => ok || toast.show("Google Play did not open. Try again.", { tone: "bad" }))} /> : null}
-    </>
-  );
-}
-
-/** Nightly only: new native builds come as an APK from GitHub. Downloading opens the browser, and
- *  Android installs it over this one (same signature, higher build). */
-function NightlyRow() {
-  const nightly = useStore(nightlyState);
-  useEffect(() => {
-    void checkNightly();
-  }, []);
-  if (!nightlySupported) return null;
-  const value = { Unchecked: "Checking", Current: "Up to date", Available: "New build", Unavailable: "Not available" }[nightly._tag];
-  const detail = nightly._tag === "Unavailable" ? nightly.reason : nightly._tag === "Available" ? `Build ${String(nightly.build)} is ready` : `Build ${String(installedBuild)} installed`;
-  return (
-    <>
-      <Row label="Nightly build" detail={detail} value={value} valueColor={nightly._tag === "Available" ? color.yellow : color.dim} />
-      {nightly._tag === "Available" ? <BigButton label={`Download build ${String(nightly.build)}`} onPress={() => void Linking.openURL(nightly.url)} /> : null}
-    </>
-  );
-}
-
-export function UpdatesScreen() {
-  const update = useStore(updateState);
-  const info = updateInfo();
-  return (
-    <Page>
-      <BackBar parent="Settings" />
-      <Title>Updates.</Title>
-      <Group>
-        <Row first label="Vitals Remote" value={`${Constants.expoConfig?.version ?? CLIENT_VERSION} · ${info.running}`} />
-        <Row label="Status" detail={update._tag === "Failed" ? update.reason : undefined} value={UPDATE_WORD[update._tag]} valueColor={update._tag === "Ready" ? color.yellow : color.dim} />
-        <PlayRow />
-        <NightlyRow />
-      </Group>
-      {update._tag === "Ready" ? (
-        <>
-          <BigButton label="Restart to update" onPress={() => void restartIntoUpdate()} />
-          <Note>Takes a second. The screen stays dark and your Mac is not touched.</Note>
-        </>
-      ) : null}
-      {update._tag !== "Off" && update._tag !== "Ready" ? <BigButton ghost label="Check now" disabled={update._tag === "Checking" || update._tag === "Downloading"} onPress={() => void checkForUpdate(true)} /> : null}
-      <Note>Updates download in the background and install the next time you open the app. Nothing blocks you.</Note>
     </Page>
   );
 }
