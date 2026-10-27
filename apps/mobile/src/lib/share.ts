@@ -94,11 +94,47 @@ export const hasFullStorage = (): boolean => {
   if (Platform.OS !== "android") return false;
   const granted = androidShare?.fullStorage?.() ?? null;
   if (granted !== null) return granted;
+  return probeFullStorage();
+};
+
+/**
+ * Builds without the native check: another app's folder inside Download or Documents can only be
+ * listed with All files access. With no such folder to try, the top of storage is the best guess.
+ */
+const probeFullStorage = (): boolean => {
+  for (const top of ["Download", "Documents"]) {
+    let folders: ReadonlyArray<Directory>;
+    try {
+      folders = new Directory(uriOf(`${STORAGE}/${top}`)).list().filter((item): item is Directory => item instanceof Directory && item.name !== "Vitals");
+    } catch {
+      return false;
+    }
+    for (const folder of folders.slice(0, 3)) {
+      try {
+        folder.list();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
   try {
     new Directory(uriOf(STORAGE)).list();
     return true;
   } catch {
     return false;
+  }
+};
+
+/** What a caller sees when Android keeps Vitals out of a folder. */
+const NEEDS_ALL_FILES = `${deviceInfo().name} needs All files access to open this. On it: Android Settings › Apps › Special app access › All files access › Vitals.`;
+
+const readable = <A>(read: () => A): A => {
+  try {
+    return read();
+  } catch (cause) {
+    if (cause instanceof Error && /permission/i.test(cause.message)) throw new Error(NEEDS_ALL_FILES);
+    throw cause;
   }
 };
 
@@ -280,8 +316,7 @@ export class PhoneShare {
   private entries(path: string): ReadonlyArray<FsEntry> {
     const cached = this.cache.get(path);
     if (cached !== undefined && Date.now() - cached.at < CACHE_MS) return cached.entries;
-    const entries = new Directory(uriOf(path))
-      .list()
+    const entries = readable(() => new Directory(uriOf(path)).list())
       .filter((item) => !item.name.startsWith("."))
       .map((item) => entryOf(item, path))
       .filter((entry) => entry !== null);
