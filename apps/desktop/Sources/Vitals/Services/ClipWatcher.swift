@@ -134,6 +134,9 @@ struct PasteboardContents: Equatable {
 /// Classifies a copy and builds its clips. Pure apart from `clips(for:)`, which writes into `clips/`.
 enum ClipCapture: Equatable, Sendable {
     case files([URL])
+    /// One copied image file, like a saved screenshot copied in Finder: recorded as a picture
+    /// so phones can paste it, falling back to a file clip if it can't be read.
+    case imageFile(URL)
     case image(PasteboardContents.Image)
     case link(String)
     case text(String)
@@ -157,6 +160,7 @@ enum ClipCapture: Equatable, Sendable {
     ]
 
     static let maxFiles = 20
+    static let maxImageFileBytes = 50 * 1024 * 1024
     static let maxStringBytes = 10 * 1024 * 1024
     /// Mirrors `CLIP_LIMITS` in clips.ts.
     static let inlineTextBytes = 256 * 1024
@@ -179,6 +183,7 @@ enum ClipCapture: Equatable, Sendable {
     /// nil means "don't record": private, empty, or too big.
     static func classify(_ contents: PasteboardContents) -> ClipCapture? {
         guard !isPrivate(contents) else { return nil }
+        if contents.fileURLs.count == 1, let url = contents.fileURLs.first, isImageFile(url) { return .imageFile(url) }
         if !contents.fileURLs.isEmpty { return .files(Array(contents.fileURLs.prefix(maxFiles))) }
         if let image = contents.image { return .image(image) }
         guard let string = contents.string, string.utf8.count <= maxStringBytes else { return nil }
@@ -198,6 +203,10 @@ enum ClipCapture: Equatable, Sendable {
         return true
     }
 
+    static func isImageFile(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
+    }
+
     static func newID() -> String { UUID().uuidString.lowercased() }
 
     /// Builds the history entries for one copy. Images and long text are written into
@@ -206,6 +215,9 @@ enum ClipCapture: Equatable, Sendable {
         switch capture {
         case let .files(urls):
             return urls.compactMap { fileClip($0, at: at, source: source) }
+        case let .imageFile(url):
+            let clip = imageFileClip(url, at: at, source: source, directory: directory) ?? fileClip(url, at: at, source: source)
+            return clip.map { [$0] } ?? []
         case let .image(image):
             return imageClip(image, at: at, source: source, directory: directory).map { [$0] } ?? []
         case let .link(url):
@@ -243,6 +255,22 @@ enum ClipCapture: Equatable, Sendable {
         let stored = "\(id).png"
         guard write(png, to: directory.appendingPathComponent(stored)) else { return nil }
         return MacClip(id: id, kind: .image, at: at, source: source, mime: "image/png", bytes: png.count, thumb: thumbnail(png), stored: stored)
+    }
+
+    /// PNG and JPEG keep their bytes; other formats (HEIC, TIFF, GIF) are stored as PNG so any phone can paste them.
+    private static func imageFileClip(_ url: URL, at: Int64, source: String?, directory: URL) -> MacClip? {
+        guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size <= maxImageFileBytes,
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        let kept = UTType(filenameExtension: url.pathExtension).flatMap { type in [UTType.png, .jpeg].first { type.conforms(to: $0) } }
+        guard let bytes = kept == nil ? encode(data, as: .png) : data, let thumb = thumbnail(data) else { return nil }
+        let type = kept ?? .png
+        let ext = type == .jpeg ? "jpg" : "png"
+        let id = newID()
+        let stored = "\(id).\(ext)"
+        guard write(bytes, to: directory.appendingPathComponent(stored)) else { return nil }
+        let name = kept == nil ? url.deletingPathExtension().appendingPathExtension("png").lastPathComponent : url.lastPathComponent
+        return MacClip(id: id, kind: .image, at: at, source: source, name: name, mime: type.preferredMIMEType, bytes: bytes.count, thumb: thumb, stored: stored)
     }
 
     private static func textClip(_ text: String, at: Int64, source: String?, directory: URL) -> MacClip? {

@@ -43,6 +43,38 @@ struct ClipCaptureTests {
         #expect(ClipCapture.classify(PasteboardContents(image: .png(Data([1])), string: "x")) == .image(.png(Data([1]))))
     }
 
+    @Test func oneCopiedImageFileIsAPictureSeveralAreFiles() {
+        let shot = URL(fileURLWithPath: "/Users/me/Desktop/Screenshot 2026-10-27 at 12.23.08.png")
+        let photo = URL(fileURLWithPath: "/Users/me/Pictures/IMG_1.HEIC")
+        let pdf = URL(fileURLWithPath: "/Users/me/Report.pdf")
+        #expect(ClipCapture.classify(PasteboardContents(fileURLs: [shot])) == .imageFile(shot))
+        #expect(ClipCapture.classify(PasteboardContents(fileURLs: [photo])) == .imageFile(photo))
+        #expect(ClipCapture.classify(PasteboardContents(fileURLs: [pdf])) == .files([pdf]))
+        #expect(ClipCapture.classify(PasteboardContents(fileURLs: [shot, photo])) == .files([shot, photo]))
+    }
+
+    @Test func aCopiedScreenshotFileKeepsItsBytesNameAndThumbnail() throws {
+        let directory = try tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let context = try #require(CGContext(data: nil, width: 600, height: 400, bitsPerComponent: 8, bytesPerRow: 0,
+                                             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let png = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(png, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try #require(context.makeImage()), nil)
+        #expect(CGImageDestinationFinalize(destination))
+        let shot = directory.appendingPathComponent("Screenshot 1.png")
+        try (png as Data).write(to: shot)
+
+        let clip = try #require(ClipCapture.clips(for: .imageFile(shot), at: 1, source: "Finder", directory: directory).first)
+        #expect(clip.kind == .image && clip.mime == "image/png" && clip.name == "Screenshot 1.png" && clip.thumb != nil)
+        #expect(try Data(contentsOf: directory.appendingPathComponent(clip.stored ?? "")) == png as Data)
+
+        let fake = directory.appendingPathComponent("broken.png")
+        try Data("not a png".utf8).write(to: fake)
+        let fallback = try #require(ClipCapture.clips(for: .imageFile(fake), at: 1, source: nil, directory: directory).first)
+        #expect(fallback.kind == .file && fallback.origin == fake.path)
+    }
+
     @Test func richTextCopiesWithAPictureStayText() {
         let office = PasteboardContents(types: ["public.rtf", plainText, "public.png"])
         #expect(ClipCapture.prefersText(office))
