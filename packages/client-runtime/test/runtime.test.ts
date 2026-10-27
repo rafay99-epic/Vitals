@@ -25,7 +25,7 @@ const session = Schema.decodeUnknownSync(SessionInfo)({
 });
 
 describe("backoff", () => {
-  test("delay stays within equal-jitter bounds and caps at five minutes", () => {
+  test("delay stays within equal-jitter bounds and caps at thirty seconds", () => {
     expect(retryDelayMs(0, 0)).toBe(1_000);
     expect(retryDelayMs(0, 1)).toBe(2_000);
     expect(retryDelayMs(3, 0.5)).toBe(12_000);

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { type ConnectionState, type Route, createConnection, pair, pairOverLan, parsePairingUrl, probeLan } from "@vitals/client-runtime";
 import { fromBase64Url, generateKeyPair } from "@vitals/noise";
 
-import { OWNER, adminOp, sample, startGateway } from "./harness.ts";
+import { OWNER, adminOp, pairDevice, sample, startGateway } from "./harness.ts";
 
 let gateway: Awaited<ReturnType<typeof startGateway>> | null = null;
 
@@ -24,6 +24,19 @@ const rawSocket = (url: string) => {
   const socket = new WebSocket(url);
   socket.binaryType = "arraybuffer";
   return socket;
+};
+
+/** Wraps a socket constructor so a test can see, and close, every socket the runtime opened. */
+const tracked = (make: (url: string) => WebSocket) => {
+  const sockets: Array<WebSocket> = [];
+  return {
+    sockets,
+    make: (url: string) => {
+      const socket = make(url);
+      sockets.push(socket);
+      return socket;
+    },
+  };
 };
 
 const phone = { name: "Pixel 9", platform: "android", model: "Pixel 9", appVersion: "1.0.0" } as const;
@@ -258,6 +271,133 @@ describe("client runtime against the gateway", () => {
     await until(() => seen.includes(62));
     unsubscribe();
     stop();
+    connection.dispose();
+  });
+
+  test("dispose closes the live socket", async () => {
+    gateway = await startGateway();
+    const paired = await pairDevice(gateway);
+    const opened = tracked(ownerSocket);
+    const base = gateway.base;
+    const connection = createConnection({
+      routes: () => [{ _tag: "Tailnet", baseUrl: base }],
+      token: paired.token,
+      clientVersion: "test",
+      webSocket: opened.make,
+      fetch: withOwner,
+    });
+    await until(() => connection.state.get()._tag === "Ready");
+    expect(opened.sockets.filter((socket) => socket.readyState === WebSocket.OPEN)).toHaveLength(1);
+    connection.dispose();
+    await until(() => opened.sockets.every((socket) => socket.readyState === WebSocket.CLOSED));
+    expect((await connection.call((client) => client["apps.list"]({}))).ok).toBe(false);
+  });
+
+  test("a call made while connecting waits for the session", async () => {
+    gateway = await startGateway();
+    const paired = await pairDevice(gateway);
+    const base = gateway.base;
+    const connection = createConnection({
+      routes: () => [{ _tag: "Tailnet", baseUrl: base }],
+      token: paired.token,
+      clientVersion: "test",
+      webSocket: ownerSocket,
+      fetch: withOwner,
+    });
+    expect(connection.state.get()._tag).not.toBe("Ready");
+    expect((await connection.call((client) => client["apps.list"]({}))).ok).toBe(true);
+    connection.dispose();
+  });
+
+  test("a session lost right after connecting backs off before reconnecting", async () => {
+    gateway = await startGateway();
+    const paired = await pairDevice(gateway);
+    const opened = tracked(ownerSocket);
+    const base = gateway.base;
+    const connection = createConnection({
+      routes: () => [{ _tag: "Tailnet", baseUrl: base }],
+      token: paired.token,
+      clientVersion: "test",
+      webSocket: opened.make,
+      fetch: withOwner,
+      random: () => 0,
+    });
+    await until(() => connection.state.get()._tag === "Ready");
+    opened.sockets[0]?.close();
+    await until(() => connection.state.get()._tag === "Backoff");
+    const state = connection.state.get();
+    expect(state._tag === "Backoff" ? state.attempt : null).toBe(1);
+    await until(() => connection.state.get()._tag === "Ready");
+    connection.dispose();
+  });
+
+  test("a removed phone on Wi-Fi only stays Revoked when it tries again", async () => {
+    gateway = await startGateway();
+    const running = gateway;
+    const { outcome, device, key, port } = await pairByWifi(running, true);
+    if (!outcome.ok) throw new Error(outcome.reason);
+    let bound = true;
+    const tags: Array<ConnectionState["_tag"]> = [];
+    const connection = createConnection({
+      routes: () => [{ _tag: "Lan", host: "127.0.0.1", port }],
+      token: outcome.result.token,
+      macKey: () => key,
+      deviceKey: device,
+      clientVersion: "test",
+      webSocket: rawSocket,
+      lanEnrolled: () => bound,
+      onLanUnknown: () => {
+        bound = false;
+      },
+      onTransition: (_, next) => tags.push(next._tag),
+      random: () => 0,
+    });
+    await until(() => connection.state.get()._tag === "Ready");
+    await adminOp(running.app, { _tag: "RevokeDevice", deviceId: outcome.result.deviceId });
+    await until(() => connection.state.get()._tag === "Revoked", 8000);
+
+    const mark = tags.length;
+    connection.wake("foreground");
+    await until(() => tags.slice(mark).some((tag) => tag === "Revoked" || tag === "Backoff"));
+    expect(tags.slice(mark)).toEqual(["Connecting", "Revoked"]);
+    expect(bound).toBe(true);
+    connection.dispose();
+  });
+
+  test("a call in flight when the session moves to Wi-Fi still gets its answer", async () => {
+    gateway = await startGateway();
+    const running = gateway;
+    const { outcome, device, key, port } = await pairByWifi(running, true);
+    if (!outcome.ok) throw new Error(outcome.reason);
+    let lanPortNow = port + 7;
+    const connection = createConnection({
+      routes: () => [
+        { _tag: "Lan", host: "127.0.0.1", port: lanPortNow },
+        { _tag: "Tailnet", baseUrl: running.base },
+      ],
+      token: outcome.result.token,
+      macKey: () => key,
+      deviceKey: device,
+      clientVersion: "test",
+      webSocket: ownerSocket,
+      fetch: withOwner,
+    });
+    await until(() => connection.state.get()._tag === "Ready", 6000);
+
+    let answer: () => void = () => {};
+    running.app.answer = (query) =>
+      query._tag === "Apps" ? new Promise((resolve) => (answer = () => resolve({ _tag: "Apps", result: { running: [], emulators: [] } }))) : null;
+    const inFlight = connection.call((client) => client["apps.list"]({}));
+    await until(() => running.app.received.some((message) => message.t === "query" && message.q._tag === "Apps"));
+
+    lanPortNow = port;
+    connection.wake("network");
+    await until(() => {
+      const now = connection.state.get();
+      return now._tag === "Ready" && now.route === "lan";
+    }, 6000);
+    answer();
+    expect((await inFlight).ok).toBe(true);
     connection.dispose();
   });
 });

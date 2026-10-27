@@ -7,6 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
@@ -63,7 +64,9 @@ export interface ConnectionOptions {
   readonly random?: () => number;
   readonly onTransition?: (from: ConnectionState, to: ConnectionState) => void;
   readonly onRoutes?: (routes: MacRoutes, via: RouteKind) => void;
+  /** Whether the Mac has accepted this phone's Wi-Fi key. Then Wi-Fi saying "unknown" with no Tailscale answer means the phone was removed. Defaults to true. */
   readonly lanEnrolled?: () => boolean;
+  /** Wi-Fi does not know this phone but Tailscale still accepts its token, so the Wi-Fi key can be bound again. */
   readonly onLanUnknown?: () => void;
 }
 
@@ -87,7 +90,7 @@ export interface Connection {
 export class NotConnected extends Data.TaggedError("NotConnected")<{ readonly message: string }> {}
 
 class AttemptFailed extends Data.TaggedError("AttemptFailed")<{
-  readonly reason: "unreachable" | "identity" | "revoked" | "server" | "socket";
+  readonly reason: "unreachable" | "identity" | "revoked" | "server" | "socket" | "unknown";
   readonly message: string;
 }> {}
 
@@ -96,6 +99,7 @@ type Signal = { readonly _tag: "Wake"; readonly reason: WakeReason } | { readonl
 interface Session {
   readonly client: VitalsClient;
   readonly id: number;
+  readonly calls: SubscriptionRef.SubscriptionRef<number>;
 }
 
 interface Established {
@@ -105,6 +109,14 @@ interface Established {
   readonly disconnected: Deferred.Deferred<void>;
   readonly route: RouteKind;
   readonly latencyMs: number;
+  /** Calls running on this session; a replaced session closes once it reaches 0. */
+  readonly calls: SubscriptionRef.SubscriptionRef<number>;
+}
+
+interface SocketPlan {
+  readonly layer: Layer.Layer<Socket.Socket>;
+  /** Why the Mac turned the Wi-Fi handshake down, once it has. */
+  readonly rejected: () => string | null;
 }
 
 type Ended =
@@ -114,12 +126,24 @@ type Ended =
 
 const CONNECT_TIMEOUT = "15 seconds";
 const PING_TIMEOUT = "15 seconds";
-const PROBE_TIMEOUT = "3 seconds";
+// One slow answer on cellular or a relayed Tailscale path is not a lost Mac.
+const HEARTBEAT_TIMEOUT = "10 seconds";
 const HEARTBEAT_MS = 15_000;
 // Network changes and seeing the Mac on Wi-Fi trigger an upgrade at once; this is only the safety net.
 const UPGRADE_EVERY_MS = 5 * 60_000;
 const HOLD_OFF_MS = 5 * 60_000;
 const LAN_PROBE_MS = 1_200;
+// A cold built-in Tailscale path may need a relay before the Mac answers.
+const TUNNEL_PROBE_MS = 5_000;
+// A call made while the connection comes back (just after opening the app) waits this long for it.
+const CALL_GRACE = "5 seconds";
+// The Mac bounds its own handlers; this only catches a hung one. Long clip reads retry on NotConnected.
+const CALL_TIMEOUT = "3 minutes";
+// After moving to Wi-Fi the old route stays open this long for calls still running on it.
+const DRAIN_TIMEOUT = "30 seconds";
+const WATCH_RETRY = Schedule.min([Schedule.exponential("500 millis"), Schedule.spaced("30 seconds")]);
+const WATCH_REPEAT = Schedule.spaced("2 seconds");
+const UNKNOWN_ON_WIFI = "The Mac does not know this phone on Wi-Fi";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
@@ -127,30 +151,44 @@ const kindOf = (route: Route): RouteKind => (route._tag === "Lan" && route.tunne
 
 const keyOf = (route: Route): string => (route._tag === "Lan" ? `lan:${route.host}:${route.port}` : `tailnet:${route.baseUrl}`);
 
+const failureOf = <A>(exit: Exit.Exit<A, AttemptFailed>): AttemptFailed | null =>
+  Exit.isFailure(exit) ? Option.getOrNull(Cause.findErrorOption(exit.cause)) : null;
+
+/** Runs an app callback so a throw is logged instead of stopping the connection loop or a watch. */
+const safely = (run: () => void): void => {
+  try {
+    run();
+  } catch (error) {
+    console.error("Connection callback threw", error);
+  }
+};
+
 export const createConnection = (options: ConnectionOptions): Connection => {
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   const random = options.random ?? Math.random;
   const state = new Store<ConnectionState>({ _tag: "Idle" });
   const session = Effect.runSync(SubscriptionRef.make<Session | null>(null));
   const signals = Effect.runSync(Queue.unbounded<Signal>());
+  // Every session scope is a child, so dispose closes whatever is still open.
+  const root = Scope.makeUnsafe();
   const heldOff = new Map<string, number>();
   let suspended = false;
+  let disposed = false;
   let sessionCounter = 0;
 
   const transition = (next: ConnectionState) => {
     const previous = state.get();
     state.set(next);
-    options.onTransition?.(previous, next);
+    safely(() => options.onTransition?.(previous, next));
   };
+
+  const lanUnknown = () => safely(() => options.onLanUnknown?.());
 
   const lanReady = (): { readonly key: string; readonly device: KeyPair } | null => {
     const key = options.macKey?.() ?? null;
     const device = options.deviceKey ?? null;
-    if (key === null || device === null || options.lanEnrolled?.() === false) return null;
-    return { key, device };
+    return key === null || device === null ? null : { key, device };
   };
-
-  let lanRejectedAsUnknown = false;
 
   const health = (baseUrl: string) =>
     Effect.tryPromise(async () => {
@@ -172,7 +210,8 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     }
     const lan = lanReady();
     if (lan === null) return Effect.succeed({ _tag: "Down", reason: "Wi-Fi route is not set up" });
-    return Effect.promise(() => probeLan(route.host, route.port, lan.key, fetchImpl, LAN_PROBE_MS)).pipe(
+    const timeoutMs = route.tunnel === true ? TUNNEL_PROBE_MS : LAN_PROBE_MS;
+    return Effect.promise(() => probeLan(route.host, route.port, lan.key, fetchImpl, timeoutMs)).pipe(
       Effect.map((advert): Probe => {
         if (advert === null) return { _tag: "Down", reason: route.tunnel === true ? "Built-in Tailscale could not reach the Mac" : "Not on the Mac's Wi-Fi" };
         return advert.protocol === PROTOCOL_VERSION ? { _tag: "Ok" } : { _tag: "Incompatible", protocol: advert.protocol };
@@ -206,21 +245,23 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       ),
     );
 
-  const socketLayer = (route: Route): Effect.Effect<Layer.Layer<Socket.Socket>, AttemptFailed> => {
+  const socketPlan = (route: Route): Effect.Effect<SocketPlan, AttemptFailed> => {
     if (route._tag === "Tailnet") {
       const base = route.baseUrl.replace(/\/$/, "");
       return ticket(base).pipe(
-        Effect.map((value) =>
-          Socket.layerWebSocket(
+        Effect.map((value) => ({
+          layer: Socket.layerWebSocket(
             `${base.replace(/^http/, "ws")}/ws?v=${PROTOCOL_VERSION}&ticket=${encodeURIComponent(value)}&client=${encodeURIComponent(options.clientVersion)}`,
             { openTimeout: CONNECT_TIMEOUT },
           ).pipe(Layer.provide(Layer.succeed(Socket.WebSocketConstructor)(options.webSocket))),
-        ),
+          rejected: () => null,
+        })),
       );
     }
     const lan = lanReady();
     if (lan === null) return Effect.fail(new AttemptFailed({ reason: "unreachable", message: "Wi-Fi route is not set up" }));
     const macKey = macKeyBytes(lan.key);
+    let rejection: string | null = null;
     const lanSocket: Socket.WebSocketConstructor["Service"] = (url) =>
       openLanSocket(url, {
         macKey,
@@ -228,14 +269,15 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         client: options.clientVersion,
         raw: (raw) => options.webSocket(raw),
         onRejected: (reason) => {
-          lanRejectedAsUnknown = reason === "unknown";
+          rejection = reason;
         },
       });
-    return Effect.succeed(
-      Socket.layerWebSocket(lanSocketUrl(route.host, route.port), { openTimeout: CONNECT_TIMEOUT }).pipe(
+    return Effect.succeed({
+      layer: Socket.layerWebSocket(lanSocketUrl(route.host, route.port), { openTimeout: CONNECT_TIMEOUT }).pipe(
         Layer.provide(Layer.succeed(Socket.WebSocketConstructor)(lanSocket)),
       ),
-    );
+      rejected: () => rejection,
+    });
   };
 
   const timedHello = (client: VitalsClient, via: RouteKind) =>
@@ -245,15 +287,16 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         Effect.timeout(CONNECT_TIMEOUT),
         Effect.mapError(() => new AttemptFailed({ reason: "socket", message: "The Mac did not answer" })),
       );
-      if (hello.routes !== undefined) options.onRoutes?.(hello.routes, via);
+      const routes = hello.routes;
+      if (routes !== undefined) safely(() => options.onRoutes?.(routes, via));
       return { hello, latencyMs: Date.now() - startedAt };
     });
 
   const attempt = (route: Route): Effect.Effect<Established, AttemptFailed> =>
     Effect.gen(function* () {
-      const scope = yield* Scope.make();
-      const built = yield* Effect.gen(function* () {
-        const socket = yield* socketLayer(route);
+      const plan = yield* socketPlan(route);
+      const scope = yield* Scope.fork(root);
+      return yield* Effect.gen(function* () {
         const disconnected = yield* Deferred.make<void>();
         const hooks = RpcClient.ConnectionHooks.of({
           onConnect: Effect.void,
@@ -262,13 +305,20 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         const protocol = Layer.effect(
           RpcClient.Protocol,
           RpcClient.makeProtocolSocket({ pingTimeout: PING_TIMEOUT, retryTransientErrors: false, retryPolicy: Schedule.recurs(0) }),
-        ).pipe(Layer.provide(Layer.mergeAll(socket, RpcSerialization.layerJson, Layer.succeed(RpcClient.ConnectionHooks, hooks))));
+        ).pipe(Layer.provide(Layer.mergeAll(plan.layer, RpcSerialization.layerJson, Layer.succeed(RpcClient.ConnectionHooks, hooks))));
         const context = yield* Layer.buildWithScope(protocol, scope);
         const client = yield* RpcClient.make(VitalsRpc).pipe(Effect.provide(context), Scope.provide(scope));
         const { hello, latencyMs } = yield* timedHello(client, kindOf(route));
-        return { scope, client, hello, disconnected, route: kindOf(route), latencyMs };
-      }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
-      return built;
+        const calls = yield* SubscriptionRef.make(0);
+        return { scope, client, hello, disconnected, route: kindOf(route), latencyMs, calls };
+      }).pipe(
+        Effect.catchCause((cause) =>
+          plan.rejected() === "unknown" && !Cause.hasInterrupts(cause)
+            ? Effect.fail(new AttemptFailed({ reason: "unknown", message: UNKNOWN_ON_WIFI }))
+            : Effect.failCause(cause),
+        ),
+        Effect.onError(() => Scope.close(scope, Exit.void)),
+      );
     });
 
   type Connect =
@@ -281,7 +331,9 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     if (routes.length === 0) return { _tag: "Failed", kind: "failed", message: "No route to the Mac", failures: [] };
     const probes = yield* Effect.forEach(routes, probe, { concurrency: "unbounded" });
     const failures: Array<RouteFailure> = [];
-    let unknownOnLan = false;
+    let unknownOnWifi = false;
+    // Tailscale handed out a ticket, so the token is still good even if the socket then failed.
+    let tokenAccepted = false;
     for (const [index, route] of routes.entries()) {
       const result = probes[index];
       if (result === undefined) continue;
@@ -290,22 +342,25 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         failures.push({ kind: kindOf(route), reason: result.reason });
         continue;
       }
-      lanRejectedAsUnknown = false;
       const established = yield* attempt(route).pipe(Effect.exit);
-      if (Exit.isSuccess(established)) return { _tag: "Ready", established: established.value };
-      const error = Cause.findErrorOption(established.cause);
-      const reason = error._tag === "Some" ? error.value : null;
-      if (reason?.reason === "revoked") return { _tag: "Failed", kind: "revoked", message: reason.message, failures: [] };
-      if (route._tag === "Lan" && lanRejectedAsUnknown) {
-        unknownOnLan = true;
-        options.onLanUnknown?.();
-        failures.push({ kind: "lan", reason: "The Mac does not know this phone on Wi-Fi" });
+      if (Exit.isSuccess(established)) {
+        if (unknownOnWifi && route._tag === "Tailnet") lanUnknown();
+        return { _tag: "Ready", established: established.value };
+      }
+      const error = failureOf(established);
+      if (error?.reason === "revoked") return { _tag: "Failed", kind: "revoked", message: error.message, failures: [] };
+      if (error?.reason === "unknown") {
+        unknownOnWifi = true;
+        failures.push({ kind: kindOf(route), reason: error.message });
         continue;
       }
+      if (route._tag === "Tailnet" && error?.reason === "socket") tokenAccepted = true;
       heldOff.set(keyOf(route), Date.now() + HOLD_OFF_MS);
-      failures.push({ kind: kindOf(route), reason: reason?.message ?? "Connection failed" });
+      failures.push({ kind: kindOf(route), reason: error?.message ?? "Connection failed" });
     }
-    if (unknownOnLan && routes.every((route) => route._tag === "Lan")) {
+    if (unknownOnWifi && tokenAccepted) lanUnknown();
+    // Wi-Fi forgot a key it had accepted and nothing else vouches for the token: this phone was removed.
+    if (unknownOnWifi && !tokenAccepted && options.lanEnrolled?.() !== false) {
       return { _tag: "Failed", kind: "revoked", message: "This device is no longer paired", failures: [] };
     }
     return { _tag: "Failed", kind: "failed", message: failures[0]?.reason ?? "Mac is unreachable", failures };
@@ -323,10 +378,10 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       if (target === null) return null;
       const reachable = yield* probe(target);
       if (reachable._tag !== "Ok") return null;
-      lanRejectedAsUnknown = false;
       const next = yield* attempt(target).pipe(Effect.exit);
       if (Exit.isSuccess(next)) return next.value;
-      if (lanRejectedAsUnknown) options.onLanUnknown?.();
+      // The current Tailscale session can bind the Wi-Fi key again.
+      if (failureOf(next)?.reason === "unknown") lanUnknown();
       heldOff.set(keyOf(target), Date.now() + HOLD_OFF_MS);
       return null;
     });
@@ -339,11 +394,14 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     const listen = Effect.gen(function* () {
       while (true) {
         const signal = yield* Queue.take(signals).pipe(Effect.timeoutOption(HEARTBEAT_MS));
-        if (signal._tag === "Some" && signal.value._tag === "Suspend") return { _tag: "Suspended" } satisfies Ended;
+        // A burst of wakes asks for one check, not one each.
+        if (signal._tag === "Some") yield* Queue.clear(signals);
+        if (suspended) return { _tag: "Suspended" } satisfies Ended;
         const startedAt = Date.now();
-        const beat = yield* established.client["server.hello"]({}).pipe(Effect.timeout(PROBE_TIMEOUT), Effect.exit);
+        const beat = yield* established.client["server.hello"]({}).pipe(Effect.timeout(HEARTBEAT_TIMEOUT), Effect.exit);
         if (Exit.isFailure(beat)) return { _tag: "Lost", message: "The Mac stopped answering" } satisfies Ended;
-        if (beat.value.routes !== undefined) options.onRoutes?.(beat.value.routes, established.route);
+        const routes = beat.value.routes;
+        if (routes !== undefined) safely(() => options.onRoutes?.(routes, established.route));
         latencyMs = Date.now() - startedAt;
         ready();
         const due = signal._tag === "Some" || Date.now() - lastUpgradeAt >= UPGRADE_EVERY_MS;
@@ -357,17 +415,18 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     return Effect.raceFirst(lost, listen);
   };
 
-  const waitForWake = Effect.gen(function* () {
+  /** Waits for the next wake; suspends that arrive meanwhile are already reflected in `suspended`. */
+  const waitForWake: Effect.Effect<WakeReason> = Effect.gen(function* () {
     while (true) {
       const signal = yield* Queue.take(signals);
-      if (signal._tag === "Wake") return;
+      if (signal._tag === "Wake") return signal.reason;
     }
   });
 
   const adopt = (established: Established) =>
     Effect.gen(function* () {
       sessionCounter += 1;
-      yield* SubscriptionRef.set(session, { client: established.client, id: sessionCounter });
+      yield* SubscriptionRef.set(session, { client: established.client, id: sessionCounter, calls: established.calls });
       transition({
         _tag: "Ready",
         hello: established.hello,
@@ -377,64 +436,129 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       });
     });
 
+  const close = (established: Established) => Scope.close(established.scope, Exit.void);
+
+  /** Closes a replaced session once its last call has answered, or after DRAIN_TIMEOUT. */
+  const retire = (established: Established) =>
+    SubscriptionRef.changes(established.calls).pipe(
+      Stream.filter((count) => count === 0),
+      Stream.runHead,
+      Effect.timeoutOption(DRAIN_TIMEOUT),
+      Effect.andThen(close(established)),
+      Effect.forkIn(root),
+      Effect.asVoid,
+    );
+
+  /**
+   * Shows Backoff and waits out the delay for the current failure count, or until a wake.
+   * Returns the next failure count: a foreground or manual wake starts the count over.
+   */
+  const backoff = (failures: number, reason: string, routes: ReadonlyArray<RouteFailure>): Effect.Effect<number> =>
+    Effect.gen(function* () {
+      const delay = retryDelayMs(failures, random());
+      // Wakes queued while connecting are already answered by this attempt.
+      yield* Queue.clear(signals);
+      transition({ _tag: "Backoff", attempt: failures + 1, retryAt: Date.now() + delay, reason, failures: routes });
+      const woke = yield* Effect.raceFirst(Effect.as(Effect.sleep(delay), null), Queue.take(signals));
+      return woke?._tag === "Wake" && woke.reason !== "network" ? 0 : failures + 1;
+    });
+
   const loop = Effect.gen(function* () {
     let failures = 0;
-    let pending: Established | null = null;
-    let adopted = false;
+    // A session an upgrade already adopted; it is held next.
+    let upgraded: Established | null = null;
     while (true) {
       if (suspended) {
+        if (upgraded !== null) {
+          // The suspend landed while moving to Wi-Fi: the new session must not stay open in the background.
+          yield* SubscriptionRef.set(session, null);
+          yield* close(upgraded);
+          upgraded = null;
+        }
+        yield* Queue.clear(signals);
+        if (!suspended) continue;
         transition({ _tag: "Suspended" });
-        yield* waitForWake;
+        // Only the app coming back resumes; a network wake leaves the connection suspended.
+        let reason = yield* waitForWake;
+        while (reason === "network") reason = yield* waitForWake;
+        failures = 0;
         continue;
       }
-      let established: Established | null = pending;
-      pending = null;
+      let established: Established | null = upgraded;
+      upgraded = null;
       if (established === null) {
         transition({ _tag: "Connecting", attempt: failures + 1 });
         const result = yield* connect;
-        if (result._tag === "Incompatible") {
-          transition({ _tag: "Incompatible", serverProtocol: result.protocol });
-          yield* waitForWake;
+        if (result._tag === "Failed" && result.kind === "failed") {
+          failures = yield* backoff(failures, result.message, result.failures);
           continue;
         }
-        if (result._tag === "Failed" && result.kind === "revoked") {
-          transition({ _tag: "Revoked", reason: result.message });
+        if (result._tag !== "Ready") {
+          yield* Queue.clear(signals);
+          transition(result._tag === "Incompatible" ? { _tag: "Incompatible", serverProtocol: result.protocol } : { _tag: "Revoked", reason: result.message });
           yield* waitForWake;
-          continue;
-        }
-        if (result._tag === "Failed") {
-          const delay = retryDelayMs(failures, random());
-          failures += 1;
-          transition({ _tag: "Backoff", attempt: failures, retryAt: Date.now() + delay, reason: result.message, failures: result.failures });
-          yield* Effect.raceFirst(Effect.sleep(delay), waitForWake);
           continue;
         }
         established = result.established;
+        yield* adopt(established);
       }
+      const current: Established = established;
       const readyAt = Date.now();
-      if (!adopted) yield* adopt(established);
-      adopted = false;
-      const ended: Ended = yield* holdSession(established);
+      const ended: Ended = yield* holdSession(current).pipe(
+        Effect.onError(() => Effect.andThen(SubscriptionRef.set(session, null), close(current))),
+      );
+      const lasted = Date.now() - readyAt >= BACKOFF_RESET_AFTER_MS;
+      if (lasted) failures = 0;
       if (ended._tag === "Upgrade") {
         yield* adopt(ended.next);
-        pending = ended.next;
-        adopted = true;
-      } else {
-        yield* SubscriptionRef.set(session, null);
+        yield* retire(current);
+        upgraded = ended.next;
+        continue;
       }
-      yield* Scope.close(established.scope, Exit.void);
-      if (Date.now() - readyAt > BACKOFF_RESET_AFTER_MS) failures = 0;
+      yield* SubscriptionRef.set(session, null);
+      yield* close(current);
+      // A session that dies soon after connecting counts as a failed attempt, or a flaky route reconnects in a tight loop.
+      if (ended._tag === "Lost" && !lasted) failures = yield* backoff(failures, ended.message, [{ kind: current.route, reason: ended.message }]);
     }
   });
 
-  const main = Effect.runFork(loop);
+  const main = Effect.runFork(
+    Effect.forever(
+      loop.pipe(
+        Effect.catchDefect((defect) =>
+          Effect.andThen(
+            Effect.sync(() => console.error("Connection loop failed, restarting", defect)),
+            Effect.sleep("1 second"),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /** The live session, waiting briefly while the connection is on its way back. */
+  const sessionSoon: Effect.Effect<Session | null> = Effect.suspend(() => {
+    const tag = state.get()._tag;
+    if (disposed || tag === "Revoked" || tag === "Incompatible") return SubscriptionRef.get(session);
+    return SubscriptionRef.changes(session).pipe(
+      Stream.filter((current) => current !== null),
+      Stream.runHead,
+      Effect.timeoutOption(CALL_GRACE),
+      Effect.map((found) => Option.getOrNull(Option.flatten(found))),
+    );
+  });
 
   const call = <A, E>(run: (client: VitalsClient) => Effect.Effect<A, E>): Promise<CallResult<A, E>> => {
-    const program: Effect.Effect<A, E | NotConnected> = Effect.flatMap(
-      SubscriptionRef.get(session),
-      (current): Effect.Effect<A, E | NotConnected> =>
-        current === null ? Effect.fail(new NotConnected({ message: "Not connected to your Mac" })) : run(current.client),
-    );
+    const program: Effect.Effect<A, E | NotConnected> = Effect.flatMap(sessionSoon, (current): Effect.Effect<A, E | NotConnected> => {
+      if (current === null) return Effect.fail(new NotConnected({ message: "Not connected to your Mac" }));
+      return SubscriptionRef.update(current.calls, (count) => count + 1).pipe(
+        Effect.andThen(run(current.client)),
+        Effect.timeoutOrElse({
+          duration: CALL_TIMEOUT,
+          orElse: () => Effect.fail(new NotConnected({ message: "The Mac took too long to answer" })),
+        }),
+        Effect.ensuring(SubscriptionRef.update(current.calls, (count) => count - 1)),
+      );
+    });
     return Effect.runPromiseExit(
       Effect.match(program, {
         onFailure: (error): CallResult<A, E> => ({ ok: false, error }),
@@ -449,6 +573,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     });
   };
 
+  /** Follows `open` on every session; a stream that fails or ends while the session lives is opened again. */
   const watch = <A, E>(
     open: (client: VitalsClient) => Stream.Stream<A, E>,
     onValue: (value: A) => void,
@@ -460,13 +585,16 @@ export const createConnection = (options: ConnectionOptions): Connection => {
           current === null
             ? Stream.empty
             : open(current.client).pipe(
+                Stream.tapError((error) => Effect.sync(() => safely(() => onError?.(error)))),
+                Stream.retry(WATCH_RETRY),
+                Stream.repeat(WATCH_REPEAT),
                 Stream.catchCause((cause) => {
-                  if (!Cause.hasInterruptsOnly(cause)) onError?.(Cause.squash(cause));
+                  if (!Cause.hasInterruptsOnly(cause)) safely(() => onError?.(Cause.squash(cause)));
                   return Stream.empty;
                 }),
               ),
         ),
-        Stream.runForEach((value) => Effect.sync(() => onValue(value))),
+        Stream.runForEach((value) => Effect.sync(() => safely(() => onValue(value)))),
       ),
     );
     return () => {
@@ -479,7 +607,8 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     call,
     watch,
     wake: (reason) => {
-      suspended = false;
+      // A network change in the background is no reason to reconnect; only the app coming back is.
+      if (reason !== "network") suspended = false;
       Effect.runSync(Queue.offer(signals, { _tag: "Wake", reason }));
     },
     suspend: () => {
@@ -487,7 +616,14 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       Effect.runSync(Queue.offer(signals, { _tag: "Suspend" }));
     },
     dispose: () => {
-      Effect.runFork(Fiber.interrupt(main));
+      if (disposed) return;
+      disposed = true;
+      Effect.runFork(
+        Fiber.interrupt(main).pipe(
+          Effect.andThen(SubscriptionRef.set(session, null)),
+          Effect.andThen(Scope.close(root, Exit.void)),
+        ),
+      );
     },
   };
 };

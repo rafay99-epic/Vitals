@@ -145,14 +145,15 @@ export class Remote {
       if (state._tag === "Ready" && state.route === "lan") return;
       if (nearbyEndpoints(this.link.get().macKey).length > 0) this.connection.wake("network");
     });
-    let binding = false;
+    // Binds the Wi-Fi key once per Tailscale session. Heartbeats re-emit Ready with the same hello,
+    // so a Mac that refuses the key is asked again on the next session, not every beat.
+    let triedFor: object | null = null;
     this.stopBind = this.connection.state.subscribe(() => {
       const state = this.connection.state.get();
-      if (binding || deviceKey === null || this.link.get().lanBound === true) return;
-      if (state._tag !== "Ready" || state.route !== "tailnet" || state.hello.routes === undefined) return;
-      binding = true;
+      if (deviceKey === null || this.link.get().lanBound === true) return;
+      if (state._tag !== "Ready" || state.route !== "tailnet" || state.hello.routes === undefined || state.hello === triedFor) return;
+      triedFor = state.hello;
       void this.connection.call((client) => client["device.lanKey"]({ key: deviceKeyText(deviceKey) })).then((result) => {
-        binding = false;
         if (!result.ok) return;
         relink({ ...this.link.get(), lanBound: true });
         this.connection.wake("network");

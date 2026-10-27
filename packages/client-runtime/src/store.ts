@@ -20,10 +20,17 @@ export class Store<T> implements ReadableStore<T> {
     };
   };
 
+  /** Stores `next` and tells every listener. A throwing listener is logged and never stops the others or the caller. */
   set(next: T): void {
     if (Object.is(next, this.value)) return;
     this.value = next;
-    for (const listener of this.listeners) listener();
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.error("Store listener threw", error);
+      }
+    }
   }
 
   update(change: (current: T) => T): void {
