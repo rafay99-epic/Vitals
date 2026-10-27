@@ -74,13 +74,16 @@ export const layer = (initialOwner: string | null) =>
         const identity = checkIdentity(login);
         if (identity !== null) return identity;
         const lanKey = request.lanKey ?? null;
-        retire(lanKey);
+        // The device this phone was before re-pairing. Its sockets close only once the new code is
+        // accepted: a stale or wrong code must not knock the phone's live connection off.
+        const prior = lanKey === null ? null : store.lanDevice(lanKey);
         const scopes = pairedScopes(request.device.platform);
         const result = store.redeemPairing(request.code, request.device, scopes, Date.now(), lanKey);
         if (typeof result === "string") {
           log("warn", "pairing.rejected", { reason: result, device: request.device.name });
           return { reason: "credentials", message: `Pairing code ${result}` };
         }
+        if (prior !== null) Effect.runSync(signal(prior.id));
         log("info", "pairing.consumed", { device: request.device.name, platform: request.device.platform }, result.deviceId);
         return { deviceId: result.deviceId, token: result.token, scopes, expiresAt: result.expiresAt };
       };

@@ -27,6 +27,8 @@ export const startNearby = (): void => {
 export const stopNearby = (): void => {
   stop?.();
   stop = null;
+  // Browsing again starts from nothing; a Mac seen on the last Wi-Fi must not linger.
+  nearby.set([]);
 };
 
 export const macKeyOf = (mac: FoundMac): string | null => mac.txt["k"] ?? null;
