@@ -1,116 +1,137 @@
 import SwiftUI
 
-/// A phone's whole shared storage, folder by folder. Get asks the phone to send a file.
+/// A phone's shared folders. Opening one drills in on the device page.
 struct PhoneFilesCard: View {
-    @Environment(RemoteModel.self) private var remote
-    let device: PhoneDevice
-    @State private var roots: [PhoneRoot] = []
-    @State private var trail: [PhoneRoot] = []
-    @State private var listing: PhoneListing?
-    @State private var problem: String?
-    @State private var getting: Set<String> = []
+    @Environment(DevicesModel.self) private var pages
+    let phone: PhoneDevice
+    let open: (PhoneRoot) -> Void
 
     var body: some View {
-        SectionCard(title: "All files", symbol: "folder") {
-            if let problem {
-                Text(problem).font(.callout).foregroundStyle(.orange)
+        let page = pages.page(phone.id)
+        SectionCard(title: "Folders", symbol: "folder") {
+            if let roots = page.roots, !roots.isEmpty {
+                FolderRows(folders: roots, open: open)
+            } else {
+                Text(page.rootsProblem ?? (page.roots == nil ? "Loading…" : "Nothing found")).foregroundStyle(.secondary)
             }
-            browser
         }
-        .task(id: device.online) {
-            guard device.online, roots.isEmpty else { return }
-            do { roots = try await remote.phoneRoots(device.deviceId) } catch { problem = message(error) }
+        .opacity(phone.online ? 1 : 0.55)
+        .disabled(!phone.online)
+    }
+}
+
+/// One folder on a phone, with its path: folders first, then images in the fixed grid, then
+/// files. Select, then Transfer.
+struct FolderDrill: View {
+    @Environment(DevicesModel.self) private var pages
+    let phone: PhoneDevice
+    /// Never empty: the device page shows the roots.
+    let trail: [PhoneRoot]
+    @Binding var selection: Set<String>
+    let open: ([PhoneRoot]) -> Void
+
+    var body: some View {
+        let page = pages.page(phone.id)
+        let here = trail[trail.count - 1]
+        let folder = page.folders[here.path]
+        let entries = folder?.listing?.entries ?? []
+        let folders = entries.filter { $0.kind == "folder" }.map { PhoneRoot(label: $0.name, path: $0.path, place: "folder") }
+        let files = entries.filter { $0.kind != "folder" }
+        let images = files.filter(\.isImage)
+        let rest = files.filter { !$0.isImage }
+        MetricScroll {
+            Crumb(title: trail.dropLast().last?.label ?? phone.name) { open(Array(trail.dropLast())) }
+            PageHero(value: here.label, subtitle: subtitle(folder?.listing)) {
+                TransferControls(phone: phone, paths: images.map(\.path) + rest.map(\.path), selection: $selection)
+            }
+            path
+            if let notice = page.notice {
+                Text(notice).font(.callout).foregroundStyle(.secondary)
+            }
+            if let problem = folder?.problem {
+                Text(problem).font(.callout).foregroundStyle(.secondary)
+            }
+            if let listing = folder?.listing {
+                if entries.isEmpty {
+                    Text("Empty").foregroundStyle(.secondary)
+                }
+                if !folders.isEmpty {
+                    FolderRows(folders: folders) { open(trail + [$0]) }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .cardBackground()
+                }
+                if !images.isEmpty {
+                    ThumbPicker(phone: phone, entries: images, selection: $selection)
+                }
+                if !rest.isEmpty {
+                    EntryPicker(entries: rest, selection: $selection)
+                }
+                if listing.total > entries.count {
+                    Text("Showing \(entries.count) of \(listing.total)").font(.caption).foregroundStyle(.secondary)
+                }
+            } else if folder?.problem == nil {
+                Text("Loading…").foregroundStyle(.secondary)
+            }
+        }
+        .id(here.path)
+        .task(id: "\(phone.online)\(here.path)") {
+            guard phone.online else { return }
+            await pages.loadFolder(phone.id, path: here.path)
         }
     }
 
-    @ViewBuilder private var browser: some View {
-        if !trail.isEmpty {
-            HStack(spacing: 6) {
-                Button { back() } label: { Label("Back", systemImage: "chevron.left") }
-                    .buttonStyle(.borderless)
-                Text(trail.map(\.label).joined(separator: " › "))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-            }
-        }
-        if trail.isEmpty {
-            ForEach(roots) { root in
-                row(title: root.label, symbol: "folder", detail: nil) { open(root) }
-            }
-        } else if let listing {
-            if listing.entries.isEmpty {
-                Text("Empty").foregroundStyle(.secondary)
-            }
-            ForEach(listing.entries) { entry in
-                if entry.kind == "folder" {
-                    row(title: entry.name, symbol: "folder", detail: nil) { open(PhoneRoot(label: entry.name, path: entry.path, place: "folder")) }
+    private func subtitle(_ listing: PhoneListing?) -> String {
+        if !selection.isEmpty { return "\(selection.count) selected" }
+        guard let listing else { return "On \(phone.name)" }
+        return "\(listing.total) \(listing.total == 1 ? "item" : "items") on \(phone.name)"
+    }
+
+    /// "Pixel 9 › Download › Camera": every part but the last jumps back to it.
+    private var path: some View {
+        HStack(spacing: 4) {
+            Button(phone.name) { open([]) }
+                .buttonStyle(.borderless)
+            ForEach(trail.indices, id: \.self) { index in
+                Text("›").foregroundStyle(.tertiary)
+                if index == trail.count - 1 {
+                    Text(trail[index].label)
                 } else {
-                    HStack {
-                        Image(systemName: "doc").foregroundStyle(.secondary).frame(width: 18)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(entry.name).lineLimit(1).truncationMode(.middle)
-                            Text(ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button(getting.contains(entry.path) ? "Asked" : "Get") { get(entry) }
-                            .controlSize(.small)
-                            .disabled(getting.contains(entry.path) || !device.online)
-                    }
+                    Button(trail[index].label) { open(Array(trail.prefix(index + 1))) }
+                        .buttonStyle(.borderless)
                 }
             }
-            if listing.total > listing.entries.count {
-                Text("Showing \(listing.entries.count) of \(listing.total)").font(.caption).foregroundStyle(.secondary)
+        }
+        .font(.callout)
+        .lineLimit(1)
+    }
+}
+
+/// Folder rows with a chevron. The whole row opens it.
+private struct FolderRows: View {
+    let folders: [PhoneRoot]
+    let open: (PhoneRoot) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(folders) { folder in
+                Button { open(folder) } label: {
+                    HStack(spacing: 10) {
+                        IconTile(symbol: "folder", tint: .blue, size: 26)
+                        Text(folder.label).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if folder.id != folders.last?.id { Divider() }
             }
         }
     }
+}
 
-    private func row(title: String, symbol: String, detail: String?, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: symbol).foregroundStyle(.blue).frame(width: 18)
-                Text(title)
-                Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!device.online)
-    }
-
-    private func open(_ root: PhoneRoot) {
-        Task {
-            do {
-                let next = try await remote.phoneList(device.deviceId, path: root.path)
-                trail.append(root)
-                listing = next
-                problem = nil
-            } catch { problem = message(error) }
-        }
-    }
-
-    private func back() {
-        trail.removeLast()
-        guard let current = trail.last else {
-            listing = nil
-            return
-        }
-        Task { listing = try? await remote.phoneList(device.deviceId, path: current.path) }
-    }
-
-    private func get(_ entry: PhoneEntry) {
-        getting.insert(entry.path)
-        Task {
-            do { _ = try await remote.pullFromPhone(device.deviceId, paths: [entry.path]) } catch {
-                getting.remove(entry.path)
-                problem = message(error)
-            }
-        }
-    }
-
-    private func message(_ error: Error) -> String {
-        (error as? RemoteModel.AdminFailure)?.message ?? "That phone didn't answer"
-    }
+private extension PhoneEntry {
+    var isImage: Bool { DropLook.symbol(name: name) == "photo" }
 }

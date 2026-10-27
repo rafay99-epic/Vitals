@@ -509,8 +509,9 @@ final class RemoteModel {
         return listing
     }
 
-    func pullFromPhone(_ device: String, paths: [String]) async throws -> Int {
-        guard case let .fsPull(files) = try await admin(.fsPull(device: device, paths: paths)) else { return 0 }
+    /// Asks `device` to send `paths` to this Mac, or on to the phone `to`.
+    func pullFromPhone(_ device: String, paths: [String], to: String? = nil) async throws -> Int {
+        guard case let .fsPull(files) = try await admin(.fsPull(device: device, paths: paths, to: to)) else { return 0 }
         return files
     }
 

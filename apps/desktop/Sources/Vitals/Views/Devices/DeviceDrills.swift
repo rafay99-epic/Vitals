@@ -1,108 +1,149 @@
 import SwiftUI
 
-/// "‹ Pixel": back to the device page. Escape does the same.
-private struct Crumb: View {
-    let phone: PhoneDevice
+/// "‹ Pixel": back up one level. Escape does the same.
+struct Crumb: View {
+    let title: String
     let back: () -> Void
 
     var body: some View {
         Button(action: back) {
-            Label(phone.name, systemImage: "chevron.left")
+            Label(title, systemImage: "chevron.left")
         }
         .buttonStyle(.borderless)
         .keyboardShortcut(.cancelAction)
     }
 }
 
-/// Every item of one kind, newest first: a six-column grid of thumbnails or a list.
-/// Select items, then Get asks the phone to send them.
+/// Every item of some kinds, newest first: a six-column grid of thumbnails or a list.
+/// Select items, then Transfer sends them to this Mac or another phone.
 struct RecentDrill: View {
     @Environment(DevicesModel.self) private var pages
     let phone: PhoneDevice
-    let kind: RecentKind
+    let kinds: [RecentKind]
     @Binding var selection: Set<String>
     let back: () -> Void
 
     var body: some View {
         let page = pages.page(phone.id)
-        let recent = page.recent[kind] ?? DevicesModel.Recent()
+        let recents = kinds.map { page.recent[$0] ?? DevicesModel.Recent() }
+        let entries = pages.newest(phone.id, kinds)
+        let more = recents.contains(where: \.more)
         MetricScroll {
-            Crumb(phone: phone, back: back)
-            PageHero(value: kind.title, subtitle: subtitle(recent)) {
-                if !selection.isEmpty {
-                    Button("Deselect") { selection = [] }
-                    Button("Get \(selection.count)") {
-                        let paths = recent.entries.map(\.path).filter(selection.contains)
-                        selection = []
-                        Task { await pages.get(phone.id, paths: paths) }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!phone.online)
-                }
+            Crumb(title: phone.name, back: back)
+            PageHero(value: kinds.count == 1 ? kinds[0].title : "Newest images", subtitle: subtitle(entries.count, more: more)) {
+                TransferControls(phone: phone, paths: entries.map(\.path), selection: $selection)
             }
             if let notice = page.notice {
                 Text(notice).font(.callout).foregroundStyle(.secondary)
             }
-            if recent.entries.isEmpty {
-                Text(recent.problem ?? (recent.loaded ? "Nothing found" : "Loading…")).foregroundStyle(.secondary)
-            } else if kind.isVisual {
-                grid(recent.entries, asked: page.asked)
+            if entries.isEmpty {
+                Text(DeviceLook.empty(recents)).foregroundStyle(.secondary)
+            } else if kinds.allSatisfy(\.isVisual) {
+                ThumbPicker(phone: phone, entries: entries, selection: $selection)
             } else {
-                list(recent.entries, asked: page.asked)
+                EntryPicker(entries: entries, selection: $selection)
             }
-            if recent.more {
-                Button(recent.loading ? "Loading…" : "Show more") {
-                    Task { await pages.loadRecent(phone.id, kind, more: true) }
+            if more {
+                Button(recents.contains(where: \.loading) ? "Loading…" : "Show more") {
+                    Task {
+                        for kind in kinds where page.recent[kind]?.more == true {
+                            await pages.loadRecent(phone.id, kind, more: true)
+                        }
+                    }
                 }
-                .disabled(recent.loading || !phone.online)
+                .disabled(recents.contains(where: \.loading) || !phone.online)
             }
         }
     }
 
-    private func subtitle(_ recent: DevicesModel.Recent) -> String {
-        let count = recent.more ? "\(recent.entries.count)+" : "\(recent.entries.count)"
-        let base = "\(count) on \(phone.name) · newest first"
-        return selection.isEmpty ? base : "\(selection.count) selected"
+    private func subtitle(_ count: Int, more: Bool) -> String {
+        selection.isEmpty ? "\(count)\(more ? "+" : "") on \(phone.name) · newest first" : "\(selection.count) selected"
+    }
+}
+
+/// Deselect and Transfer for a drill's selection. Transfer offers this Mac and every other
+/// phone, never the one the files are on.
+struct TransferControls: View {
+    @Environment(DevicesModel.self) private var pages
+    @Environment(RemoteModel.self) private var remote
+    let phone: PhoneDevice
+    /// The drill's items in order, so a transfer keeps it.
+    let paths: [String]
+    @Binding var selection: Set<String>
+
+    var body: some View {
+        if !selection.isEmpty {
+            Button("Deselect") { selection = [] }
+            Menu("Transfer \(selection.count)") {
+                Button { send(to: nil) } label: {
+                    Text("This Mac")
+                    Text(ShareFormat.folder(remote.share.folder))
+                }
+                ForEach(pages.destinations(from: phone.id)) { other in
+                    Button { send(to: other) } label: {
+                        Text(other.name)
+                        Text(DeviceLook.status(other))
+                    }
+                }
+            }
+            .menuStyle(.button)
+            .buttonStyle(.borderedProminent)
+            .fixedSize()
+            .disabled(!phone.online)
+        }
     }
 
-    private func grid(_ entries: [PhoneEntry], asked: Set<String>) -> some View {
+    private func send(to target: PhoneDevice?) {
+        let picked = paths.filter(selection.contains)
+        selection = []
+        Task { await pages.transfer(phone.id, paths: picked, to: target) }
+    }
+}
+
+/// Selectable thumbnails in the fixed six-column grid.
+struct ThumbPicker: View {
+    @Environment(DevicesModel.self) private var pages
+    let phone: PhoneDevice
+    let entries: [PhoneEntry]
+    @Binding var selection: Set<String>
+
+    var body: some View {
         LazyVGrid(columns: ThumbGrid.columns, spacing: 8) {
             ForEach(entries) { entry in
-                let done = asked.contains(entry.path)
-                Button { toggle(entry.path) } label: {
-                    ThumbTile(image: pages.thumb(phone.id, entry.path), selected: done ? nil : selection.contains(entry.path))
-                        .opacity(done ? 0.5 : 1)
+                Button { selection.formSymmetricDifference([entry.path]) } label: {
+                    ThumbTile(image: pages.thumb(phone.id, entry.path), selected: selection.contains(entry.path))
                 }
                 .buttonStyle(.plain)
-                .disabled(done)
-                .help(done ? "\(entry.name) · Asked" : entry.name)
+                .help(entry.name)
+                .accessibilityLabel(entry.name)
+                .accessibilityAddTraits(selection.contains(entry.path) ? .isSelected : [])
             }
         }
-        .task(id: "\(phone.online)\(entries.count)") { await pages.loadThumbs(phone.id, paths: entries.map(\.path)) }
+        .task(id: "\(phone.online)\(entries.count)\(entries.first?.path ?? "")") { await pages.loadThumbs(phone.id, paths: entries.map(\.path)) }
     }
+}
 
-    private func list(_ entries: [PhoneEntry], asked: Set<String>) -> some View {
+/// Selectable file rows in one card.
+struct EntryPicker: View {
+    let entries: [PhoneEntry]
+    @Binding var selection: Set<String>
+
+    var body: some View {
         VStack(spacing: 0) {
             ForEach(entries) { entry in
-                let done = asked.contains(entry.path)
-                Button { toggle(entry.path) } label: {
-                    EntryRow(entry: entry, asked: done) {
+                Button { selection.formSymmetricDifference([entry.path]) } label: {
+                    EntryRow(entry: entry) {
                         SelectionMark(selected: selection.contains(entry.path))
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(done)
                 if entry.id != entries.last?.id { Divider() }
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .cardBackground()
-    }
-
-    private func toggle(_ path: String) {
-        if selection.contains(path) { selection.remove(path) } else { selection.insert(path) }
     }
 }
 
@@ -116,7 +157,7 @@ struct ClipsDrill: View {
         let page = pages.page(phone.id)
         let rows = page.clips ?? []
         MetricScroll {
-            Crumb(phone: phone, back: back)
+            Crumb(title: phone.name, back: back)
             PageHero(value: "Clipboard", subtitle: "\(rows.count) from \(phone.name) · newest first") { EmptyView() }
             if let notice = page.notice {
                 Text(notice).font(.callout).foregroundStyle(.secondary)

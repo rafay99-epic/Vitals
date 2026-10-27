@@ -380,6 +380,15 @@ struct DevicePageBridgeTests {
         ))
     }
 
+    @Test func pullSendsToOnlyWhenAnotherPhoneIsPicked() throws {
+        #expect(try json(FromApp.admin(id: "a-1", op: .fsPull(device: "dev-1", paths: ["/a.png"]))) == dictionary(
+            #"{"t":"admin","id":"a-1","op":{"_tag":"FsPull","device":"dev-1","paths":["/a.png"]}}"#
+        ))
+        #expect(try json(FromApp.admin(id: "a-2", op: .fsPull(device: "dev-1", paths: ["/a.png"], to: "dev-2"))) == dictionary(
+            #"{"t":"admin","id":"a-2","op":{"_tag":"FsPull","device":"dev-1","paths":["/a.png"],"to":"dev-2"}}"#
+        ))
+    }
+
     @Test func recentResultDecodes() throws {
         let ok = #"{"_tag":"FsRecent","result":{"kind":"downloads","entries":[{"name":"Invoice.pdf","path":"/storage/emulated/0/Download/Invoice.pdf","kind":"file","size":245760,"modifiedAt":1790000000000}],"more":true}}"#
         let entry = PhoneEntry(name: "Invoice.pdf", path: "/storage/emulated/0/Download/Invoice.pdf", kind: "file", size: 245_760, modifiedAt: 1_790_000_000_000)

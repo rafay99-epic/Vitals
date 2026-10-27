@@ -435,7 +435,8 @@ enum AdminOp: Equatable, Sendable {
     case fsRoots(device: String)
     case fsList(device: String, path: String, offset: Int)
     case fsThumbs(device: String, paths: [String])
-    case fsPull(device: String, paths: [String])
+    /// `to` sends the files on to another phone instead of this Mac.
+    case fsPull(device: String, paths: [String], to: String? = nil)
     case fsRecent(device: String, kind: RecentKind, offset: Int)
     case clipsFrom(device: String)
 }
@@ -444,7 +445,7 @@ enum AdminOp: Equatable, Sendable {
 enum RecentKind: String, Codable, CaseIterable, Sendable { case photos, screenshots, downloads, documents }
 
 extension AdminOp: Encodable {
-    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow, device, path, paths, offset, kind }
+    private enum Keys: String, CodingKey { case _tag, deviceId, scopes, id, allow, device, path, paths, offset, kind, to }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Keys.self)
@@ -476,10 +477,11 @@ extension AdminOp: Encodable {
             try c.encode("FsThumbs", forKey: ._tag)
             try c.encode(device, forKey: .device)
             try c.encode(paths, forKey: .paths)
-        case let .fsPull(device, paths):
+        case let .fsPull(device, paths, to):
             try c.encode("FsPull", forKey: ._tag)
             try c.encode(device, forKey: .device)
             try c.encode(paths, forKey: .paths)
+            try c.encodeIfPresent(to, forKey: .to)
         case let .fsRecent(device, kind, offset):
             try c.encode("FsRecent", forKey: ._tag)
             try c.encode(device, forKey: .device)

@@ -2,8 +2,8 @@ import AppKit
 import Foundation
 
 /// What each phone's page in the sidebar's Devices group shows: its newest files by kind,
-/// what it sent to the clipboard, and thumbnails. Cached per device, so pages reopen filled
-/// and a phone that went away stays listed until it's back.
+/// its folders, what it sent to the clipboard, and thumbnails. Cached per device, so pages
+/// reopen filled and a phone that went away stays listed until it's back.
 @MainActor
 @Observable
 final class DevicesModel {
@@ -21,12 +21,19 @@ final class DevicesModel {
         var id: String { item.id }
     }
 
+    struct Folder {
+        var listing: PhoneListing?
+        var problem: String?
+    }
+
     struct Page {
         var recent: [RecentKind: Recent] = [:]
+        var roots: [PhoneRoot]?
+        var rootsProblem: String?
+        /// Listings by folder path, so going back up shows them at once.
+        var folders: [String: Folder] = [:]
         var clips: [ClipRow]?
         var clipsProblem: String?
-        /// Paths already asked for, so Get isn't sent twice.
-        var asked: Set<String> = []
         var copied: String?
         var notice: String?
     }
@@ -48,6 +55,15 @@ final class DevicesModel {
     func page(_ id: String) -> Page { pages[id] ?? Page() }
 
     func thumb(_ device: String, _ path: String) -> NSImage? { thumbs[Self.key(device, path)] }
+
+    /// Every listed item of `kinds`, merged newest first.
+    func newest(_ id: String, _ kinds: [RecentKind]) -> [PhoneEntry] {
+        let recent = page(id).recent
+        return kinds.flatMap { recent[$0]?.entries ?? [] }.sorted { $0.modifiedAt > $1.modifiedAt }
+    }
+
+    /// Phones a transfer from `id` can go to: every other phone with Files on.
+    func destinations(from id: String) -> [PhoneDevice] { phones.filter { $0.id != id } }
 
     func reset() {
         phones = []
@@ -86,6 +102,7 @@ final class DevicesModel {
             group.addTask { await self.loadClips(id) }
             if online {
                 for kind in RecentKind.allCases { group.addTask { await self.loadRecent(id, kind) } }
+                group.addTask { await self.loadRoots(id) }
             }
         }
     }
@@ -108,6 +125,27 @@ final class DevicesModel {
         }
         recent.loading = false
         pages[id, default: Page()].recent[kind] = recent
+    }
+
+    func loadRoots(_ id: String) async {
+        guard let remote else { return }
+        do {
+            pages[id, default: Page()].roots = try await remote.phoneRoots(id)
+            pages[id]?.rootsProblem = nil
+        } catch {
+            pages[id, default: Page()].rootsProblem = Self.message(error)
+        }
+    }
+
+    /// Lists one folder, keeping the last listing on screen until the new one lands.
+    func loadFolder(_ id: String, path: String) async {
+        guard let remote else { return }
+        do {
+            let listing = try await remote.phoneList(id, path: path)
+            pages[id, default: Page()].folders[path] = Folder(listing: listing)
+        } catch {
+            pages[id, default: Page()].folders[path, default: Folder()].problem = Self.message(error)
+        }
     }
 
     func loadClips(_ id: String) async {
@@ -144,17 +182,16 @@ final class DevicesModel {
         }
     }
 
-    /// Asks the phone to send `paths` over Drop. They land where received files land.
-    func get(_ id: String, paths: [String]) async {
+    /// Asks the phone to send `paths` over Drop: to this Mac, where received files land, or
+    /// on to the phone `to`. It keeps its copy.
+    func transfer(_ id: String, paths: [String], to target: PhoneDevice?) async {
         guard let remote, !paths.isEmpty else { return }
-        pages[id, default: Page()].asked.formUnion(paths)
+        let what = paths.count == 1 ? "1 file" : "\(paths.count) files"
         do {
-            _ = try await remote.pullFromPhone(id, paths: paths)
-            let what = paths.count == 1 ? "1 item" : "\(paths.count) items"
-            pages[id]?.notice = "Asked for \(what). They arrive in \(ShareFormat.folder(remote.share.folder))."
+            _ = try await remote.pullFromPhone(id, paths: paths, to: target?.id)
+            pages[id, default: Page()].notice = target.map { "Sending \(what) to \($0.name)" } ?? "Getting \(what) to this Mac"
         } catch {
-            pages[id]?.asked.subtract(paths)
-            pages[id]?.notice = Self.message(error)
+            pages[id, default: Page()].notice = Self.message(error)
         }
     }
 

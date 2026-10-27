@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// One phone's page under Devices in the sidebar: short rows of its newest screenshots, photos,
-/// clipboard, downloads and documents, then its folders. "See all" drills into one kind inline,
-/// with a crumb back, never a second navigation level.
+/// One phone's page under Devices in the sidebar: a tile per kind of file, its newest images,
+/// its folders, then what it sent to the clipboard. Tiles, "See all" and folders drill in
+/// inline, with a crumb back, never a second navigation level.
 struct DevicePage: View {
     @Environment(DevicesModel.self) private var pages
     let deviceId: String?
@@ -13,8 +13,10 @@ struct DevicePage: View {
         if let deviceId, let phone = pages.phone(deviceId) {
             Group {
                 switch drill {
-                case let .recent(kind):
-                    RecentDrill(phone: phone, kind: kind, selection: $selection) { open(nil) }
+                case let .recent(kinds):
+                    RecentDrill(phone: phone, kinds: kinds, selection: $selection) { open(nil) }
+                case let .folder(trail):
+                    FolderDrill(phone: phone, trail: trail, selection: $selection) { open($0.isEmpty ? nil : .folder($0)) }
                 case .clipboard:
                     ClipsDrill(phone: phone) { open(nil) }
                 case nil:
@@ -40,21 +42,17 @@ struct DevicePage: View {
             PageHero(value: phone.name, subtitle: DeviceLook.status(phone)) { EmptyView() }
             if let notice = page.notice { NoticeLine(text: notice) }
             if !phone.online { OfflineCard(phone: phone) }
-            ForEach([RecentKind.screenshots, .photos], id: \.self) { kind in
-                if phone.online || page.recent[kind] != nil {
-                    RecentCard(phone: phone, kind: kind, seeAll: { open(.recent(kind)) }, pick: { path in
-                        selection = [path]
-                        drill = .recent(kind)
-                    })
-                }
+            if phone.online || !page.recent.isEmpty {
+                KindTiles(phone: phone) { open(.recent([$0])) }
+                NewestImages(phone: phone, seeAll: { open(.recent(RecentKind.images)) }, pick: { path in
+                    selection = [path]
+                    drill = .recent(RecentKind.images)
+                })
+            }
+            if phone.online || page.roots != nil {
+                PhoneFilesCard(phone: phone) { open(.folder([$0])) }
             }
             ClipsCard(phone: phone) { open(.clipboard) }
-            ForEach([RecentKind.downloads, .documents], id: \.self) { kind in
-                if phone.online || page.recent[kind] != nil {
-                    RecentCard(phone: phone, kind: kind, seeAll: { open(.recent(kind)) }, pick: { _ in })
-                }
-            }
-            if phone.online { PhoneFilesCard(device: phone) }
         }
     }
 
@@ -64,8 +62,10 @@ struct DevicePage: View {
     }
 }
 
-enum DeviceDrill: Hashable {
-    case recent(RecentKind)
+enum DeviceDrill: Equatable {
+    case recent([RecentKind])
+    /// The folders opened so far, outermost first.
+    case folder([PhoneRoot])
     case clipboard
 }
 
@@ -78,9 +78,31 @@ enum DeviceLook {
         if phone.notSharing { return "\(platform) · Connected, not sharing files" }
         return "\(platform) · \(phone.platform == "ios" ? "Not open" : "Offline")"
     }
+
+    private static let ageFormat: RelativeDateTimeFormatter = {
+        let format = RelativeDateTimeFormatter()
+        format.unitsStyle = .short
+        return format
+    }()
+
+    /// "2 min. ago". A phone clock a little ahead of the Mac's reads as now, not the future.
+    static func age(_ entry: PhoneEntry) -> String {
+        let now = Date.now
+        return ageFormat.localizedString(for: min(Date(timeIntervalSince1970: TimeInterval(entry.modifiedAt) / 1000), now), relativeTo: now)
+    }
+
+    /// What a list with no items says: a phone's error, "Nothing found" once every kind loaded,
+    /// else "Loading…".
+    static func empty(_ recents: [DevicesModel.Recent]) -> String {
+        if let problem = recents.lazy.compactMap(\.problem).first { return problem }
+        return !recents.isEmpty && recents.allSatisfy(\.loaded) ? "Nothing found" : "Loading…"
+    }
 }
 
 extension RecentKind {
+    /// Screenshots and photos, merged in "Newest images".
+    static let images: [RecentKind] = [.screenshots, .photos]
+
     var title: String {
         switch self {
         case .photos: return "Photos"
@@ -157,45 +179,102 @@ private struct OfflineCard: View {
     }
 }
 
-/// Six newest as thumbnails, or four newest as rows. Greyed while the phone is away.
-private struct RecentCard: View {
+/// Screenshots, Photos, Downloads, Documents in one fixed row: each with its newest item and
+/// how old it is. Greyed while the phone is away.
+private struct KindTiles: View {
+    @Environment(DevicesModel.self) private var pages
+    let phone: PhoneDevice
+    let open: (RecentKind) -> Void
+
+    private static let kinds: [RecentKind] = [.screenshots, .photos, .downloads, .documents]
+    private static let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+
+    var body: some View {
+        let recent = pages.page(phone.id).recent
+        let newest = Self.kinds.compactMap { recent[$0]?.entries.first?.path }
+        LazyVGrid(columns: Self.columns, spacing: 12) {
+            ForEach(Self.kinds, id: \.self) { kind in
+                Button { open(kind) } label: {
+                    KindTile(phone: phone, kind: kind, recent: recent[kind] ?? DevicesModel.Recent())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .task(id: "\(phone.online)\(newest)") { await pages.loadThumbs(phone.id, paths: newest) }
+        .opacity(phone.online ? 1 : 0.55)
+        .disabled(!phone.online)
+    }
+}
+
+private struct KindTile: View {
     @Environment(DevicesModel.self) private var pages
     let phone: PhoneDevice
     let kind: RecentKind
+    let recent: DevicesModel.Recent
+
+    var body: some View {
+        let newest = recent.entries.first
+        VStack(alignment: .leading, spacing: 8) {
+            preview(newest)
+                .frame(maxWidth: .infinity)
+                .frame(height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(kind.title).font(.body.weight(.medium))
+                Text(newest.map(DeviceLook.age) ?? DeviceLook.empty([recent]))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+        }
+        .padding(10)
+        .cardBackground()
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .help(newest?.name ?? kind.title)
+    }
+
+    @ViewBuilder private func preview(_ newest: PhoneEntry?) -> some View {
+        if let newest, let image = pages.thumb(phone.id, newest.path) {
+            Color.clear.overlay { Image(nsImage: image).resizable().scaledToFill() }
+        } else {
+            let symbol = newest.map { DropLook.symbol(name: $0.name) } ?? kind.symbol
+            Rectangle()
+                .fill(.quaternary.opacity(0.35))
+                .overlay { IconTile(symbol: symbol, tint: newest == nil ? .secondary : DropLook.tint(symbol: symbol), size: 28, font: .system(size: 13, weight: .medium)) }
+        }
+    }
+}
+
+/// Screenshots and photos merged, newest first, in one row of thumbnails.
+private struct NewestImages: View {
+    @Environment(DevicesModel.self) private var pages
+    let phone: PhoneDevice
     let seeAll: () -> Void
     let pick: (String) -> Void
 
     var body: some View {
-        let recent = pages.page(phone.id).recent[kind]
-        let entries = Array((recent?.entries ?? []).prefix(kind.isVisual ? 6 : 4))
-        SectionCard(title: kind.title, symbol: kind.symbol) {
-            RecentStatus(recent: recent)
-            if !entries.isEmpty {
-                if kind.isVisual {
-                    LazyVGrid(columns: ThumbGrid.columns, spacing: 8) {
-                        ForEach(entries) { entry in
-                            Button { pick(entry.path) } label: {
-                                ThumbTile(image: pages.thumb(phone.id, entry.path), selected: nil)
-                            }
-                            .buttonStyle(.plain)
-                            .help(entry.name)
+        let all = pages.newest(phone.id, RecentKind.images)
+        let entries = Array(all.prefix(ThumbGrid.count))
+        SectionCard(title: "Newest images", symbol: "photo.on.rectangle") {
+            if entries.isEmpty {
+                let recent = pages.page(phone.id).recent
+                Text(DeviceLook.empty(RecentKind.images.map { recent[$0] ?? DevicesModel.Recent() })).foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: ThumbGrid.columns, spacing: 8) {
+                    ForEach(entries) { entry in
+                        Button { pick(entry.path) } label: {
+                            ThumbTile(image: pages.thumb(phone.id, entry.path), selected: nil)
                         }
-                    }
-                    .task(id: "\(phone.online)\(entries.map(\.path))") { await pages.loadThumbs(phone.id, paths: entries.map(\.path)) }
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(entries) { entry in
-                            EntryRow(entry: entry, asked: pages.page(phone.id).asked.contains(entry.path)) {
-                                Button("Get") { Task { await pages.get(phone.id, paths: [entry.path]) } }
-                                    .controlSize(.small)
-                            }
-                            if entry.id != entries.last?.id { Divider() }
-                        }
+                        .buttonStyle(.plain)
+                        .help(entry.name)
+                        .accessibilityLabel(entry.name)
                     }
                 }
+                .task(id: "\(phone.online)\(entries.map(\.path))") { await pages.loadThumbs(phone.id, paths: entries.map(\.path)) }
             }
         } accessory: {
-            if recent?.entries.isEmpty == false {
+            if !all.isEmpty {
                 Button("See all", action: seeAll).buttonStyle(.borderless)
             }
         }
@@ -204,25 +283,9 @@ private struct RecentCard: View {
     }
 }
 
-/// Loading, a phone's error, or "Nothing found" for a kind with no items yet.
-private struct RecentStatus: View {
-    let recent: DevicesModel.Recent?
-
-    var body: some View {
-        if let recent, !recent.entries.isEmpty {
-            EmptyView()
-        } else if let problem = recent?.problem {
-            Text(problem).font(.callout).foregroundStyle(.secondary)
-        } else if recent?.loaded == true {
-            Text("Nothing found").foregroundStyle(.secondary)
-        } else {
-            Text("Loading…").foregroundStyle(.secondary)
-        }
-    }
-}
-
 enum ThumbGrid {
-    static let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 6)
+    static let count = 6
+    static let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: count)
 }
 
 struct ThumbTile: View {
@@ -257,7 +320,6 @@ struct ThumbTile: View {
 
 struct EntryRow<Trailing: View>: View {
     let entry: PhoneEntry
-    let asked: Bool
     @ViewBuilder let trailing: Trailing
 
     var body: some View {
@@ -272,18 +334,14 @@ struct EntryRow<Trailing: View>: View {
                     .monospacedDigit()
             }
             Spacer(minLength: 8)
-            if asked {
-                Text("Asked").font(.callout).foregroundStyle(.secondary)
-            } else {
-                trailing
-            }
+            trailing
         }
         .padding(.vertical, 6)
     }
 }
 
-/// The newest things this phone sent to the clipboard. Works while the phone is away:
-/// the Mac keeps them.
+/// The newest things this phone sent to the clipboard, kept apart from its files. Works while
+/// the phone is away: the Mac keeps them.
 private struct ClipsCard: View {
     @Environment(DevicesModel.self) private var pages
     let phone: PhoneDevice
