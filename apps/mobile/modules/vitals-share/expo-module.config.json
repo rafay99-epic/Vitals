@@ -1,4 +1,5 @@
 {
-  "platforms": ["android"],
-  "android": { "modules": ["expo.modules.vitalsshare.VitalsShareModule"] }
+  "platforms": ["android", "apple"],
+  "android": { "modules": ["expo.modules.vitalsshare.VitalsShareModule"] },
+  "apple": { "modules": ["VitalsShareModule"] }
 }

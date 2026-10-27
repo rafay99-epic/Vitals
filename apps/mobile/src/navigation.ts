@@ -1,5 +1,5 @@
 import { createNavigationContainerRef, type NavigatorScreenParams } from "@react-navigation/native";
-import type { DeviceId } from "@vitals/contracts";
+import type { DeviceId, FsRecentKind } from "@vitals/contracts";
 import type { Channel } from "@vitals/ui";
 
 export type HomeStackParams = {
@@ -12,6 +12,8 @@ export type ControlStackParams = {
   Clipboard: undefined;
   Files: undefined;
   Folder: { readonly path: string; readonly title: string; readonly device?: DeviceId; readonly deviceName?: string };
+  /** "See all" for one kind on a device page. No device means the Mac. */
+  Recent: { readonly kind: FsRecentKind; readonly device?: DeviceId; readonly deviceName?: string };
   Terminal: undefined;
 };
 

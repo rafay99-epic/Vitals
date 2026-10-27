@@ -1,26 +1,28 @@
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { clipAge } from "@vitals/app/features/clips/format.ts";
+import { clipAge, clipMeta, clipTitle } from "@vitals/app/features/clips/format.ts";
 import type { SavedFile, SentDrop } from "@vitals/app/state/drops.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
 import { formatBytes } from "@vitals/shared";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { FsDevice, FsEntry, FsRoot } from "@vitals/contracts";
+import type { Clip, DeviceId, FsDevice, FsEntry, FsRecentKind, FsRoot } from "@vitals/contracts";
 import { useCallback, useEffect, useState } from "react";
-import { Image, ScrollView, SectionList, StyleSheet, View } from "react-native";
+import { FlatList, Image, SectionList, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DropCards } from "../DropTransfers.tsx";
+import { EntryRow, isGallery, KIND_TITLE, PhotoTile } from "../FsRows.tsx";
 import type { Batch } from "../lib/clips.ts";
-import { pickFiles, pickPhotos } from "../lib/clips.ts";
+import { copyToPhone, pickFiles, pickPhotos } from "../lib/clips.ts";
 import { BLOCK_NOTE, type FileKind, fileKind, KIND_NAME, keepsGoing, pickFolder, savedTo, useFilesBlock } from "../lib/drops.ts";
 import { useAccess } from "../lib/remote.ts";
 import type { ControlStackParams } from "../navigation.ts";
-import { sendSheet } from "../sheets/ClipSheets.tsx";
-import { macFileSheet } from "../sheets/MacFileSheet.tsx";
+import { clipSheet, sendSheet } from "../sheets/ClipSheets.tsx";
+import { macFileSheet, type OnPhone } from "../sheets/MacFileSheet.tsx";
+import { ClipRow } from "./ClipboardScreen.tsx";
 import { receivedSheet, sentSheet } from "../sheets/FileSheets.tsx";
-import { BackBar, Chip, color, Empty, Group, Icon, type IconName, Label, Note, Row, SearchField, sheet, T, Tap, Tile, TileGrid, Title, toast, Toggle, useDockSpace } from "../ui/index.ts";
+import { BackBar, Chip, color, Empty, Group, Icon, type IconName, Label, Note, Row, SearchField, sheet, T, Tap, Tile, TileGrid, Title, toast, Toggle, space, useDockSpace } from "../ui/index.ts";
 
 const KIND_LOOK: Readonly<Record<FileKind, { readonly icon: IconName; readonly tint: string }>> = {
   apk: { icon: "android", tint: color.green },
@@ -94,34 +96,132 @@ const PLACE_ICON: Readonly<Record<FsRoot["place"], IconName>> = {
 
 type Places = { readonly _tag: "loading" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly roots: ReadonlyArray<FsRoot> };
 
-function MacPlaces() {
+type Recents = { readonly _tag: "loading" } | { readonly _tag: "failed"; readonly message: string } | { readonly _tag: "loaded"; readonly entries: ReadonlyArray<FsEntry>; readonly more: boolean };
+
+const KINDS: ReadonlyArray<FsRecentKind> = ["screenshots", "photos", "downloads", "documents"];
+const STRIP = 12;
+const ROWS = 3;
+const TILE = 92;
+
+const LOADING: Readonly<Record<FsRecentKind, Recents>> = { photos: { _tag: "loading" }, screenshots: { _tag: "loading" }, downloads: { _tag: "loading" }, documents: { _tag: "loading" } };
+
+/** A section title with "See all" on the right. */
+function Head({ title, onSeeAll }: { readonly title: string; readonly onSeeAll?: (() => void) | undefined }) {
+  return (
+    <View style={styles.head}>
+      <T v="label">{title}</T>
+      {onSeeAll === undefined ? null : (
+        <Tap onPress={onSeeAll} accessibilityRole="button" accessibilityLabel={`See all ${title}`} hitSlop={10}>
+          <T v="label" color={color.yellow}>
+            See all
+          </T>
+        </Tap>
+      )}
+    </View>
+  );
+}
+
+function Quiet({ children }: { readonly children: string }) {
+  return (
+    <T v="small" style={styles.quiet}>
+      {children}
+    </T>
+  );
+}
+
+/** The newest few of one kind: a strip of pictures, or a few rows of files. */
+function RecentSection({ kind, recents, phone, now, onSeeAll }: { readonly kind: FsRecentKind; readonly recents: Recents; readonly phone: OnPhone | null; readonly now: number; readonly onSeeAll: () => void }) {
+  const open = (entry: FsEntry) => sheet.open(macFileSheet(entry, phone));
+  const loaded = recents._tag === "loaded" && recents.entries.length > 0 ? recents.entries : null;
+  return (
+    <View>
+      <Head title={KIND_TITLE[kind]} onSeeAll={loaded === null ? undefined : onSeeAll} />
+      {recents._tag === "loading" ? (
+        <Quiet>Loading</Quiet>
+      ) : recents._tag === "failed" ? (
+        <Quiet>{recents.message}</Quiet>
+      ) : loaded === null ? (
+        <Quiet>Nothing yet</Quiet>
+      ) : isGallery(kind) ? (
+        <FlatList
+          horizontal
+          data={loaded.slice(0, STRIP)}
+          keyExtractor={(entry) => entry.path}
+          renderItem={({ item }) => <PhotoTile entry={item} device={phone?.device} size={TILE} onPress={open} />}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.strip}
+        />
+      ) : (
+        loaded.slice(0, ROWS).map((entry) => <EntryRow key={entry.path} entry={entry} device={phone?.device} now={now} onPress={open} />)
+      )}
+    </View>
+  );
+}
+
+const copyable = (clip: Clip): boolean => clip.kind === "text" || clip.kind === "link" || clip.kind === "image";
+
+/** The latest three things this device copied. Copy puts one on this phone's clipboard, pictures too. */
+function ClipSection({ device, now }: { readonly device: FsDevice | null; readonly now: number }) {
+  const remote = useRemote();
+  const access = useAccess();
+  const navigation = useNavigation<NativeStackNavigationProp<ControlStackParams>>();
+  const clips = useStore(remote.clips.clips);
+  const enabled = useStore(remote.clips.enabled);
+  const supported = useStore(remote.clips.supported);
+  const me = remote.credentials.deviceId;
+  if (!access.clipboard || supported === false) return null;
+  const from = device?.deviceId ?? null;
+  const latest = clips.filter((clip) => clip.deviceId === from).slice(0, ROWS);
+  const copy = (clip: Clip) =>
+    void copyToPhone(remote, clip).then((copied) => copied && toast.show(clip.kind === "image" ? "Image copied. Paste it anywhere." : "Copied to this phone"));
+  return (
+    <View>
+      <Head title="Clipboard" onSeeAll={latest.length === 0 ? undefined : () => navigation.push("Clipboard")} />
+      {enabled === false ? (
+        <Quiet>Clipboard history is off on the Mac.</Quiet>
+      ) : latest.length === 0 ? (
+        <Quiet>Nothing yet</Quiet>
+      ) : (
+        latest.map((clip) => (
+          <ClipRow
+            key={clip.id}
+            clip={clip}
+            meta={clipMeta(clip, me, now)}
+            onPress={() => sheet.open(clipSheet(clip))}
+            action={
+              copyable(clip) ? (
+                <Tap onPress={() => copy(clip)} accessibilityRole="button" accessibilityLabel={`Copy ${clipTitle(clip)}`} hitSlop={8} style={styles.copy}>
+                  <T v="medium" color={color.yellow}>
+                    Copy
+                  </T>
+                </Tap>
+              ) : undefined
+            }
+          />
+        ))
+      )}
+    </View>
+  );
+}
+
+/** "All files": the device's shared folders, and search on the Mac. */
+function AllFiles({ device }: { readonly device: FsDevice | null }) {
   const remote = useRemote();
   const navigation = useNavigation<NativeStackNavigationProp<ControlStackParams>>();
   const [places, setPlaces] = useState<Places>({ _tag: "loading" });
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<ReadonlyArray<FsEntry> | null>(null);
-  const [devices, setDevices] = useState<ReadonlyArray<FsDevice>>([]);
-  const [picked, setPicked] = useState<FsDevice | null>(null);
-  const state = useStore(remote.connection.state);
-  const ready = state._tag === "Ready";
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!ready) return;
-      void remote.files.devices().then((outcome) => outcome.ok && setDevices(outcome.value.devices));
-    }, [remote, ready]),
-  );
+  const id = device?.deviceId;
 
   useEffect(() => {
-    if (!ready) return;
     let cancelled = false;
-    void remote.files.roots(picked?.deviceId).then((outcome) => {
+    void remote.files.roots(id).then((outcome) => {
       if (!cancelled) setPlaces(outcome.ok ? { _tag: "loaded", roots: outcome.value.roots } : { _tag: "failed", message: outcome.message });
     });
     return () => {
       cancelled = true;
     };
-  }, [remote, ready, picked]);
+  }, [remote, id]);
 
   useEffect(() => {
     const text = query.trim();
@@ -144,44 +244,120 @@ function MacPlaces() {
     setQuery(text);
     if (text.trim().length < 2) setFound(null);
   };
-  const searching = query.trim().length >= 2;
+  const searching = device === null && query.trim().length >= 2;
   const openEntry = (entry: FsEntry) =>
     entry.kind === "folder" || entry.kind === "link" ? navigation.push("Folder", { path: entry.path, title: entry.name }) : sheet.open(macFileSheet(entry));
-
-  const pick = (device: FsDevice | null) => {
-    setPlaces({ _tag: "loading" });
-    setPicked(device);
-  };
-
-  const openRoot = (root: FsRoot) =>
-    navigation.push("Folder", { path: root.path, title: root.label, ...(picked === null ? {} : { device: picked.deviceId, deviceName: picked.name }) });
+  const openRoot = (root: FsRoot) => navigation.push("Folder", { path: root.path, title: root.label, ...(device === null ? {} : { device: device.deviceId, deviceName: device.name }) });
 
   return (
     <View>
-      {devices.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.devices}>
-          <Chip label="Your Mac" on={picked === null} onPress={() => pick(null)} />
-          {devices.map((device) => (
-            <Chip key={device.deviceId} label={device.online ? device.name : `${device.name} · not open`} on={picked?.deviceId === device.deviceId} onPress={() => pick(device)} />
-          ))}
-        </ScrollView>
-      ) : null}
-      <Label>{picked === null ? "On your Mac" : `On ${picked.name}`}</Label>
-      {picked === null ? <SearchField placeholder="Search your Mac" value={query} onChangeText={type} accessibilityLabel="Search your Mac" /> : null}
-      {searching && picked === null ? (
+      <Head title="All files" />
+      {device === null ? <SearchField placeholder="Search your Mac" value={query} onChangeText={type} accessibilityLabel="Search your Mac" /> : null}
+      {searching ? (
         found === null ? (
-          <Empty title="Searching" />
+          <Quiet>Searching</Quiet>
         ) : found.length === 0 ? (
-          <Empty title="Nothing found" />
+          <Quiet>Nothing found</Quiet>
         ) : (
           found.map((entry) => <PlaceRow key={entry.path} icon={entry.kind === "folder" ? "folder" : "file"} title={entry.name} detail={folderOf(entry.path)} onPress={() => openEntry(entry)} />)
         )
       ) : places._tag === "loading" ? (
-        <Empty title="Loading" />
+        <Quiet>Loading</Quiet>
       ) : places._tag === "failed" ? (
-        <Empty title={picked === null ? "Can't see your Mac's folders" : `Can't see ${picked.name}`} detail={places.message} />
+        <Quiet>{places.message}</Quiet>
       ) : (
         places.roots.map((root) => <PlaceRow key={root.path} icon={PLACE_ICON[root.place]} title={root.label} onPress={() => openRoot(root)} />)
+      )}
+    </View>
+  );
+}
+
+/** Every kind on one device, newest first. Reloads each time Files comes back into view. */
+function DeviceRows({ device }: { readonly device: FsDevice | null }) {
+  const remote = useRemote();
+  const navigation = useNavigation<NativeStackNavigationProp<ControlStackParams>>();
+  const now = useNow(60_000);
+  const [recents, setRecents] = useState<Readonly<Record<FsRecentKind, Recents>>>(LOADING);
+  const id = device?.deviceId;
+  const phone = device === null ? null : { device: device.deviceId, name: device.name };
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      for (const kind of KINDS) {
+        void remote.files.recent(kind, 0, isGallery(kind) ? STRIP : ROWS, id).then((outcome) => {
+          if (cancelled) return;
+          setRecents((current) => ({ ...current, [kind]: outcome.ok ? { _tag: "loaded", entries: outcome.value.entries, more: outcome.value.more } : { _tag: "failed", message: outcome.message } }));
+          if (outcome.ok) remote.files.want(outcome.value.entries, id);
+        });
+      }
+      return () => {
+        cancelled = true;
+      };
+    }, [remote, id]),
+  );
+
+  const seeAll = (kind: FsRecentKind) => navigation.push("Recent", { kind, ...(device === null ? {} : { device: device.deviceId, deviceName: device.name }) });
+  const failures = KINDS.map((kind) => recents[kind]).filter((item) => item._tag === "failed");
+  const shared = failures.length === KINDS.length && failures.every((item) => item.message === failures[0]?.message) ? failures[0] : undefined;
+  const section = (kind: FsRecentKind) => <RecentSection key={kind} kind={kind} recents={recents[kind]} phone={phone} now={now} onSeeAll={() => seeAll(kind)} />;
+
+  return (
+    <View>
+      {shared === undefined ? (
+        <>
+          {section("screenshots")}
+          {section("photos")}
+          <ClipSection device={device} now={now} />
+          {section("downloads")}
+          {section("documents")}
+        </>
+      ) : (
+        <>
+          <Empty title={device === null ? "Can't see your Mac's recent files" : `Can't see ${device.name}'s recent files`} detail={shared.message} />
+          <ClipSection device={device} now={now} />
+        </>
+      )}
+      <AllFiles device={device} />
+    </View>
+  );
+}
+
+/** The device page: a switcher (Mac, then each phone that shares), then that device's rows. */
+function DeviceHub() {
+  const remote = useRemote();
+  const [devices, setDevices] = useState<ReadonlyArray<FsDevice>>([]);
+  const [picked, setPicked] = useState<DeviceId | null>(null);
+  const state = useStore(remote.connection.state);
+  const ready = state._tag === "Ready";
+  const me = remote.credentials.deviceId;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!ready) return;
+      void remote.files.devices().then((outcome) => outcome.ok && setDevices(outcome.value.devices.filter((device) => device.deviceId !== me)));
+    }, [remote, ready, me]),
+  );
+
+  const device = devices.find((item) => item.deviceId === picked) ?? null;
+
+  return (
+    <View>
+      {devices.length > 0 ? (
+        <FlatList
+          horizontal
+          data={devices}
+          keyExtractor={(item) => item.deviceId}
+          ListHeaderComponent={<Chip label="Mac" on={device === null} onPress={() => setPicked(null)} />}
+          renderItem={({ item }) => <Chip label={item.name} on={device?.deviceId === item.deviceId} onPress={() => setPicked(item.deviceId)} />}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.devices}
+        />
+      ) : null}
+      {device !== null && !device.online ? (
+        <Empty title={`Open Vitals on ${device.name}`} detail={device.platform === "ios" ? "An iPhone shares only while Vitals is open on it." : "Then turn on Let your Mac and other phones browse, in Settings › This phone."} />
+      ) : (
+        <DeviceRows key={device?.deviceId ?? "mac"} device={device} />
       )}
     </View>
   );
@@ -241,7 +417,7 @@ export function FilesScreen() {
     <View style={{ paddingTop: insets.top + 6 }}>
       <BackBar parent="Control" />
       <Title>Files.</Title>
-      {browsable ? <MacPlaces /> : null}
+      {browsable ? <DeviceHub /> : null}
       <Label>Send to your Mac</Label>
       <T v="mono" style={styles.where}>{`From your Mac → ${savedTo}`}</T>
       <TileGrid>
@@ -289,7 +465,11 @@ export function FilesScreen() {
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: color.bg },
   where: { paddingHorizontal: 20, paddingBottom: 12 },
-  devices: { gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  devices: { gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
+  head: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 8 },
+  quiet: { paddingHorizontal: space.gutter, paddingBottom: 6 },
+  strip: { gap: 8, paddingHorizontal: 16 },
+  copy: { paddingHorizontal: 6, paddingVertical: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 8 },
   rowText: { flex: 1 },
   icon: { width: 34, height: 34, borderRadius: 10 },

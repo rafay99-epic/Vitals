@@ -34,6 +34,7 @@ import { ChannelScreen } from "./screens/ChannelScreen.tsx";
 import { ControlScreen } from "./screens/ControlScreen.tsx";
 import { FilesScreen } from "./screens/FilesScreen.tsx";
 import { FolderScreen } from "./screens/FolderScreen.tsx";
+import { RecentScreen } from "./screens/RecentScreen.tsx";
 import { TerminalScreen } from "./screens/TerminalScreen.tsx";
 import { HomeScreen } from "./screens/HomeScreen.tsx";
 import { ConnectionScreen, DiagnosticsRoute, HelpScreen, NotificationsScreen, PhoneScreen, SettingsScreen, UpdatesScreen } from "./screens/SettingsScreens.tsx";
@@ -95,6 +96,7 @@ function ControlNavigator() {
       <ControlStack.Screen name="Clipboard" component={ClipboardScreen} />
       <ControlStack.Screen name="Files" component={FilesScreen} />
       <ControlStack.Screen name="Folder" component={FolderScreen} />
+      <ControlStack.Screen name="Recent" component={RecentScreen} />
       <ControlStack.Screen name="Terminal" component={TerminalScreen} />
     </ControlStack.Navigator>
   );

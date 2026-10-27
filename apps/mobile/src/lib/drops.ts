@@ -5,6 +5,7 @@ import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { canInstallApps, dropSupported, installApk, openFile } from "@vitals/tailnet/drop";
 import { Directory, File } from "expo-file-system";
+import * as Clipboard from "expo-clipboard";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
@@ -121,4 +122,30 @@ export const saveSavedToPhotos = async (file: SavedFile): Promise<void> => {
     () => false,
   );
   toast.show(saved ? "Saved to Photos" : "Photos didn't take that file", saved ? {} : { tone: "bad" });
+};
+
+/** Gets Mac files into this phone's Downloads. `then` gets the saved copies once they land. */
+export const getFromMac = async (remote: Remote, paths: ReadonlyArray<string>, then?: (files: ReadonlyArray<SavedFile>) => void): Promise<boolean> => {
+  const drop = await remote.drops.pull(paths);
+  if (drop === null) return false;
+  if (then === undefined) return true;
+  const stop = remote.drops.onFinish((finish) => {
+    if (finish.drop.id !== drop.id) return;
+    stop();
+    if (finish._tag === "Received") then(finish.files);
+  });
+  return true;
+};
+
+/** Puts a saved picture on this phone's clipboard, ready to paste in any app. */
+export const copySavedImage = async (file: SavedFile): Promise<void> => {
+  if (file.uri === null) return toast.show("Vitals can't find that file anymore", { tone: "bad" });
+  const copied = await new File(file.uri)
+    .base64()
+    .then((data) => Clipboard.setImageAsync(data))
+    .then(
+      () => true,
+      () => false,
+    );
+  toast.show(copied ? "Image copied. Paste it anywhere." : "Vitals couldn't copy that image", copied ? {} : { tone: "bad" });
 };

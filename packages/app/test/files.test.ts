@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { type Connection, type ConnectionState, type VitalsClient, Store } from "@vitals/client-runtime";
-import type { FsEntry } from "@vitals/contracts";
+import { DeviceId, type FsEntry } from "@vitals/contracts";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
-import { hasPreview, MacFiles } from "../src/state/files.ts";
+import { hasPreview, MacFiles, thumbKey } from "../src/state/files.ts";
+
+const deviceIdOf = Schema.decodeUnknownSync(DeviceId);
 
 const entry = (name: string): FsEntry => ({ name, path: `/Users/me/Downloads/${name}`, kind: "file", size: 1, modifiedAt: 0 });
 
@@ -41,6 +44,21 @@ describe("MacFiles thumbnails", () => {
     files.want(photos);
     await settle();
     expect(batches).toHaveLength(2);
+    files.dispose();
+  });
+
+  test("a phone's thumbnails are kept apart from the Mac's, even for the same path", async () => {
+    const batches: Array<ReadonlyArray<string>> = [];
+    const files = new MacFiles(thumbsConnection(batches));
+    const photo = entry("IMG_1.jpg");
+    const phone = deviceIdOf("01a17bf6-b432-736b-a51e-2b2972ac7818");
+    files.want([photo]);
+    await settle();
+    files.want([photo], phone);
+    await settle();
+    expect(batches).toHaveLength(2);
+    expect(files.thumbs.get().has(thumbKey(photo.path, phone))).toBe(true);
+    expect(thumbKey(photo.path, phone)).not.toBe(thumbKey(photo.path));
     files.dispose();
   });
 

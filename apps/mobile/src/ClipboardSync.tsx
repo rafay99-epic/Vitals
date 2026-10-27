@@ -4,7 +4,9 @@ import { dropLabel, isIncoming } from "@vitals/app/state/drops.ts";
 import type { Clip } from "@vitals/contracts";
 import { type ResolvedSharePayload, type SharePayload, useIncomingShare } from "expo-sharing";
 import { useEffect, useRef } from "react";
-import { AppState, Linking, Platform } from "react-native";
+import { AppState, Linking, Platform, ToastAndroid } from "react-native";
+
+import { androidShare } from "../modules/vitals-share/index.ts";
 
 import { autoCopy } from "./lib/autoCopy.ts";
 import { batchOf, copyToPhone, isFile, nameFromUri, type Picked, textItem } from "./lib/clips.ts";
@@ -120,19 +122,27 @@ function usePhoneCopies() {
   }, [remote]);
 }
 
-/** `<scheme>://clipboard/send`, from the Quick Settings tile or the Shortcuts action: send what is copied now. */
+/**
+ * `<scheme>://clipboard/send`, from the Quick Settings tile or the Shortcuts action: send what is copied now.
+ * When the link brought Vitals up from the background, it steps back to the app you were in.
+ */
 function useSendLink() {
   const remote = useRemote();
   useEffect(() => {
     let active = true;
-    const handle = (url: string | null | undefined) => {
-      if (active && typeof url === "string" && SEND_LINK.test(url)) void sendClipboardNow(remote);
+    const handle = (url: string | null | undefined, away: boolean) => {
+      if (!active || typeof url !== "string" || !SEND_LINK.test(url)) return;
+      void sendClipboardNow(remote).then((sent) => {
+        if (!sent || !away || androidShare === null) return;
+        ToastAndroid.show("Sent to your Mac", ToastAndroid.SHORT);
+        void androidShare.toBack();
+      });
     };
     if (!launchLinkRead) {
       launchLinkRead = true;
-      void Linking.getInitialURL().then(handle);
+      void Linking.getInitialURL().then((url) => handle(url, true));
     }
-    const subscription = Linking.addEventListener("url", ({ url }) => handle(url));
+    const subscription = Linking.addEventListener("url", ({ url }) => handle(url, AppState.currentState !== "active"));
     return () => {
       active = false;
       subscription.remove();

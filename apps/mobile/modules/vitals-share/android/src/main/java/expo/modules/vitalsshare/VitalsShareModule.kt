@@ -31,6 +31,15 @@ class VitalsShareModule : Module() {
       context.stopService(Intent(context, ShareService::class.java))
       Unit
     }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("recent") { kind: String, offset: Int, limit: Int ->
+      val context = appContext.reactContext ?: throw IllegalStateException("No context")
+      Recent.page(context, kind, offset, limit)
+    }
+
+    AsyncFunction("thumbnail") { path: String, px: Int -> Recent.thumbnail(path, px) }
+
+    AsyncFunction("toBack") { appContext.currentActivity?.moveTaskToBack(true) ?: false }.runOnQueue(Queues.MAIN)
   }
 
   private companion object {

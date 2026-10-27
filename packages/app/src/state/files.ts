@@ -25,6 +25,9 @@ const PREVIEWABLE = /\.(jpe?g|png|gif|heic|heif|webp|tiff?|bmp|svg|pdf|mov|mp4|m
 
 export const hasPreview = (entry: FsEntry): boolean => entry.kind === "file" && PREVIEWABLE.test(entry.name);
 
+/** Where a thumbnail lives in `MacFiles.thumbs`. Phone paths are keyed by device, since two phones can share a path. */
+export const thumbKey = (path: string, device?: DeviceId): string => (device === undefined ? path : `${device}:${path}`);
+
 export type Outcome<A> = { readonly ok: true; readonly value: A } | { readonly ok: false; readonly message: string };
 
 export class MacFiles {
@@ -78,7 +81,7 @@ export class MacFiles {
       this.device = undefined;
     }
     const known = this.thumbs.get();
-    for (const entry of entries) if (hasPreview(entry) && !known.has(entry.path)) this.wanted.add(entry.path);
+    for (const entry of entries) if (hasPreview(entry) && !known.has(thumbKey(entry.path, device))) this.wanted.add(entry.path);
     if (this.wanted.size === 0 || this.timer !== null) return;
     this.timer = setTimeout(() => {
       this.timer = null;
@@ -102,7 +105,7 @@ export class MacFiles {
       if (!result.ok) break;
       this.thumbs.update((previous) => {
         const next = new Map(previous);
-        for (const thumb of result.value.thumbs) next.set(thumb.path, thumb.jpeg === null ? null : `data:image/jpeg;base64,${thumb.jpeg}`);
+        for (const thumb of result.value.thumbs) next.set(thumbKey(thumb.path, device), thumb.jpeg === null ? null : `data:image/jpeg;base64,${thumb.jpeg}`);
         for (const key of next.keys()) {
           if (next.size <= THUMB_KEEP) break;
           next.delete(key);

@@ -1,22 +1,21 @@
 import { LegendList } from "@legendapp/list/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { clipAge } from "@vitals/app/features/clips/format.ts";
 import { FILES_PAGE, hasPreview } from "@vitals/app/state/files.ts";
-import { useSelect } from "@vitals/app/state/useStore.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
 import type { FsEntry, FsSort } from "@vitals/contracts";
 import { formatBytes } from "@vitals/shared";
 import { useCallback, useEffect, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { EntryRow } from "../FsRows.tsx";
 import { pickFiles } from "../lib/clips.ts";
 import { sendDrop } from "../lib/drops.ts";
 import { useAccess } from "../lib/remote.ts";
 import type { ControlStackParams } from "../navigation.ts";
 import { macFileSheet } from "../sheets/MacFileSheet.tsx";
-import { BackBar, color, Empty, Icon, type IconName, Segmented, sheet, T, Tap, Title, toast, useDockSpace } from "../ui/index.ts";
+import { BackBar, color, Empty, Segmented, sheet, T, Tap, Title, toast, useDockSpace } from "../ui/index.ts";
 
 type Props = NativeStackScreenProps<ControlStackParams, "Folder">;
 
@@ -30,59 +29,6 @@ const SORTS: ReadonlyArray<{ readonly value: FsSort; readonly label: string }> =
   { value: "date", label: "Newest" },
   { value: "size", label: "Biggest" },
 ];
-
-const EXTENSIONS: ReadonlyArray<readonly [RegExp, IconName, string]> = [
-  [/\.(jpe?g|png|gif|heic|heif|webp|tiff?|bmp|svg|psd)$/i, "image", color.pink],
-  [/\.(mov|mp4|m4v|avi|mkv|webm)$/i, "video", color.blue],
-  [/\.apk$/i, "android", color.green],
-  [/\.(zip|xip|dmg|tar|gz|7z|rar|pkg)$/i, "files", color.orange],
-];
-
-const lookOf = (entry: FsEntry): { readonly icon: IconName; readonly tint: string } => {
-  if (entry.kind === "folder") return { icon: "folder", tint: color.blue };
-  if (entry.kind === "package") return { icon: "files", tint: color.violet };
-  if (entry.kind === "link") return { icon: "link", tint: color.dim };
-  const match = EXTENSIONS.find(([pattern]) => pattern.test(entry.name));
-  return match === undefined ? { icon: "file", tint: color.ink2 } : { icon: match[1], tint: match[2] };
-};
-
-const metaOf = (entry: FsEntry, now: number): string =>
-  entry.kind === "folder" ? clipAge(entry.modifiedAt, now) : [entry.kind === "package" ? "package" : formatBytes(entry.size), clipAge(entry.modifiedAt, now)].join(" · ");
-
-function Thumb({ entry }: { readonly entry: FsEntry }) {
-  const thumbs = useRemote().files.thumbs;
-  const select = useCallback((map: ReadonlyMap<string, string | null>) => map.get(entry.path) ?? null, [entry.path]);
-  const uri = useSelect(thumbs, select);
-  if (uri !== null) return <Image source={{ uri }} style={styles.icon} accessibilityIgnoresInvertColors />;
-  const look = lookOf(entry);
-  return (
-    <View style={[styles.icon, styles.iconTile]}>
-      <Icon name={look.icon} size={16} color={look.tint} />
-    </View>
-  );
-}
-
-function EntryRow({ entry, now, selecting, selected, onPress }: { readonly entry: FsEntry; readonly now: number; readonly selecting: boolean; readonly selected: boolean; readonly onPress: (entry: FsEntry) => void }) {
-  const meta = metaOf(entry, now);
-  return (
-    <Tap onPress={() => onPress(entry)} accessibilityRole="button" accessibilityLabel={`${entry.name}, ${meta}`} accessibilityState={{ selected }} scale={0.99} style={[styles.row, selected ? styles.picked : null]}>
-      <Thumb entry={entry} />
-      <View style={styles.rowText}>
-        <T v="medium" numberOfLines={1}>
-          {entry.name}
-        </T>
-        <T v="small" numberOfLines={1}>
-          {meta}
-        </T>
-      </View>
-      {selecting && entry.kind !== "folder" ? (
-        <View style={[styles.check, selected ? styles.checkOn : null]}>{selected ? <Icon name="check" size={13} color={color.bg} weight={2.6} /> : null}</View>
-      ) : entry.kind === "folder" ? (
-        <Icon name="chevron" size={15} color={color.mute} />
-      ) : null}
-    </Tap>
-  );
-}
 
 export function FolderScreen({ navigation, route }: Props) {
   const remote = useRemote();
@@ -198,7 +144,7 @@ export function FolderScreen({ navigation, route }: Props) {
       <LegendList
         data={entries}
         keyExtractor={(entry) => entry.path}
-        renderItem={({ item }) => <EntryRow entry={item} now={now} selecting={selecting} selected={picked.has(item.path)} onPress={open} />}
+        renderItem={({ item }) => <EntryRow entry={item} device={device} now={now} selecting={selecting} selected={picked.has(item.path)} onPress={open} />}
         extraData={{ selecting, picked }}
         estimatedItemSize={52}
         recycleItems
@@ -229,13 +175,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.bg },
   actions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12 },
   count: { paddingHorizontal: 20, paddingTop: 8 },
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 8, minHeight: 52 },
-  picked: { backgroundColor: "rgba(242,236,107,0.06)" },
-  rowText: { flex: 1 },
-  icon: { width: 34, height: 34, borderRadius: 10 },
-  iconTile: { backgroundColor: color.s3, alignItems: "center", justifyContent: "center" },
-  check: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: color.line2, alignItems: "center", justifyContent: "center" },
-  checkOn: { backgroundColor: color.yellow, borderColor: color.yellow },
   bar: { position: "absolute", left: 14, right: 14, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: color.ink, borderRadius: 18, paddingVertical: 10, paddingLeft: 16, paddingRight: 10 },
   barText: { flex: 1 },
   barButton: { backgroundColor: color.bg, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14 },
