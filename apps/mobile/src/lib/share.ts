@@ -1,10 +1,11 @@
 import { Store } from "@vitals/client-runtime";
+import { toBase64 } from "@vitals/app/lib/base64.ts";
 import { deviceInfo } from "@vitals/app/lib/device.ts";
 import { KEYCHAIN_OPTIONS } from "@vitals/app/persistence/credentials.ts";
 import type { Remote } from "@vitals/app/state/remote.ts";
 import type { OutgoingFile } from "@vitals/app/state/drops.ts";
-import { FS_LIMITS, type FsEntry, type FsListResult, type FsRecentKind, type FsRecentResult, type FsRoot, type FsServeRequest, type FsServeResult, type FsSort, type FsThumb } from "@vitals/contracts";
-import { Directory, File, Paths } from "expo-file-system";
+import { FS_LIMITS, type FsEntry, type FsReadResult, type FsListResult, type FsRecentKind, type FsRecentResult, type FsRoot, type FsServeRequest, type FsServeResult, type FsSort, type FsThumb } from "@vitals/contracts";
+import { Directory, File, FileMode, Paths } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import { AppState, Linking, Platform } from "react-native";
@@ -249,6 +250,7 @@ export class PhoneShare {
   private stop: (() => void) | null = null;
   private readonly cache = new Map<string, { readonly at: number; readonly entries: ReadonlyArray<FsEntry> }>();
   private readonly name = deviceInfo().name;
+  private readonly exports = new Map<string, string>();
 
   constructor(remote: Remote) {
     this.remote = remote;
@@ -258,7 +260,7 @@ export class PhoneShare {
     if (this.stop !== null) return;
     this.roots = roots;
     this.stop = this.remote.connection.watch(
-      (client) => client["fs.serve"]({ roots, recent: true }),
+      (client) => client["fs.serve"]({ roots, recent: true, read: true }),
       (request) => void this.answer(request),
     );
   }
@@ -294,6 +296,33 @@ export class PhoneShare {
       }
       case "Recent":
         return { _tag: "Recent", result: await this.recent(request.kind, request.offset, Math.min(request.limit, FS_LIMITS.recent)) };
+      case "Read":
+        return { _tag: "Read", result: await this.read(request.path, request.offset, Math.min(request.length, FS_LIMITS.readChunk)) };
+    }
+  }
+
+  /** A photo exported once per preview: every chunk of it reads the same file. */
+  private async exported(path: string): Promise<string> {
+    const known = this.exports.get(path);
+    if (known !== undefined) return known;
+    if (iosShare === null) throw new Error("This phone doesn't share that");
+    const { uri } = await iosShare.exportPhoto(path);
+    this.exports.set(path, uri);
+    return uri;
+  }
+
+  /** One chunk of a file for a preview elsewhere. Photos on iPhone are exported first, like a send. */
+  private async read(path: string, offset: number, length: number): Promise<FsReadResult> {
+    this.allowed(path);
+    const uri = isPhoto(path) ? await this.exported(path) : uriOf(path);
+    const handle = readable(() => new File(uri).open(FileMode.ReadOnly));
+    try {
+      const total = handle.size ?? 0;
+      handle.offset = Math.min(offset, total);
+      const bytes = await handle.readBytes(length);
+      return { data: toBase64(bytes), offset, total, done: offset + bytes.length >= total };
+    } finally {
+      handle.close();
     }
   }
 

@@ -84,6 +84,10 @@ export const layer = Layer.effectDiscard(
             const result = yield* files.recent({ device: op.device, kind: op.kind, offset: op.offset, limit: FS_LIMITS.recent }).pipe(Effect.mapError((error) => error.message));
             return { _tag: "FsRecent", result } satisfies AdminResult;
           }
+          case "FsPreview": {
+            const path = yield* files.preview(op.device, op.path).pipe(Effect.mapError((error) => error.message));
+            return { _tag: "FsPreview", path } satisfies AdminResult;
+          }
           case "ClipsFrom": {
             return { _tag: "ClipsFrom", clips: yield* clips.fromDevice(op.device) } satisfies AdminResult;
           }

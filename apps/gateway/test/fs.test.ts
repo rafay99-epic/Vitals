@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-import { type Gateway, pairDevice, startGateway, withClient } from "./harness.ts";
+import { type Gateway, adminOp, pairDevice, startGateway, withClient } from "./harness.ts";
 
 const deviceIdOf = Schema.decodeUnknownSync(DeviceId);
 
@@ -280,5 +280,54 @@ describe("fs: transfer between devices", () => {
     expect(asked.toThird).toEqual({ files: 1 });
     expect(asked.toItself).toMatchObject({ _tag: "CommandRejected" });
     expect(relays).toEqual([null, third.deviceId]);
+  });
+});
+
+describe("fs: previews", () => {
+  test("Mac files read in pages, byte-exact, and only inside shared folders", async () => {
+    const { gateway: target, token } = await paired();
+    const result = await withClient(target, token, (client) =>
+      Effect.gen(function* () {
+        const first = yield* client["fs.read"]({ path: join(home, "Downloads", "b.mov"), offset: 0, length: 5 });
+        const rest = yield* client["fs.read"]({ path: join(home, "Downloads", "b.mov"), offset: 5, length: 100 });
+        const folder = yield* Effect.flip(client["fs.read"]({ path: join(home, "Downloads", "Trip"), offset: 0, length: 10 }));
+        const secret = yield* Effect.flip(client["fs.read"]({ path: join(home, "Library", "Keychains", "login.keychain-db"), offset: 0, length: 10 }));
+        return { first, rest, folder, secret };
+      }),
+    );
+    expect(result.first).toEqual({ data: Buffer.from("movie").toString("base64"), offset: 0, total: 11, done: false });
+    expect(Buffer.from(result.rest.data, "base64").toString()).toBe("-bytes");
+    expect(result.rest.done).toBe(true);
+    expect(result.folder).toMatchObject({ _tag: "CommandRejected" });
+    expect(result.secret).toMatchObject({ _tag: "CommandRejected" });
+  });
+
+  test("a phone's file reads through the phone and lands whole in the Mac's preview cache", async () => {
+    gateway = await startGateway(join(mkdtempSync(join(tmpdir(), "vitals-data-")), "remote"), home);
+    const target = gateway;
+    const phone = await pairDevice(target);
+    const old = await pairDevice(target);
+    const phoneId = deviceIdOf(phone.deviceId);
+    const content = Buffer.from("x".repeat(700_000) + "end");
+    const serving = withClient(target, phone.token, (client) =>
+      client["fs.serve"]({ roots: [{ label: "Download", path: "/storage/emulated/0/Download", place: "downloads" }], recent: true, read: true }).pipe(
+        Stream.take(2),
+        Stream.runForEach((request) => {
+          if (request._tag !== "Read") return Effect.void;
+          const end = Math.min(content.length, request.offset + request.length);
+          return client["fs.reply"]({ id: request.id, result: { _tag: "Read", result: { data: content.subarray(request.offset, end).toString("base64"), offset: request.offset, total: content.length, done: end >= content.length } }, error: null });
+        }),
+      ),
+    );
+    const oldServing = withClient(target, old.token, (client) => client["fs.serve"]({ roots: [] }).pipe(Stream.take(1), Stream.runDrain, Effect.timeout("1500 millis"), Effect.ignore));
+    await Bun.sleep(300);
+    const cached = await adminOp(target.app, { _tag: "FsPreview", device: phoneId, path: "/storage/emulated/0/Download/Statement.pdf" });
+    const stale = await adminOp(target.app, { _tag: "FsPreview", device: deviceIdOf(old.deviceId), path: "/storage/emulated/0/Download/a.pdf" });
+    await serving;
+    await oldServing;
+    const path = cached.ok?._tag === "FsPreview" ? cached.ok.path : "";
+    expect(path.endsWith("/Statement.pdf")).toBe(true);
+    expect(readFileSync(path).equals(content)).toBe(true);
+    expect(stale.error).toContain("Update Vitals");
   });
 });
