@@ -69,6 +69,7 @@ export class LiveData {
   private stopWatch: (() => void) | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly connection: Connection;
+  private readonly stopState: () => void;
 
   readonly cores: GridSource = {
     rows: () => this.coreBuffers.map((buffer) => buffer.toArray()),
@@ -77,6 +78,10 @@ export class LiveData {
 
   constructor(connection: Connection) {
     this.connection = connection;
+    // Off the link, the last numbers are old: show no signal until a new session sends fresh ones.
+    this.stopState = connection.state.subscribe(() => {
+      if (connection.state.get()._tag !== "Ready" && this.latest.get() !== null) this.latest.set(null);
+    });
   }
 
   series(key: SeriesKey): SeriesSource {
@@ -101,6 +106,7 @@ export class LiveData {
   }
 
   dispose(): void {
+    this.stopState();
     this.stopWatch?.();
     if (this.restartTimer !== null) clearTimeout(this.restartTimer);
   }
