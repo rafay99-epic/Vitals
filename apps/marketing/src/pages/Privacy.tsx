@@ -8,10 +8,10 @@ export default function Privacy() {
     <LegalLayout title="Privacy Policy" updated="October 28, 2026">
       <Section title="The short version">
         <P>
-          <Strong>Vitals does not collect, sell or share your personal data. It has no analytics, no usage tracking, no
-          advertising and no accounts.</Strong> Everything the App measures stays on your Mac. What does leave it automatically:
-          crash and error reports, sent to Sentry so we can fix bugs, with your name, folders, file names and addresses removed
-          first, and never any of your readings. You can turn them off in Settings → Developer → Crash reports (section 3). The
+          <Strong>Vitals does not sell or share your personal data. It has no analytics, no advertising and no
+          accounts.</Strong> Everything the App measures stays on your Mac. What does leave it automatically: crash and error
+          reports and a log of what the App was doing, sent to Sentry so we can fix bugs, with your name, folders, file names and
+          addresses removed first, and never any of your readings. You can turn them off in Settings → Developer → Crash reports (section 3). The
           App also asks GitHub for updates. Remote access, which is off until you turn it on, sends readings only to devices you
           pair, over your own Wi-Fi or your own Tailscale network (section 7). The Vitals Remote phone app talks to your Mac the
           same way, and reports its own crashes and errors to your Mac and to Sentry, scrubbed the same way, unless you turn that
@@ -53,21 +53,43 @@ export default function Privacy() {
         </P>
         <P>
           This log is <Strong>local and capped in size</Strong> (older entries roll off). The file itself is never uploaded; it
-          leaves your Mac only if you choose to send a problem report. Its errors and crashes are also reported to Sentry, scrubbed,
-          as described next.
+          leaves your Mac only if you choose to send a problem report. Its crashes, errors and Normal-level lines are also sent to
+          Sentry, scrubbed, as described next, whatever level you pick here.
         </P>
       </Section>
 
       <Section title="3. Crash reports and problem reports">
         <P>
-          <Strong>Crash reports (Sentry, on unless you turn it off).</Strong> When the App crashes, freezes, hits an uncaught
-          exception or logs an error, it sends a report to Sentry, the error tracking service we use to find and fix bugs. A
-          report holds the error message and the code it happened in, the App's version and channel, your Mac's model and macOS
-          version, and the App's recent log lines (what its services were doing). Before anything is sent, the App removes your
-          user name and home folder, your Mac's name, folder paths, file names, links, IP addresses, email addresses and Tailscale
-          names. Your readings, your files, your clipboard and anything you browse from a phone are never part of a report.
-          Reports carry no account and no name; they do carry a random ID created on first launch, so we can tell how many Macs
-          hit the same bug, which is not linked to you. Sentry is set not to store IP addresses or the location it could tell
+          <Strong>Crash reports (Sentry, on unless you turn it off).</Strong> The App sends Sentry, the error tracking service
+          we use to find and fix bugs:
+        </P>
+        <List>
+          <Item>
+            <Strong>Crashes and freezes,</Strong> uncaught exceptions, and the hang, CPU and disk-write diagnostics macOS itself
+            collects, each with the code it happened in.
+          </Item>
+          <Item>
+            <Strong>Errors and the App's log,</Strong> as it runs: the same lines the diagnostic log records at its Normal level,
+            such as the App starting, the Mac sleeping and waking, update checks, Remote starting and stopping, and failures.
+            Lines about your apps and files (uninstalling and cleaning) are never sent; for those, only the fact that a step
+            failed and its error code are.
+          </Item>
+          <Item>
+            <Strong>Sessions:</Strong> that the App started and whether that run ended in a crash, so we can see how often it
+            crashes.
+          </Item>
+          <Item>
+            <Strong>With Remote on, the gateway's reports:</Strong> its crashes and errors, which kind of request from a paired
+            device failed and why, and connections opening and closing, without device names or request contents.
+          </Item>
+        </List>
+        <P>
+          Each report also carries the App's version and channel and your Mac's model and macOS version. Before anything is sent,
+          the App removes your user name and home folder, your Mac's name, folder paths, file names, links, IP addresses, email
+          addresses and Tailscale names, and Sentry applies the same kind of rules again on arrival. This is automatic and can
+          miss an unusual name, which is why lines about your apps and files are kept off entirely. Your readings, your clipboard
+          and the contents of your files are never sent. Reports carry no account and no name; they do carry a random ID created
+          on first launch, so we can tell how many Macs hit the same bug, which is not linked to you. Sentry is set not to store IP addresses or the location it could tell
           from them. Sentry, Inc. processes reports in the United States under the{' '}
           <ExtLink href="https://sentry.io/privacy/">Sentry Privacy Policy</ExtLink> and deletes them after 30 days. Turn reports
           off in Settings → Developer → Crash reports; nothing more is sent from then on.
@@ -220,12 +242,14 @@ export default function Privacy() {
             update downloads.
           </Item>
           <Item>
-            <Strong>Error reports (Sentry, on unless you turn it off):</Strong> when the phone app crashes or hits an error, it
-            sends a report to Sentry, the error tracking service we use to find and fix bugs. A report holds the error message and
-            the code it happened in, the app version and update channel, the phone's model and operating system version, and the
-            app's recent events from the log described in section 7 (connection changes and failures). Before anything is sent,
-            the app removes file names, folder paths, links, your Mac's and Tailscale addresses, IP addresses, email addresses and
-            your phone's name. Reports carry no account and no name. They do carry a random ID created when the app was installed,
+            <Strong>Error reports (Sentry, on unless you turn it off):</Strong> the phone app sends Sentry, the error tracking
+            service we use to find and fix bugs, its crashes and errors with the code they happened in, and, as it runs, the log
+            described in section 7: the app opening and going to the background, connection changes, which kind of command you
+            sent (for example "restart", never its details), and that a failure was shown (not its text, which can name a file).
+            It also sends sessions: that the app started and whether that run crashed. Each report carries the app version and
+            update channel and the phone's model and operating system version. Before anything is sent, the app removes file
+            names, folder paths, links, your Mac's and Tailscale addresses, IP addresses, email addresses and your phone's name;
+            crashes inside the app's native code skip that step and are cleaned by Sentry's own rules on arrival instead. Reports carry no account and no name. They do carry a random ID created when the app was installed,
             so we can tell how many installs hit the same bug; it is not linked to you, your phone number or your accounts, and a
             reinstall makes a new one. Sentry is set not to store IP addresses or the location it could tell from them, and there
             are no screenshots or screen recordings. Sentry, Inc. processes reports in the United States
