@@ -26,6 +26,19 @@ const decoder = new TextDecoder();
 const prologue = encoder.encode(LAN_PROLOGUE);
 const noAd = new Uint8Array(0);
 
+const textOf = (event: unknown, key: string): string => {
+  const value: unknown = typeof event === "object" && event !== null ? Reflect.get(event, key) : undefined;
+  return typeof value === "string" ? value : "";
+};
+
+/** Says how a Wi-Fi socket ended before its handshake finished, for the phone's journal. */
+export const earlyEnd = (opened: boolean, event: unknown): string => {
+  const said = textOf(event, "message") || textOf(event, "reason");
+  if (!opened) return said === "" ? "no connection" : `no connection: ${said}`;
+  const code: unknown = typeof event === "object" && event !== null ? Reflect.get(event, "code") : undefined;
+  return `the Mac closed it before answering${typeof code === "number" ? ` (${String(code)}${said === "" ? "" : ` ${said}`})` : ""}`;
+};
+
 const bytesOf = (data: unknown): Uint8Array | null => {
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   return data instanceof Uint8Array ? data : null;
@@ -56,6 +69,8 @@ export interface LanSocketOptions {
   readonly client: string;
   readonly raw: RawSocket;
   readonly onRejected?: (reason: string) => void;
+  /** Why the socket ended before the Mac's handshake reply, when it did. */
+  readonly onEndedEarly?: (detail: string) => void;
 }
 
 export const openLanSocket = (url: string, options: LanSocketOptions): Socket.WebSocketLike => {
@@ -64,6 +79,8 @@ export const openLanSocket = (url: string, options: LanSocketOptions): Socket.We
   const start = handshake(options.macKey, options.device, { t: "connect", v: PROTOCOL_VERSION, client: options.client });
   let transport: Transport | null = null;
   let readyState = 0;
+  let opened = false;
+  let failure: unknown = null;
 
   const emit = (name: EventName, event: Socket.WebSocketEvent) => {
     for (const [listener, once] of listeners.get(name) ?? []) {
@@ -79,12 +96,21 @@ export const openLanSocket = (url: string, options: LanSocketOptions): Socket.We
     emit("close", { type: "close", code, reason });
   };
 
-  raw.addEventListener("open", () => raw.send(start.first), { once: true });
+  raw.addEventListener(
+    "open",
+    () => {
+      opened = true;
+      raw.send(start.first);
+    },
+    { once: true },
+  );
   raw.addEventListener("error", (event) => {
+    failure = event;
     if (readyState < 3) emit("error", event);
   });
   raw.addEventListener("close", (event) => {
     if (readyState === 3) return;
+    if (transport === null) options.onEndedEarly?.(earlyEnd(opened, opened ? event : (failure ?? event)));
     readyState = 3;
     emit("close", event);
   });
@@ -105,6 +131,7 @@ export const openLanSocket = (url: string, options: LanSocketOptions): Socket.We
       readyState = 1;
       emit("open", { type: "open" });
     } catch {
+      options.onEndedEarly?.("the Mac's key did not match");
       fail(4400, "the Mac's key did not match");
     }
   });
@@ -135,7 +162,12 @@ export const openLanSocket = (url: string, options: LanSocketOptions): Socket.We
 
 export type LanPairOutcome =
   | { readonly ok: true; readonly result: Extract<LanPairResult, { readonly t: "paired" }> }
-  | { readonly ok: false; readonly reason: "denied" | "expired" | "busy" | "incompatible" | "unreachable" | "mismatch" | "cancelled" };
+  | {
+      readonly ok: false;
+      readonly reason: "denied" | "expired" | "busy" | "incompatible" | "unreachable" | "mismatch" | "cancelled";
+      /** What actually happened on the socket, for the phone's journal. */
+      readonly detail: string;
+    };
 
 export interface LanPairOptions {
   readonly host: string;
@@ -151,6 +183,7 @@ export const pairOverLan = (options: LanPairOptions): { readonly outcome: Promis
   const raw = options.raw(lanSocketUrl(options.host, options.port));
   const start = handshake(options.macKey, options.device, { t: "pair", v: PROTOCOL_VERSION, device: options.info });
   let transport: Transport | null = null;
+  let opened = false;
   let settle: (outcome: LanPairOutcome) => void = () => {};
   const outcome = new Promise<LanPairOutcome>((resolve) => {
     settle = (value) => {
@@ -160,47 +193,67 @@ export const pairOverLan = (options: LanPairOptions): { readonly outcome: Promis
     };
   });
 
-  raw.addEventListener("open", () => raw.send(start.first), { once: true });
-  raw.addEventListener("close", () => settle({ ok: false, reason: transport === null ? "unreachable" : "expired" }));
-  raw.addEventListener("error", () => settle({ ok: false, reason: "unreachable" }));
+  type Failed = Extract<LanPairOutcome, { readonly ok: false }>["reason"];
+  const fail = (reason: Failed, detail: string) => settle({ ok: false, reason, detail });
+
+  raw.addEventListener(
+    "open",
+    () => {
+      opened = true;
+      raw.send(start.first);
+    },
+    { once: true },
+  );
+  raw.addEventListener("close", (event) =>
+    transport === null ? fail("unreachable", earlyEnd(opened, event)) : fail("expired", "the Mac closed it while waiting"),
+  );
+  raw.addEventListener("error", (event) => fail("unreachable", earlyEnd(opened, event)));
   raw.addEventListener("message", (event) => {
     const bytes = bytesOf(event.data);
-    if (bytes === null) return settle({ ok: false, reason: "mismatch" });
+    if (bytes === null) return fail("mismatch", "the Mac sent text, not a handshake");
     try {
       if (transport === null) {
         const finished = start.finish(bytes);
         transport = finished.transport;
         const accept = finished.accept;
         if (accept?.t === "waiting") return options.onWaiting(matchCode(transport.handshakeHash), accept.expiresAt);
-        if (accept?.t === "busy" || accept?.t === "incompatible") return settle({ ok: false, reason: accept.t });
-        return settle({ ok: false, reason: "mismatch" });
+        if (accept?.t === "busy" || accept?.t === "incompatible") return fail(accept.t, `the Mac answered ${accept.t}`);
+        return fail("mismatch", `the Mac answered ${accept?.t ?? "something unreadable"}`);
       }
       const result = decodeResult(decoder.decode(transport.receive.decrypt(noAd, bytes)));
-      if (result._tag === "None") return settle({ ok: false, reason: "mismatch" });
+      if (result._tag === "None") return fail("mismatch", "the Mac's answer was unreadable");
       if (result.value.t === "paired") return settle({ ok: true, result: result.value });
-      settle({ ok: false, reason: result.value.t });
+      fail(result.value.t, `the Mac answered ${result.value.t}`);
     } catch {
-      settle({ ok: false, reason: "mismatch" });
+      fail("mismatch", transport === null ? "the Mac's key did not match" : "the Mac's answer did not decrypt");
     }
   });
 
-  return { outcome, cancel: () => settle({ ok: false, reason: "cancelled" }) };
+  return { outcome, cancel: () => fail("cancelled", "cancelled on the phone") };
 };
 
+export type LanProbe = { readonly ok: true; readonly advert: LanAdvert } | { readonly ok: false; readonly why: string };
+
+const isTimeout = (error: unknown): boolean => error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+
+/** Asks host:port whether it is a Vitals Mac, and with which key. A miss says why. */
 export const probeLan = async (
   host: string,
   port: number,
   expectedKey: string | null,
   fetchImpl: typeof globalThis.fetch,
   timeoutMs = 2_500,
-): Promise<LanAdvert | null> => {
+): Promise<LanProbe> => {
   try {
     const response = await fetchImpl(lanAdvertUrl(host, port), { signal: AbortSignal.timeout(timeoutMs) });
-    const advert = decodeAdvert(response.ok ? await response.json() : null);
-    if (advert._tag === "None") return null;
-    return expectedKey === null || advert.value.key === expectedKey ? advert.value : null;
-  } catch {
-    return null;
+    if (!response.ok) return { ok: false, why: `answered HTTP ${String(response.status)}` };
+    const advert = decodeAdvert(await response.json());
+    if (advert._tag === "None") return { ok: false, why: "answered, but not as Vitals" };
+    if (expectedKey !== null && advert.value.key !== expectedKey) return { ok: false, why: "a Vitals Mac with a different key" };
+    return { ok: true, advert: advert.value };
+  } catch (error) {
+    if (isTimeout(error)) return { ok: false, why: `no answer in ${String(timeoutMs / 1000)} s` };
+    return { ok: false, why: error instanceof Error && error.message !== "" ? `no connection: ${error.message}` : "no connection" };
   }
 };
 

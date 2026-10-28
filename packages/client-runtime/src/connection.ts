@@ -34,6 +34,8 @@ export type Route =
 export interface RouteFailure {
   readonly kind: RouteKind;
   readonly reason: string;
+  /** The low-level cause behind `reason`, for diagnostics. */
+  readonly detail?: string;
 }
 
 export type ConnectionState =
@@ -94,6 +96,7 @@ export class NotConnected extends Data.TaggedError("NotConnected")<{ readonly me
 class AttemptFailed extends Data.TaggedError("AttemptFailed")<{
   readonly reason: "unreachable" | "identity" | "revoked" | "server" | "socket" | "unknown";
   readonly message: string;
+  readonly detail?: string;
 }> {}
 
 type Signal = { readonly _tag: "Wake"; readonly reason: WakeReason } | { readonly _tag: "Suspend" };
@@ -119,6 +122,8 @@ interface SocketPlan {
   readonly layer: Layer.Layer<Socket.Socket>;
   /** Why the Mac turned the Wi-Fi handshake down, once it has. */
   readonly rejected: () => string | null;
+  /** How the Wi-Fi socket ended before the handshake finished, once it has. */
+  readonly endedEarly: () => string | null;
 }
 
 type Ended =
@@ -199,7 +204,10 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       return isRecord(body) && typeof body["protocol"] === "number" ? body["protocol"] : null;
     }).pipe(Effect.orElseSucceed(() => null));
 
-  type Probe = { readonly _tag: "Ok" } | { readonly _tag: "Down"; readonly reason: string } | { readonly _tag: "Incompatible"; readonly protocol: number };
+  type Probe =
+    | { readonly _tag: "Ok" }
+    | { readonly _tag: "Down"; readonly reason: string; readonly detail?: string }
+    | { readonly _tag: "Incompatible"; readonly protocol: number };
 
   const probe = (route: Route): Effect.Effect<Probe> => {
     if (route._tag === "Tailnet") {
@@ -214,9 +222,10 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     if (lan === null) return Effect.succeed({ _tag: "Down", reason: "Wi-Fi route is not set up" });
     const timeoutMs = route.tunnel === true ? TUNNEL_PROBE_MS : LAN_PROBE_MS;
     return Effect.promise(() => probeLan(route.host, route.port, lan.key, fetchImpl, timeoutMs)).pipe(
-      Effect.map((advert): Probe => {
-        if (advert === null) return { _tag: "Down", reason: route.tunnel === true ? "Built-in Tailscale could not reach the Mac" : "Not on the Mac's Wi-Fi" };
-        return advert.protocol === PROTOCOL_VERSION ? { _tag: "Ok" } : { _tag: "Incompatible", protocol: advert.protocol };
+      Effect.map((found): Probe => {
+        const where = `${route.host}:${String(route.port)}`;
+        if (!found.ok) return { _tag: "Down", reason: route.tunnel === true ? "Built-in Tailscale could not reach the Mac" : "Not on the Mac's Wi-Fi", detail: `${where} ${found.why}` };
+        return found.advert.protocol === PROTOCOL_VERSION ? { _tag: "Ok" } : { _tag: "Incompatible", protocol: found.advert.protocol };
       }),
     );
   };
@@ -257,6 +266,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
             { openTimeout: CONNECT_TIMEOUT },
           ).pipe(Layer.provide(Layer.succeed(Socket.WebSocketConstructor)(options.webSocket))),
           rejected: () => null,
+          endedEarly: () => null,
         })),
       );
     }
@@ -264,6 +274,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     if (lan === null) return Effect.fail(new AttemptFailed({ reason: "unreachable", message: "Wi-Fi route is not set up" }));
     const macKey = macKeyBytes(lan.key);
     let rejection: string | null = null;
+    let ended: string | null = null;
     const lanSocket: Socket.WebSocketConstructor["Service"] = (url) =>
       openLanSocket(url, {
         macKey,
@@ -273,12 +284,16 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         onRejected: (reason) => {
           rejection = reason;
         },
+        onEndedEarly: (detail) => {
+          ended = detail;
+        },
       });
     return Effect.succeed({
       layer: Socket.layerWebSocket(lanSocketUrl(route.host, route.port), { openTimeout: CONNECT_TIMEOUT }).pipe(
         Layer.provide(Layer.succeed(Socket.WebSocketConstructor)(lanSocket)),
       ),
       rejected: () => rejection,
+      endedEarly: () => ended,
     });
   };
 
@@ -314,11 +329,15 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         const calls = yield* SubscriptionRef.make(0);
         return { scope, client, hello, disconnected, route: kindOf(route), latencyMs, calls };
       }).pipe(
-        Effect.catchCause((cause) =>
-          plan.rejected() === "unknown" && !Cause.hasInterrupts(cause)
-            ? Effect.fail(new AttemptFailed({ reason: "unknown", message: UNKNOWN_ON_WIFI }))
-            : Effect.failCause(cause),
-        ),
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+          if (plan.rejected() === "unknown") return Effect.fail(new AttemptFailed({ reason: "unknown", message: UNKNOWN_ON_WIFI }));
+          // Only a Wi-Fi socket ends early; its cause is what the journal needs, whatever error surfaced above it.
+          const early = plan.endedEarly();
+          if (early === null) return Effect.failCause(cause);
+          const failed = Option.getOrNull(Cause.findErrorOption(cause));
+          return Effect.fail(new AttemptFailed({ reason: failed?.reason ?? "unreachable", message: failed?.message ?? "Mac is unreachable", detail: early }));
+        }),
         Effect.onError(() => Scope.close(scope, Exit.void)),
       );
     });
@@ -341,7 +360,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       if (result === undefined) continue;
       if (result._tag === "Incompatible") return { _tag: "Incompatible", protocol: result.protocol };
       if (result._tag === "Down") {
-        failures.push({ kind: kindOf(route), reason: result.reason });
+        failures.push({ kind: kindOf(route), reason: result.reason, ...(result.detail === undefined ? {} : { detail: result.detail }) });
         continue;
       }
       const established = yield* attempt(route).pipe(Effect.exit);
@@ -358,7 +377,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       }
       if (route._tag === "Tailnet" && error?.reason === "socket") tokenAccepted = true;
       heldOff.set(keyOf(route), Date.now() + HOLD_OFF_MS);
-      failures.push({ kind: kindOf(route), reason: error?.message ?? "Connection failed" });
+      failures.push({ kind: kindOf(route), reason: error?.message ?? "Connection failed", ...(error?.detail === undefined ? {} : { detail: error.detail }) });
     }
     if (unknownOnWifi && tokenAccepted) lanUnknown();
     // Wi-Fi forgot a key it had accepted and nothing else vouches for the token: this phone was removed.

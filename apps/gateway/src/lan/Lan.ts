@@ -136,6 +136,17 @@ export const layer = Layer.effect(
     const log = (level: "info" | "warn", kind: string, data: Record<string, unknown>, deviceId: string | null = null) =>
       activity.record({ at: Date.now(), source: "gateway", level, kind, deviceId, data });
 
+    // A phone retrying, or anything else on the Wi-Fi poking the port, is logged once a minute per address and outcome.
+    const turnedAway = new Map<string, number>();
+    const refuse = (socket: ServerWebSocket<Conn>, why: string, data: Record<string, unknown> = {}) => {
+      const now = Date.now();
+      const seen = `${socket.data.address} ${why}`;
+      if ((turnedAway.get(seen) ?? 0) > now - 60_000) return;
+      if (turnedAway.size > 256) turnedAway.clear();
+      turnedAway.set(seen, now);
+      log("warn", "lan.refused", { address: socket.data.address, why, ...data });
+    };
+
     const tell = (message: Parameters<typeof bridge.send>[0]) => {
       Effect.runFork(bridge.send(message));
     };
@@ -227,18 +238,30 @@ export const layer = Layer.effect(
         return transport;
       };
       const open = decodeOpen(decoder.decode(first.payload));
-      if (open._tag === "None") return accept(socket, answer, { t: "incompatible", protocol: PROTOCOL_VERSION });
-      if (open.value.v !== PROTOCOL_VERSION) return accept(socket, answer, { t: "incompatible", protocol: PROTOCOL_VERSION });
+      if (open._tag === "None") {
+        refuse(socket, "unreadable opening");
+        return accept(socket, answer, { t: "incompatible", protocol: PROTOCOL_VERSION });
+      }
+      if (open.value.v !== PROTOCOL_VERSION) {
+        refuse(socket, "other protocol", { protocol: open.value.v });
+        return accept(socket, answer, { t: "incompatible", protocol: PROTOCOL_VERSION });
+      }
       if (open.value.t === "connect") {
         const device = store.lanDevice(lanKey);
         const ticket = device === null ? null : auth.issueDeviceTicket(device.id);
-        if (device === null || ticket === null) return accept(socket, answer, { t: "unknown" });
+        if (device === null || ticket === null) {
+          refuse(socket, device === null ? "unknown phone key" : "device has no session", { key: lanKey.slice(0, 8), client: open.value.client });
+          return accept(socket, answer, { t: "unknown" });
+        }
         const transport = noise.writeMessage2(encoder.encode(JSON.stringify({ t: "ready" } satisfies LanAccept)));
         return startProxy(socket, transport.transport, ticket, open.value.client, () => socket.send(transport.message));
       }
       const now = Date.now();
       while (recent.length > 0 && (recent[0] ?? now) < now - 60_000) recent.shift();
-      if (prompts.size >= MAX_PENDING || recent.length >= PROMPTS_PER_MINUTE) return accept(socket, answer, { t: "busy" });
+      if (prompts.size >= MAX_PENDING || recent.length >= PROMPTS_PER_MINUTE) {
+        refuse(socket, "too many pairing requests");
+        return accept(socket, answer, { t: "busy" });
+      }
       recent.push(now);
       const expiresAt = now + PAIR_REQUEST_TTL_MS;
       const transport = answer({ t: "waiting", expiresAt });
@@ -263,6 +286,8 @@ export const layer = Layer.effect(
         if (phase.loopback.readyState === WebSocket.OPEN) phase.loopback.send(text);
         else phase.queue.push(text);
       } catch {
+        // In the handshake this is a phone holding another key for this Mac (it was reset, or it's a different Mac).
+        refuse(socket, phase._tag === "Handshake" ? "handshake for another Mac key" : "frame did not decrypt");
         socket.data.phase = { _tag: "Closed" };
         socket.close(4400, "bad frame");
       }

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { join } from "node:path";
 
 import { type ConnectionState, type Route, createConnection, pair, pairOverLan, parsePairingUrl, probeLan } from "@vitals/client-runtime";
 import { fromBase64Url, generateKeyPair } from "@vitals/noise";
@@ -45,8 +47,9 @@ const lanPort = (lanBase: string) => Number(new URL(lanBase).port);
 
 const pairByWifi = async (running: NonNullable<typeof gateway>, allow: boolean) => {
   const port = lanPort(running.lanBase);
-  const advert = await probeLan("127.0.0.1", port, null, fetch);
-  if (advert === null) throw new Error("no LAN advert");
+  const probe = await probeLan("127.0.0.1", port, null, fetch);
+  if (!probe.ok) throw new Error(`no LAN advert: ${probe.why}`);
+  const advert = probe.advert;
   const device = generateKeyPair();
   const codes: Array<string> = [];
   const attempt = pairOverLan({
@@ -181,7 +184,7 @@ describe("client runtime against the gateway", () => {
   test("a denied Wi-Fi pairing creates no device", async () => {
     gateway = await startGateway();
     const { outcome } = await pairByWifi(gateway, false);
-    expect(outcome).toEqual({ ok: false, reason: "denied" });
+    expect(outcome).toEqual({ ok: false, reason: "denied", detail: "the Mac answered denied" });
     const listed = await adminOp(gateway.app, { _tag: "ListDevices" });
     expect(listed.ok?._tag === "ListDevices" ? listed.ok.devices.length : -1).toBe(0);
   });
@@ -226,7 +229,31 @@ describe("client runtime against the gateway", () => {
     await until(() => connection.state.get()._tag === "Backoff");
     const state = connection.state.get();
     expect(state._tag === "Backoff" ? state.failures[0]?.kind : null).toBe("lan");
+    expect(state._tag === "Backoff" ? state.failures[0]?.detail : null).toBe(`127.0.0.1:${String(port)} a Vitals Mac with a different key`);
     connection.dispose();
+  });
+
+  test("the Mac logs a Wi-Fi handshake made for another Mac's key", async () => {
+    gateway = await startGateway();
+    const port = lanPort(gateway.lanBase);
+    const stranger = generateKeyPair();
+    const attempt = pairOverLan({ host: "127.0.0.1", port, macKey: generateKeyPair().publicKey, device: stranger, info: phone, raw: rawSocket, onWaiting: () => undefined });
+    const outcome = await attempt.outcome;
+    expect(outcome.ok ? null : outcome.detail).toMatch(/^the Mac closed it before answering/);
+    const db = new Database(join(gateway.dataDir, "activity.db"), { readonly: true });
+    const refused = () => db.query<{ data_json: string }, []>("SELECT data_json FROM events WHERE kind = 'lan.refused'").all();
+    await until(() => refused().length > 0);
+    expect(JSON.parse(refused()[0]?.data_json ?? "{}")).toMatchObject({ why: "handshake for another Mac key" });
+    db.close();
+  });
+
+  test("a Wi-Fi probe that misses says why", async () => {
+    gateway = await startGateway();
+    const port = lanPort(gateway.lanBase);
+    const closed = await probeLan("127.0.0.1", port + 7, null, fetch);
+    expect(closed.ok ? null : closed.why.startsWith("no connection")).toBe(true);
+    const http = await probeLan("127.0.0.1", Number(new URL(gateway.base).port), null, fetch);
+    expect(http.ok ? null : http.why).toMatch(/^answered/);
   });
 
   test("moves a live session from Tailscale to Wi-Fi without dropping the stream", async () => {
