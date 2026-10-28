@@ -149,6 +149,16 @@ jobs:
           ./build.sh
           ./make-dmg.sh
 
+      # Mac crash stack traces in Sentry need this build's debug symbols (build.sh writes the
+      # dSYM). No secret, or Sentry down → a warning, never a failed release.
+      - name: Upload debug symbols to Sentry
+        continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then echo "::warning::SENTRY_AUTH_TOKEN is not set; skipping the dSYM upload"; exit 0; fi
+          npx -y @sentry/cli@3.8.0 debug-files upload --org syntax-lab-tecnology --project vitals-macos build/*.dSYM
+
       # The promotion commit (promote.sh) bakes the grouped-by-area PR changelog
       # into its body — and main moves ONLY via promotion, so HEAD's body IS the
       # release notes. They can't be regenerated here: after promotion main ==

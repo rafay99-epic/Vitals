@@ -236,7 +236,8 @@ final class RemoteModel {
         restartAttempt += 1
         let delay = min(10, 0.5 * pow(2, Double(restartAttempt - 1)))
         state = .restarting(attempt: restartAttempt)
-        Log.notice(.remote, "gateway exited (\(code)); restarting in \(delay)s")
+        // Remote is still on, so nobody asked it to stop: a crash, reported as one.
+        Log.error(.remote, "gateway exited (\(code)); restarting in \(delay)s")
         restartTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }

@@ -16,6 +16,8 @@ struct VitalsApp: App {
         DataHome.prepare()
         // Arm crash capture before anything else can fault.
         CrashReporter.install()
+        // Then Sentry, whose handlers run first and chain to CrashReporter's.
+        ErrorReporting.startIfEnabled()
         let settings = AppSettings()
         let model = VitalsModel(settings: settings)
         let updater = Updater()

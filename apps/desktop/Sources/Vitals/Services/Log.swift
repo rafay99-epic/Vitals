@@ -163,9 +163,10 @@ enum Log {
                       file: String = #fileID, function: String = #function, line: Int = #line) {
         emit(.error, category, message(), error, file, function, line)
     }
-    static func fault(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+    /// `report: false` keeps a line out of Sentry when Sentry already has the event (a past crash).
+    static func fault(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil, report: Bool = true,
                       file: String = #fileID, function: String = #function, line: Int = #line) {
-        emit(.fault, category, message(), error, file, function, line)
+        emit(.fault, category, message(), error, file, function, line, report: report)
     }
 
     // MARK: Emit once (hot-path)
@@ -193,14 +194,20 @@ enum Log {
     }
 
     private static func emit(_ level: LogLevel, _ category: LogCategory, _ message: @autoclosure () -> String,
-                             _ error: Error?, _ file: String, _ function: String, _ line: Int) {
+                             _ error: Error?, _ file: String, _ function: String, _ line: Int, report: Bool = true) {
         let minimum = minimumLevel.withLock { $0 }
+        let logs = minimum != .off && level >= minimum
+        // Crash reports don't follow the local log level: an owner who turned the log off still
+        // gets errors reported, unless they turned reports off too.
+        let reports = report && level >= .notice && ErrorReporting.isRunning
         // Bail before building the string.
-        guard minimum != .off, level >= minimum else { return }
+        guard logs || reports else { return }
 
         let text = message()
         let source = Source(file: shortName(file), function: function, line: line)
         let info = error.map(ErrorInfo.init)
+        if reports { ErrorReporting.record(level, category, text, source: source, error: info) }
+        guard logs else { return }
 
         let suffix = info.map { " | \($0.inline)" } ?? ""
         loggers[category]?.log(level: level.osType, "[\(session)] \(text)\(suffix) (\(source.file):\(line))")

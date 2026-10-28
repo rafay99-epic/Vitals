@@ -130,6 +130,16 @@ jobs:
           export VITALS_BUILD="$BUILD"
           ./make-dmg.sh
 
+      # Mac crash stack traces in Sentry need this build's debug symbols (build.sh writes the
+      # dSYM). No secret, or Sentry down → a warning, never a failed release.
+      - name: Upload debug symbols to Sentry
+        continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then echo "::warning::SENTRY_AUTH_TOKEN is not set; skipping the dSYM upload"; exit 0; fi
+          npx -y @sentry/cli@3.8.0 debug-files upload --org syntax-lab-tecnology --project vitals-macos build/*.dSYM
+
       - name: Build release notes
         env:
           GH_TOKEN: ${{ github.token }}

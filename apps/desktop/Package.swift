@@ -4,14 +4,16 @@ import PackageDescription
 let package = Package(
     name: "Vitals",
     platforms: [.macOS(.v15)],
+    // Sentry is the one third-party dependency: crash and error reports (see `ErrorReporting`).
+    dependencies: [.package(url: "https://github.com/getsentry/sentry-cocoa", exact: "9.31.0")],
     targets: [
         .target(name: "PrivateSensors"),
         .executableTarget(
             name: "Vitals",
-            dependencies: ["PrivateSensors"],
+            dependencies: ["PrivateSensors", .product(name: "Sentry", package: "sentry-cocoa")],
             swiftSettings: [.swiftLanguageMode(.v5)],
-            // libsqlite3 ships with macOS — `import SQLite3` against it keeps the
-            // history store dependency-free, matching the zero-dependency norm.
+            // libsqlite3 ships with macOS: `import SQLite3` against it keeps the
+            // history store dependency-free. Sentry stays the only package.
             linkerSettings: [.linkedFramework("IOKit"), .linkedLibrary("sqlite3")]
         ),
         .testTarget(
