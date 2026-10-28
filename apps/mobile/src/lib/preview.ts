@@ -29,7 +29,7 @@ export const previewKind = (name: string): PreviewKind => KINDS.find(([pattern])
 export const TOO_BIG = "Too big to preview. Transfer it instead.";
 
 /** Text shows at most this much. */
-export const TEXT_BYTES = 256 * 1024;
+const TEXT_BYTES = 256 * 1024;
 
 const IN_FLIGHT = 3;
 const UNZIP_CHUNK = 256 * 1024;

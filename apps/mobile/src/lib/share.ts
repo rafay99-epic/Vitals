@@ -31,7 +31,7 @@ void SecureStore.getItemAsync(KEY, KEYCHAIN_OPTIONS)
   .then((value) => changed || shareFiles.set(value === "1"))
   .catch(() => undefined);
 
-export const setShareFiles = (on: boolean): void => {
+const setShareFiles = (on: boolean): void => {
   changed = true;
   shareFiles.set(on);
   void SecureStore.setItemAsync(KEY, on ? "1" : "0", KEYCHAIN_OPTIONS).catch(() => undefined);

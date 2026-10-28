@@ -65,8 +65,3 @@ export const openPreview = (params: ControlStackParams["Preview"]): void => {
 export const openTransfers = (): void => {
   if (navigationRef.isReady()) navigationRef.navigate("Control", { screen: "Transfers", initial: false });
 };
-
-/** Opens Settings > Updates with Settings underneath, so Back works. */
-export const openUpdates = (): void => {
-  if (navigationRef.isReady()) navigationRef.navigate("SettingsTab", { screen: "Updates", initial: false });
-};
