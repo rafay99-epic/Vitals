@@ -475,6 +475,12 @@ final class RemoteModel {
         await phonePages.refreshPhones()
     }
 
+    /// Deletes every log line phones sent (errors, connection changes). Returns how many, or nil when the gateway is off.
+    func clearPhoneLogs() async -> Int? {
+        guard case let .clearPhoneLogs(removed) = try? await admin(.clearPhoneLogs) else { return nil }
+        return removed
+    }
+
     func revoke(_ device: RemoteDevice) async {
         _ = try? await admin(.revokeDevice(device.id))
         send(.terminalEnd(id: nil, deviceId: device.id))

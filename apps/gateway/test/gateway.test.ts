@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { CommandId } from "@vitals/contracts";
+import { CommandId, EventId } from "@vitals/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -11,6 +11,7 @@ import { MAX_FRAME_BYTES } from "../src/config.ts";
 import { adminOp, alertFixture, clientLayer, makeClient, ownerHeaders, pairDevice, sample, startGateway, ticketFor } from "./harness.ts";
 
 const commandId = Schema.decodeUnknownSync(CommandId);
+const eventId = Schema.decodeUnknownSync(EventId);
 let gateway: Awaited<ReturnType<typeof startGateway>> | null = null;
 
 afterEach(async () => {
@@ -284,6 +285,28 @@ describe("rpc over websocket", () => {
       headers: { ...ownerHeaders, authorization: `Bearer ${token}` },
     });
     expect(response.status).toBe(401);
+  });
+
+  test("a phone clears only its own log lines, and the Mac clears every phone's", async () => {
+    const started = await startGateway();
+    gateway = started;
+    const first = await pairDevice(started);
+    const second = await pairDevice(started);
+    const fault = (id: string) => ({ eventId: eventId(id), at: Date.now(), level: "error" as const, kind: "client.app.fault", data: { message: "boom" } });
+    await withClient(first.token, (client) => client["activity.ingest"]({ events: [fault("a-1"), fault("a-2")] }));
+    await withClient(second.token, (client) => client["activity.ingest"]({ events: [fault("b-1")] }));
+    const cleared = await withClient(first.token, (client) => client["activity.clear"]({}));
+    expect(cleared.removed).toBeGreaterThanOrEqual(2);
+    const faults = () => {
+      const db = new Database(join(started.dataDir, "activity.db"), { readonly: true });
+      const rows = db.query("SELECT event_id FROM events WHERE kind = 'client.app.fault'").all().map((row) => (row as { event_id: string }).event_id);
+      db.close();
+      return rows;
+    };
+    expect(faults()).toEqual(["b-1"]);
+    const result = await adminOp(started.app, { _tag: "ClearPhoneLogs" });
+    expect(result.ok?._tag).toBe("ClearPhoneLogs");
+    expect(faults()).toEqual([]);
   });
 
   test("events replay after a sequence and every frame lands in activity.db", async () => {

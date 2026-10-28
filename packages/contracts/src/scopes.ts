@@ -61,6 +61,7 @@ export const RPC_SCOPES = {
   "terminal.resize": "terminal",
   "terminal.close": "terminal",
   "activity.ingest": "read",
+  "activity.clear": "read",
   "device.lanKey": "read",
   "device.forget": "read",
 } as const satisfies Record<VitalsMethod, ScopeRule>;

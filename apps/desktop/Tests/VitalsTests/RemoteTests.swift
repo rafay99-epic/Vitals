@@ -378,6 +378,10 @@ struct DevicePageBridgeTests {
         #expect(try json(FromApp.admin(id: "a-2", op: .clipsFrom(device: "dev-1"))) == dictionary(
             #"{"t":"admin","id":"a-2","op":{"_tag":"ClipsFrom","device":"dev-1"}}"#
         ))
+        #expect(try json(FromApp.admin(id: "a-3", op: .clearPhoneLogs)) == dictionary(
+            #"{"t":"admin","id":"a-3","op":{"_tag":"ClearPhoneLogs"}}"#
+        ))
+        #expect(try adminResult(#"{"_tag":"ClearPhoneLogs","removed":12}"#) == .clearPhoneLogs(removed: 12))
     }
 
     @Test func pullSendsToOnlyWhenAnotherPhoneIsPicked() throws {

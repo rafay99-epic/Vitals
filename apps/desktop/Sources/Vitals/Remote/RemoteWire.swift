@@ -441,6 +441,8 @@ enum AdminOp: Equatable, Sendable {
     /// Copies a phone's file into the gateway's preview cache for Quick Look.
     case fsPreview(device: String, path: String)
     case clipsFrom(device: String)
+    /// Deletes every log line phones sent, for all phones.
+    case clearPhoneLogs
 }
 
 /// What a device page lists newest first (`FsRecentKind` in fs.ts).
@@ -496,6 +498,8 @@ extension AdminOp: Encodable {
         case let .clipsFrom(device):
             try c.encode("ClipsFrom", forKey: ._tag)
             try c.encode(device, forKey: .device)
+        case .clearPhoneLogs:
+            try c.encode("ClearPhoneLogs", forKey: ._tag)
         }
     }
 }

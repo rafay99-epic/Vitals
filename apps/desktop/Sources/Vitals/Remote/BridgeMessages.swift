@@ -312,6 +312,7 @@ enum AdminResult: Equatable, Sendable {
     /// Where the gateway put its copy of the phone's file.
     case fsPreview(path: String)
     case clipsFrom([PhoneClip])
+    case clearPhoneLogs(removed: Int)
 }
 
 struct PhoneDevice: Codable, Equatable, Identifiable, Sendable {
@@ -388,7 +389,7 @@ struct PhoneClip: Codable, Equatable, Identifiable, Sendable {
 }
 
 extension AdminResult: Decodable {
-    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices, roots, result, thumbs, files, clips, path }
+    private enum Keys: String, CodingKey { case _tag, code, url, expiresAt, devices, roots, result, thumbs, files, clips, path, removed }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -411,6 +412,7 @@ extension AdminResult: Decodable {
         case "FsRecent": self = .fsRecent(try c.decode(RecentFiles.self, forKey: .result))
         case "FsPreview": self = .fsPreview(path: try c.decode(String.self, forKey: .path))
         case "ClipsFrom": self = .clipsFrom(try c.decode([PhoneClip].self, forKey: .clips))
+        case "ClearPhoneLogs": self = .clearPhoneLogs(removed: try c.decode(Int.self, forKey: .removed))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: ._tag, in: c, debugDescription: "unknown admin result \(other)")
         }
