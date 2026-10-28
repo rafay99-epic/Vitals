@@ -12,6 +12,11 @@ enum Scrub {
         (#"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"#, "<email>"),
         (#"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b"#, "<ip>"),
         (#"\b[\w-]+(?:\.[\w-]+)*\.ts\.net\b"#, "<host>"),
+        (#"\b[\w-]+\.local\b"#, "<host>"),
+        // IPv6: four or more groups, or a "fe80::" form, so a time (11:10:46) and std::x stay.
+        (#"(?:\b[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}\b(?:%\w+)?|\b[0-9a-f]{1,4}::(?:[0-9a-f]{1,4}:?){0,6}\b(?:%\w+)?"#, "<ip>"),
+        // macOS names a file in “curly quotes” ("The file “Taxes” couldn’t be opened").
+        (#"“[^”\n]{1,200}”"#, "“<name>”"),
         (#"(?:~|\b[A-Za-z]:)?(?:/[^\s/"'<>:]+){2,}/?"#, "<path>"),
         (#"[^\s/\\"'<>]+\.(?:\#(fileTypes))\b"#, "<file>")
     ].compactMap { pattern, label in
@@ -29,9 +34,13 @@ enum Scrub {
         (NSUserName(), "<user>")
     ].filter { $0.0.count >= 3 }
 
+    /// Only the owner's names (home folder, Mac, user), for paths that should stay readable.
+    static func home(_ text: String, identities: [(String, String)] = identities) -> String {
+        identities.reduce(text) { $0.replacingOccurrences(of: $1.0, with: $1.1) }
+    }
+
     static func text(_ text: String, identities: [(String, String)] = identities) -> String {
-        var out = text
-        for (name, label) in identities { out = out.replacingOccurrences(of: name, with: label) }
+        var out = home(text, identities: identities)
         for (regex, label) in rules {
             out = regex.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: label)
         }

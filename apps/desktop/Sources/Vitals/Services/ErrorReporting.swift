@@ -19,6 +19,12 @@ enum ErrorReporting {
     /// Source lines already reported this launch, so a failure in a loop is one event, not thousands.
     private static let reported = OSAllocatedUnfairLock(initialState: Set<String>())
 
+    /// Turning reports on or off at runtime: `close()` flushes for up to two seconds, so off the main thread.
+    private static let toggles = DispatchQueue(label: "com.syntaxlab.vitals.error-reporting", qos: .utility)
+
+    /// Their lines name the owner's apps and files, so only where they failed is sent, never the text.
+    private static let privateCategories: Set<LogCategory> = [.uninstall, .cleanup]
+
     static var isRunning: Bool { running.withLock { $0 } }
 
     /// Call once at launch, after `CrashReporter.install()`, so Sentry's handlers chain to it.
@@ -27,10 +33,12 @@ enum ErrorReporting {
     }
 
     static func setEnabled(_ on: Bool) {
-        if on {
-            start()
-        } else if running.withLock({ was in defer { was = false }; return was }) {
-            SentrySDK.close()
+        toggles.async {
+            if on {
+                start()
+            } else if running.withLock({ was in defer { was = false }; return was }) {
+                SentrySDK.close()
+            }
         }
     }
 
@@ -42,8 +50,8 @@ enum ErrorReporting {
             options.releaseName = "vitals-macos@\(Updater.currentVersion)"
             if let build = Bundle.main.object(forInfoDictionaryKey: "VitalsBuildNumber") as? String { options.dist = build }
             options.sendDefaultPii = false
-            // AppKit swallows exceptions on the main thread unless told to crash on them.
-            options.enableUncaughtNSExceptionReporting = true
+            // Not `enableUncaughtNSExceptionReporting`: it makes AppKit crash on exceptions it would
+            // survive, so the app would behave differently with reports on. Uncaught ones still land.
             options.enableAppHangTracking = true
             // macOS's own diagnostics: hangs, CPU spikes and runaway disk writes it caught.
             options.enableMetricKit = true
@@ -66,13 +74,15 @@ enum ErrorReporting {
     /// Sentry log line; errors and faults also become events, once per source line per launch.
     static func record(_ level: LogLevel, _ category: LogCategory, _ message: String, source: Log.Source, error: Log.ErrorInfo?) {
         guard isRunning else { return }
-        let body = Scrub.text(message)
+        let hidden = privateCategories.contains(category)
+        if hidden && level < .error { return }
+        let body = hidden ? "\(category.title) failed" : Scrub.text(message)
         var attributes: [String: Any] = ["category": category.rawValue, "source": "\(source.file):\(source.line)"]
         if let error {
             attributes["error.type"] = error.type
             attributes["error.domain"] = error.domain
             attributes["error.code"] = error.code
-            attributes["error.description"] = Scrub.text(error.description)
+            if !hidden { attributes["error.description"] = Scrub.text(error.description) }
         }
         switch level {
         case .fault: SentrySDK.logger.fatal(body, attributes: attributes)
@@ -91,12 +101,19 @@ enum ErrorReporting {
         SentrySDK.capture(event: event)
     }
 
-    /// Nothing that names the Mac or its owner: no server name, no device name, messages scrubbed.
+    /// Nothing that names the Mac or its owner: no server name, no device name, messages scrubbed,
+    /// and the home folder out of image and frame paths (an app run from ~/Downloads, a Dev build).
     private static func scrubbed(_ event: Event) -> Event {
         event.serverName = nil
         if let formatted = event.message?.formatted { event.message = SentryMessage(formatted: Scrub.text(formatted)) }
         event.exceptions?.forEach { exception in exception.value = exception.value.map { Scrub.text($0) } }
         event.breadcrumbs?.forEach { crumb in crumb.message = crumb.message.map { Scrub.text($0) } }
+        event.debugMeta?.forEach { image in image.codeFile = image.codeFile.map { Scrub.home($0) } }
+        let stacks = (event.exceptions ?? []).compactMap(\.stacktrace) + (event.threads ?? []).compactMap(\.stacktrace)
+        for frame in stacks.flatMap(\.frames) {
+            frame.package = frame.package.map { Scrub.home($0) }
+            frame.fileName = frame.fileName.map { Scrub.home($0) }
+        }
         if var context = event.context, var device = context["device"] {
             device.removeValue(forKey: "name")
             context["device"] = device

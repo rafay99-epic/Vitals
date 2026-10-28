@@ -51,7 +51,8 @@ final class GatewayProcess: @unchecked Sendable {
                 return
             }
             for line in String(decoding: chunk, as: UTF8.self).split(whereSeparator: \.isNewline) where !line.isEmpty {
-                Log.notice(.remote, "gateway: \(line.prefix(500))")
+                // Raw output (causes, payloads) stays local; a crash still reports as "gateway exited".
+                Log.notice(.remote, "gateway: \(line.prefix(500))", report: false)
             }
         }
         try process.run()

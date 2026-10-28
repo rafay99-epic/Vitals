@@ -155,15 +155,16 @@ enum Log {
                       file: String = #fileID, function: String = #function, line: Int = #line) {
         emit(.debug, category, message(), error, file, function, line)
     }
-    static func notice(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+    /// `report: false` keeps a line out of Sentry: raw gateway output, lines that name the owner's
+    /// files, or an event Sentry already has (a past crash). It still reaches `vitals.log`.
+    static func notice(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil, report: Bool = true,
                        file: String = #fileID, function: String = #function, line: Int = #line) {
-        emit(.notice, category, message(), error, file, function, line)
+        emit(.notice, category, message(), error, file, function, line, report: report)
     }
-    static func error(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil,
+    static func error(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil, report: Bool = true,
                       file: String = #fileID, function: String = #function, line: Int = #line) {
-        emit(.error, category, message(), error, file, function, line)
+        emit(.error, category, message(), error, file, function, line, report: report)
     }
-    /// `report: false` keeps a line out of Sentry when Sentry already has the event (a past crash).
     static func fault(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil, report: Bool = true,
                       file: String = #fileID, function: String = #function, line: Int = #line) {
         emit(.fault, category, message(), error, file, function, line, report: report)
