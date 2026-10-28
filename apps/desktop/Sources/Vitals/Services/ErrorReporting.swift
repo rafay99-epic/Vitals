@@ -45,6 +45,10 @@ enum ErrorReporting {
             // AppKit swallows exceptions on the main thread unless told to crash on them.
             options.enableUncaughtNSExceptionReporting = true
             options.enableAppHangTracking = true
+            // macOS's own diagnostics: hangs, CPU spikes and runaway disk writes it caught.
+            options.enableMetricKit = true
+            // Sentry Logs: `record` sends every `Log` line at notice or above as a searchable log.
+            options.enableLogs = true
             options.beforeSend = { event in scrubbed(event) }
             options.beforeBreadcrumb = { crumb in
                 crumb.message = crumb.message.map { Scrub.text($0) }
