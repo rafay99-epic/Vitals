@@ -188,7 +188,6 @@ export const ActivityIngest = Rpc.make("activity.ingest", {
   error: AuthError,
 });
 
-/** Deletes every log line this phone sent, errors included. The phone's "Clear error logs". */
 export const ActivityClear = Rpc.make("activity.clear", { payload: Empty, success: ActivityClearResult, error: AuthError });
 
 export const DeviceLanKey = Rpc.make("device.lanKey", {

@@ -2,32 +2,24 @@ import Foundation
 import os
 import Sentry
 
-/// Sends crashes, hangs, uncaught exceptions and logged errors to Sentry (org
-/// `syntax-lab-tecnology`, project `vitals-macos`), scrubbed by `Scrub` first. On unless the owner
-/// turns it off in Settings → Developer → Crash reports.
-///
-/// Sits beside `CrashReporter`, which keeps writing the same crashes into `vitals.log` for Report a
-/// Problem. Started only from the GUI process, never the `--fan-daemon` path or tests.
 enum ErrorReporting {
-    /// UserDefaults key, read here before `AppSettings` exists so a crash during launch is caught.
     static let enabledKey = "errorReportsEnabled"
 
-    /// Public by design: a DSN only lets an app send events to this project.
-    private static let dsn = "https://8366e6b56aff057459b81f26180108ac@o4512219615920128.ingest.us.sentry.io/4512333592526848"
+    private static var dsn: String {
+        Channel.current == .stable
+            ? "https://8366e6b56aff057459b81f26180108ac@o4512219615920128.ingest.us.sentry.io/4512333592526848"
+            : "https://ad2098bcc6654fb435e6681fa29adc55@o4512219615920128.ingest.us.sentry.io/4512333983252480"
+    }
 
     private static let running = OSAllocatedUnfairLock(initialState: false)
-    /// Source lines already reported this launch, so a failure in a loop is one event, not thousands.
     private static let reported = OSAllocatedUnfairLock(initialState: Set<String>())
 
-    /// Turning reports on or off at runtime: `close()` flushes for up to two seconds, so off the main thread.
     private static let toggles = DispatchQueue(label: "com.syntaxlab.vitals.error-reporting", qos: .utility)
 
-    /// Their lines name the owner's apps and files, so only where they failed is sent, never the text.
     private static let privateCategories: Set<LogCategory> = [.uninstall, .cleanup]
 
     static var isRunning: Bool { running.withLock { $0 } }
 
-    /// Call once at launch, after `CrashReporter.install()`, so Sentry's handlers chain to it.
     static func startIfEnabled(_ defaults: UserDefaults = .standard) {
         if defaults.object(forKey: enabledKey) as? Bool ?? true { start() }
     }
@@ -50,12 +42,8 @@ enum ErrorReporting {
             options.releaseName = "vitals-macos@\(Updater.currentVersion)"
             if let build = Bundle.main.object(forInfoDictionaryKey: "VitalsBuildNumber") as? String { options.dist = build }
             options.sendDefaultPii = false
-            // Not `enableUncaughtNSExceptionReporting`: it makes AppKit crash on exceptions it would
-            // survive, so the app would behave differently with reports on. Uncaught ones still land.
             options.enableAppHangTracking = true
-            // macOS's own diagnostics: hangs, CPU spikes and runaway disk writes it caught.
             options.enableMetricKit = true
-            // Sentry Logs: `record` sends every `Log` line at notice or above as a searchable log.
             options.enableLogs = true
             options.beforeSend = { event in scrubbed(event) }
             options.beforeBreadcrumb = { crumb in
@@ -70,8 +58,6 @@ enum ErrorReporting {
         }
     }
 
-    /// Called by `Log` for every line at notice or above while reports are on. Each becomes a
-    /// Sentry log line; errors and faults also become events, once per source line per launch.
     static func record(_ level: LogLevel, _ category: LogCategory, _ message: String, source: Log.Source, error: Log.ErrorInfo?) {
         guard isRunning else { return }
         let hidden = privateCategories.contains(category)
@@ -96,13 +82,10 @@ enum ErrorReporting {
         event.message = SentryMessage(formatted: body)
         event.tags = ["category": category.rawValue, "source": key]
         event.extra = attributes
-        // Group by where it was logged, not by the message, which often carries a changing value.
         event.fingerprint = [category.rawValue, source.file, String(source.line)]
         SentrySDK.capture(event: event)
     }
 
-    /// Nothing that names the Mac or its owner: no server name, no device name, messages scrubbed,
-    /// and the home folder out of image and frame paths (an app run from ~/Downloads, a Dev build).
     private static func scrubbed(_ event: Event) -> Event {
         event.serverName = nil
         if let formatted = event.message?.formatted { event.message = SentryMessage(formatted: Scrub.text(formatted)) }

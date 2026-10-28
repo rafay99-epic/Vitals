@@ -6,17 +6,11 @@ import { openOutbox } from "../persistence/outbox";
 
 const makeEventId = Schema.decodeUnknownSync(EventId);
 
-/** The gateway keeps a line's data only up to 2 KB, so faults are cut to fit. */
 const MESSAGE_CHARS = 500;
 const STACK_CHARS = 1_200;
 
 type Listener = (event: ClientEvent) => void;
 
-/**
- * The phone's own log: errors, crashes and connection changes. Lines wait on disk until the paired
- * Mac has them (`Remote.flush` sends them to the Mac's Activity log), so a crash or a restart loses
- * nothing. Listeners see each line as it's written; the phone app forwards them to Sentry.
- */
 class ClientLog {
   private readonly outbox = openOutbox();
   private readonly listeners = new Set<Listener>();
@@ -27,7 +21,6 @@ class ClientLog {
     for (const listener of this.listeners) listener(event);
   }
 
-  /** An uncaught error. Written before the app dies, so a fatal one still reaches the Mac on the next run. */
   fault(error: unknown, fatal: boolean): void {
     const name = error instanceof Error ? error.name : "Error";
     const message = error instanceof Error ? error.message : String(error);
@@ -43,7 +36,6 @@ class ClientLog {
     this.outbox.remove(ids);
   }
 
-  /** Drops every line the Mac hasn't received yet. */
   clear(): void {
     this.outbox.clear();
   }

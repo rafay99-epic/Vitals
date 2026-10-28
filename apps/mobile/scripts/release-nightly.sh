@@ -19,8 +19,6 @@ grep -q '^VITALS_UPLOAD_STORE_FILE=' "$HOME/.gradle/gradle.properties" 2>/dev/nu
 
 build=$(git rev-list --count HEAD)
 export APP_VARIANT=nightly ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-# Gradle uploads source maps to Sentry with SENTRY_AUTH_TOKEN, read from the repo's .env.local when the
-# shell has none (scripts/with-sentry.sh). With no token anywhere the upload is skipped rather than failing.
 SENTRY_AUTH_TOKEN="$(../../scripts/with-sentry.sh sh -c 'printf %s "${SENTRY_AUTH_TOKEN:-}"')"
 if [ -n "$SENTRY_AUTH_TOKEN" ]; then export SENTRY_AUTH_TOKEN; else export SENTRY_DISABLE_AUTO_UPLOAD=true; fi
 

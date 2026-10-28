@@ -155,8 +155,6 @@ enum Log {
                       file: String = #fileID, function: String = #function, line: Int = #line) {
         emit(.debug, category, message(), error, file, function, line)
     }
-    /// `report: false` keeps a line out of Sentry: raw gateway output, lines that name the owner's
-    /// files, or an event Sentry already has (a past crash). It still reaches `vitals.log`.
     static func notice(_ category: LogCategory, _ message: @autoclosure () -> String, error: Error? = nil, report: Bool = true,
                        file: String = #fileID, function: String = #function, line: Int = #line) {
         emit(.notice, category, message(), error, file, function, line, report: report)
@@ -198,8 +196,6 @@ enum Log {
                              _ error: Error?, _ file: String, _ function: String, _ line: Int, report: Bool = true) {
         let minimum = minimumLevel.withLock { $0 }
         let logs = minimum != .off && level >= minimum
-        // Crash reports don't follow the local log level: an owner who turned the log off still
-        // gets errors reported, unless they turned reports off too.
         let reports = report && level >= .notice && ErrorReporting.isRunning
         // Bail before building the string.
         guard logs || reports else { return }

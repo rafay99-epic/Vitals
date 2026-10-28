@@ -206,7 +206,6 @@ export class Remote {
 
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** A "bad" toast is a failure the owner saw, so it's logged for the Mac and Sentry too. */
   show(message: string, tone: Toast["tone"] = "ok"): void {
     if (tone === "bad") this.record("warn", "client.ui.failure", { message });
     const toast = { message, tone, at: Date.now() };
@@ -231,10 +230,6 @@ export class Remote {
     clientLog.clear();
   }
 
-  /**
-   * "Clear error logs": drops what this phone hasn't sent yet, its connection journal, and deletes
-   * what the Mac already has. Resolves how many lines the Mac deleted, or null when it couldn't be reached.
-   */
   async clearLogs(): Promise<number | null> {
     clientLog.clear();
     clearJournal();

@@ -131,7 +131,6 @@ final class AppSettings {
             Log.configure(minimumLevel: diagnosticLogLevel)
         }
     }
-    /// Crashes, hangs and logged errors go to Sentry, scrubbed (see `ErrorReporting`). On by default.
     var errorReportsEnabled: Bool {
         didSet {
             defaults.set(errorReportsEnabled, forKey: ErrorReporting.enabledKey)
