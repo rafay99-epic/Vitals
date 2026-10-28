@@ -186,9 +186,13 @@ const captureFaults = (): void => {
   if (typeof ErrorUtils === "undefined") return;
   const previous = ErrorUtils.getGlobalHandler();
   ErrorUtils.setGlobalHandler((error: unknown, fatal?: boolean) => {
-    diagnostics.fault(error, fatal === true);
-    clientLog.fault(error, fatal === true);
-    previous(error, fatal);
+    // A failing write (disk full, a locked database) must not stop Sentry and React Native's handlers.
+    try {
+      diagnostics.fault(error, fatal === true);
+      clientLog.fault(error, fatal === true);
+    } finally {
+      previous(error, fatal);
+    }
   });
 };
 
