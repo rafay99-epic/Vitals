@@ -30,7 +30,7 @@ object Files {
     }
     val slices = (0 until STAT_THREADS).map { slice -> pool.submit { for (index in slice until names.size step STAT_THREADS) stat(index) } }
     slices.forEach { it.get() }
-    return mapOf("names" to names, "dirs" to dirs, "sizes" to sizes, "times" to times)
+    return mapOf("names" to names, "dirs" to dirs.toList(), "sizes" to sizes, "times" to times)
   }
 
   private const val STAT_THREADS = 4
