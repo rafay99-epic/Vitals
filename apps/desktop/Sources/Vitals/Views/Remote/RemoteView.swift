@@ -68,6 +68,7 @@ private struct RemoteDevicesTab: View {
                 }
                 .disabled(remote.state != .running)
             }
+            if remote.isEnabled { AttemptsCard() }
         }
         .sheet(isPresented: $showingPairing, onDismiss: { remote.clearPairing() }, content: {
             PairingSheet(isPresented: $showingPairing)

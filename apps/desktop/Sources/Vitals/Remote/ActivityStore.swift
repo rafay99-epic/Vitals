@@ -129,6 +129,81 @@ final class ActivityStore: @unchecked Sendable {
         }
     }
 
+    /// A phone the gateway turned away on Wi-Fi, grouped by address and reason. The gateway logs
+    /// each pair at most once a minute, so `first` and `last` bound the attempts rather than count them.
+    struct Refusal: Identifiable, Equatable, Sendable {
+        var id: String { "\(address) \(why)" }
+        let address: String
+        let why: String
+        let client: String?
+        let first: Date
+        let last: Date
+    }
+
+    /// The latest connection each device opened.
+    struct Visit: Identifiable, Equatable, Sendable {
+        var id: String { deviceId }
+        let deviceId: String
+        let at: Date
+        let client: String?
+        let overWifi: Bool
+    }
+
+    struct Attempts: Equatable, Sendable {
+        var refusals: [Refusal] = []
+        var visits: [Visit] = []
+        /// When any phone last opened a connection, however long ago.
+        var lastReached: Date?
+    }
+
+    func attempts(since: Date) -> Attempts {
+        queue.sync {
+            guard let db = connection() else { return Attempts() }
+            let from = Int64(since.timeIntervalSince1970 * 1000)
+            var result = Attempts()
+            let refusals = """
+            SELECT json_extract(data_json, '$.address'), json_extract(data_json, '$.why'), max(json_extract(data_json, '$.client')), min(at), max(at)
+            FROM events WHERE kind = 'lan.refused' AND at >= ?1
+            GROUP BY 1, 2 ORDER BY 5 DESC LIMIT 8
+            """
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, refusals, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_int64(stmt, 1, from)
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    result.refusals.append(Refusal(
+                        address: text(stmt, 0) ?? "unknown",
+                        why: text(stmt, 1) ?? "",
+                        client: text(stmt, 2),
+                        first: Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 3)) / 1000),
+                        last: Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 4)) / 1000)
+                    ))
+                }
+            }
+            sqlite3_finalize(stmt)
+            stmt = nil
+            // SQLite returns the other columns from the row holding max(opened_at).
+            let visits = """
+            SELECT device_id, max(opened_at), client_version, ts_login FROM connections
+            WHERE opened_at >= ?1 GROUP BY device_id ORDER BY 2 DESC LIMIT 8
+            """
+            if sqlite3_prepare_v2(db, visits, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_int64(stmt, 1, from)
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    result.visits.append(Visit(
+                        deviceId: text(stmt, 0) ?? "",
+                        at: Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 1)) / 1000),
+                        client: text(stmt, 2),
+                        overWifi: text(stmt, 3) == "wifi"
+                    ))
+                }
+            }
+            sqlite3_finalize(stmt)
+            let last = scalar(db, "SELECT coalesce(max(opened_at), 0) FROM connections")
+            result.lastReached = last > 0 ? Date(timeIntervalSince1970: Double(last) / 1000) : nil
+            return result
+        }
+    }
+
     func summary(since: Date) -> Summary {
         queue.sync {
             guard let db = connection() else { return Summary() }
