@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The GPU section: utilization (renderer/tiler), the unified-memory working
 /// set, and power rails. Apple Silicon exposes no GPU-specific temperature (the
@@ -21,7 +20,7 @@ struct GPUView: View {
                     tint: .purple,
                     title: "No GPU detected",
                     message: "Vitals couldn't read a GPU on this Mac. That's expected in a virtual machine or with restricted hardware access — details appear here once a GPU is available."
-                ) { EmptyView() }
+                )
             }
         }
     }
@@ -35,15 +34,11 @@ private struct GPUHeroCard: View {
     var body: some View {
         SectionCard(title: "GPU", symbol: "cpu.fill") {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(gpu.utilization.map { String(format: "%.0f%%", $0) } ?? "—")
-                        .font(.system(size: 40, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Text("utilization")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                HeroReadout(
+                    value: gpu.utilization.map { String(format: "%.0f%%", $0) } ?? "—",
+                    caption: "utilization",
+                    large: true
+                ) {
                     VStack(alignment: .trailing, spacing: 2) {
                         if let name = gpu.name {
                             Text(name).font(.headline)
@@ -98,19 +93,12 @@ private struct GPUUtilizationCard: View {
     }
 
     private var history: some View {
-        Chart(model.chartHistory) { sample in
-            if let usage = sample.gpuUsage {
-                AreaMark(x: .value("Time", sample.time), y: .value("%", usage))
-                    .foregroundStyle(LinearGradient(colors: [.purple.opacity(0.35), .purple.opacity(0.02)],
-                                                    startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time), y: .value("%", usage))
-                    .foregroundStyle(.purple)
-                    .interpolationMethod(.catmullRom)
-            }
-        }
-        .chartYScale(domain: 0...100)
-        .chartYAxisLabel("%")
+        MetricChart(
+            samples: model.chartHistory,
+            series: [.init(name: "GPU", color: .purple, area: 0.35) { $0.gpuUsage }],
+            yLabel: "%",
+            yDomain: 0...100
+        )
     }
 }
 
@@ -131,9 +119,7 @@ private struct GPUMemoryCard: View {
                         .foregroundStyle(.tertiary)
                 }
             } else {
-                Text("GPU memory statistics unavailable.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("GPU memory statistics unavailable.")
             }
         }
     }
@@ -186,8 +172,7 @@ private struct GPUMemoryCard: View {
 
     private func swatch(_ color: Color, _ label: String, _ bytes: UInt64?) -> some View {
         HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 9, height: 9)
-            Text(label).foregroundStyle(.secondary)
+            LegendSwatch(color: color, label: label).foregroundStyle(.secondary)
             Text(bytes.map { String(format: "%.2f GB", gigabytes($0)) } ?? "—").monospacedDigit()
         }
     }
@@ -203,23 +188,8 @@ private struct GPUPowerCard: View {
             if let power = model.power {
                 PowerRails(power: power)
             } else {
-                Text("Power readings unavailable on this Mac.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("Power readings appear in a moment, or aren't available on this Mac.")
             }
         }
     }
-}
-
-/// A fraction-filled bar in the card language, used by the GPU and CPU meters.
-func utilizationBar(fraction: Double, tint: Color) -> some View {
-    GeometryReader { geometry in
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.secondary.opacity(0.15))
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(tint)
-                .frame(width: geometry.size.width * min(max(fraction, 0), 1))
-        }
-    }
-    .frame(height: 12)
 }

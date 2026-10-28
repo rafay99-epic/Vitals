@@ -1,0 +1,53 @@
+@theme {
+  --color-bg: #000000;
+  --color-raise: #0a0a0a;
+  --color-sheet: #0e0e0e;
+  --color-line: #141414;
+  --color-line2: #1f1f1f;
+  --color-line3: #2c2c2c;
+  --color-mute: #5c5c5c;
+  --color-dim: #8b8b8b;
+  --color-ink2: #c9c9c9;
+  --color-ink: #ffffff;
+  --color-pulse: #5cf2a6;
+  --color-eeg: #f2ec6b;
+  --color-press: #ff6b8b;
+  --color-temp: #ffb45c;
+  --color-resp: #74d4ff;
+  --color-oxy: #c8a8ff;
+  --color-drip: #6f9bff;
+  --color-tele: #b9c4d0;
+  --color-disk: #63e6e2;
+  --color-alarm-high: #ff4d6d;
+  --color-alarm-medium: #ffb45c;
+  --color-alarm-low: #74d4ff;
+
+  --font-display: "InstrumentSerif-Regular";
+  --font-display-italic: "InstrumentSerif-Italic";
+  --font-text: "Geist-Regular";
+  --font-text-medium: "Geist-Medium";
+  --font-text-semibold: "Geist-SemiBold";
+  --font-code: "GeistMono-Regular";
+  --font-code-medium: "GeistMono-Medium";
+
+  --text-hero: 56px;
+  --text-hero--line-height: 1;
+  --text-xl2: 56px;
+  --text-xl2--line-height: 1;
+  --text-state: 46px;
+  --text-state--line-height: 1.05;
+  --text-l: 44px;
+  --text-l--line-height: 1.05;
+  --text-m: 26px;
+  --text-m--line-height: 1.1;
+  --text-s: 20px;
+  --text-s--line-height: 1.15;
+  --text-body: 15px;
+  --text-body--line-height: 1.45;
+  --text-small: 13px;
+  --text-small--line-height: 1.45;
+  --text-tag: 10px;
+  --text-tag--line-height: 1.3;
+  --text-meta: 11px;
+  --text-meta--line-height: 1.4;
+}

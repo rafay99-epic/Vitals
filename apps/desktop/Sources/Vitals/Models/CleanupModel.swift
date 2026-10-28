@@ -40,6 +40,7 @@ final class CleanupModel {
     private(set) var isScanning = false
     private(set) var isCleaning = false
     private(set) var hasRun = false
+    private(set) var scanComplete = false
     var selected: Set<CleanupCategory.Kind> = []
     private(set) var lastResult: DiskCleaner.CleanResult?
     private(set) var lastError: String?
@@ -78,6 +79,7 @@ final class CleanupModel {
         Log.debug(.cleanup, "cleanup scan started (\(depth))")
         scanTask?.cancel()
         isScanning = true
+        scanComplete = false
         // Drop selections absent at this depth. Pure enum filtering, no IO.
         selected.formIntersection(DiskCleaner.kinds(at: depth))
 
@@ -100,6 +102,7 @@ final class CleanupModel {
                 categories = scanned
             }
             localSnapshots = await Task.detached(priority: .utility) { DiskCleaner.localSnapshotCount() }.value
+            scanComplete = true
             isScanning = false
         }
     }

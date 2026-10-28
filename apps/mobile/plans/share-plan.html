@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Share: shared clipboard + files, Mac and Android and iPhone</title>
+<style>
+  :root { --ink:#fff; --ink2:#c9c9c9; --dim:#8a8a8a; --line:#222; --acc:#f2ec6b; --ok:#5cf2a6; --warn:#ffb45c; --bad:#ff4d6d; --blue:#74d4ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  h2 { font-size:18px; margin:40px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:22px 0 6px; }
+  p, li { color:var(--ink2); }
+  p { margin:6px 0 10px; }
+  ul, ol { margin:6px 0 10px; padding-left:20px; }
+  li { margin:3px 0; }
+  b { color:var(--ink); }
+  code { font:12.5px ui-monospace, "SF Mono", Menlo, monospace; color:#e6e6e6; background:#111; padding:1px 4px; border-radius:3px; }
+  pre { font:12.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background:#0b0b0b; border:1px solid var(--line); padding:12px 14px; overflow:auto; color:#e6e6e6; border-radius:6px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:13px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  td { color:var(--ink2); }
+  td:first-child { color:var(--ink); }
+  .lead { font-size:15px; color:var(--ink2); max-width:820px; }
+  .links { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0 4px; }
+  .links a { border:1px solid var(--line); padding:8px 12px; border-radius:8px; text-decoration:none; color:var(--ink); font-weight:600; }
+  .links a small { display:block; color:var(--dim); font-weight:400; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .pick { color:var(--acc); font-weight:600; }
+  a { color:var(--blue); }
+  .phase { display:grid; grid-template-columns:120px 1fr; gap:6px 18px; margin:10px 0 18px; }
+  .phase .k { color:var(--ink); font-weight:600; }
+  .phase small { color:var(--dim); display:block; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media (max-width:800px) { .two { grid-template-columns:1fr; } }
+  svg text { font-family:-apple-system, system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Vitals Share: one clipboard, any file, both ways</h1>
+<p class="lead">Two features that work together across your Mac, your Android phone and your iPhone. <b>Shared clipboard:</b> copy on one device, paste on the other, plus a history. <b>Files:</b> LocalSend-style transfers of any size and type (APKs, videos, photos, documents, whole folders), Mac to phone and phone to Mac, over your Wi-Fi or Tailscale. The clipboard part shipped in PR #165; this plan finishes it and adds files. Written 2026-10-24.</p>
+<div class="links">
+  <a href="https://pagepilot.rafay99.com/p/35876932f3e84f22997f8fc86e81384e">Phone prototype<small>Android and iPhone, 9 journeys, every state</small></a>
+  <a href="https://pagepilot.rafay99.com/p/1d70d07c7cb24933b2873467e2053129">Mac prototype<small>menu bar, Finder, Dock, Sharing tab, notifications</small></a>
+  <a href="https://pagepilot.rafay99.com/p/1ec38b3163d34a5199a89eb731d7aec0">Drop transport plan<small>the deep dive on moving bytes</small></a>
+</div>
+
+<h2>Decisions taken (change any of them)</h2>
+<table>
+  <tr><th>Question</th><th>Taken</th><th>Why</th></tr>
+  <tr><td>How bytes move</td><td class="pick">Go transfer engine over HTTPS</td><td>Same code on Android and iOS, native speed, can resume, and the Mac's certificate is pinned on Wi-Fi. The app already ships Go for built-in Tailscale</td></tr>
+  <tr><td>Where Files lives on the phone</td><td class="pick">Its own tile and screen (Direction A)</td><td>Clipboard and Files do different jobs. Control's Share section shows Clipboard, Files, Open link and Find Mac. Direction B, one Share screen with a Clipboard | Files switch, is in the prototype gallery if you prefer it</td></tr>
+  <tr><td>APK install</td><td class="pick">Dev and Nightly now, Stable after Google's review</td><td>Google Play allows <code>REQUEST_INSTALL_PACKAGES</code> for file transfer apps through a declaration form</td></tr>
+  <tr><td>Accepting files</td><td class="pick">Start without asking from your own paired devices</td><td>One switch on each side turns on "ask first". Browsers always ask</td></tr>
+</table>
+
+<h2>1. Shared clipboard, both ways</h2>
+<div class="two">
+<div>
+<h3>Mac to phone (shipped in #165, polished here)</h3>
+<ul>
+  <li>The Mac records what you copy (off by default, passwords never).</li>
+  <li>The phone shows the latest copy on Control and the full history under Clipboard.</li>
+  <li>"Copy Mac copies here": while Vitals is open, each new Mac copy lands on the phone clipboard, repeat copies included.</li>
+  <li><b>New:</b> ⌃⌥⌘V on the Mac sends the current clipboard to the phone right away, even with history off.</li>
+</ul>
+</div>
+<div>
+<h3>Phone to Mac (new)</h3>
+<ul>
+  <li><b>When you open Vitals:</b> Android reads the new copy and shows "You copied a link · Send to Mac", or sends it straight away if "Send phone copies to Mac" is on. iPhone knows something new was copied without reading it, and one tap on Apple's Paste button sends it, with no "Allow Paste" prompt.</li>
+  <li><b>Without opening Vitals:</b> a Quick Settings tile on Android, "Send clipboard" (a brief see-through screen does the read, since Android only lets the app in front read the clipboard). On iPhone, a Shortcuts action "Send clipboard to Mac" that you can put on Back Tap.</li>
+  <li>On the Mac, the copy lands on the clipboard (⌘V) and in the menu bar panel: "Pixel 9 Pro copied: … · Copy".</li>
+</ul>
+</div>
+</div>
+<p><b>What no app can do:</b> neither Android nor iOS lets an app read or write the clipboard in the background. So there is no silent, always-on two-way sync, and the plan doesn't pretend otherwise. The tile, the Shortcut and the open-the-app path are the honest versions.</p>
+
+<h2>2. Files, both ways</h2>
+<svg viewBox="0 0 1050 250" width="100%" role="img" aria-label="Files architecture">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8a8a8a"/></marker></defs>
+  <g fill="none" stroke="#333"><rect x="10" y="20" width="310" height="200" rx="8"/><rect x="370" y="20" width="310" height="200" rx="8"/><rect x="730" y="20" width="310" height="200" rx="8"/></g>
+  <g fill="#fff" font-size="14" font-weight="600"><text x="26" y="46">Mac app</text><text x="386" y="46">Gateway</text><text x="746" y="46">Phone</text></g>
+  <g fill="#c9c9c9" font-size="12.5">
+    <text x="26" y="74">Send: Finder › Send to Phone,</text><text x="26" y="92">drop on menu bar or Dock icon,</text><text x="26" y="110">Remote › Sharing › Send Files</text>
+    <text x="26" y="138">Receive: ~/Downloads/Vitals</text><text x="26" y="156" fill="#8a8a8a">quarantined, notification</text>
+    <text x="26" y="184">Progress: menu bar panel</text>
+    <text x="386" y="74">RPC: drop.offer, accept, watch</text>
+    <text x="386" y="98">HTTPS: PUT, HEAD, GET /api/drop</text><text x="386" y="116" fill="#8a8a8a">16 MB parts, Range resume, sha256</text>
+    <text x="386" y="144">Wi-Fi: own HTTPS port, pinned cert</text><text x="386" y="162">Tailscale: tailscale serve (ts.net)</text>
+    <text x="386" y="190">Free-space check before accepting</text>
+    <text x="746" y="74">Go engine streams disk to disk</text>
+    <text x="746" y="102">Android: Downloads › Vitals,</text><text x="746" y="120" fill="#8a8a8a">background job + notification, Install</text>
+    <text x="746" y="148">iPhone: Files › On My iPhone ›</text><text x="746" y="166" fill="#8a8a8a">Vitals, ~30 s in the background</text>
+    <text x="746" y="194">Share sheet in, Files screen</text>
+  </g>
+  <g stroke="#8a8a8a" fill="none" marker-end="url(#a)"><path d="M320 100 H367"/><path d="M370 150 H323"/><path d="M680 100 H727"/><path d="M730 150 H683"/></g>
+</svg>
+<p>Details of the transport, options considered, and security are in the <a href="https://pagepilot.rafay99.com/p/1ec38b3163d34a5199a89eb731d7aec0">Drop transport plan</a>. In short: small messages stay on today's connection, while file bytes go over HTTPS, read and written by native code. On Wi-Fi the phone checks the Mac's certificate fingerprint, which it learned over the paired connection. Over Tailscale it uses Tailscale's normal <code>ts.net</code> certificate.</p>
+
+<h3>Which path a thing takes</h3>
+<table>
+  <tr><th>What</th><th>Path</th><th>Lands</th></tr>
+  <tr><td>Text, links</td><td>Clipboard RPC (today)</td><td>The other device's clipboard, plus history</td></tr>
+  <tr><td>A photo or screenshot under 50 MB, sent to the clipboard</td><td>Clipboard RPC</td><td>The clipboard</td></tr>
+  <tr><td>Any file, any size, sent to Downloads</td><td>Files (HTTPS, native)</td><td>Mac: <code>~/Downloads/Vitals</code>. Android: Downloads › Vitals. iPhone: Files › Vitals</td></tr>
+  <tr><td>A folder</td><td>Files, keeping its relative paths</td><td>The same folder structure</td></tr>
+  <tr><td>A Mac copy of a big file in Finder</td><td>Clipboard history, but the download goes through Files</td><td>Where you save it</td></tr>
+</table>
+
+<h2>3. Phone interaction (Android and iPhone, one code path)</h2>
+<ul>
+  <li><b>Control › Share:</b> the Mac's latest copy (Copy is one tap), a live line while files arrive ("Getting 3 files from your Mac · 34%"), then four tiles: Clipboard, Files, Open link, Find Mac.</li>
+  <li><b>Clipboard screen:</b> as shipped, plus "Send phone copies to Mac" and the copy strip.</li>
+  <li><b>Files screen:</b> where things land; Send tiles (Files, Photos, Folder); live transfer cards with Cancel; "From your Mac" and "Sent" lists; "Start without asking".</li>
+  <li><b>File sheet:</b> Install (APK, Android), Save to Photos (photos and videos), Open or Show in Files, Share, Remove from list. Apps get a clear warning.</li>
+  <li><b>Share sheet:</b> text and links go to the Clipboard Send sheet. Files open the Files Send sheet, where "Mac clipboard" is turned off with a reason when the file is too big.</li>
+  <li><b>Leaving the app:</b> Android keeps going with a progress notification, and the Quick Settings tile is always there. iPhone gets about 30 seconds, then pauses and says "Open Vitals to finish".</li>
+</ul>
+
+<h2>4. Mac interaction</h2>
+<ul>
+  <li><b>Four ways in, one list:</b> drop on the menu bar icon, drop on the Dock icon, Finder › Quick Actions › Send to Phone (with Services › Send to Phone with Vitals as the fallback), or Remote › Sharing › Send Files…. All four end in the same transfer list.</li>
+  <li><b>Phone picker:</b> it only appears when more than one phone has Files allowed. The last-used phone is pre-checked, and you can tick both. Offline phones are listed as "Offline, it will wait".</li>
+  <li><b>What opens after Send:</b> a menu bar drop opens the panel; a Dock drop opens Remote › Sharing; a Quick Action opens nothing. The menu bar shows the percent next to its icon, and the Dock tile shows a progress bar.</li>
+  <li><b>Menu bar panel:</b> a Share section at the top appears only while something is happening: asks (Accept, Decline), running transfers ("0.5 of 1.4 GB · Wi-Fi", pause, cancel), "Waiting for Pixel 9 Pro…", the last finished drop (Show in Finder), and "Pixel 9 Pro copied: … · Copy". The bottom row gains a Send clipboard button labelled with its shortcut.</li>
+  <li><b>Notifications:</b> Got (Show in Finder), Wants to send (Accept, Decline), Sent, Waiting (Cancel) and Clipboard sent. No banners while the panel is open, because it already shows the same thing.</li>
+  <li><b>Remote:</b> segments become Devices | Sharing | Activity | Pressure Guard. Each phone in Devices gets a Files checkbox. Sharing holds a Files card (save folder, start without asking, ask for browsers, largest drop, Send Files…), a Recent list (Running, Paused, Waiting, Asking, Done, Failed with Retry, Cancelled, Declined) and the Clipboard card.</li>
+  <li><b>Shortcut:</b> ⌃⌥⌘V sends the Mac clipboard to the phone. It can be re-recorded in Settings › Shortcuts, and "Sends to" can be the last-used phone, a specific phone or all phones.</li>
+  <li><b>Gatekeeper:</b> received DMG, PKG and app files show "App · quarantined" ("macOS will check it before it runs"). Every received file gets the quarantine flag, as PR #165 already does.</li>
+</ul>
+
+<h3>Questions the prototypes raised, answered</h3>
+<table>
+  <tr><th>Question</th><th>Answer</th></tr>
+  <tr><td>Who may send without asking?</td><td>A per-phone Files checkbox on the Mac, plus one "Start without asking from my phones" switch. Browsers always ask</td></tr>
+  <tr><td>Phone copies on the Mac</td><td>Straight onto the Mac clipboard by default, because that is the shared clipboard. One switch turns it off so copies wait in the panel</td></tr>
+  <tr><td>Banners while the panel is open</td><td>None, since the panel shows the same thing</td></tr>
+  <tr><td>Resume</td><td>It continues from where it stopped ("Stopped at 1.1 of 2.3 GB"). The HTTPS protocol supports it with Range requests and part offsets</td></tr>
+  <tr><td>iPhone in the background</td><td>"Waiting… Open Vitals on the phone" is the normal iPhone state. Background downloads over Tailscale (real certificate) through a background URLSession come later</td></tr>
+  <tr><td>APKs on the Mac</td><td>Quarantined like every received file, but the tag only shows for things that run on a Mac. APK tooltip: "Android app. Marked as downloaded on this Mac."</td></tr>
+  <tr><td>Folders</td><td>Sent as folders with their structure kept, not zipped</td></tr>
+  <tr><td>Web sessions</td><td>They send to the Mac and download from it. They are never a send target</td></tr>
+  <tr><td>Shortcut edge cases</td><td>If the last-used phone is gone, show the picker. A clipboard push to an offline phone keeps only the latest copy and delivers it when the phone connects</td></tr>
+</table>
+
+<h2>5. Web client</h2>
+<ul>
+  <li>The Orders clipboard sheet (shipped) keeps history, drop and paste.</li>
+  <li>Files: downloads become direct HTTPS links with the session cookie, so the browser handles them natively. Uploads are streamed PUTs. Browsers always ask the Mac to accept.</li>
+</ul>
+
+<h2>6. Build order (small commits, each tested and pushed)</h2>
+<div class="phase">
+  <div class="k">S1 Gateway</div><div>Drop store and <code>drop.*</code> RPCs; HTTPS PUT/HEAD/GET with tickets; Range resume; streamed hash; space check.<small>Bun tests: resume after a cut, out-of-order parts, bad hash, wrong device, path escape. About 6 commits.</small></div>
+  <div class="k">S2 Wi-Fi TLS</div><div>LAN HTTPS listener; certificate made once; fingerprint in <code>MacRoutes</code>.<small>Tests: a pinned client works and a wrong pin is refused. About 3 commits.</small></div>
+  <div class="k">S3 Go engine</div><div>Pinned TLS client, parallel parts, resume, hashing, progress; gomobile bindings; Expo module API.<small>Go unit tests plus an Android emulator smoke test against the fake Mac. About 5 commits.</small></div>
+  <div class="k">S4 Mac app</div><div>Send to Phone service, menu bar and Dock drop, picker, Sharing tab, Files card, Recent, notifications, ⌃⌥⌘V, receive into <code>~/Downloads/Vitals</code>.<small>Swift tests for names, paths and quarantine; checked visually on Vitals Dev. About 8 commits.</small></div>
+  <div class="k">S5 Phone</div><div>Files screen, file sheet, Install, MediaStore save, iOS Files folder, background job and notification on Android, share routing.<small>Release APK on a leased emulator; iOS simulator build. About 8 commits.</small></div>
+  <div class="k">S6 Clipboard</div><div>Phone-to-Mac copy strip, "Send phone copies to Mac", Android Quick Settings tile, iOS Shortcuts action, Mac panel line.<small>About 5 commits.</small></div>
+  <div class="k">S7 Web</div><div>Direct downloads, streamed uploads. About 2 commits.</div>
+  <div class="k">S8 Measure</div><div>4 GB video and 200 MB APK over Wi-Fi 5 and 6, Tailscale direct and relayed; resume after Wi-Fi drops; battery. Real numbers go in the PR.</div>
+  <div class="k">S9 Ship</div><div>Privacy policy, Play declaration for APK installs, retire the old 1 GB base64 path for big files, OTA for JS-only parts and new native builds for the rest.</div>
+</div>
+<p>Every chunk is committed and pushed as soon as its tests, typecheck and lint pass, on a branch from <code>nightly</code> stacked on #165.</p>
+
+<h2>7. Honest limits</h2>
+<ul>
+  <li>No background clipboard sync on phones: OS rules, explained in the app.</li>
+  <li>The Mac can't wake the phone app: no push service by design. Drops wait, and Android's 15-minute check can start them.</li>
+  <li>iPhone pauses about 30 seconds after you leave the app on Wi-Fi.</li>
+  <li>Speeds are measured in S8 and not promised before then.</li>
+  <li>The Stable Install button needs Google's approval.</li>
+</ul>
+
+</main>
+</body>
+</html>

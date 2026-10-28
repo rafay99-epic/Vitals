@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Connect: full vitals, files on every device, a terminal (plan)</title>
+<style>
+  :root { --ink:#fff; --ink2:#c9c9c9; --dim:#8a8a8a; --line:#222; --acc:#f2ec6b; --ok:#5cf2a6; --warn:#ffb45c; --bad:#ff4d6d; --blue:#74d4ff; --violet:#c8a8ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  h2 { font-size:18px; margin:40px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:22px 0 6px; }
+  p, li { color:var(--ink2); }
+  p { margin:6px 0 10px; }
+  ul, ol { margin:6px 0 10px; padding-left:20px; }
+  li { margin:3px 0; }
+  b { color:var(--ink); }
+  code { font:12.5px ui-monospace, "SF Mono", Menlo, monospace; color:#e6e6e6; background:#111; padding:1px 4px; border-radius:3px; }
+  pre { font:12.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background:#0b0b0b; border:1px solid var(--line); padding:12px 14px; overflow:auto; color:#e6e6e6; border-radius:6px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:13px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  td { color:var(--ink2); }
+  td:first-child { color:var(--ink); }
+  .lead { font-size:15px; color:var(--ink2); max-width:840px; }
+  .links { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0 4px; }
+  .links a { border:1px solid var(--line); padding:8px 12px; border-radius:8px; text-decoration:none; color:var(--ink); font-weight:600; }
+  .links a small { display:block; color:var(--dim); font-weight:400; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .pick { color:var(--acc); font-weight:600; }
+  a { color:var(--blue); }
+  .phase { display:grid; grid-template-columns:150px 1fr; gap:10px 18px; margin:10px 0 18px; }
+  .phase .k { color:var(--ink); font-weight:600; }
+  .phase .k small { color:var(--acc); font-weight:500; }
+  .phase small { color:var(--dim); display:block; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media (max-width:800px) { .two { grid-template-columns:1fr; } .phase { grid-template-columns:1fr; } }
+  svg text { font-family:-apple-system, system-ui, sans-serif; }
+  .toc { columns:2; font-size:13px; margin:14px 0 0; }
+  .toc a { color:var(--ink2); text-decoration:none; } .toc a:hover { color:var(--ink); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Vitals Connect: full vitals, files on every device, a terminal</h1>
+<p class="lead">One Mac, one Android phone, one iPhone, all running Vitals. Each sees everything the Mac measures. Each can browse the others' files and pull or push anything. They share one clipboard history. The phone gets a real terminal on the Mac. All of it runs over your own Wi-Fi or your own Tailscale, encrypted, with no cloud in the middle. Most of the plumbing already exists. This plan adds the missing pieces in six phases, each one a PR into <code>nightly</code>.</p>
+<div class="links">
+  <a href="https://pagepilot.rafay99.com/p/7764c2a80fd946fba5403458abfdaf47">Phone prototype<small>Android and iPhone, 11 journeys, 28 states, 2 direction calls</small></a>
+  <a href="https://pagepilot.rafay99.com/p/4c37ee5df3a74f30b4469db47524914d">Mac prototype<small>Devices panel, Finder mount, permissions, terminal awareness</small></a>
+  <a href="https://pagepilot.rafay99.com/p/ffaf29ef4fab420faebc51e943bbcc4e">Share plan<small>clipboard and Drop, already shipped in #165 and #166</small></a>
+  <a href="https://pagepilot.rafay99.com/p/1ec38b3163d34a5199a89eb731d7aec0">Drop transport plan<small>how bytes move today</small></a>
+</div>
+<div class="toc">
+  <a href="#today">1. What already exists</a><br>
+  <a href="#decisions">2. Decisions to take</a><br>
+  <a href="#arch">3. Architecture</a><br>
+  <a href="#vitals">4. Phase 1: full vitals on the phone</a><br>
+  <a href="#macfiles">5. Phase 2: browse your Mac</a><br>
+  <a href="#terminal">6. Phase 3: terminal</a><br>
+  <a href="#phonefiles">7. Phase 4: phones as file sources</a><br>
+  <a href="#system">8. Phase 5 and 6: Finder and Files apps</a><br>
+  <a href="#clip">9. Clipboard on every device</a><br>
+  <a href="#security">10. Security model</a><br>
+  <a href="#ship">11. How it ships</a><br>
+  <a href="#market">12. Market and the Pro tier</a><br>
+  <a href="#limits">13. Honest limits</a><br>
+  <a href="#questions">14. Questions for you</a>
+</div>
+
+<h2 id="today">1. What already exists (checked in the code)</h2>
+<table>
+  <tr><th>Piece</th><th>State today</th><th>What it means for this plan</th></tr>
+  <tr><td>Gateway</td><td>A compiled Bun binary at <code>Vitals.app/Contents/Helpers/vitals-gateway</code>, started by <code>RemoteModel</code>, talking to the Swift app over stdin/stdout JSON lines</td><td>Terminal and file listing can live here. Bun has a built-in PTY (<code>Bun.spawn({ terminal })</code>, Bun 1.3.5+), so nothing native to sign</td></tr>
+  <tr><td>Links</td><td>Wi-Fi with Noise IK (<code>ws://</code> + ChaCha20-Poly1305), Wi-Fi file bytes over pinned TLS, Tailscale through built-in tsnet on the phone or <code>tailscale serve</code> HTTPS</td><td>Every new feature rides the same RPC socket and the same Drop HTTPS. No new ports exposed to the network</td></tr>
+  <tr><td>Scopes</td><td><code>read</code>, <code>operate</code>, <code>destructive</code>, <code>clipboard</code>, <code>files</code>; enforced per RPC in <code>ws/route.ts</code>; revoke drops live sockets</td><td>Add <code>fsRead</code>, <code>fsWrite</code>, <code>terminal</code></td></tr>
+  <tr><td>Live sample</td><td><code>LiveSample</code> already carries GPU, network in/out, disk read/write, battery (percent, charging, watts, cycles, health, temperature, condition, time left)</td><td>Phase 1 is mostly phone UI. The phone never asks for the <code>disk</code> topic on Home today</td></tr>
+  <tr><td>History</td><td>SQLite on the Mac, a row every 10 s, 365 days. <code>history.range</code> serves 13 series, including <code>networkOut</code>, <code>diskRead</code>, <code>diskWrite</code>, <code>gpuTemp</code>, <code>batteryWatts</code></td><td>The phone shows one series per channel. Second lines are free</td></tr>
+  <tr><td>Drop</td><td>Any file, any size, both ways, 16 MiB parts, resume, SHA-256, Go engine on the phone, pinned TLS on Wi-Fi, tsnet on Tailscale. Mac to phone streams straight from the original path</td><td>"Get" from a folder listing is a Drop with paths the phone picked. "Put files here" is a Drop with a destination folder</td></tr>
+  <tr><td>File browsing</td><td><b class="bad">None.</b> No list-directory RPC anywhere</td><td>New in Phase 2 and 4</td></tr>
+  <tr><td>Terminal</td><td><b class="bad">None.</b> Remote commands are a closed set of tagged types</td><td>New in Phase 3</td></tr>
+  <tr><td>Clipboard</td><td>History on the Mac (gateway SQLite, 500 rows or 2 GiB, pins kept). Phones read it and send to it</td><td>Already shared by all devices through the Mac. Phase 4 labels which device a clip came from</td></tr>
+</table>
+
+<h2 id="decisions">2. Decisions to take (my picks, change any)</h2>
+<table>
+  <tr><th>Question</th><th>Pick</th><th>Why</th></tr>
+  <tr><td>Who is the hub</td><td class="pick">The Mac</td><td>Phones can't accept connections in the background (iPhone at all). The Mac is always on, already runs the gateway, already pairs every device. Phone to phone goes through it. No new pairing between phones</td></tr>
+  <tr><td>What a phone can browse on the Mac</td><td class="pick">Only folders the Mac shares</td><td>Default Desktop, Documents, Downloads, Movies, Pictures. Add or remove on the Mac. Not the whole disk</td></tr>
+  <tr><td>Home layout</td><td class="pick">Direction A, eight rows</td><td>Same row component as today, nothing new to learn. Direction B (four rows plus tiles) is in the prototype</td></tr>
+  <tr><td>Where Files and Terminal live</td><td class="pick">Direction A, Control tiles</td><td>No new tab, matches Clipboard. Direction B (a Files tab replacing Alerts) is in the prototype</td></tr>
+  <tr><td>Terminal engine on the Mac</td><td class="pick">Bun's built-in PTY in the gateway</td><td>No native addon. T3 Code uses node-pty; it would mean shipping and signing <code>pty.node</code> and <code>spawn-helper</code> next to the binary</td></tr>
+  <tr><td>Terminal renderer on the phone</td><td class="pick">ghostty-web in a WebView, input from React Native</td><td>One code path, and the web client reuses it as-is. Keys never go through the WebView, so its keyboard bugs don't apply. If it isn't smooth enough, port T3's native libghostty module (MIT) later</td></tr>
+  <tr><td>New permissions</td><td class="pick">Off until you allow them on the Mac</td><td>The phone can ask ("Ask my Mac"). The Mac shows Allow or Don't allow. Terminal also needs your fingerprint or Face ID on the phone</td></tr>
+  <tr><td>Phones in Finder</td><td class="pick">WebDAV served by the gateway on 127.0.0.1</td><td>A macOS File Provider needs an Apple Team ID, and this build is self-signed. WebDAV needs no entitlements and never leaves the Mac</td></tr>
+  <tr><td>Mac in the phone's Files app</td><td class="pick">Android now, iPhone later</td><td>Android's Documents provider runs in the app. iPhone needs a File Provider extension, an App Group and a paid team</td></tr>
+</table>
+
+<h2 id="arch">3. Architecture</h2>
+<svg viewBox="0 0 1060 430" width="100%" role="img" aria-label="The Mac is the hub. Phones and the browser connect over Wi-Fi or Tailscale to the gateway, which talks to the Vitals app.">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#666"/></marker></defs>
+  <rect x="330" y="20" width="400" height="390" rx="12" fill="#0b0b0b" stroke="#333"/>
+  <text x="350" y="46" fill="#fff" font-size="15" font-weight="600">Your Mac</text>
+  <rect x="350" y="62" width="360" height="92" rx="8" fill="#111" stroke="#2a2a2a"/>
+  <text x="366" y="84" fill="#fff" font-size="13" font-weight="600">Vitals.app (Swift)</text>
+  <text x="366" y="104" fill="#aaa" font-size="12">samples hardware · history SQLite · places files</text>
+  <text x="366" y="122" fill="#aaa" font-size="12">Quick Look thumbnails · permission prompts</text>
+  <text x="366" y="140" fill="#aaa" font-size="12">menu bar: live terminals, who is browsing</text>
+  <line x1="530" y1="154" x2="530" y2="186" stroke="#666" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text x="540" y="175" fill="#777" font-size="11">stdin / stdout JSON lines</text>
+  <rect x="350" y="188" width="360" height="206" rx="8" fill="#111" stroke="#f2ec6b" stroke-opacity=".5"/>
+  <text x="366" y="210" fill="#fff" font-size="13" font-weight="600">vitals-gateway (Bun)</text>
+  <text x="366" y="232" fill="#aaa" font-size="12">RPC over WebSocket · scopes · audit log</text>
+  <text x="366" y="250" fill="#aaa" font-size="12">Drop HTTPS (Range, resume, SHA-256)</text>
+  <text x="366" y="272" fill="#f2ec6b" font-size="12">new  fs.*  lists shared folders, search</text>
+  <text x="366" y="290" fill="#f2ec6b" font-size="12">new  terminal.*  Bun PTY sessions</text>
+  <text x="366" y="308" fill="#f2ec6b" font-size="12">new  fs.serve  asks phones for their files</text>
+  <text x="366" y="326" fill="#f2ec6b" font-size="12">new  WebDAV on 127.0.0.1 for Finder</text>
+  <text x="366" y="348" fill="#777" font-size="11">listens: 127.0.0.1 RPC · Wi-Fi Noise WS · Wi-Fi TLS</text>
+  <text x="366" y="364" fill="#777" font-size="11">tailscale serve HTTPS (owner login only)</text>
+  <text x="366" y="382" fill="#777" font-size="11">Finder mounts WebDAV here, never on the network</text>
+  <rect x="30" y="70" width="230" height="110" rx="10" fill="#0b0b0b" stroke="#333"/>
+  <text x="48" y="96" fill="#fff" font-size="14" font-weight="600">Pixel 9 (Android)</text>
+  <text x="48" y="118" fill="#aaa" font-size="12">Vitals: Home, Files, Terminal</text>
+  <text x="48" y="136" fill="#aaa" font-size="12">shares Photos, Downloads › Vitals</text>
+  <text x="48" y="154" fill="#aaa" font-size="12">Files app: "Vitals · MacBook Pro"</text>
+  <rect x="30" y="230" width="230" height="110" rx="10" fill="#0b0b0b" stroke="#333"/>
+  <text x="48" y="256" fill="#fff" font-size="14" font-weight="600">iPhone 17 (iOS)</text>
+  <text x="48" y="278" fill="#aaa" font-size="12">Vitals: Home, Files, Terminal</text>
+  <text x="48" y="296" fill="#aaa" font-size="12">shares while Vitals is on screen</text>
+  <text x="48" y="314" fill="#aaa" font-size="12">files land in Files › Vitals</text>
+  <line x1="260" y1="125" x2="350" y2="240" stroke="#666" marker-end="url(#a)" marker-start="url(#a)"/>
+  <line x1="260" y1="285" x2="350" y2="300" stroke="#666" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="262" y="188" fill="#74d4ff" font-size="11">Wi-Fi: Noise + pinned TLS</text>
+  <text x="262" y="204" fill="#c8a8ff" font-size="11">Tailscale: WireGuard + HTTPS</text>
+  <rect x="800" y="70" width="230" height="90" rx="10" fill="#0b0b0b" stroke="#333"/>
+  <text x="818" y="96" fill="#fff" font-size="14" font-weight="600">Browser (web client)</text>
+  <text x="818" y="118" fill="#aaa" font-size="12">same app, Tailscale only</text>
+  <text x="818" y="136" fill="#aaa" font-size="12">terminal off unless you allow it</text>
+  <line x1="800" y1="115" x2="710" y2="240" stroke="#666" marker-end="url(#a)" marker-start="url(#a)"/>
+  <rect x="800" y="230" width="230" height="110" rx="10" fill="#0b0b0b" stroke="#333"/>
+  <text x="818" y="256" fill="#fff" font-size="14" font-weight="600">Finder</text>
+  <text x="818" y="278" fill="#aaa" font-size="12">"Pixel 9" under Locations</text>
+  <text x="818" y="296" fill="#aaa" font-size="12">WebDAV on 127.0.0.1</text>
+  <text x="818" y="314" fill="#aaa" font-size="12">gateway asks the phone</text>
+  <line x1="800" y1="300" x2="710" y2="320" stroke="#666" marker-end="url(#a)" marker-start="url(#a)"/>
+</svg>
+<p>One rule keeps this simple: <b>phones only ever connect out to the Mac.</b> When the Mac (or the other phone) wants a phone's files, the gateway sends the request down the socket the phone already has open, and the phone answers on the same socket. Bytes always move as Drops, so resume, hashing, pinning and progress come for free.</p>
+
+<h2 id="vitals">4. Phase 1: full vitals on the phone</h2>
+<p>The Mac already measures everything you asked for. Most of it already reaches the phone. The gaps:</p>
+<table>
+  <tr><th>Area</th><th>Mac measures</th><th>Phone gets today</th><th>Add to the contract (optional keys, old phones ignore them)</th></tr>
+  <tr><td>Network</td><td>per link in/out, totals since boot, Wi-Fi SSID, RSSI, noise, tx rate, channel, band</td><td>total in/out, RSSI, primary interface</td><td><code>NetworkSample.links[]</code> {name, kind, in, out, active}, <code>totalIn</code>, <code>totalOut</code>, <code>wifi</code> {ssid, band, channel, txRateMbps, noise}</td></tr>
+  <tr><td>Disk</td><td>read/write per second, SMART health (wear, TB read/written, hours, temperature, unsafe shutdowns)</td><td>read/write, only when the Net screen asks</td><td><code>DiskSample.health</code> {wearPercent, readBytes, writtenBytes, powerOnHours, celsius, unsafeShutdowns}; new <code>freeBytes</code> and <code>totalBytes</code> (read with <code>volumeAvailableCapacityForImportantUsage</code>; nothing reads free space today)</td></tr>
+  <tr><td>GPU</td><td>utilization, renderer, tiler, cores, memory used/allocated/total</td><td>utilization, memory used, cores</td><td><code>GpuSample.renderer</code>, <code>tiler</code>, <code>memoryTotalBytes</code></td></tr>
+  <tr><td>Battery</td><td>everything the Battery panel shows</td><td>percent, charging, external power, watts, time left, cycles, health, temperature, condition</td><td><code>fullyCharged</code>, <code>designCapacityMah</code>, <code>maxCapacityMah</code>, <code>voltage</code>, <code>amperage</code>, <code>adapter</code> {watts, name, wireless, deliveredWatts, voltage, amperage}</td></tr>
+</table>
+<h3>Work</h3>
+<ul>
+  <li><b>Contracts</b> (<code>packages/contracts/src/stats.ts</code>): the optional keys above. Free disk and SMART change slowly, so the Mac sends them every 60 s, not every tick.</li>
+  <li><b>Mac</b> (<code>Remote/RemoteSample.swift</code>): fill the new keys from <code>NetworkStats</code>, <code>DiskStats</code>, <code>DiskHealth</code>, <code>GPUSensor</code>, <code>Battery</code>. SSID needs Location permission on macOS; if it isn't granted, send null and the phone says nothing.</li>
+  <li><b>Phone</b>: <code>LIVE_TOPICS</code> adds <code>disk</code>. Two new channels in <code>@vitals/ui</code> (<code>disk</code>, and <code>net</code> split from the current <code>tele</code>), both drawn by the existing <code>Trace</code> with a second series. Home shows eight <code>Wave</code> rows; the minis become Power, Swap, Wi-Fi, Free. <code>ChannelDetails</code> gains the blocks in the prototype. The history chart asks for two series where it makes sense (<code>networkIn</code> + <code>networkOut</code>, <code>diskRead</code> + <code>diskWrite</code>, <code>battery</code> + <code>batteryWatts</code>).</li>
+  <li><b>Alerts</b>: one new guard rule, "Disk is almost full" (under 10 GB or 5%).</li>
+  <li><b>Tests</b>: contract round trip with and without the new keys; Swift test that free space and capacities are never invented (null when unread); a phone reading test for "--" when a key is missing.</li>
+</ul>
+<p><b>Size:</b> about 2 to 3 days, one PR. Nothing here needs a new phone store build if the native parts stay unchanged (OTA for the JS).</p>
+
+<h2 id="macfiles">5. Phase 2: browse your Mac from the phone</h2>
+<h3>RPCs (scope <code>fsRead</code> unless noted)</h3>
+<table>
+  <tr><th>Method</th><th>Does</th><th>Notes</th></tr>
+  <tr><td><code>fs.roots</code></td><td>The folders this Mac shares, with item counts</td><td>The list is set on the Mac in Settings › Remote</td></tr>
+  <tr><td><code>fs.list</code></td><td>One folder: name, kind, size, modified, item count for folders</td><td>Pages of 500 with a cursor. Sort by name, date or size. Hidden files off</td></tr>
+  <tr><td><code>fs.search</code></td><td>Names across all shared folders</td><td><code>mdfind -onlyin &lt;root&gt; -name</code> per root, 200 results max, then filtered through the same path check</td></tr>
+  <tr><td><code>fs.thumb</code></td><td>A small JPEG for images, videos, PDFs</td><td>Swift <code>QLThumbnailGenerator</code> through the bridge, cached in <code>remote/thumbs/</code></td></tr>
+  <tr><td><code>fs.get</code></td><td>Starts a Mac to phone Drop for the picked paths</td><td>Reuses Drop. Folders keep their structure. Scope <code>files</code> too</td></tr>
+  <tr><td><code>fs.put</code></td><td>"Put files here": a phone to Mac Drop with a destination folder</td><td>Scope <code>fsWrite</code>. The Mac places files with the existing <code>DropFiles.place</code>, which already refuses to write outside its folder</td></tr>
+  <tr><td><code>fs.trash</code>, <code>fs.rename</code>, <code>fs.mkdir</code></td><td>Small edits</td><td>Scope <code>fsWrite</code>. Trash only, never delete. Hold to confirm on the phone, Undo puts it back</td></tr>
+  <tr><td><code>fs.open</code></td><td>Opens the file on the Mac</td><td>Scope <code>operate</code></td></tr>
+</table>
+<h3>Path safety (test-locked, like the uninstall script)</h3>
+<ul>
+  <li>Every path is resolved with <code>realpath</code> and must sit inside a shared root. Symlinks that leave a root are listed as links and can't be followed.</li>
+  <li>Never <code>/System</code>, never the Vitals data folder, never <code>~/Library</code> unless you share it on purpose.</li>
+  <li>App bundles and packages (<code>.app</code>, <code>.photoslibrary</code>) show as one item; Get zips them.</li>
+  <li>macOS asks once per protected folder ("Vitals would like to access files in your Desktop folder"). The prompt is attributed to Vitals.app because the gateway is its child. If you say no, that place shows "Your Mac said no. Allow it in System Settings › Privacy › Files and Folders."</li>
+</ul>
+<h3>Phone</h3>
+<ul>
+  <li>Files screen: device chips, Places, search, folders, Select, Get, Put files here, file sheet (Get, Look at it, Open on the Mac, Send to the other phone, Share, Trash). Send and transfers stay as shipped.</li>
+  <li>"Look at it" streams images and video from the Drop URL with a short-lived ticket in the query string (players can't send our header), nothing saved.</li>
+</ul>
+<p><b>Size:</b> about 4 to 5 days, one PR. Fake Mac harness gets a fake file tree so the emulator can test it without a Mac.</p>
+
+<h2 id="terminal">6. Phase 3: terminal</h2>
+<h3>Mac (gateway)</h3>
+<ul>
+  <li><b>PTY</b>: <code>Bun.spawn([shell, "-l"], { terminal: { cols, rows, data } })</code>, shell from the user's record, <code>cwd</code> home, <code>TERM=xterm-256color</code>, the user's locale. Runs as you; <code>sudo</code> asks for your password like anywhere else.</li>
+  <li><b>Sessions</b> outlive the phone's connection. Each keeps a 2 MB ring of output and replays it on attach, minus the escape codes that would re-trigger queries (T3 does the same). An idle session ends after 12 hours. A gateway restart ends them all, and the phone says so.</li>
+  <li><b>Backpressure</b>: at most 64 KB of output in flight per stream until the phone acks, so <code>cat</code> on a big log can't flood the socket or the phone.</li>
+  <li><b>Saved commands</b> live on the Mac (gateway SQLite), so every device sees one list.</li>
+</ul>
+<h3>RPCs (scope <code>terminal</code>)</h3>
+<pre>terminal.list                      sessions on this Mac
+terminal.open   { cols, rows }     new session, returns id
+terminal.attach { id, afterSeq }   stream: replay, then live output chunks (seq, bytes)
+terminal.ack    { id, seq }        flow control
+terminal.write  { id, data }       keys and paste, max 64 KB
+terminal.resize { id, cols, rows }
+terminal.close  { id }
+terminal.saved / terminal.save / terminal.forget</pre>
+<h3>Phone</h3>
+<ul>
+  <li>Full screen, dock hidden. Session chips on top, saved commands and sessions in sheets.</li>
+  <li>Renderer: <a href="https://github.com/coder/ghostty-web">ghostty-web</a> (Ghostty's parser in WASM, xterm.js API, about 400 KB) in <code>react-native-webview</code>, fed bytes from React Native. Input comes from a React Native text field plus a key row (esc, tab, ctrl latch, arrows, ^C, |, ~, /, paste), so the WebView never handles the keyboard. The web client uses ghostty-web directly.</li>
+  <li>If it isn't smooth enough on a real phone, swap the renderer for a native view. T3 Code ships one (<code>apps/mobile/modules/t3-terminal</code>, libghostty on iOS and Android, MIT, so it can go into this GPL-3.0 app with credit). The RPCs don't change.</li>
+  <li>Unlock with fingerprint or Face ID (<code>expo-local-authentication</code>) on every open after 5 minutes away.</li>
+  <li>The cursor doesn't blink (no repainting animation).</li>
+</ul>
+<h3>Mac awareness</h3>
+<ul>
+  <li>Off until you allow it, per device. First open of a session sends a notification, "Pixel 9 opened a terminal", with End.</li>
+  <li>The menu bar panel lists live sessions with End and End all. Turning the permission off ends that device's sessions at once.</li>
+  <li>The audit log records open, close, device and duration. It never records keystrokes or output.</li>
+</ul>
+<p><b>Size:</b> 5 to 7 days, two PRs (gateway and Mac, then phone and web).</p>
+
+<h2 id="phonefiles">7. Phase 4: phones as file sources</h2>
+<ul>
+  <li><b>Reverse requests</b>: a phone that shares files opens <code>fs.serve</code>, a stream. The gateway pushes requests down it (<code>list</code>, <code>thumb</code>, <code>send</code>) and the phone answers with <code>fs.reply</code>. Bytes go phone to Mac as a normal Drop. No ports open on phones.</li>
+  <li><b>What a phone shares</b> (Settings › This phone):
+    <ul>
+      <li>Android: Photos and videos (MediaStore, <code>READ_MEDIA_IMAGES</code> and <code>READ_MEDIA_VIDEO</code>), Downloads › Vitals, folders you pick with <code>ACTION_OPEN_DOCUMENT_TREE</code> (permission kept across restarts). No "all files" permission: Play only allows it for file managers and backup apps, and it isn't needed.</li>
+      <li>iPhone: Photos (PhotoKit), Files › Vitals, folders you pick (security-scoped bookmarks).</li>
+    </ul>
+  </li>
+  <li><b>Phone to phone</b>: v1 goes through the Mac. Phone A sends to the Mac's staging folder, then the Mac sends to phone B, and the staged copy is deleted when B confirms. A streaming relay (bytes pass straight through) can come later if it matters.</li>
+  <li><b>When a phone can answer</b>: iPhone only while Vitals is on screen (iOS suspends it otherwise). Android while the app or its transfer service runs. Everything else says "not open", never a fake listing.</li>
+  <li><b>Mac</b>: a Devices panel to browse phones, with Get and Get all into Downloads › Vitals.</li>
+</ul>
+<p><b>Size:</b> about 5 days, one PR, plus a store build for the new native permissions.</p>
+
+<h2 id="system">8. Phase 5 and 6: Finder and the phones' Files apps</h2>
+<table>
+  <tr><th>Where</th><th>How</th><th>Needs</th><th>When</th></tr>
+  <tr><td>Phones in Finder</td><td>The gateway serves WebDAV on <code>127.0.0.1</code> and translates each request into an <code>fs.serve</code> request. Vitals mounts it (<code>mount_webdav</code>), and it shows under Locations as "Pixel 9". A setting, "Show phones in Finder", turns it on</td><td>Nothing. macOS File Provider would need a Team ID</td><td class="ok">Phase 5</td></tr>
+  <tr><td>Mac in Android's Files app</td><td>A <code>DocumentsProvider</code> in the app: roots, folders and <code>openDocument</code>. It calls the Go engine, which gains <code>FsList</code> and <code>FsOpen</code> over the pinned TLS port on Wi-Fi or tsnet on Tailscale. A device-bound file ticket lives in the Android Keystore, so it works when Android starts the app cold</td><td>New HTTPS routes <code>/api/fs/list</code> and <code>/api/fs/file</code> with Drop-style tickets</td><td class="ok">Phase 5</td></tr>
+  <tr><td>Mac in iPhone's Files app</td><td>A File Provider extension (<code>NSFileProviderReplicatedExtension</code>) using the same Go engine and HTTPS routes. It runs in its own process, so it can't borrow the app's tsnet node: it works on Wi-Fi, and on Tailscale only with the Tailscale app's VPN on</td><td>A paid Apple developer team (App Group), a custom Expo config plugin. Memory use of Go inside the extension is untested</td><td class="warn">Phase 6, when you have the team</td></tr>
+  <tr><td>Free extra on iPhone</td><td>Files › Connect to Server speaks SMB to the Mac's own File Sharing on Wi-Fi. A Help page can explain it</td><td>Nothing to build</td><td class="ok">Any time</td></tr>
+</table>
+<p><b>Size:</b> Phase 5 about 5 to 7 days (two PRs). Phase 6 about 5 days once the team exists.</p>
+
+<h2 id="clip">9. Clipboard on every device</h2>
+<p>This already works hub style: every phone reads the Mac's history and can add to it, so a copy on the Pixel reaches the iPhone through the Mac. Two small additions in Phase 4: each clip records which device it came from ("from Pixel 9"), and "Copy here automatically" can follow clips from the other phone too, not only from the Mac.</p>
+
+<h2 id="security">10. Security model</h2>
+<table>
+  <tr><th>Capability</th><th>Scope</th><th>Default</th><th>Confirmation</th><th>Revoke</th></tr>
+  <tr><td>See vitals, history</td><td><code>read</code></td><td>On</td><td>None</td><td rowspan="6">Any scope change on the Mac drops that device's sockets, so it applies at once. Unpairing ends everything</td></tr>
+  <tr><td>Browse shared folders, Get</td><td><code>fsRead</code> + <code>files</code></td><td>Off, the phone can ask</td><td>Mac: Allow once per device. Menu bar shows who is browsing, with Stop</td></tr>
+  <tr><td>Put files, rename, Trash</td><td><code>fsWrite</code></td><td>Off</td><td>Phone: hold to Trash, Undo</td></tr>
+  <tr><td>Share this phone's files</td><td>on the phone</td><td>Off until you pick what to share</td><td>Phone: Settings › This phone</td></tr>
+  <tr><td>Terminal</td><td><code>terminal</code></td><td>Off, never on for the web unless you also allow it there</td><td>Mac: Allow. Phone: fingerprint or Face ID. Mac: notification on open, End</td></tr>
+  <tr><td>Power, apps</td><td><code>operate</code>, <code>destructive</code></td><td>As shipped</td><td>As shipped</td></tr>
+</table>
+<ul>
+  <li><b>Encryption</b>: Wi-Fi control traffic is Noise IK (X25519, ChaCha20-Poly1305), Wi-Fi bytes are TLS pinned to the Mac's key, Tailscale is WireGuard plus HTTPS from <code>tailscale serve</code> with the owner-login check. WebDAV listens on loopback only.</li>
+  <li><b>No cloud</b>: nothing passes through a server we run. Convex stays the website's release proxy only.</li>
+  <li><b>Small fixes found on the way</b>: the Wi-Fi pair notification says "read and operate" but new devices also get <code>files</code>; there is no rotation for the Mac's Noise key or Drop certificate. Both are worth fixing in Phase 2.</li>
+</ul>
+
+<h2 id="ship">11. How it ships</h2>
+<div class="phase">
+  <div class="k">P1 Full vitals<br><small>2 to 3 days</small></div><div>Contracts, Swift sample, Home rows, detail blocks, two-series history, disk alert.<small>One PR into nightly. JS can go out over the air; the Mac change rides the next Nightly build.</small></div>
+  <div class="k">P2 Browse your Mac<br><small>4 to 5 days</small></div><div><code>fs.*</code> RPCs, path checks, thumbnails, permission ask flow, Files screen, Get, Put files here, Trash.<small>Gateway bun tests with a temp file tree, Swift path-safety test, emulator run against the fake Mac.</small></div>
+  <div class="k">P3 Terminal<br><small>5 to 7 days</small></div><div>Bun PTY sessions, replay, acks, Mac menu bar and notifications, phone renderer and key row, biometric gate, web client.<small>Two PRs. Tests: scope refused, replay after reconnect, ack window, revoke ends sessions.</small></div>
+  <div class="k">P4 Phones as sources<br><small>about 5 days</small></div><div><code>fs.serve</code>, Android MediaStore and SAF, iOS PhotoKit and bookmarks, Mac Devices panel, phone to phone through the Mac, clip origin.<small>Needs a phone store build (new permissions).</small></div>
+  <div class="k">P5 Finder and Android Files<br><small>5 to 7 days</small></div><div>Loopback WebDAV, mount toggle, Go <code>FsList</code>/<code>FsOpen</code>, <code>/api/fs/*</code> routes, Android Documents provider.<small>Two PRs. Test Finder with large folders (it sends many PROPFIND requests).</small></div>
+  <div class="k">P6 iPhone Files<br><small>about 5 days</small></div><div>File Provider extension, config plugin, App Group.<small>Waits for a paid Apple team.</small></div>
+</div>
+<ul>
+  <li><b>Compatibility</b>: the gateway ships inside the Mac app, so Mac and phone updates arrive at different times. Every new key is optional and every new feature is announced in <code>server.hello</code> (<code>fs</code>, <code>terminal</code>, <code>fsServe</code>), like <code>clips</code> and <code>drop</code> today. An old phone just doesn't show the tiles; a new phone on an old Mac shows "Update Vitals on your Mac".</li>
+  <li><b>Branches</b>: each phase on its own branch from <code>nightly</code>, PR into <code>nightly</code>, Nightly feed for both apps, weekly promotion to Stable. Small tested commits along the way.</li>
+  <li><b>Store builds</b>: Phase 1 and 2 are JS on the phone. Phase 3 adds <code>react-native-webview</code> and biometrics, Phase 4 adds media and folder permissions, Phase 5 adds the provider. Each of those needs a new Android and iOS build. The privacy policy gets updated before each ships (file browsing and terminal are new data flows, even though nothing leaves your devices).</li>
+</ul>
+
+<h2 id="market">12. Market and the Pro tier</h2>
+<table>
+  <tr><th>App</th><th>Browse the other device</th><th>Clipboard history</th><th>Terminal</th><th>Hardware vitals</th><th>Notes</th></tr>
+  <tr><td>LocalSend</td><td>No, push only</td><td>No</td><td>No</td><td>No</td><td>Open source, free</td></tr>
+  <tr><td>KDE Connect</td><td>Android only, over SFTP</td><td>No history</td><td>Run preset commands</td><td>Battery only</td><td>Closest overall, weak on Mac and iPhone</td></tr>
+  <tr><td>AirDroid</td><td>Android only</td><td>No</td><td>No</td><td>No</td><td>Cloud relay, $3.99/mo or $29.99/yr, 30 MB per file free remotely</td></tr>
+  <tr><td>Taildrop</td><td>No, push only</td><td>No</td><td>No</td><td>No</td><td>No resume when a Mac or iPhone receives</td></tr>
+  <tr><td>Blip, PairDrop, Quick Share</td><td>No</td><td>No</td><td>No</td><td>No</td><td>Transfer only</td></tr>
+  <tr><td><b>Vitals</b></td><td class="ok">Both ways, all devices</td><td class="ok">Yes, pinned items</td><td class="ok">Real shell</td><td class="ok">Everything the Mac reads</td><td>No cloud, Wi-Fi or your own Tailscale</td></tr>
+</table>
+<p>Nobody combines these four. That's the gap.</p>
+<h3>Where Pro limits would sit (for later)</h3>
+<ul>
+  <li>Free: one phone, Wi-Fi, vitals, clipboard, sending files, browsing your Mac.</li>
+  <li>Pro: Tailscale from anywhere, more than one phone and phone to phone, Terminal, phones in Finder and the Mac in Files apps, longer clipboard history.</li>
+  <li>Pricing: with no servers to pay for, a one-time price fits better than a subscription, with paid major upgrades if needed.</li>
+  <li><b class="warn">Check first:</b> Vitals is GPL-3.0. Anyone can build it with the Pro checks removed. What can still be sold: the signed, auto-updating builds, the store apps, and support. The license check would gate the official builds. As the copyright holder you could also dual-license, but every outside contribution makes that harder. Worth deciding before Pro code gets written.</li>
+</ul>
+
+<h2 id="limits">13. Honest limits</h2>
+<ul>
+  <li>iPhone can only share its files while Vitals is on screen. iOS gives no way around that.</li>
+  <li>Android can't share the root of Downloads or other apps' private folders to a third-party app; pick subfolders instead.</li>
+  <li>A macOS File Provider (a phone in the Finder sidebar like iCloud) needs a Team ID. WebDAV under Locations is the honest alternative until then.</li>
+  <li>The terminal ends when the gateway restarts (for example on a Vitals update). It says so; it doesn't pretend to resume.</li>
+  <li>Phone to phone through the Mac costs Mac disk space while the file passes through (deleted after delivery).</li>
+  <li>GPU renderer and tiler numbers come from private IOKit keys and may change in a macOS update. They show "--" when missing.</li>
+  <li>Not yet tested: Finder WebDAV speed on folders with thousands of items, ghostty-web keyboard feel on a real phone, Go memory inside an iOS extension.</li>
+</ul>
+
+<h2 id="questions">14. Questions for you</h2>
+<ol>
+  <li>Home: Direction A (eight rows) or B (four rows plus tiles)?</li>
+  <li>Files and Terminal: Control tiles (A) or a Files tab replacing Alerts (B)?</li>
+  <li>Order: vitals, then Mac files, then terminal (my pick), or terminal first?</li>
+  <li>Should "Browse my files" be on by default for devices you pair after the update, or always asked?</li>
+  <li>Terminal on the web client: never, or allowed per browser?</li>
+  <li>Do you plan to get a paid Apple developer team? It unlocks the iPhone Files app location (Phase 6) and stable iOS signing.</li>
+</ol>
+
+<p style="margin-top:40px;color:var(--dim);font-size:12px">Last updated 2026-10-25 · sources: the Vitals code on <code>nightly</code> at e32d0d8, the T3 Code repo at 3d00499, Bun docs, Apple and Android developer docs, Google Play policy, competitor pricing pages · Opus 5.5 via Claude Code in T3 Code</p>
+</main>
+</body>
+</html>

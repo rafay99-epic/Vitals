@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The Network section: summed download/upload, the throughput chart, the
 /// per-interface breakdown (active first), and the Wi-Fi association.
@@ -91,63 +90,20 @@ private struct NetworkHistoryCard: View {
         // One pass for the Y ceiling, outside the per-sample chart closure. A small
         // floor keeps an idle link off a zero-height axis. Rates are bytes/s; the
         // chart plots MB/s.
-        let peak = chartHistory.reduce(0.0) { max($0, mbps($1.netInPerSec), mbps($1.netOutPerSec)) }
-        let upper = max(peak * 1.15, 0.1)
-        return SectionCard(title: "Last \(settings.historyMinutes) minutes", symbol: "chart.xyaxis.line") {
-            VStack(alignment: .leading, spacing: 10) {
-                Deferred { chart(upper: upper) }.frame(height: 150)
-                legend
-            }
+        let upper = max((chartHistory.bounds(of: Self.series)?.upperBound ?? 0) * 1.15, 0.1)
+        return ChartCard(
+            title: "Last \(settings.historyMinutes) minutes",
+            symbol: "chart.xyaxis.line",
+            legend: Self.series.map { LegendSwatch(color: $0.color, label: $0.name) }
+        ) {
+            MetricChart(samples: chartHistory, series: Self.series, yLabel: "MB/s", yDomain: 0...upper)
         }
     }
 
-    private func chart(upper: Double) -> some View {
-        Chart {
-            ForEach(chartHistory) { sample in
-                if let down = sample.netInPerSec {
-                    AreaMark(x: .value("Time", sample.time),
-                             y: .value("MB/s", down / 1_000_000),
-                             series: .value("Series", "Download"))
-                        .foregroundStyle(LinearGradient(colors: [.mint.opacity(0.35), .mint.opacity(0.02)],
-                                                        startPoint: .top, endPoint: .bottom))
-                        .interpolationMethod(.catmullRom)
-                    LineMark(x: .value("Time", sample.time),
-                             y: .value("MB/s", down / 1_000_000),
-                             series: .value("Series", "Download"))
-                        .foregroundStyle(.mint)
-                        .interpolationMethod(.catmullRom)
-                }
-                if let up = sample.netOutPerSec {
-                    LineMark(x: .value("Time", sample.time),
-                             y: .value("MB/s", up / 1_000_000),
-                             series: .value("Series", "Upload"))
-                        .foregroundStyle(.orange)
-                        .interpolationMethod(.catmullRom)
-                }
-            }
-        }
-        .chartYScale(domain: 0...upper)
-        .chartYAxisLabel("MB/s")
-    }
-
-    private var legend: some View {
-        HStack(spacing: 16) {
-            swatch(.mint, "Download")
-            swatch(.orange, "Upload")
-            Spacer()
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-
-    private func swatch(_ color: Color, _ label: String) -> some View {
-        HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 9, height: 9)
-            Text(label)
-        }
-    }
-
-    private func mbps(_ bytesPerSec: Double?) -> Double { (bytesPerSec ?? 0) / 1_000_000 }
+    private static let series: [ChartSeries<VitalsModel.Sample>] = [
+        .init(name: "Download", color: .mint, area: 0.35) { $0.netInPerSec.map { $0 / 1_000_000 } },
+        .init(name: "Upload", color: .orange) { $0.netOutPerSec.map { $0 / 1_000_000 } }
+    ]
 }
 
 // MARK: - Interfaces
@@ -161,9 +117,7 @@ private struct NetworkInterfacesCard: View {
     var body: some View {
         SectionCard(title: "Interfaces", symbol: "network") {
             if links.isEmpty {
-                Text("No network interfaces.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("No network interfaces.")
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(links, id: \.name) { link in
@@ -176,7 +130,7 @@ private struct NetworkInterfacesCard: View {
 
     private func row(_ link: NetworkLink) -> some View {
         HStack(spacing: 12) {
-            iconTile(link)
+            IconTile(symbol: symbol(for: link.kind), tint: link.isActive ? .mint : .secondary)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(link.displayName).font(.callout).fontWeight(.medium)
@@ -190,15 +144,6 @@ private struct NetworkInterfacesCard: View {
             Spacer(minLength: 8)
             trailing(link)
         }
-    }
-
-    private func iconTile(_ link: NetworkLink) -> some View {
-        let tint: Color = link.isActive ? .mint : .secondary
-        return Image(systemName: symbol(for: link.kind))
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(tint)
-            .frame(width: 26, height: 26)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.14)))
     }
 
     private func symbol(for kind: NetworkLink.Kind) -> String {
@@ -227,10 +172,7 @@ private struct NetworkInterfacesCard: View {
     private var primaryTag: some View {
         Text("Primary")
             .font(.caption2.weight(.medium))
-            .foregroundStyle(.mint)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(.mint.opacity(0.15)))
+            .capsuleTag(.mint, fill: 0.15, horizontal: 7, vertical: 2)
     }
 }
 

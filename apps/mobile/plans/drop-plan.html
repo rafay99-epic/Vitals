@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Drop: any file, any size, both ways</title>
+<style>
+  :root { --ink:#fff; --ink2:#c9c9c9; --dim:#8a8a8a; --line:#222; --acc:#f2ec6b; --ok:#5cf2a6; --warn:#ffb45c; --bad:#ff4d6d; --blue:#74d4ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#000; color:var(--ink); font:14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif; }
+  main { max-width:1080px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.01em; }
+  h2 { font-size:18px; margin:40px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; }
+  p, li { color:var(--ink2); }
+  p { margin:6px 0 10px; }
+  ul, ol { margin:6px 0 10px; padding-left:20px; }
+  li { margin:3px 0; }
+  b { color:var(--ink); }
+  code { font:12.5px ui-monospace, "SF Mono", Menlo, monospace; color:#e6e6e6; background:#111; padding:1px 4px; border-radius:3px; }
+  pre { font:12.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background:#0b0b0b; border:1px solid var(--line); padding:12px 14px; overflow:auto; color:#e6e6e6; border-radius:6px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:13px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  td { color:var(--ink2); }
+  td:first-child { color:var(--ink); }
+  .lead { font-size:15px; color:var(--ink2); max-width:800px; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .pick { color:var(--acc); font-weight:600; }
+  a { color:var(--blue); }
+  .phase { display:grid; grid-template-columns:110px 1fr; gap:6px 18px; margin:10px 0 18px; }
+  .phase .k { color:var(--ink); font-weight:600; }
+  .note { border-left:3px solid var(--acc); padding:4px 0 4px 14px; color:var(--ink2); margin:14px 0; }
+  svg text { font-family:-apple-system, system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Vitals Drop: any file, any size, both ways</h1>
+<p class="lead">Goal: replace LocalSend. APKs, videos, photos, documents, whole folders, from the phone to the Mac and from the Mac to the phone, over your Wi-Fi or Tailscale. Files are files: they land in Downloads (or Files on iPhone), not on the clipboard. Builds on Clipboard and Drop (PR #165). Plan written 2026-10-24. Nothing here is built yet.</p>
+
+<h2>Where today's build stops</h2>
+<table>
+  <tr><th>Limit</th><th>Why</th></tr>
+  <tr><td>1 GB per file</td><td>A cap we set because bytes travel as base64 inside JSON RPC calls, 512 KB at a time</td></tr>
+  <tr><td>Slow on big files</td><td>About a third extra bytes on the wire for base64. On Wi-Fi, every byte is also encrypted in JavaScript on the phone (<code>@noble/ciphers</code> ChaCha20 inside the Noise tunnel) and handed to native code as a string. Fine for a screenshot, painful for a 4 GB video</td></tr>
+  <tr><td>The Mac can't send</td><td>Mac to phone only works for things you copied. There is no "send this file to my phone"</td></tr>
+  <tr><td>Phone downloads sit in a cache</td><td>You have to tap Save every time. Nothing lands in Downloads or the Files app on its own</td></tr>
+  <tr><td>Stops in the background</td><td>Transfers run in the app's JavaScript, so they pause when you switch apps</td></tr>
+  <tr><td>No APK install</td><td>The app can't hand an APK to Android's installer</td></tr>
+</table>
+
+<h2>The idea: control stays on RPC, bytes move over HTTPS, natively</h2>
+<p>Keep the existing connection for everything small: offers, accept, progress, history. Move the file bytes to plain HTTPS requests handled by native code on the phone, streamed straight to and from disk. That is how LocalSend works too: each device runs an HTTPS server with a self-signed certificate, and peers check its SHA-256 fingerprint.</p>
+<svg viewBox="0 0 1030 300" width="100%" role="img" aria-label="Drop architecture">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8a8a8a"/></marker></defs>
+  <g fill="none" stroke="#333"><rect x="10" y="20" width="300" height="210" rx="8"/><rect x="365" y="20" width="300" height="210" rx="8"/><rect x="720" y="20" width="300" height="210" rx="8"/><rect x="365" y="248" width="300" height="44" rx="8" stroke-dasharray="4 4"/></g>
+  <g fill="#fff" font-size="14" font-weight="600"><text x="26" y="46">Mac app (Swift)</text><text x="381" y="46">Gateway (Bun)</text><text x="736" y="46">Phone (RN + Go engine)</text></g>
+  <g fill="#c9c9c9" font-size="12.5">
+    <text x="26" y="76">Send: Finder Quick Action,</text><text x="26" y="94">menu bar and Dock drop, picker</text>
+    <text x="26" y="122">Receive: ~/Downloads/Vitals</text><text x="26" y="140" fill="#8a8a8a">quarantined, notification</text>
+    <text x="26" y="168">Progress in the menu bar panel</text>
+
+    <text x="381" y="76">RPC: drop.offer / accept / watch</text>
+    <text x="381" y="100">HTTPS: PUT and GET /api/drop/…</text><text x="381" y="118" fill="#8a8a8a">Range resume, streamed sha256</text>
+    <text x="381" y="146">LAN: HTTPS, self-signed, pinned</text><text x="381" y="164">Tailscale: tailscale serve (ts.net)</text>
+    <text x="381" y="192">Disk-space check before accepting</text>
+
+    <text x="736" y="76">Go engine (gomobile, already</text><text x="736" y="94">shipped for built-in Tailscale)</text>
+    <text x="736" y="122">Streams file to file, no JS bytes</text>
+    <text x="736" y="150">Android: user-initiated transfer</text><text x="736" y="168" fill="#8a8a8a">job, Downloads/Vitals, APK install</text>
+    <text x="736" y="196">iOS: Files app › On My iPhone</text>
+
+    <text x="381" y="275">~/.vitals*/remote/drop/  (shared with the Mac app)</text>
+  </g>
+  <g stroke="#8a8a8a" fill="none" marker-end="url(#a)"><path d="M310 100 H362"/><path d="M365 150 H313"/><path d="M665 100 H717"/><path d="M720 150 H668"/><path d="M160 230 V270 H362"/></g>
+  <g fill="#8a8a8a" font-size="11.5"><text x="318" y="94">bridge</text><text x="672" y="94">RPC (Noise/TS)</text><text x="672" y="166">HTTPS bytes</text></g>
+</svg>
+
+<h3>Three ways to move the bytes</h3>
+<table>
+  <tr><th>Option</th><th>Good</th><th>Bad</th></tr>
+  <tr><td>A. Keep RPC chunks, switch to binary (msgpack)</td><td>Smallest change. Drops base64</td><td>Still JS encryption on Wi-Fi, still JS in the byte path, still foreground only. Changes the protocol for every RPC</td></tr>
+  <tr><td>B. Native HTTP from Expo (<code>expo-file-system</code> downloads and uploads)</td><td>No new native code. Streams to disk</td><td>Can't pin a self-signed certificate, so it only works over Tailscale's real <code>ts.net</code> certificate. Wi-Fi at home would still use the slow path</td></tr>
+  <tr><td><span class="pick">C. Go transfer engine in the existing gomobile module (recommended)</span></td><td>One implementation for Android and iOS. Pins the Mac's certificate on Wi-Fi, trusts <code>ts.net</code> on Tailscale. Streams disk to disk, resumes with Range requests, hashes as it goes. The app already ships Go (<code>packages/tailnet</code>), so it adds no new toolchain</td><td>Most work. Needs a native rebuild (no OTA). Bridges, foreground service and Files integration still need small Kotlin and Swift pieces</td></tr>
+</table>
+
+<h2>Protocol</h2>
+<pre>RPC (small, over the existing connection)
+  drop.offer   { to, files: [{ name, size, mime, path, sha256? }] }  -> { dropId, files: [{ fileId, url }], ticket }
+  drop.accept  { dropId }            the receiving side says yes (auto-yes for your own paired devices, a setting)
+  drop.watch   stream of DropEvent   Offered | Accepted | Progress | FileDone | Done | Failed | Cancelled
+  drop.cancel  { dropId }
+
+HTTPS (bytes)
+  PUT  /api/drop/:dropId/:fileId     Content-Range: bytes a-b/total, 16 MB parts, written in place
+  HEAD /api/drop/:dropId/:fileId     which ranges arrived, so a resumed upload skips them
+  GET  /api/drop/:dropId/:fileId     Range supported, so a resumed download picks up where it stopped
+  Authorization: Drop &lt;ticket&gt;       one drop, one device, expires in an hour, never in the URL</pre>
+<ul>
+  <li><b>Wi-Fi:</b> the gateway opens one more HTTPS port next to the Noise port, with a certificate made once with <code>openssl</code> and kept in the data dir. Its SHA-256 key fingerprint travels in <code>MacRoutes</code>, which the phone only accepts over the already-authenticated Noise or Tailscale channel. The Go engine refuses any other certificate. That gives TLS 1.3 at native speed instead of ChaCha20 in JavaScript.</li>
+  <li><b>Tailscale:</b> the same endpoints are served under the existing <code>tailscale serve</code> HTTPS address, with its real certificate. When both devices are on the same Wi-Fi, Tailscale usually finds a direct path anyway.</li>
+  <li><b>Integrity:</b> the sender hashes while reading and the receiver hashes while writing. A mismatch throws the file away and says so.</li>
+  <li><b>Space:</b> the receiver checks free space before accepting: "Your Mac needs 4.2 GB free for this".</li>
+  <li><b>Folders:</b> phone to Mac keeps relative paths and recreates the folder in <code>~/Downloads/Vitals</code>. Mac to phone sends each file with its path, so there's no zipping and no double disk use; Android saves them under <code>Downloads/Vitals/&lt;folder&gt;</code>.</li>
+</ul>
+
+<h2>Mac to phone (the new direction)</h2>
+<ul>
+  <li><b>Ways to send:</b> right-click in Finder › Quick Actions › <b>Send to Phone</b> (a macOS Service declared in Info.plist; it works in our SwiftPM app, unlike a Share extension). Or drag files onto the Vitals menu bar icon or Dock icon, or use a Send Files button under Remote. With more than one paired phone, a small picker asks which.</li>
+  <li><b>When the phone is open:</b> the transfer starts at once and shows in the menu bar panel: "Sending to Pixel 9 Pro · 1.2 of 4.0 GB".</li>
+  <li><b>When it isn't:</b> there is no push service by design, so the Mac shows "Waiting for Pixel 9 Pro. Open Vitals on the phone." and starts the moment it connects. Android's background check (every 15 minutes) can also start a waiting drop.</li>
+</ul>
+
+<h2>Phone to Mac</h2>
+<ul>
+  <li>The share sheet sends files through Drop: any type, any size, several at once. Text and links keep going to the Mac clipboard as they do now.</li>
+  <li>Files land in <code>~/Downloads/Vitals</code> (a setting), quarantined so Gatekeeper checks apps and installers, with a notification that has Show in Finder.</li>
+</ul>
+
+<h2>On the phone</h2>
+<table>
+  <tr><th></th><th>Android</th><th>iPhone</th></tr>
+  <tr><td>Where files land</td><td><code>Downloads/Vitals</code> through MediaStore, with no storage permission on Android 10 and later. Photos and videos can also go to the gallery</td><td>Files app › On My iPhone › Vitals (<code>UIFileSharingEnabled</code> + <code>LSSupportsOpeningDocumentsInPlace</code>). Save to Photos for photos and videos</td></tr>
+  <tr><td>APKs</td><td>An <b>Install</b> button hands the APK to Android's installer. It needs <code>REQUEST_INSTALL_PACKAGES</code>, which Google Play allows for "file sharing, transfer or management" apps through a declaration form. Plan: Dev and Nightly get Install now; Stable shows "Open in Files" until the declaration is approved</td><td>Saved as a file. iOS can't install APKs</td></tr>
+  <tr><td>Background</td><td>Android 14 and later: a <b>user-initiated data transfer job</b>, which is made for this, shows its own progress notification and isn't under the 6-hour cap. Android 10 to 13: a <code>dataSync</code> foreground service. Android 15 caps <code>dataSync</code> at 6 hours a day, which is why it is only the fallback</td><td>Keeps going for about 30 seconds after you leave the app. Longer background transfers over Tailscale could use a background <code>URLSession</code> later; over Wi-Fi, with a pinned certificate, the app needs to stay open</td></tr>
+  <tr><td>Warnings</td><td colspan="2">Apps and installers (APK, DMG, PKG) are marked: "This is an app. Only install apps you trust."</td></tr>
+</table>
+
+<h2>How it fits the app (mocks first)</h2>
+<ul>
+  <li><b>Control:</b> the Clipboard section gains one tile: <b>Clipboard · Files · Open link · Find Mac</b>. Clipboard stays text, links and images. Files is the LocalSend replacement.</li>
+  <li><b>Files screen:</b> Incoming (from the Mac, with progress, then Open, Install, Save to Photos), Send (Files, Photos, Videos, plus whole folders on Android), and Sent. Nothing new on Home.</li>
+  <li><b>Share sheet:</b> files go to Drop and open a small Send sheet showing "4 files · 3.2 GB". Text and links still go to the Clipboard sheet.</li>
+  <li><b>Mac:</b> one Files card under Remote: receive folder, auto-accept from your own phones, Send Files. Progress shows in the menu bar panel.</li>
+  <li>As before: an HTML mock grid first, you pick, then code.</li>
+</ul>
+
+<h2>Security</h2>
+<ul>
+  <li>The Wi-Fi certificate is pinned, using a fingerprint delivered over the authenticated channel. Tailscale uses its own identity plus our session.</li>
+  <li>Tickets are per drop and per device, short-lived, and never in URLs or logs. Scopes: <code>operate</code> to send to the Mac; Mac-initiated drops go only to the device the Mac picked.</li>
+  <li>Received files on the Mac are quarantined. Names are sanitized to one path component, paths can't escape the receive folder, and nothing is ever overwritten.</li>
+  <li>Size has no hard cap, but the receiver checks free space, and a setting caps how much a single drop may use.</li>
+  <li>The privacy policy gets updated before this ships, plus the Play declaration for APK installs.</li>
+</ul>
+
+<h2>One system, not two</h2>
+<p>Drop reuses the clip store and the shared folder. A drop is a set of file clips with a target and a state. Clipboard history keeps its small RPC path for text, links and images under 8 MB. Anything bigger, and every file you send on purpose, goes through Drop. Once Drop ships, the 1 GB base64 path for big files is retired.</p>
+
+<h2>Phases (small commits, each tested)</h2>
+<div class="phase">
+  <div class="k">P0 Mocks</div><div>Files screen, incoming card, Install flow, share-sheet Send sheet, Mac Quick Action, menu bar progress. You pick.</div>
+  <div class="k">P1 Gateway</div><div>Drop store, <code>drop.*</code> RPCs, HTTPS PUT/HEAD/GET with tickets, Range resume, streamed hash, space check. Bun tests: resume after a cut, out-of-order parts, bad hash, wrong device, path escape.</div>
+  <div class="k">P2 Wi-Fi TLS</div><div>LAN HTTPS listener, certificate created once, fingerprint in <code>MacRoutes</code> (contract change). Tests: a pinned client succeeds and a wrong pin is refused.</div>
+  <div class="k">P3 Go engine</div><div>Pinned TLS client, parallel parts, resume, progress callbacks, hashing. Go unit tests, then gomobile bindings into the Expo module (Android and iOS).</div>
+  <div class="k">P4 Platform</div><div>Android: user-initiated transfer job (14+), foreground-service fallback, MediaStore Downloads, APK install (Dev and Nightly). iOS: Files app folder, finishing in the background.</div>
+  <div class="k">P5 Phone UI</div><div>Files screen, incoming, share-sheet routing, warnings, all from the picked mock.</div>
+  <div class="k">P6 Mac</div><div>Send to Phone service, menu bar and Dock drop, device picker, progress, receive-folder setting, notifications.</div>
+  <div class="k">P7 Web</div><div>Downloads by direct HTTPS GET with the session cookie; uploads by streamed PUT.</div>
+  <div class="k">P8 Measure</div><div>A 4 GB video and a 200 MB APK over Wi-Fi 5 and 6, Tailscale direct, and Tailscale relayed. Resume after turning Wi-Fi off mid-way. Battery and heat. Real numbers go in the PR; none are promised before then.</div>
+  <div class="k">P9 Ship</div><div>Privacy policy, Play declaration for APK installs, retire the old big-file path.</div>
+</div>
+
+<h2>Decisions for you</h2>
+<ol>
+  <li><b>Byte transport:</b> the Go engine (C, recommended) or the quicker Tailscale-only native HTTP (B)?</li>
+  <li><b>APK install:</b> Dev and Nightly first, with Stable after the Play declaration?</li>
+  <li><b>Where it lives:</b> a separate Files tile and screen (recommended), or inside the Clipboard screen?</li>
+  <li><b>Auto-accept:</b> should drops from your own paired devices start without asking (recommended), with a switch to ask first?</li>
+</ol>
+
+<h2>Sources</h2>
+<ul>
+  <li><a href="https://github.com/localsend/protocol">LocalSend protocol</a> (HTTPS, self-signed certificate, SHA-256 fingerprint)</li>
+  <li><a href="https://deepwiki.com/localsend/localsend/2.2-file-transfer-system">LocalSend file transfer system</a></li>
+  <li><a href="https://support.google.com/googleplay/android-developer/answer/12085295?hl=en">Google Play: REQUEST_INSTALL_PACKAGES policy</a></li>
+  <li><a href="https://developer.android.com/develop/background-work/services/fg-service-timeout">Android: foreground service timeouts (6 hours for dataSync)</a></li>
+  <li><a href="https://developer.android.com/about/versions/15/behavior-changes-15">Android 15 behavior changes</a></li>
+</ul>
+
+</main>
+</body>
+</html>

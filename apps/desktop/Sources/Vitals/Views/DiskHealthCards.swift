@@ -21,13 +21,7 @@ struct DiskHealthHeroCard: View {
     var body: some View {
         SectionCard(title: "Drive health", symbol: "internaldrive.fill") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(disk.percentUsed)%")
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Text("used").font(.callout).foregroundStyle(.secondary)
-                    Spacer()
+                HeroReadout(value: "\(disk.percentUsed)%", caption: "used") {
                     VStack(alignment: .trailing, spacing: 2) {
                         conditionBadge
                         if let identity = identityLine {
@@ -54,10 +48,7 @@ struct DiskHealthHeroCard: View {
         let ok = disk.criticalWarning == 0
         return Text(DiskHealthSnapshot.condition(criticalWarning: disk.criticalWarning))
             .font(.caption.weight(.medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill((ok ? Color.green : .orange).opacity(0.18)))
-            .foregroundStyle(ok ? Color.green : .orange)
+            .capsuleTag(ok ? .green : .orange)
     }
 }
 
@@ -69,14 +60,7 @@ struct DiskEnduranceCard: View {
     var body: some View {
         SectionCard(title: "Endurance", symbol: "square.and.arrow.down") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(formatBytes(UInt64(disk.bytesWritten)))
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Text("written, lifetime").font(.callout).foregroundStyle(.secondary)
-                    Spacer()
-                }
+                HeroReadout(value: formatBytes(UInt64(disk.bytesWritten)), caption: "written, lifetime")
                 Divider()
                 MetricRowGrid(rows: [
                     MetricRow(symbol: "square.and.arrow.up", label: "Data read", value: formatBytes(UInt64(disk.bytesRead))),

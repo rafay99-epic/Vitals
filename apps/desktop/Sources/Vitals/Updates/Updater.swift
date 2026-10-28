@@ -54,7 +54,7 @@ final class Updater {
     private(set) var status: Status = .idle
     private(set) var lastChecked: Date?
 
-    private let notifications = NotificationManager()
+    private let notifications = NotificationManager.shared
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
     @ObservationIgnored private var notifiedVersion: String?

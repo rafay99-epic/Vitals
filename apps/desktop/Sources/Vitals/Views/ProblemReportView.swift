@@ -23,8 +23,7 @@ struct ProblemReportView: View {
                     .font(.system(size: 12.5))
                     .frame(height: 120)
                     .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.quaternary.opacity(0.3)))
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator.opacity(0.5)))
+                    .insetCard(cornerRadius: 8)
             }
 
             Label {
@@ -78,11 +77,7 @@ struct ProblemReportView: View {
 
     private var header: some View {
         HStack(spacing: 9) {
-            Image(systemName: "envelope.badge")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.blue)
-                .frame(width: 30, height: 30)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.blue.opacity(0.14)))
+            IconTile(symbol: "envelope.badge", tint: .blue, size: 30, font: .system(size: 13, weight: .medium), cornerRadius: 8)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Report a Problem")
                     .font(.system(size: 14, weight: .semibold))

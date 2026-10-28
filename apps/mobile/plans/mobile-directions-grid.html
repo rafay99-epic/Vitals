@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Remote · three directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --s1:#0b0b0b; --s2:#121212; --s3:#1a1a1a; --line:#1c1c1c; --line2:#2a2a2a;
+  --mute:#6b6b6b; --dim:#9c9c9c; --ink2:#d4d4d4; --ink:#fff;
+  --yellow:#f2ec6b; --orange:#ffb45c; --red:#ff4d6d; --green:#5cf2a6; --blue:#74d4ff; --pink:#ff6b8b; --violet:#c8a8ff;
+  --serif:"Instrument Serif",Georgia,serif; --sans:"Geist",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  --tray:cubic-bezier(.32,.72,0,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.page{max-width:1700px;margin:0 auto;padding:36px 24px 120px}
+.kicker{font:500 10px var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+h1{font:italic 56px/1 var(--serif);margin:8px 0 14px}
+.constants{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));border-top:1px solid var(--line2);border-left:1px solid var(--line2);margin:18px 0 8px}
+.constants div{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:12px 14px;font-size:13px;color:var(--ink2)}
+.constants b{display:block;font:500 10px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--yellow);margin-bottom:4px}
+.dir{border-top:1px solid var(--line2);margin-top:48px;padding-top:20px}
+.dir-head{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:start}
+.dir-head h2{font:italic 40px/1 var(--serif);margin:0}
+.dir-head .label{font:500 12px var(--mono);color:var(--yellow);margin:8px 0 6px}
+.dir-head ul{margin:6px 0 0;padding:0;list-style:none;font-size:13px;color:var(--ink2);display:flex;gap:6px 22px;flex-wrap:wrap}
+.dir-head .pro::before{content:"+ ";color:var(--green)} .dir-head .con::before{content:"− ";color:var(--red)}
+.journey{font:12px var(--mono);color:var(--ink2);margin-top:10px}
+.journey b{color:var(--orange);font-weight:500}
+.pick{border:1px solid var(--line2);padding:10px 16px;font:500 12px var(--mono);letter-spacing:.5px}
+.pick[aria-pressed="true"]{border-color:var(--yellow);color:#000;background:var(--yellow)}
+.row{display:flex;gap:22px;overflow-x:auto;padding:30px 2px 14px;scroll-snap-type:x proximity}
+.cell{flex:none;scroll-snap-align:start}
+.cap{font:500 10px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between;gap:8px;width:262px}
+.cap button{color:var(--yellow);text-transform:none;letter-spacing:0}
+.note{width:262px;font-size:12px;color:var(--dim);margin-top:8px}
+
+/* phone shell */
+.phone{width:262px;height:556px;border:1px solid var(--line2);border-radius:34px;background:#000;position:relative;overflow:hidden;font-size:12px}
+.sb{position:absolute;top:10px;left:22px;right:22px;display:flex;justify-content:space-between;font:500 10px var(--mono);color:var(--ink2);z-index:1}
+.scr{position:absolute;inset:0;padding-top:32px;overflow:hidden}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.72);opacity:0;pointer-events:none;transition:opacity 200ms var(--tray);z-index:5}
+.phone.open .scrim{opacity:1;pointer-events:auto;transition-duration:300ms}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--s2);border-top:1px solid var(--line2);border-radius:24px 24px 0 0;padding:8px 0 18px;transform:translateY(105%);transition:transform 200ms var(--tray);z-index:6;max-height:92%;overflow:hidden}
+.phone.open .sheet.show{transform:none;transition-duration:300ms}
+.grab{width:34px;height:4px;border-radius:2px;background:#3a3a3a;margin:0 auto 12px}
+.sh-title{font:600 18px/1.2 var(--sans);padding:0 18px}
+.sh-sub{font-size:12px;color:var(--dim);padding:4px 18px 12px}
+.ico{width:18px;height:18px;flex:none}
+.ico-s{width:14px;height:14px;flex:none}
+
+/* shared bits */
+.mac{display:flex;justify-content:space-between;align-items:center;padding:8px 18px 0;font:11px var(--mono);color:var(--ink2)}
+.ok{color:var(--green)}
+.hold{position:relative;overflow:hidden;display:flex;justify-content:center;align-items:center;gap:8px;height:52px;margin:6px 18px 0;border:1px solid var(--red);color:var(--red);font:600 14px var(--sans);border-radius:14px;width:calc(100% - 36px);text-align:center}
+.hold::before{content:"";position:absolute;inset:0;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform 150ms ease-out;z-index:0}
+.hold:active::before{transform:scaleX(1);transition:transform 1.3s linear}
+.hold span{position:relative;z-index:1}
+.hold:active span{color:#000}
+.sh-foot{font-size:11px;color:var(--dim);text-align:center;padding:10px 18px 0}
+.sh-cancel{display:block;width:100%;text-align:center;padding:12px;color:var(--dim);font-size:13px}
+.toggle{width:30px;height:18px;border-radius:9px;background:#333;position:relative;flex:none}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#aaa}
+.toggle.on{background:var(--yellow)} .toggle.on::after{left:14px;background:#000}
+
+/* ===== A · Big buttons ===== */
+.A .title{font:700 26px/1.1 var(--sans);padding:6px 18px 10px;letter-spacing:-.3px}
+.A .state{font:italic 40px/1 var(--serif);padding:10px 18px 2px}
+.A .meta{font-size:11px;color:var(--dim);padding:0 18px 10px}
+.A .alert{margin:0 14px 12px;border:1px solid var(--orange);border-radius:14px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;width:calc(100% - 28px)}
+.A .alert b{display:block;font:600 13px var(--sans);color:var(--orange)}
+.A .alert span{font-size:11px;color:var(--ink2)}
+.A .lbl{font:600 11px var(--sans);color:var(--dim);padding:4px 18px 6px}
+.A .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px 12px}
+.A .pgrid.three{grid-template-columns:1fr 1fr 1fr}
+.A .pbtn{background:var(--s2);border-radius:14px;height:58px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:4px;padding:0 12px;font:600 13px var(--sans)}
+.A .pgrid.three .pbtn{height:62px;font-size:12px}
+.A .pbtn.red{color:var(--red)} .A .pbtn.red .ico{color:var(--red)}
+.A .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px}
+.A .m{background:var(--s1);border-radius:14px;padding:9px 12px}
+.A .m small{font:500 10px var(--mono);letter-spacing:.8px}
+.A .m div{font:600 20px var(--sans)}
+.A .m div i{font:400 11px var(--sans);font-style:normal;color:var(--dim)}
+.A .dock{position:absolute;left:14px;right:14px;bottom:12px;height:56px;border-radius:28px;background:#141414;border:1px solid var(--line2);display:flex;justify-content:space-around;align-items:center;z-index:2}
+.A .dock span{display:flex;flex-direction:column;align-items:center;gap:2px;font:500 9px var(--sans);color:var(--mute)}
+.A .dock span.on{color:var(--yellow)}
+.A .search{margin:0 14px 10px;background:var(--s2);border-radius:12px;padding:9px 12px;color:var(--mute);font-size:12px;display:flex;gap:8px;align-items:center}
+.A .chips{display:flex;gap:6px;padding:0 14px 10px;overflow:hidden}
+.A .chips span{background:var(--s2);border-radius:16px;padding:5px 10px;font:500 11px var(--sans);white-space:nowrap;color:var(--ink2)}
+.A .chips span.on{background:var(--yellow);color:#000}
+.A .sec{font:600 12px var(--sans);color:var(--dim);padding:8px 18px 4px;display:flex;justify-content:space-between}
+.A .app{display:flex;align-items:center;gap:10px;padding:7px 18px}
+.A .tile{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:700 12px var(--sans);color:#000;flex:none}
+.A .app .n{flex:1;font:500 13px var(--sans)}
+.A .app .n small{display:block;font:400 11px var(--sans);color:var(--dim)}
+.A .app .v{font:12px var(--mono);color:var(--ink2)}
+.A .more{padding:6px 18px 4px 58px;color:var(--yellow);font:500 12px var(--sans)}
+.A .actrow{display:flex;align-items:center;gap:12px;margin:0 14px 6px;background:var(--s3);border-radius:12px;padding:12px;font:600 13px var(--sans);width:calc(100% - 28px)}
+.A .actrow small{display:block;font:400 11px var(--sans);color:var(--dim)}
+.A .actrow.red{color:var(--red)}
+.A .seg{display:flex;margin:0 14px 12px;background:var(--s2);border-radius:12px;padding:3px}
+.A .seg span{flex:1;text-align:center;padding:7px 0;border-radius:9px;font:500 12px var(--sans);color:var(--dim)}
+.A .seg span.on{background:var(--yellow);color:#000}
+.A .slider{margin:0 14px 12px;background:var(--s2);border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px}
+.A .bar{flex:1;height:6px;border-radius:3px;background:#333;position:relative}
+.A .bar::before{content:"";position:absolute;left:0;top:0;bottom:0;width:55%;background:var(--yellow);border-radius:3px}
+.A .card{margin:0 14px 10px;border-radius:16px;background:var(--s2);padding:14px;border:1px solid var(--orange)}
+.A .card.calm{border-color:var(--line2)}
+.A .card h4{margin:0;font:700 15px var(--sans);color:var(--orange)}
+.A .card.calm h4{color:var(--ink2)}
+.A .card p{margin:4px 0 10px;font-size:12px;color:var(--ink2)}
+.A .big{display:block;width:100%;text-align:center;background:var(--yellow);color:#000;border-radius:12px;padding:11px;font:700 13px var(--sans)}
+.A .card .row2{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--dim)}
+.A .card .row2 b{color:var(--yellow);font-weight:600}
+.A .group{margin:0 14px 10px;background:var(--s2);border-radius:14px;overflow:hidden}
+.A .gi{display:flex;justify-content:space-between;align-items:center;padding:11px 12px;border-top:1px solid var(--line2);font:500 13px var(--sans)}
+.A .gi:first-child{border-top:0}
+.A .gi span:last-child{color:var(--dim);font-weight:400;font-size:12px}
+.A .gi.red{color:var(--red)}
+.A .maccard{margin:0 14px 10px;padding:14px;border-radius:16px;background:var(--s2)}
+.A .maccard b{font:700 16px var(--sans);display:block}
+.A .maccard span{font-size:11px;color:var(--dim)}
+
+/* ===== B · Monitor first ===== */
+.B .head{display:flex;justify-content:space-between;align-items:center;padding:8px 18px 0;font:11px var(--mono);color:var(--ink2)}
+.B .pw{width:34px;height:34px;border:1px solid var(--line2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.B .word{font:italic 44px/1 var(--serif);padding:4px 18px 2px}
+.B .meta{font:10.5px var(--mono);color:var(--dim);padding:2px 18px 10px}
+.B .status{display:flex;justify-content:space-between;align-items:center;margin:0 18px;padding:9px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);font:11px var(--mono);width:calc(100% - 36px)}
+.B .status .t{color:var(--orange)}
+.B .ch{padding:8px 18px 4px;border-bottom:1px solid var(--line)}
+.B .ch .top{display:flex;justify-content:space-between;align-items:baseline}
+.B .ch .tag{font:500 9.5px var(--mono);letter-spacing:1px}
+.B .ch .val{font:24px/1 var(--serif)}
+.B .ch .val i{font:10px var(--mono);font-style:normal;color:var(--dim)}
+.B .ch svg{display:block;width:100%;height:24px}
+.B .tabs{position:absolute;left:0;right:0;bottom:0;background:#000;border-top:1px solid var(--line2);display:flex;justify-content:space-around;padding:10px 0 16px;z-index:2}
+.B .tabs span{font:500 10px var(--mono);color:var(--mute);padding-bottom:4px;border-bottom:2px solid transparent}
+.B .tabs span.on{color:var(--ink);border-color:var(--yellow)}
+.B .title{font:italic 40px/1 var(--serif);padding:8px 18px 8px;display:flex;justify-content:space-between;align-items:center}
+.B .sort{font:10px var(--mono);color:var(--dim);display:flex;gap:8px;padding:0 18px 8px}
+.B .sort span.on{color:var(--yellow)}
+.B .grp{display:flex;justify-content:space-between;padding:10px 18px 4px;font:500 9.5px var(--mono);letter-spacing:1px;color:var(--dim);text-transform:uppercase;border-top:1px solid var(--line2)}
+.B .pr{display:flex;align-items:center;gap:10px;padding:6px 18px;font-size:12.5px}
+.B .pr .n{flex:1}
+.B .pr svg{width:44px;height:14px}
+.B .pr .v{font:11.5px var(--mono);width:44px;text-align:right}
+.B .more{padding:5px 18px 6px;font:10.5px var(--mono);color:var(--yellow)}
+.B .sec{font:500 9.5px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);padding:12px 18px 4px;display:flex;justify-content:space-between}
+.B .li{display:flex;justify-content:space-between;align-items:center;padding:10px 18px;border-top:1px solid var(--line);font-size:13px;width:100%}
+.B .li small{font:10px var(--mono);color:var(--dim)}
+.B .li.red{color:var(--red)}
+.B .chipsb{display:flex;gap:6px;padding:6px 18px 10px;border-top:1px solid var(--line)}
+.B .chipsb span{border:1px solid var(--line2);padding:4px 9px;font:10.5px var(--mono);color:var(--dim)}
+.B .chipsb span.on{border-color:var(--yellow);color:var(--yellow)}
+.B .alarm{margin:2px 18px 6px;border-left:3px solid var(--orange);padding:6px 0 6px 12px}
+.B .alarm b{font:italic 20px/1.1 var(--serif);font-weight:400;display:block}
+.B .alarm span{font:10.5px var(--mono);color:var(--dim)}
+.B .alarm .acts{display:flex;gap:14px;margin-top:6px;font:500 11px var(--mono)}
+.B .alarm .acts .y{color:var(--yellow)}
+.B .alarm.calm{border-color:var(--mute)}
+.B .kv{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:6px}
+.B .kv div{padding:8px 18px 8px 18px;font:10px var(--mono);color:var(--dim)}
+.B .kv div b{display:block;font:20px var(--serif);color:var(--ink);font-weight:400}
+
+/* ===== C · Search first ===== */
+.C .hello{font:600 13px var(--sans);color:var(--dim);padding:10px 18px 2px}
+.C .q{font:italic 30px/1.05 var(--serif);padding:0 18px 12px}
+.C .cmd{margin:0 14px 10px;border:1px solid var(--yellow);border-radius:16px;padding:12px 14px;display:flex;align-items:center;gap:10px;color:var(--dim);font-size:13px;width:calc(100% - 28px)}
+.C .sugg{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 12px}
+.C .sugg button{border:1px solid var(--line2);border-radius:18px;padding:6px 11px;font:500 12px var(--sans);display:flex;gap:6px;align-items:center}
+.C .sugg button.red{color:var(--red);border-color:rgba(255,77,109,.5)}
+.C .strip{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);margin:0 0 10px}
+.C .strip div{padding:8px 0 8px 14px;font:500 9px var(--mono);letter-spacing:.8px}
+.C .strip div b{display:block;font:600 17px var(--sans);color:var(--ink);letter-spacing:0}
+.C .need{margin:0 14px 10px;display:flex;gap:10px;align-items:center;padding:10px 12px;background:rgba(255,180,92,.1);border-radius:12px;font-size:12px;width:calc(100% - 28px)}
+.C .need b{color:var(--orange)}
+.C .sec{font:600 11px var(--sans);color:var(--dim);padding:6px 18px 4px;display:flex;justify-content:space-between}
+.C .sec span:last-child{color:var(--yellow);font-weight:500}
+.C .ar{display:flex;align-items:center;gap:10px;padding:7px 18px;font-size:13px}
+.C .ar .n{flex:1}
+.C .ar .v{font:11.5px var(--mono);color:var(--ink2)}
+.C .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.C .tabs{position:absolute;left:0;right:0;bottom:0;background:#000;border-top:1px solid var(--line2);display:flex;justify-content:space-around;padding:8px 0 14px;z-index:2}
+.C .tabs span{display:flex;flex-direction:column;align-items:center;gap:3px;font:500 9.5px var(--sans);color:var(--mute)}
+.C .tabs span.on{color:var(--ink)}
+.C .tabs span.on .ico{color:var(--yellow)}
+.C .field{margin:0 14px 8px;border:1px solid var(--yellow);border-radius:14px;padding:10px 12px;font-size:14px;display:flex;gap:8px;align-items:center}
+.C .field .caret{width:1.5px;height:16px;background:var(--yellow)}
+.C .res{display:flex;align-items:center;gap:12px;padding:10px 18px;font:500 13.5px var(--sans);width:100%}
+.C .res small{display:block;font:400 11px var(--sans);color:var(--dim)}
+.C .res.red{color:var(--red)}
+.C .res mark{background:none;color:var(--yellow)}
+.C .title{font:700 24px var(--sans);padding:8px 18px 10px}
+.C .swipe{display:flex;align-items:stretch;margin:0 0 2px}
+.C .swipe .body{flex:1;display:flex;align-items:center;gap:10px;padding:8px 18px;background:#000}
+.C .swipe .q1,.C .swipe .q2{width:58px;display:flex;align-items:center;justify-content:center;font:600 11px var(--sans)}
+.C .swipe .q1{background:#333} .C .swipe .q2{background:var(--red);color:#000}
+.C .li{display:flex;justify-content:space-between;align-items:center;padding:11px 18px;border-top:1px solid var(--line);font-size:13px}
+.C .li span:last-child{color:var(--dim);font-size:12px}
+.C .li.red{color:var(--red)}
+.C .tilegrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 14px 10px}
+.C .tilegrid span{border:1px solid var(--line2);border-radius:12px;height:58px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font:500 11px var(--sans)}
+.C .tilegrid span.red{color:var(--red)}
+
+.submitbar{position:fixed;left:0;right:0;bottom:0;background:#0b0b0b;border-top:1px solid var(--line2);padding:12px 24px;display:flex;gap:12px;align-items:center;z-index:50}
+.submitbar textarea{flex:1;background:#000;border:1px solid var(--line2);color:var(--ink);font:13px var(--sans);padding:8px 10px;height:40px;resize:vertical}
+.submitbar .chosen{font:12px var(--mono);color:var(--dim);min-width:150px}
+.submitbar button{background:var(--yellow);color:#000;font:600 13px var(--sans);padding:10px 16px}
+footer{margin-top:60px;font:11px var(--mono);color:var(--mute)}
+@media (max-width:700px){ .dir-head{grid-template-columns:1fr} h1{font-size:40px} .submitbar{flex-wrap:wrap} }
+@media print{ .submitbar{display:none} .row{flex-wrap:wrap;overflow:visible} }
+@media (prefers-reduced-motion:reduce){ .sheet,.scrim{transition-duration:1ms !important} }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8M6.4 6.6a8 8 0 1 0 11.2 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-control" viewBox="0 0 24 24"><path d="M5 7h14M5 17h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="7" r="2.5" fill="#000" stroke="currentColor" stroke-width="2"/><circle cx="15" cy="17" r="2.5" fill="#000" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-slow" viewBox="0 0 24 24"><path d="M4 18a8 8 0 0 1 16 0M12 18l-4-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 5V3h6v2" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-ping" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="w-ecg" viewBox="0 0 230 24"><path d="M0 14H40l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h44l5 5 5-17 6 20 5-8h29" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="w-wave" viewBox="0 0 230 24"><path d="M0 13C20 3 40 23 60 13S100 3 120 13 160 23 180 13 220 3 230 13" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="w-art" viewBox="0 0 230 24"><path d="M0 18L12 5 20 12 28 10 46 18 58 5 66 12 74 10 92 18 104 5 112 12 120 10 138 18 150 5 158 12 166 10 184 18 196 5 204 12 212 10 230 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="w-step" viewBox="0 0 230 24"><path d="M0 20H30V12H70V17H110V6H150V14H190V9H230" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="w-mini" viewBox="0 0 44 14"><path d="M0 10 8 8 14 11 20 4 28 7 34 3 44 6" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+</svg>
+
+<div class="page">
+  <div class="kicker">Vitals Remote · mobile · round 2</div>
+  <h1>Three directions. Pick one.</h1>
+  <div class="constants">
+    <div><b>Same in all three</b>True black, white text, yellow accent, orange and red for trouble. Instrument Serif, Geist, Geist Mono.</div>
+    <div><b>One code path</b>Every screen and sheet is one React Native component for iOS and Android. No per-platform forks.</div>
+    <div><b>Sheets</b>@gorhom/bottom-sheet, the same setup Lumo uses: 300 ms open, 200 ms close, drag to dismiss, Android back closes it. Tap "Play" on any sheet phone.</div>
+    <div><b>Mobile owns its UI</b>The phone app gets its own components, no longer shared with the web client. The Mac app stays SwiftUI, untouched.</div>
+    <div><b>Hold only to destroy</b>Shut down, Restart, Log out, Quit, Force quit and Unpair need a hold. Everything else is a tap. Try holding the red buttons.</div>
+  </div>
+
+  <!-- ================= A ================= -->
+  <section class="dir A" data-dir="A">
+    <div class="dir-head">
+      <div>
+        <h2>A · Big buttons</h2>
+        <div class="label">easiest to find, least like a monitor</div>
+        <ul><li class="pro">Power is on Home, 4 big buttons</li><li class="pro">Friendly labels, floating dock like Lumo</li><li class="con">Graphs shrink to number tiles</li><li class="con">Most chrome of the three</li></ul>
+        <div class="journey">Shut down at night: <b>Home → Shut down → hold 2 s</b>. 1 tap + hold.</div>
+      </div>
+      <button class="pick" data-pick="A" aria-pressed="false">Pick A</button>
+    </div>
+    <div class="row">
+      <div class="cell">
+        <div class="cap"><span>Home</span><button data-play="a-home" data-sheet="a-shut">Play</button></div>
+        <div class="phone" id="a-home"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="mac"><span>Rafay's MacBook Pro</span><span class="ok">● Connected</span></div>
+            <div class="state">Busy.</div>
+            <div class="meta">M3 Max · macOS 26.1 · updated just now</div>
+            <button class="alert"><div><b>▲ 25 agents running</b><span>Your Mac is slowing down</span></div><svg class="ico-s"><use href="#i-chev"/></svg></button>
+            <div class="lbl">Power</div>
+            <div class="pgrid">
+              <button class="pbtn"><svg class="ico"><use href="#i-moon"/></svg>Sleep</button>
+              <button class="pbtn"><svg class="ico"><use href="#i-lock"/></svg>Lock</button>
+              <button class="pbtn"><svg class="ico"><use href="#i-restart"/></svg>Restart</button>
+              <button class="pbtn red" data-open="a-shut"><svg class="ico"><use href="#i-power"/></svg>Shut down</button>
+            </div>
+            <div class="lbl">Right now</div>
+            <div class="mgrid">
+              <div class="m"><small style="color:var(--green)">CPU</small><div>71%</div></div>
+              <div class="m"><small style="color:var(--pink)">MEMORY</small><div>29.4 <i>of 36 GB</i></div></div>
+              <div class="m"><small style="color:var(--orange)">TEMP</small><div>68°</div></div>
+              <div class="m"><small style="color:var(--violet)">BATTERY</small><div>82%</div></div>
+            </div>
+          </div>
+          <nav class="dock"><span class="on"><svg class="ico"><use href="#i-home"/></svg>Home</span><span><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span><svg class="ico"><use href="#i-control"/></svg>Control</span><span><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+          <div class="scrim"></div>
+          <div class="sheet" id="a-shut"><div class="grab"></div>
+            <div class="sh-title">Shut down your Mac?</div>
+            <div class="sh-sub">Safari, Xcode and Slack are open. They may ask to save first.</div>
+            <button class="hold"><span>Hold to shut down</span></button>
+            <div class="sh-foot">You get 10 seconds to cancel.</div>
+            <button class="sh-cancel" data-close>Cancel</button>
+          </div>
+        </div>
+        <div class="note">Tap Shut down. The sheet slides up; tap outside to close it.</div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Apps</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title">Apps</div>
+            <div class="search"><svg class="ico-s"><use href="#i-search"/></svg>Search 214 apps and processes</div>
+            <div class="chips"><span class="on">All</span><span>Open 9</span><span>Agents 25</span><span>Emulators 2</span><span>Background</span></div>
+            <div class="sec"><span>Open apps</span><span>9</span></div>
+            <div class="app"><span class="tile" style="background:var(--blue)">X</span><span class="n">Xcode<small>12% CPU · 3.1 GB</small></span></div>
+            <div class="app"><span class="tile" style="background:var(--orange)">S</span><span class="n">Safari<small>4% CPU · 820 MB</small></span></div>
+            <div class="sec"><span>Agents</span><span>25 · 6.1 GB</span></div>
+            <div class="app"><span class="tile" style="background:var(--yellow)">c</span><span class="n">claude<small>38% CPU · 1.2 GB</small></span></div>
+            <div class="app"><span class="tile" style="background:var(--yellow)">c</span><span class="n">codex<small>22% CPU · 640 MB</small></span></div>
+            <div class="more">Show all 25</div>
+            <div class="sec"><span>Emulators</span><span>2</span></div>
+            <div class="app"><span class="tile" style="background:var(--green)">P</span><span class="n">Pixel 9 emulator<small>61% CPU · 4.0 GB</small></span></div>
+          </div>
+          <nav class="dock"><span><svg class="ico"><use href="#i-home"/></svg>Home</span><span class="on"><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span><svg class="ico"><use href="#i-control"/></svg>Control</span><span><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>App sheet</span><button data-play="a-app" data-sheet="a-appsheet">Play</button></div>
+        <div class="phone open" id="a-app"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr" style="opacity:.5"><div class="title">Apps</div></div>
+          <div class="scrim"></div>
+          <div class="sheet show" id="a-appsheet"><div class="grab"></div>
+            <div class="sh-title">claude</div>
+            <div class="sh-sub">Agent · 38% CPU · 1.2 GB · running 2 h</div>
+            <button class="actrow"><svg class="ico"><use href="#i-pause"/></svg><span>Pause<small>Resume any time</small></span></button>
+            <button class="actrow"><svg class="ico"><use href="#i-slow"/></svg><span>Slow it down<small>Runs when the Mac is idle</small></span></button>
+            <button class="actrow"><svg class="ico"><use href="#i-sun"/></svg><span>Keep Mac awake until it ends</span></button>
+            <button class="hold" style="height:46px"><span>Hold to quit</span></button>
+            <button class="sh-cancel" style="color:var(--red)">Force quit…</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Control</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title">Control</div>
+            <div class="lbl">Power</div>
+            <div class="pgrid three">
+              <span class="pbtn"><svg class="ico"><use href="#i-moon"/></svg>Sleep</span>
+              <span class="pbtn"><svg class="ico"><use href="#i-lock"/></svg>Lock</span>
+              <span class="pbtn"><svg class="ico"><use href="#i-screen"/></svg>Screen off</span>
+              <span class="pbtn"><svg class="ico"><use href="#i-restart"/></svg>Restart</span>
+              <span class="pbtn"><svg class="ico"><use href="#i-out"/></svg>Log out</span>
+              <span class="pbtn red"><svg class="ico"><use href="#i-power"/></svg>Shut down</span>
+            </div>
+            <div class="lbl">Keep awake</div>
+            <div class="seg"><span class="on">Off</span><span>1 h</span><span>4 h</span><span>Always</span></div>
+            <div class="lbl">Sound</div>
+            <div class="slider"><svg class="ico-s"><use href="#i-sound"/></svg><div class="bar"></div><span style="font:12px var(--mono)">55</span></div>
+            <div class="lbl">Send to Mac</div>
+            <div class="pgrid three">
+              <span class="pbtn"><svg class="ico"><use href="#i-clip"/></svg>Clipboard</span>
+              <span class="pbtn"><svg class="ico"><use href="#i-link"/></svg>Open link</span>
+              <span class="pbtn"><svg class="ico"><use href="#i-ping"/></svg>Find Mac</span>
+            </div>
+          </div>
+          <nav class="dock"><span><svg class="ico"><use href="#i-home"/></svg>Home</span><span><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span class="on"><svg class="ico"><use href="#i-control"/></svg>Control</span><span><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Alerts</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title">Alerts</div>
+            <div class="card"><h4>▲ Too many agents</h4><p>25 agents are using 140% CPU. Calming them lowers their priority so your apps stay fast.</p><button class="big">Calm them down</button></div>
+            <div class="card calm"><h4>✓ Emulators calmed</h4><div class="row2"><span>2 idle emulators paused at 22:30</span><b>Undo</b></div></div>
+            <div class="lbl">Tell me when</div>
+            <div class="group">
+              <div class="gi"><span>Memory is full</span><span class="toggle on"></span></div>
+              <div class="gi"><span>CPU is maxed out</span><span class="toggle on"></span></div>
+              <div class="gi"><span>Mac is running hot</span><span class="toggle on"></span></div>
+              <div class="gi"><span>Too many agents</span><span class="toggle on"></span></div>
+              
+            </div>
+          </div>
+          <nav class="dock"><span><svg class="ico"><use href="#i-home"/></svg>Home</span><span><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span><svg class="ico"><use href="#i-control"/></svg>Control</span><span class="on"><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Settings</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title">Settings</div>
+            <div class="maccard"><b>Rafay's MacBook Pro</b><span>M3 Max · 36 GB · macOS 26.1 · Vitals 0.214</span></div>
+            <div class="group">
+              <div class="gi"><span>Connection</span><span>Wi-Fi ›</span></div>
+              <div class="gi"><span>Notifications</span><span>On ›</span></div>
+              <div class="gi"><span>Updates</span><span>Up to date ›</span></div>
+            </div>
+            <div class="group">
+              <div class="gi"><span>This phone</span><span>Pixel 9 Pro ›</span></div>
+              <div class="gi"><span>What it can do</span><span>Full control ›</span></div>
+            </div>
+            <div class="group">
+              <div class="gi"><span>Help and diagnostics</span><span>›</span></div>
+            </div>
+            <div class="group"><div class="gi red"><span>Unpair this phone</span><span></span></div></div>
+          </div>
+          <nav class="dock"><span><svg class="ico"><use href="#i-home"/></svg>Home</span><span><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span><svg class="ico"><use href="#i-control"/></svg>Control</span><span><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span class="on"><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section class="dir B" data-dir="B">
+    <div class="dir-head">
+      <div>
+        <h2>B · Monitor first</h2>
+        <div class="label">keeps today's identity, power one icon away</div>
+        <ul><li class="pro">Live waveforms stay the hero</li><li class="pro">Dense, editorial, closest to the current look</li><li class="con">Shut down hides behind the ⏻ icon</li><li class="con">Text-only tab bar is less obvious</li></ul>
+        <div class="journey">Shut down at night: <b>⏻ (any screen) → Shut down → hold 2 s</b>. 2 taps + hold.</div>
+      </div>
+      <button class="pick" data-pick="B" aria-pressed="false">Pick B</button>
+    </div>
+    <div class="row">
+      <div class="cell">
+        <div class="cap"><span>Home</span><button data-play="b-home" data-sheet="b-power">Play</button></div>
+        <div class="phone" id="b-home"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="head"><span>Rafay's MacBook Pro <span class="ok">●</span></span><button class="pw" data-open="b-power" aria-label="Power"><svg class="ico-s"><use href="#i-power"/></svg></button></div>
+            <div class="word">Busy.</div>
+            <div class="meta">M3 Max · macOS 26.1</div>
+            <button class="status"><span class="t">▲ Too many agents · 25 running</span><span>›</span></button>
+            <div class="ch"><div class="top"><span class="tag" style="color:var(--green)">PULSE · CPU</span><span class="val">71<i>%</i></span></div><svg style="color:var(--green)"><use href="#w-ecg"/></svg></div>
+            <div class="ch"><div class="top"><span class="tag" style="color:var(--pink)">PRESS · MEMORY</span><span class="val">29.4<i>/36 GB</i></span></div><svg style="color:var(--pink)"><use href="#w-art"/></svg></div>
+            <div class="ch"><div class="top"><span class="tag" style="color:var(--orange)">TEMP</span><span class="val">68°</span></div><svg style="color:var(--orange)"><use href="#w-wave"/></svg></div>
+            <div class="ch"><div class="top"><span class="tag" style="color:var(--blue)">RESP · FANS</span><span class="val">2,410<i>rpm</i></span></div><svg style="color:var(--blue)"><use href="#w-wave"/></svg></div>
+            <div class="ch"><div class="top"><span class="tag" style="color:var(--violet)">OXY · BATTERY</span><span class="val">82<i>%</i></span></div><svg style="color:var(--violet)"><use href="#w-step"/></svg></div>
+          </div>
+          <nav class="tabs"><span class="on">Home</span><span>Apps</span><span>Control</span><span>Alerts</span><span>Settings</span></nav>
+          <div class="scrim"></div>
+          <div class="sheet" id="b-power"><div class="grab"></div>
+            <div class="sh-title" style="font:italic 30px/1 var(--serif)">Power.</div>
+            <div class="sh-sub" style="font:10.5px var(--mono)">Rafay's MacBook Pro</div>
+            <button class="li"><span>Sleep</span><small>tap</small></button>
+            <button class="li"><span>Lock</span><small>tap</small></button>
+            <button class="li"><span>Screen off</span><small>tap</small></button>
+            <button class="li"><span>Restart</span><small>hold</small></button>
+            <button class="li"><span>Log out</span><small>hold</small></button>
+            <button class="li red" data-open="b-shut"><span>Shut down</span><small>hold</small></button>
+          </div>
+          <div class="sheet" id="b-shut"><div class="grab"></div>
+            <div class="sh-title" style="font:italic 30px/1 var(--serif)">Shut down?</div>
+            <div class="sh-sub" style="font:10.5px var(--mono)">Safari, Xcode, Slack open · may ask to save</div>
+            <button class="hold" style="border-radius:0"><span>Hold to shut down</span></button>
+            <div class="sh-foot" style="font:10.5px var(--mono)">10 s to cancel after</div>
+            <button class="sh-cancel" data-close>Cancel</button>
+          </div>
+        </div>
+        <div class="note">Tap ⏻, then Shut down. The sheet swaps in place.</div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Apps</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title"><span>Apps.</span><button class="pw" aria-label="Power"><svg class="ico-s"><use href="#i-power"/></svg></button></div>
+            <div class="sort"><span class="on">CPU</span><span>Memory</span><span>· search ⌕</span></div>
+            <div class="grp"><span>Agents</span><span>25 · 140% · 6.1 GB</span></div>
+            <div class="pr"><span class="n">claude</span><svg style="color:var(--green)"><use href="#w-mini"/></svg><span class="v">38%</span></div>
+            <div class="pr"><span class="n">codex</span><svg style="color:var(--green)"><use href="#w-mini"/></svg><span class="v">22%</span></div>
+            <div class="pr"><span class="n">claude</span><svg style="color:var(--green)"><use href="#w-mini"/></svg><span class="v">17%</span></div>
+            <div class="more">+ 22 more</div>
+            <div class="grp"><span>Open apps</span><span>9 · 31% · 7.4 GB</span></div>
+            <div class="pr"><span class="n">Xcode</span><svg style="color:var(--green)"><use href="#w-mini"/></svg><span class="v">12%</span></div>
+            <div class="pr"><span class="n">Safari</span><svg style="color:var(--green)"><use href="#w-mini"/></svg><span class="v">4%</span></div>
+            <div class="more">+ 7 more</div>
+            <div class="grp"><span>Emulators</span><span>2 · 64% · 4.2 GB</span></div>
+            <div class="pr"><span class="n">Pixel 9 emulator</span><svg style="color:var(--green)"><use href="#w-mini"/></svg><span class="v">61%</span></div>
+          </div>
+          <nav class="tabs"><span>Home</span><span class="on">Apps</span><span>Control</span><span>Alerts</span><span>Settings</span></nav>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>App sheet</span><button data-play="b-app" data-sheet="b-appsheet">Play</button></div>
+        <div class="phone open" id="b-app"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr" style="opacity:.5"><div class="title">Apps.</div></div>
+          <div class="scrim"></div>
+          <div class="sheet show" id="b-appsheet"><div class="grab"></div>
+            <div class="sh-title" style="font:italic 30px/1 var(--serif)">claude</div>
+            <div class="sh-sub" style="font:10.5px var(--mono)">agent · pid 81723 · 38% · 1.2 GB</div>
+            <button class="li"><span>Pause</span><small>resume any time</small></button>
+            <button class="li"><span>Slow it down</span><small>runs when idle</small></button>
+            <button class="li"><span>Keep Mac awake until it ends</span><small></small></button>
+            <button class="li red"><span>Quit</span><small>hold</small></button>
+            <button class="li red"><span>Force quit</span><small>hold · unsaved work lost</small></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Control</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title"><span>Control.</span></div>
+            <div class="sec"><span>Power</span><span>2 need a hold</span></div>
+            <div class="li"><span>Sleep</span><small>display first</small></div>
+            <div class="li"><span>Lock</span><small>login screen</small></div>
+            <div class="li"><span>Screen off</span><small>Mac stays on</small></div>
+            <div class="li red"><span>Restart · Log out · Shut down</span><small>›</small></div>
+            <div class="sec"><span>Keep awake</span><span>off</span></div>
+            <div class="chipsb"><span class="on">Off</span><span>1 h</span><span>4 h</span><span>Always</span></div>
+            <div class="sec"><span>Sound</span><span>55</span></div>
+            <div class="li"><span>Volume ━━━━━━━━○──── </span><small>mute</small></div>
+            <div class="sec"><span>Send to Mac</span></div>
+            <div class="li"><span>Clipboard</span><small>›</small></div>
+            <div class="li"><span>Open a link</span><small>›</small></div>
+          </div>
+          <nav class="tabs"><span>Home</span><span>Apps</span><span class="on">Control</span><span>Alerts</span><span>Settings</span></nav>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Alerts</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title"><span>Alerts.</span></div>
+            <div class="alarm"><b>Too many agents.</b><span>25 running · 140% CPU · since 22:12</span><div class="acts"><span class="y">Calm them →</span><span>Why?</span></div></div>
+            <div class="alarm calm"><b style="color:var(--dim)">Emulators calmed.</b><span>2 paused at 22:30</span><div class="acts"><span class="y">Undo</span></div></div>
+            <div class="kv"><div><b>Normal</b>pressure</div><div><b>2.1</b>GB swap</div><div><b>Fair</b>thermal</div></div>
+            <div class="sec"><span>Tell me when</span><span>5 of 6</span></div>
+            <div class="li"><span>Memory is full</span><span class="toggle on"></span></div>
+            <div class="li"><span>CPU is maxed out</span><span class="toggle on"></span></div>
+            <div class="li"><span>Too many agents</span><span class="toggle on"></span></div>
+          </div>
+          <nav class="tabs"><span>Home</span><span>Apps</span><span>Control</span><span class="on">Alerts</span><span>Settings</span></nav>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Settings</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title"><span>Settings.</span></div>
+            <div class="sec"><span>Mac</span></div>
+            <div class="li"><span>Rafay's MacBook Pro</span><small>M3 Max · 26.1</small></div>
+            <div class="li"><span>Connection</span><small>Wi-Fi ›</small></div>
+            <div class="sec"><span>This phone</span></div>
+            <div class="li"><span>Notifications</span><small>on ›</small></div>
+            <div class="li"><span>What it can do</span><small>full control ›</small></div>
+            <div class="li"><span>Updates</span><small>up to date ›</small></div>
+            <div class="sec"><span>Help</span></div>
+            <div class="li"><span>Diagnostics</span><small>›</small></div>
+            <div class="li red"><span>Unpair</span><small>hold</small></div>
+          </div>
+          <nav class="tabs"><span>Home</span><span>Apps</span><span>Control</span><span>Alerts</span><span class="on">Settings</span></nav>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section class="dir C" data-dir="C">
+    <div class="dir-head">
+      <div>
+        <h2>C · Just ask</h2>
+        <div class="label">fastest if you know a word, only 4 tabs</div>
+        <ul><li class="pro">Type "shut" and it's there</li><li class="pro">Common actions sit as chips on Home</li><li class="pro">Swipe a row to pause or quit</li><li class="con">Browsing every control takes one extra sheet</li><li class="con">Search has to be good, or it fails hard</li></ul>
+        <div class="journey">Shut down at night: <b>Home → "Shut down" chip → hold 2 s</b>, or type "shut". 1 tap + hold.</div>
+      </div>
+      <button class="pick" data-pick="C" aria-pressed="false">Pick C</button>
+    </div>
+    <div class="row">
+      <div class="cell">
+        <div class="cap"><span>Home</span><button data-play="c-home" data-sheet="c-search">Play</button></div>
+        <div class="phone" id="c-home"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="hello">Rafay's MacBook Pro · <span class="ok">connected</span></div>
+            <div class="q">Busy, but fine.</div>
+            <button class="cmd" data-open="c-search"><svg class="ico-s"><use href="#i-search"/></svg>What do you want to do?</button>
+            <div class="sugg">
+              <button><svg class="ico-s"><use href="#i-moon"/></svg>Sleep</button>
+              <button><svg class="ico-s"><use href="#i-lock"/></svg>Lock</button>
+              <button><svg class="ico-s"><use href="#i-sun"/></svg>Awake 1 h</button>
+              <button class="red" data-open="c-shut"><svg class="ico-s"><use href="#i-power"/></svg>Shut down</button>
+              <button data-open="c-all">All controls</button>
+            </div>
+            <div class="strip">
+              <div style="color:var(--green)">CPU<b>71%</b></div>
+              <div style="color:var(--pink)">MEM<b>29 GB</b></div>
+              <div style="color:var(--orange)">TEMP<b>68°</b></div>
+              <div style="color:var(--violet)">BATT<b>82%</b></div>
+            </div>
+            <button class="need"><b>▲</b><span><b>25 agents running.</b> Tap to calm them.</span></button>
+            <div class="sec"><span>Using the most</span><span>See all</span></div>
+            <div class="ar"><span class="dot" style="background:var(--yellow)"></span><span class="n">claude</span><span class="v">38%</span></div>
+            <div class="ar"><span class="dot" style="background:var(--green)"></span><span class="n">Pixel 9 emulator</span><span class="v">61%</span></div>
+          </div>
+          <nav class="tabs"><span class="on"><svg class="ico"><use href="#i-home"/></svg>Home</span><span><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+          <div class="scrim"></div>
+          <div class="sheet" id="c-search" style="height:88%"><div class="grab"></div>
+            <div class="field"><svg class="ico-s"><use href="#i-search"/></svg>shut<span class="caret"></span></div>
+            <button class="res red" data-open="c-shut"><svg class="ico"><use href="#i-power"/></svg><span><mark>Shut</mark> down Mac<small>Power · hold to confirm</small></span></button>
+            <button class="res"><svg class="ico"><use href="#i-screen"/></svg><span><mark>Shut</mark> off screen<small>Power · Mac stays on</small></span></button>
+            <button class="res"><svg class="ico"><use href="#i-x"/></svg><span><mark>Shut</mark> down Pixel 9 emulator<small>Apps · Emulators</small></span></button>
+            <div class="sec" style="padding-top:12px"><span>Recent</span><span></span></div>
+            <button class="res"><svg class="ico"><use href="#i-lock"/></svg><span>Lock<small>yesterday 23:10</small></span></button>
+          </div>
+          <div class="sheet" id="c-shut"><div class="grab"></div>
+            <div class="sh-title">Shut down your Mac?</div>
+            <div class="sh-sub">Safari, Xcode and Slack are open. They may ask to save first.</div>
+            <button class="hold"><span>Hold to shut down</span></button>
+            <div class="sh-foot">You get 10 seconds to cancel.</div>
+            <button class="sh-cancel" data-close>Cancel</button>
+          </div>
+          <div class="sheet" id="c-all"><div class="grab"></div>
+            <div class="sh-title">All controls</div>
+            <div class="sh-sub">Power</div>
+            <div class="tilegrid"><span><svg class="ico"><use href="#i-moon"/></svg>Sleep</span><span><svg class="ico"><use href="#i-lock"/></svg>Lock</span><span><svg class="ico"><use href="#i-screen"/></svg>Screen off</span><span><svg class="ico"><use href="#i-restart"/></svg>Restart</span><span><svg class="ico"><use href="#i-out"/></svg>Log out</span><span class="red"><svg class="ico"><use href="#i-power"/></svg>Shut down</span></div>
+            <div class="sh-sub">Mac</div>
+            <div class="tilegrid"><span><svg class="ico"><use href="#i-sun"/></svg>Keep awake</span><span><svg class="ico"><use href="#i-sound"/></svg>Sound</span><span><svg class="ico"><use href="#i-clip"/></svg>Clipboard</span><span><svg class="ico"><use href="#i-link"/></svg>Open link</span><span><svg class="ico"><use href="#i-ping"/></svg>Find Mac</span></div>
+          </div>
+        </div>
+        <div class="note">Tap the search bar, then "Shut down Mac". Or tap the red chip directly.</div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>All controls sheet</span><button data-play="c-ctl" data-sheet="c-allb">Play</button></div>
+        <div class="phone open" id="c-ctl"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr" style="opacity:.5"><div class="q" style="padding-top:12px">Busy, but fine.</div></div>
+          <div class="scrim"></div>
+          <div class="sheet show" id="c-allb"><div class="grab"></div>
+            <div class="sh-title">All controls</div>
+            <div class="sh-sub">Power</div>
+            <div class="tilegrid"><span><svg class="ico"><use href="#i-moon"/></svg>Sleep</span><span><svg class="ico"><use href="#i-lock"/></svg>Lock</span><span><svg class="ico"><use href="#i-screen"/></svg>Screen off</span><span><svg class="ico"><use href="#i-restart"/></svg>Restart</span><span><svg class="ico"><use href="#i-out"/></svg>Log out</span><span class="red"><svg class="ico"><use href="#i-power"/></svg>Shut down</span></div>
+            <div class="sh-sub">Mac</div>
+            <div class="tilegrid"><span><svg class="ico"><use href="#i-sun"/></svg>Keep awake</span><span><svg class="ico"><use href="#i-sound"/></svg>Sound</span><span><svg class="ico"><use href="#i-clip"/></svg>Clipboard</span><span><svg class="ico"><use href="#i-link"/></svg>Open link</span><span><svg class="ico"><use href="#i-ping"/></svg>Find Mac</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Apps</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title">Apps</div>
+            <div class="field" style="border-color:var(--line2);color:var(--mute);font-size:12px"><svg class="ico-s"><use href="#i-search"/></svg>Search</div>
+            <div class="sec"><span>Agents · 25</span><span>Calm all</span></div>
+            <div class="swipe"><div class="body"><span class="dot" style="background:var(--yellow)"></span><span style="flex:1">claude</span><span style="font:11.5px var(--mono)">38%</span></div></div>
+            <div class="swipe"><div class="body"><span class="dot" style="background:var(--yellow)"></span><span style="flex:1">codex</span><span style="font:11.5px var(--mono)">22%</span></div><span class="q1">Pause</span><span class="q2">Quit</span></div>
+            <div class="swipe"><div class="body"><span class="dot" style="background:var(--yellow)"></span><span style="flex:1">claude</span><span style="font:11.5px var(--mono)">17%</span></div></div>
+            <div class="sec"><span>Open apps · 9</span><span>See all</span></div>
+            <div class="swipe"><div class="body"><span class="dot" style="background:var(--blue)"></span><span style="flex:1">Xcode</span><span style="font:11.5px var(--mono)">12%</span></div></div>
+            <div class="swipe"><div class="body"><span class="dot" style="background:var(--orange)"></span><span style="flex:1">Safari</span><span style="font:11.5px var(--mono)">4%</span></div></div>
+            <div class="sec"><span>Emulators · 2</span><span>See all</span></div>
+            <div class="swipe"><div class="body"><span class="dot" style="background:var(--green)"></span><span style="flex:1">Pixel 9 emulator</span><span style="font:11.5px var(--mono)">61%</span></div></div>
+          </div>
+          <nav class="tabs"><span><svg class="ico"><use href="#i-home"/></svg>Home</span><span class="on"><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+        </div>
+        <div class="note">Row 2 shows a swipe in progress. Tap a row for its full sheet.</div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Alerts</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title">Alerts</div>
+            <div class="need" style="flex-direction:column;align-items:stretch"><span><b>▲ 25 agents running</b></span><span style="color:var(--ink2)">They use 140% CPU. Calming lowers their priority.</span><span style="display:flex;gap:14px;margin-top:4px;font-weight:600"><span style="color:var(--yellow)">Calm them</span><span style="color:var(--dim)">Not now</span></span></div>
+            <div class="ar"><span class="dot" style="background:var(--mute)"></span><span class="n">Emulators calmed at 22:30</span><span class="v" style="color:var(--yellow)">Undo</span></div>
+            <div class="sec" style="padding-top:12px"><span>Tell me when</span><span></span></div>
+            <div class="li"><span>Memory is full</span><span class="toggle on"></span></div>
+            <div class="li"><span>CPU is maxed out</span><span class="toggle on"></span></div>
+            <div class="li"><span>Mac is running hot</span><span class="toggle on"></span></div>
+            <div class="li"><span>Too many agents</span><span class="toggle on"></span></div>
+            <div class="li"><span>Emulators fighting</span><span class="toggle"></span></div>
+          </div>
+          <nav class="tabs"><span><svg class="ico"><use href="#i-home"/></svg>Home</span><span><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span class="on"><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+        </div>
+      </div>
+
+      <div class="cell">
+        <div class="cap"><span>Settings</span></div>
+        <div class="phone"><div class="sb"><span>22:41</span><span>82%</span></div>
+          <div class="scr">
+            <div class="title">Settings</div>
+            <div class="li"><span>Your Mac</span><span>MacBook Pro ›</span></div>
+            <div class="li"><span>Connection</span><span>Wi-Fi ›</span></div>
+            <div class="li"><span>Notifications</span><span>On ›</span></div>
+            <div class="li"><span>What this phone can do</span><span>Everything ›</span></div>
+            <div class="li"><span>Updates</span><span>Up to date ›</span></div>
+            <div class="li"><span>Help and diagnostics</span><span>›</span></div>
+            <div class="li red"><span>Unpair this phone</span><span></span></div>
+          </div>
+          <nav class="tabs"><span><svg class="ico"><use href="#i-home"/></svg>Home</span><span><svg class="ico"><use href="#i-apps"/></svg>Apps</span><span><svg class="ico"><use href="#i-bell"/></svg>Alerts</span><span class="on"><svg class="ico"><use href="#i-gear"/></svg>Settings</span></nav>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Last updated 2026-10-22 · mockups only, numbers are illustrative · Opus 5.5 via Claude Code in T3 Code</footer>
+</div>
+
+<div class="submitbar">
+  <span class="chosen" id="chosen">Nothing picked yet</span>
+  <textarea id="why" placeholder="Optional: what you like, what to steal from the others" aria-label="Notes"></textarea>
+  <button id="submit">Copy my pick</button>
+</div>
+
+<script>
+// Universal submit + clipboard handler for HTML skills in this plugin.
+//
+// Two functions exposed on window:
+//
+//   submitToClaude(payload, opts), primary export. Posts the standard
+//     payload envelope to the agent. Two delivery modes:
+//       1. Server mode   , agent injected window.__CLAUDE_SUBMIT_URL__
+//                           before handing the artifact off; submit POSTs
+//                           JSON there. Used only when the agent is certain
+//                           its localhost is reachable from the user's
+//                           browser (local Claude Code).
+//       2. Clipboard mode, default. submit copies JSON; user pastes back.
+//
+//   copyToClipboard(text, opts), generic clipboard helper. Use this for
+//     ANY clipboard write in an artifact (e.g. a "copy CSS" or "copy URL"
+//     button). Never call navigator.clipboard.writeText directly, that
+//     skips the fallbacks and leaves the user with "can't copy" UX in
+//     contexts where the modern API rejects.
+//
+//   submitToClaude(payload, { redactSecrets: true }), opt-in, off by
+//     default. Strips high-confidence credential patterns (PEM private
+//     keys, AKIA…, ghp_/gho_…, xox…-, sk-…, AIza…, eyJ… JWTs,
+//     scheme://user:pass@ URLs) from the serialized payload before
+//     sending/copying, replacing each with a re-joinable
+//     '{{REDACTED:<type>:…<last4>}}' marker and showing a visible notice.
+//     Intended for config/env-shaped editors (see html-throwaway-editor's
+//     "Secrets are never embedded" rule, which is the primary defense -
+//     this is a last net, not the masking step).
+//
+// Clipboard mode tries the modern Promise API first; if that rejects (file://
+// restrictions in Safari, iframe Permissions-Policy, etc.) it falls back to
+// the legacy document.execCommand('copy') path which works in many of those
+// contexts. Both paths normally hit the clipboard silently. As an absolute
+// last resort, both methods failed, a small non-blocking banner pinned to
+// the bottom shows the JSON in a pre-selected textarea with a one-line
+// "Cmd+A, Cmd+C, paste back into Claude" instruction. No modal, ever.
+//
+// Payload envelope (both modes carry the same JSON):
+//   { skill: "html-<name>", kind: "<artifact-kind>", data: <...>, version: 1 }
+
+(function () {
+  // Opt-in payload redaction (opts.redactSecrets), deliberately narrow.
+  // This handler is shared by every html-skills artifact, so only
+  // high-confidence credential patterns are stripped; fuzzy heuristics
+  // (entropy guesses, "token"-ish key names) would corrupt legitimate
+  // payloads from other skills (design tokens, hashes, dataset rows).
+  // Each match becomes a re-joinable '{{REDACTED:<type>:…<last4>}}' marker
+  // the agent can restore from the original source, and a visible notice
+  // reports the count, never silent mutation.
+  const SECRET_PATTERNS = [
+    ['private-key', /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/g],
+    ['aws-key-id', /\bAKIA[0-9A-Z]{16}\b/g],
+    ['github-token', /\bgh[opsur]_[A-Za-z0-9]{20,}\b/g],
+    ['slack-token', /\bxox[abprse]-[A-Za-z0-9-]{10,}\b/g],
+    ['openai-key', /\bsk-[A-Za-z0-9_-]{20,}\b/g],
+    ['google-key', /\bAIza[0-9A-Za-z_-]{30,}\b/g],
+    ['jwt', /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g],
+    ['url-userinfo', /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"']+:[^\s/@"']+@/gi],
+  ];
+
+  function redactKnownSecrets(json) {
+    let count = 0;
+    for (const pair of SECRET_PATTERNS) {
+      json = json.replace(pair[1], function (m) {
+        count++;
+        // url-userinfo matches end inside the password, there is no safe
+        // last-4 preview for passwords, so emit a fixed marker instead.
+        if (pair[0] === 'url-userinfo') return '{{REDACTED:url-userinfo}}';
+        return '{{REDACTED:' + pair[0] + ':…' + m.slice(-4) + '}}';
+      });
+    }
+    return { json: json, count: count };
+  }
+
+  async function submitToClaude(payload, opts) {
+    opts = opts || {};
+    let json = JSON.stringify(payload, null, 2);
+    let note = '';
+
+    if (opts.redactSecrets) {
+      const red = redactKnownSecrets(json);
+      if (red.count > 0) {
+        json = red.json;
+        note = ' (' + red.count + ' secret-looking value'
+          + (red.count === 1 ? '' : 's') + ' redacted)';
+      }
+    }
+
+    const url = opts.url || window.__CLAUDE_SUBMIT_URL__;
+
+    if (url) {
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: json,
+        });
+        if (r.ok) {
+          notify(opts, (opts.serverMessage
+            || window.__CLAUDE_SERVER_MESSAGE__
+            || 'Submitted to Claude.') + note);
+          return 'server';
+        }
+      } catch (e) {
+        // Fall through to clipboard.
+      }
+    }
+    return clipboardSubmit(json, opts, note);
+  }
+
+  async function clipboardSubmit(json, opts, note) {
+    const msg = (opts.clipboardMessage
+      || window.__CLAUDE_CLIPBOARD_MESSAGE__
+      || 'Copied to clipboard, paste back into Claude.') + (note || '');
+    return copyToClipboard(json, { ...opts, message: msg, returnTag: 'clipboard' });
+  }
+
+  // Standalone clipboard helper, exposed on window. Use this for ANY
+  // clipboard write in an artifact, never call navigator.clipboard.writeText
+  // directly, since that skips the execCommand fallback and the inline
+  // banner, leaving the user stuck with a "can't copy" message in the
+  // contexts where the modern API rejects.
+  async function copyToClipboard(text, opts) {
+    opts = opts || {};
+    const msg = opts.message || 'Copied to clipboard.';
+    if (await tryAsyncClipboard(text)) {
+      notify(opts, msg);
+      return opts.returnTag || 'copied';
+    }
+    if (copyViaExecCommand(text)) {
+      notify(opts, msg);
+      return opts.returnTag || 'copied';
+    }
+    showInlineFallback(text);
+    return 'manual';
+  }
+
+  async function tryAsyncClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function copyViaExecCommand(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    Object.assign(ta.style, {
+      position: 'fixed', top: '0', left: '0',
+      width: '1px', height: '1px', opacity: '0',
+    });
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+    return ok;
+  }
+
+  function notify(opts, msg) {
+    if (typeof opts.onResult === 'function') { opts.onResult(msg); return; }
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.setAttribute('role', 'status');
+    Object.assign(el.style, {
+      position: 'fixed', bottom: '16px', left: '50%',
+      transform: 'translateX(-50%)', background: '#111', color: '#fff',
+      padding: '10px 14px', borderRadius: '8px', font: '14px system-ui',
+      zIndex: 99999, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+    });
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  // Absolute last resort: both clipboard paths failed. Drop a small
+  // non-blocking banner pinned to the bottom of the page with the JSON
+  // pre-selected and a one-line instruction. NEVER a modal, the rest of
+  // the page stays interactive.
+  function showInlineFallback(json) {
+    const wrap = document.createElement('div');
+    wrap.setAttribute('role', 'region');
+    wrap.setAttribute('aria-label', 'Manual copy required');
+    Object.assign(wrap.style, {
+      position: 'fixed', left: '50%', bottom: '12px',
+      transform: 'translateX(-50%)',
+      width: 'min(720px, calc(100% - 24px))',
+      background: '#111', color: '#fff',
+      borderRadius: '10px', padding: '10px 12px',
+      boxShadow: '0 6px 24px rgba(0,0,0,0.3)',
+      zIndex: 99999,
+      font: '13px system-ui, -apple-system, sans-serif',
+      display: 'grid', gridTemplateColumns: '1fr auto',
+      columnGap: '8px', alignItems: 'start',
+    });
+
+    const main = document.createElement('div');
+    const msg = document.createElement('div');
+    msg.textContent = 'Auto-copy unavailable here. Press ⌘A then ⌘C in the box, then paste into Claude.';
+    msg.style.marginBottom = '6px';
+    main.appendChild(msg);
+
+    const ta = document.createElement('textarea');
+    ta.value = json;
+    ta.readOnly = true;
+    ta.spellcheck = false;
+    Object.assign(ta.style, {
+      width: '100%', minHeight: '60px', maxHeight: '160px',
+      resize: 'vertical', padding: '6px 8px',
+      font: '12px ui-monospace, monospace',
+      background: '#fff', color: '#111',
+      border: 'none', borderRadius: '6px', outline: 'none',
+      boxSizing: 'border-box',
+    });
+    main.appendChild(ta);
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Dismiss');
+    Object.assign(close.style, {
+      background: 'transparent', border: 'none', color: '#fff',
+      fontSize: '18px', cursor: 'pointer', lineHeight: '1',
+      padding: '2px 4px', alignSelf: 'start',
+    });
+    close.addEventListener('click', () => wrap.remove());
+
+    wrap.append(main, close);
+    document.body.appendChild(wrap);
+
+    setTimeout(() => { ta.focus(); ta.select(); }, 0);
+  }
+
+  window.submitToClaude = submitToClaude;
+  window.copyToClipboard = copyToClipboard;
+})();
+
+</script>
+<script>
+(function () {
+  function openSheet(phone, id) {
+    phone.querySelectorAll('.sheet').forEach(function (s) { s.classList.toggle('show', s.id === id); });
+    phone.classList.add('open');
+  }
+  function closeSheet(phone) { phone.classList.remove('open'); }
+
+  document.querySelectorAll('[data-open]').forEach(function (b) {
+    b.addEventListener('click', function () { openSheet(b.closest('.phone'), b.dataset.open); });
+  });
+  document.querySelectorAll('.scrim,[data-close]').forEach(function (el) {
+    el.addEventListener('click', function () { closeSheet(el.closest('.phone')); });
+  });
+  document.querySelectorAll('[data-play]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var phone = document.getElementById(b.dataset.play);
+      if (phone.classList.contains('open')) closeSheet(phone); else openSheet(phone, b.dataset.sheet);
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('.phone.open').forEach(closeSheet);
+  });
+
+  var NAMES = { A: 'Big buttons', B: 'Monitor first', C: 'Just ask' };
+  var chosen = null;
+  document.querySelectorAll('[data-pick]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      chosen = b.dataset.pick;
+      document.querySelectorAll('[data-pick]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+      document.getElementById('chosen').textContent = 'Picked ' + chosen + ' · ' + NAMES[chosen];
+    });
+  });
+  document.getElementById('submit').addEventListener('click', function () {
+    submitToClaude({
+      skill: 'html-brainstorm-grid',
+      kind: 'pick-one',
+      data: { chosen: chosen, title: chosen ? NAMES[chosen] : null, rationale: document.getElementById('why').value, candidates: ['A', 'B', 'C'] },
+      version: 1
+    });
+  });
+})();
+</script>
+</body>
+</html>

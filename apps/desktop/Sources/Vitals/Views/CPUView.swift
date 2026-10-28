@@ -4,14 +4,10 @@ import SwiftUI
 /// utilisation, per-core die temperatures, and the CPU power rail. Without a
 /// trusted P/E split (Intel, a VM) it shows the blended view, no invented labels.
 struct CPUView: View {
-    @Environment(VitalsModel.self) private var model
-
     var body: some View {
         MetricScroll {
             CPUHeroCard()
-            if model.cpuClusters != nil || !model.cpuPerCore.isEmpty {
-                CPUCoresCard()
-            }
+            CPUCoresCard()
             CPUThermalPowerCard()
         }
     }
@@ -25,15 +21,7 @@ private struct CPUHeroCard: View {
     var body: some View {
         SectionCard(title: "CPU", symbol: "cpu") {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(String(format: "%.0f%%", model.cpuUsage))
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Text("load")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                HeroReadout(value: String(format: "%.0f%%", model.cpuUsage), caption: "load") {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(HardwareInfo.chipName).font(.headline)
                         Text(coreSummary).font(.callout).foregroundStyle(.secondary)
@@ -62,6 +50,12 @@ private struct CPUCoresCard: View {
     @Environment(VitalsModel.self) private var model
 
     var body: some View {
+        if model.cpuClusters != nil || !model.cpuPerCore.isEmpty {
+            cores
+        }
+    }
+
+    private var cores: some View {
         SectionCard(title: "Cores", symbol: "square.split.1x2") {
             VStack(alignment: .leading, spacing: 14) {
                 if let clusters = model.cpuClusters {
@@ -106,9 +100,7 @@ private struct CPUThermalPowerCard: View {
     var body: some View {
         SectionCard(title: "Temperature", symbol: "thermometer.medium") {
             if model.cpuSensors.isEmpty {
-                Text("Per-core temperatures unavailable on this Mac.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
+                CardPlaceholder("Per-core temperatures unavailable on this Mac.")
             } else {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 24) {

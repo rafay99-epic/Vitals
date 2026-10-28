@@ -13,6 +13,12 @@ on:
     branches: [nightly]
     paths:
       - "apps/desktop/**"
+      - "apps/gateway/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/nightly.yml"
       - ".github/scripts/**"
   workflow_dispatch:
@@ -46,10 +52,32 @@ jobs:
       - name: Lint
         run: swiftlint --reporter github-actions-logging
 
+  remote:
+    name: Remote checks before nightly
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm oxlint
+      - name: Typecheck and test
+        run: pnpm turbo typecheck test --filter=@vitals/*
+
   nightly:
     name: Build and publish Nightly pre-release
     runs-on: macos-26
-    needs: test
+    needs: [test, remote]
     # Only this job writes releases (least privilege; the test job stays read-only).
     # pull-requests: read lets changelog.sh read PR titles/labels for the notes.
     permissions:
@@ -82,12 +110,33 @@ jobs:
           MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
 
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install workspace dependencies
+
+        working-directory: .
+
+        run: pnpm install --frozen-lockfile
+
       - name: Build Nightly app and installer
         run: |
           export VITALS_CHANNEL=nightly
           export VITALS_VERSION="$VERSION"
           export VITALS_BUILD="$BUILD"
           ./make-dmg.sh
+
+      - name: Upload debug symbols to Sentry
+        continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then echo "::warning::SENTRY_AUTH_TOKEN is not set; skipping the dSYM upload"; exit 0; fi
+          npx -y @sentry/cli@3.8.0 debug-files upload --org syntax-lab-tecnology --project vitals-macos-nightly build/*.dSYM
 
       - name: Build release notes
         env:

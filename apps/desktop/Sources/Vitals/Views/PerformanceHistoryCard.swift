@@ -7,8 +7,6 @@ struct PerformanceHistoryCard: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
     @State private var metric: Metric = .temp
-    @State private var hoverTime: Date?
-    @Namespace private var indicator
 
     enum Metric: String, CaseIterable, Identifiable {
         case temp, cpu, gpu, memory, power, network
@@ -52,13 +50,14 @@ struct PerformanceHistoryCard: View {
     private var chartHistory: [VitalsModel.Sample] { model.chartHistory }
 
     var body: some View {
+        let metrics = available
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Last \(settings.historyMinutes) minutes", systemImage: metric.symbol)
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                switcher
+                CapsuleSegments(options: metrics, selection: metric, title: \.title) { metric = $0 }
             }
             Deferred {
                 chart
@@ -69,136 +68,48 @@ struct PerformanceHistoryCard: View {
         .padding(16)
         .cardBackground()
         // Keep the selection valid if a metric's reading disappears.
-        .onChange(of: available) { _, list in
+        .onChange(of: metrics) { _, list in
             if !list.contains(metric) { metric = .temp }
         }
-    }
-
-    // MARK: Switcher
-
-    private var switcher: some View {
-        HStack(spacing: 2) {
-            ForEach(available) { item in
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { metric = item }
-                } label: {
-                    Text(item.title)
-                        .font(.system(size: 11, weight: .medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(metric == item ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                .background {
-                    if metric == item {
-                        Capsule().fill(.quaternary).matchedGeometryEffect(id: "seg", in: indicator)
-                    }
-                }
-            }
-        }
-        .padding(3)
-        .background(Capsule().fill(.quaternary.opacity(0.45)))
     }
 
     // MARK: Chart
 
     private var chart: some View {
-        Chart {
-            marks
-            if let sample = chartHistory.nearest(to: hoverTime) {
-                RuleMark(x: .value("Time", sample.time))
-                    .foregroundStyle(.secondary.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-                    .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                        HoverTooltip(time: sample.time) { tooltip(sample) }
-                    }
-            }
-        }
-        // Scope the legend/colors to the selected metric's series only. A global
-        // scale would list every series (Memory/Swap) even on the Temp view.
-        .chartForegroundStyleScale(domain: seriesStyle.domain, range: seriesStyle.range)
-        .chartYScale(domain: yDomain)
-        .chartYAxisLabel(axisLabel)
-        .chartLegend(multiSeries ? .visible : .hidden)
-        .chartHover($hoverTime)
+        let lines = series(for: metric)
+        return MetricChart(
+            samples: chartHistory,
+            series: lines,
+            yLabel: axisLabel,
+            yDomain: yDomain(lines),
+            legend: legend
+        ) { tooltip($0) }
     }
 
-    @ChartContentBuilder
-    private var marks: some ChartContent {
+    private func series(for metric: Metric) -> [ChartSeries<VitalsModel.Sample>] {
         switch metric {
         case .temp:
-            ForEach(chartHistory) { sample in
-                LineMark(x: .value("Time", sample.time),
-                         y: .value("Temp", settings.display(sample.hottestCPU)),
-                         series: .value("Series", "Hottest core"))
-                    .foregroundStyle(by: .value("Series", "Hottest core"))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time),
-                         y: .value("Temp", settings.display(sample.averageCPU)),
-                         series: .value("Series", "CPU average"))
-                    .foregroundStyle(by: .value("Series", "CPU average"))
-                    .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-            }
+            return [
+                .init(name: "Hottest core", color: .red.opacity(0.7)) { settings.display($0.hottestCPU) },
+                .init(name: "CPU average", color: .orange, lineWidth: 2) { settings.display($0.averageCPU) }
+            ]
         case .cpu:
-            ForEach(chartHistory) { sample in
-                areaLine(sample.time, sample.usage, .blue)
-            }
+            return [.init(name: "CPU", color: .blue, area: 0.35) { $0.usage }]
         case .gpu:
-            ForEach(chartHistory) { sample in
-                if let usage = sample.gpuUsage {
-                    areaLine(sample.time, usage, .purple)
-                }
-            }
+            return [.init(name: "GPU", color: .purple, area: 0.35) { $0.gpuUsage }]
         case .memory:
-            ForEach(chartHistory) { sample in
-                LineMark(x: .value("Time", sample.time),
-                         y: .value("GB", gigabytes(sample.memoryUsed)),
-                         series: .value("Series", "Memory"))
-                    .foregroundStyle(by: .value("Series", "Memory"))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time),
-                         y: .value("GB", gigabytes(sample.swapUsed)),
-                         series: .value("Series", "Swap"))
-                    .foregroundStyle(by: .value("Series", "Swap"))
-                    .interpolationMethod(.catmullRom)
-            }
+            return [
+                .init(name: "Memory", color: .indigo) { gigabytes($0.memoryUsed) },
+                .init(name: "Swap", color: .orange) { gigabytes($0.swapUsed) }
+            ]
         case .power:
-            ForEach(chartHistory) { sample in
-                if let watts = sample.totalWatts {
-                    areaLine(sample.time, watts, .yellow)
-                }
-            }
+            return [.init(name: "Power", color: .yellow, area: 0.35) { $0.totalWatts }]
         case .network:
-            ForEach(chartHistory) { sample in
-                if let down = sample.netInPerSec {
-                    LineMark(x: .value("Time", sample.time),
-                             y: .value("MB/s", down / 1_000_000),
-                             series: .value("Series", "Download"))
-                        .foregroundStyle(by: .value("Series", "Download"))
-                        .interpolationMethod(.catmullRom)
-                }
-                if let up = sample.netOutPerSec {
-                    LineMark(x: .value("Time", sample.time),
-                             y: .value("MB/s", up / 1_000_000),
-                             series: .value("Series", "Upload"))
-                        .foregroundStyle(by: .value("Series", "Upload"))
-                        .interpolationMethod(.catmullRom)
-                }
-            }
+            return [
+                .init(name: "Download", color: .mint) { $0.netInPerSec.map { $0 / 1_000_000 } },
+                .init(name: "Upload", color: .orange) { $0.netOutPerSec.map { $0 / 1_000_000 } }
+            ]
         }
-    }
-
-    @ChartContentBuilder
-    private func areaLine(_ time: Date, _ value: Double, _ color: Color) -> some ChartContent {
-        AreaMark(x: .value("Time", time), y: .value("%", value))
-            .foregroundStyle(LinearGradient(colors: [color.opacity(0.35), color.opacity(0.02)],
-                                            startPoint: .top, endPoint: .bottom))
-            .interpolationMethod(.catmullRom)
-        LineMark(x: .value("Time", time), y: .value("%", value))
-            .foregroundStyle(color)
-            .interpolationMethod(.catmullRom)
     }
 
     @ViewBuilder
@@ -224,16 +135,14 @@ struct PerformanceHistoryCard: View {
 
     // MARK: Per-metric scale / labels
 
-    private var multiSeries: Bool { metric == .temp || metric == .memory || metric == .network }
-
-    /// Legend/color domain for the *current* metric only (empty for the
-    /// single-series CPU/GPU views, which colour their marks directly).
-    private var seriesStyle: (domain: [String], range: [Color]) {
+    /// Legend order for the multi-series views; nil for the single-series ones,
+    /// which colour their marks directly.
+    private var legend: [String]? {
         switch metric {
-        case .temp: return (["CPU average", "Hottest core"], [.orange, .red.opacity(0.7)])
-        case .memory: return (["Memory", "Swap"], [.indigo, .orange])
-        case .network: return (["Download", "Upload"], [.mint, .orange])
-        case .cpu, .gpu, .power: return ([], [])
+        case .temp: return ["CPU average", "Hottest core"]
+        case .memory: return ["Memory", "Swap"]
+        case .network: return ["Download", "Upload"]
+        case .cpu, .gpu, .power: return nil
         }
     }
 
@@ -247,25 +156,22 @@ struct PerformanceHistoryCard: View {
         }
     }
 
-    private var yDomain: ClosedRange<Double> {
+    private func yDomain(_ series: [ChartSeries<VitalsModel.Sample>]) -> ClosedRange<Double> {
         switch metric {
         case .cpu, .gpu:
             return 0...100
         case .power:
-            let watts = chartHistory.compactMap { $0.totalWatts }
-            return 0...max((watts.max() ?? 1) * 1.15, 1)
+            return 0...max((chartHistory.bounds(of: series)?.upperBound ?? 1) * 1.15, 1)
         case .network:
             // Peak of either direction, in MB/s; a 0.1 MB/s floor keeps an idle
             // link's chart from stretching noise across the full height.
-            let rates = chartHistory.flatMap { [$0.netInPerSec, $0.netOutPerSec].compactMap { $0 } }
-            return 0...max(((rates.max() ?? 0) / 1_000_000) * 1.15, 0.1)
+            return 0...max((chartHistory.bounds(of: series)?.upperBound ?? 0) * 1.15, 0.1)
         case .memory:
             // The constant physical total, not `model.memory`, which changes every tick.
             return 0...max(gigabytes(model.memoryTotal), 1)
         case .temp:
-            let temps = chartHistory.flatMap { [$0.averageCPU, $0.hottestCPU] }.map(settings.display)
-            guard let lo = temps.min(), let hi = temps.max() else { return settings.display(30)...settings.display(90) }
-            return (lo - 5)...(hi + 5)
+            guard let bounds = chartHistory.bounds(of: series) else { return settings.display(30)...settings.display(90) }
+            return (bounds.lowerBound - 5)...(bounds.upperBound + 5)
         }
     }
 }

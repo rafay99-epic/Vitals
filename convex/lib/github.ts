@@ -115,8 +115,9 @@ export async function fetchLatestRelease(opts: FetchOptions = {}): Promise<Lates
 /// Fetches one page of the release list for `repo` (`RELEASES_PER_PAGE` items,
 /// `options.page` defaulting to 1). Resolves to a newest-first array of
 /// `ReleaseSummary`, or `null` on any failure (network error, non-2xx, non-array
-/// body) so the caller can show an error state. Drafts and tag-less releases are
-/// filtered out; prereleases (Nightly builds) are KEPT and flagged via `prerelease`.
+/// body) so the caller can show an error state. Drafts, tag-less releases and releases
+/// with no `.dmg` (the phone app's `android-nightly` APK) are filtered out; prereleases
+/// (Nightly builds) are KEPT and flagged via `prerelease`.
 export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSummary[] | null> {
   try {
     const page = opts.page ?? 1
@@ -125,14 +126,14 @@ export async function fetchReleases(opts: FetchOptions = {}): Promise<ReleaseSum
 
     const summaries: ReleaseSummary[] = []
     for (const raw of json as GitHubReleasePayload[]) {
-      if (raw.draft || !raw.tag_name) continue
       const dmg = raw.assets?.find((a) => a.name?.endsWith('.dmg'))
+      if (raw.draft || !raw.tag_name || dmg === undefined) continue
       summaries.push({
         tag: raw.tag_name,
         name: raw.name && raw.name.length > 0 ? raw.name : raw.tag_name,
         publishedAt: raw.published_at ? Date.parse(raw.published_at) : 0,
         url: raw.html_url ?? '',
-        dmgUrl: dmg?.browser_download_url ?? null,
+        dmgUrl: dmg.browser_download_url ?? null,
         sizeMB: bytesToMB(dmg?.size),
         body: raw.body ?? '',
         prerelease: raw.prerelease ?? false,

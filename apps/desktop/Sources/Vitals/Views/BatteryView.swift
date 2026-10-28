@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The Battery section: capacity vs design, cycles, condition, charge trend,
 /// adapter negotiation, and the pack's electrical readings (AppleSmartBattery).
@@ -24,7 +23,7 @@ struct BatteryView: View {
                     tint: .green,
                     title: "No battery",
                     message: "This Mac runs on wall power — there's no battery to report on. Charge, health and power figures appear here on a notebook. Sleep blockers are listed below regardless."
-                ) { EmptyView() }
+                )
             }
             // Power draw and sleep blockers matter on wall power too, so they
             // sit outside the battery gate.
@@ -44,13 +43,7 @@ private struct BatteryHeroCard: View {
     var body: some View {
         SectionCard(title: "Charge", symbol: BatteryContent.symbol(for: battery)) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(Int(battery.percent))%")
-                        .font(.system(size: 40, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Text(BatteryContent.stateLine(for: battery)).font(.title3).foregroundStyle(.secondary)
-                    Spacer()
+                HeroReadout(value: "\(Int(battery.percent))%", caption: BatteryContent.stateLine(for: battery), large: true) {
                     if let minutes = battery.timeRemainingMinutes {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(BatteryContent.timeText(minutes)).font(.headline).monospacedDigit()
@@ -75,15 +68,7 @@ private struct BatteryAdapterCard: View {
     var body: some View {
         SectionCard(title: "Power adapter", symbol: "powerplug.fill") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(heroValue)
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Text(adapter.deliveredWatts != nil ? "delivering" : "rated")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                HeroReadout(value: heroValue, caption: adapter.deliveredWatts != nil ? "delivering" : "rated") {
                     if let name = adapter.name {
                         Label(name, systemImage: adapter.isWireless ? "wave.3.right" : "powerplug")
                             .font(.callout)
@@ -134,25 +119,14 @@ private struct BatteryHistoryCard: View {
     @Environment(VitalsModel.self) private var model
 
     var body: some View {
-        SectionCard(title: "Charge history", symbol: "chart.xyaxis.line") {
-            Deferred { chart }.frame(height: 150)
+        ChartCard(title: "Charge history", symbol: "chart.xyaxis.line") {
+            MetricChart(
+                samples: model.chartHistory,
+                series: [.init(name: "Charge", color: .green, area: 0.35) { $0.batteryPercent }],
+                yLabel: "%",
+                yDomain: 0...100
+            )
         }
-    }
-
-    private var chart: some View {
-        Chart(model.chartHistory) { sample in
-            if let percent = sample.batteryPercent {
-                AreaMark(x: .value("Time", sample.time), y: .value("Charge", percent))
-                    .foregroundStyle(LinearGradient(colors: [.green.opacity(0.35), .green.opacity(0.02)],
-                                                    startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time), y: .value("Charge", percent))
-                    .foregroundStyle(.green)
-                    .interpolationMethod(.catmullRom)
-            }
-        }
-        .chartYScale(domain: 0...100)
-        .chartYAxisLabel("%")
     }
 }
 
@@ -164,13 +138,10 @@ private struct BatteryHealthCard: View {
     var body: some View {
         SectionCard(title: "Health", symbol: "heart.fill") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(battery.healthPercent.map { String(format: "%.0f%%", $0) } ?? "—")
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .numericTransition()
-                    Text("maximum capacity").font(.callout).foregroundStyle(.secondary)
-                    Spacer()
+                HeroReadout(
+                    value: battery.healthPercent.map { String(format: "%.0f%%", $0) } ?? "—",
+                    caption: "maximum capacity"
+                ) {
                     conditionBadge
                 }
                 if let health = battery.healthPercent {
@@ -201,10 +172,7 @@ private struct BatteryHealthCard: View {
         let ok = battery.condition == "Normal"
         return Text(battery.condition)
             .font(.caption.weight(.medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill((ok ? Color.green : .orange).opacity(0.18)))
-            .foregroundStyle(ok ? Color.green : .orange)
+            .capsuleTag(ok ? .green : .orange)
     }
 
     private func healthTint(_ health: Double) -> Color {
@@ -257,28 +225,17 @@ private struct BatteryPowerDrawCard: View {
     @Environment(VitalsModel.self) private var model
 
     var body: some View {
-        SectionCard(title: "Power draw", symbol: "bolt.fill") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Total system-on-chip package power — the live pull on the battery or adapter.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Deferred { chart }.frame(height: 150)
-            }
+        ChartCard(
+            title: "Power draw",
+            symbol: "bolt.fill",
+            note: "Total system-on-chip package power — the live pull on the battery or adapter."
+        ) {
+            MetricChart(
+                samples: model.chartHistory,
+                series: [.init(name: "Power", color: .orange, area: 0.32) { $0.totalWatts }],
+                yLabel: "W"
+            )
         }
-    }
-
-    private var chart: some View {
-        Chart(model.chartHistory) { sample in
-            if let watts = sample.totalWatts {
-                AreaMark(x: .value("Time", sample.time), y: .value("Watts", watts))
-                    .foregroundStyle(LinearGradient(colors: [.orange.opacity(0.32), .orange.opacity(0.02)],
-                                                    startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("Time", sample.time), y: .value("Watts", watts))
-                    .foregroundStyle(.orange)
-                    .interpolationMethod(.catmullRom)
-            }
-        }
-        .chartYAxisLabel("W")
     }
 }
 
@@ -310,9 +267,7 @@ private struct SleepBlockersCard: View {
                                 Spacer(minLength: 8)
                                 Text(app.preventsSystemSleep ? "System" : "Display")
                                     .font(.caption.weight(.medium))
-                                    .padding(.horizontal, 8).padding(.vertical, 3)
-                                    .background(Capsule().fill(Color.orange.opacity(0.18)))
-                                    .foregroundStyle(.orange)
+                                    .capsuleTag(.orange)
                             }
                         }
                     }
@@ -336,42 +291,6 @@ private struct AppIcon: View {
                 .fill(Color.secondary.opacity(0.14))
                 .frame(width: 26, height: 26)
                 .overlay(Image(systemName: "gearshape.fill").font(.system(size: 12)).foregroundStyle(.secondary))
-        }
-    }
-}
-
-// MARK: - Shared key/value grid
-
-struct MetricRow: Identifiable {
-    let symbol: String
-    let label: String
-    let value: String
-    var id: String { label }
-}
-
-/// A two-column key/value grid. Fixed columns (never `.adaptive`) so it
-/// doesn't reflow mid-animation.
-struct MetricRowGrid: View {
-    let rows: [MetricRow]
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
-                            GridItem(.flexible(), alignment: .leading)],
-                  spacing: 10) {
-            ForEach(rows) { row in
-                HStack(spacing: 8) {
-                    Image(systemName: row.symbol)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18)
-                    Text(row.label).font(.callout).foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
-                    Text(row.value)
-                        .font(.system(.callout, design: .rounded, weight: .medium))
-                        .monospacedDigit()
-                        .numericTransition()
-                }
-            }
         }
     }
 }

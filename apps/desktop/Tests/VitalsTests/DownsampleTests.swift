@@ -46,4 +46,14 @@ struct DownsampleTests {
         let times = thinned.map { $0.time }
         #expect(times == times.sorted())
     }
+
+    @Test func bucketedPointsStayPutAsTheWindowSlides() {
+        let window = samples(1200)
+        let earlier = Array(window.prefix(600)).bucketed(to: 100, span: 600)
+        let later = Array(window.dropFirst(2).prefix(600)).bucketed(to: 100, span: 600)
+        let shared = Set(earlier.map(\.id)).intersection(later.map(\.id))
+        #expect(earlier.count <= 101)
+        #expect(shared.count >= earlier.count - 2)
+        #expect(later.last?.id == window[601].id)
+    }
 }

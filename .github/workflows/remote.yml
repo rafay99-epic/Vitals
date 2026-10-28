@@ -1,0 +1,60 @@
+name: Remote
+
+on:
+  push:
+    branches: [main, nightly]
+    paths:
+      - "apps/gateway/**"
+      - "apps/mobile/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".oxlintrc.json"
+      - "knip.jsonc"
+      - "turbo.json"
+      - ".github/workflows/remote.yml"
+  pull_request:
+    paths:
+      - "apps/gateway/**"
+      - "apps/mobile/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".oxlintrc.json"
+      - "knip.jsonc"
+      - "turbo.json"
+      - ".github/workflows/remote.yml"
+
+concurrency:
+  group: remote-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Typecheck, lint, test
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm oxlint
+      - name: Dead code
+        run: pnpm knip
+      - name: Typecheck
+        run: pnpm turbo typecheck --filter=@vitals/*
+      - name: Test
+        run: pnpm turbo test --filter=@vitals/*
+      - name: Web export
+        run: pnpm --filter @vitals/web export

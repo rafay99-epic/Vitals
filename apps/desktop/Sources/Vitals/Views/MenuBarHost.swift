@@ -7,6 +7,7 @@ import AppKit
 struct MenuBarLabelView: View {
     @Environment(VitalsModel.self) private var model
     @Environment(AppSettings.self) private var settings
+    @Environment(ShareModel.self) private var share
 
     private var metrics: [MenuBarMetric] {
         MenuBarMetric.allCases.filter(settings.menuBarMetrics.contains)
@@ -16,7 +17,14 @@ struct MenuBarLabelView: View {
     }
 
     var body: some View {
-        content
+        HStack(spacing: 4) {
+            content
+            if let percent = share.percent {
+                Text("\(percent)%")
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+            }
+        }
             .fixedSize()
             .padding(.horizontal, 3)
             .frame(maxHeight: .infinity)            // fill the bar height, center vertically

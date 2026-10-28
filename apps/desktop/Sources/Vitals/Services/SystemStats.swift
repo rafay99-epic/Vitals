@@ -23,7 +23,7 @@ func sysctlInt(_ name: String) -> Int? {
 }
 
 /// One logical core's utilisation. `id` is the `host_processor_info` index.
-struct CoreUsage: Identifiable {
+struct CoreUsage: Identifiable, Equatable {
     let id: Int
     let percent: Double
     let isPerformance: Bool
@@ -132,7 +132,7 @@ enum MemoryPressure: Int {
 }
 
 /// A full memory picture matching Activity Monitor's Memory tab.
-struct MemorySnapshot {
+struct MemorySnapshot: Equatable {
     let total: UInt64
     let used: UInt64        // "Memory Used" = app + wired + compressed
     let app: UInt64         // "App Memory"
@@ -212,6 +212,7 @@ enum MemoryStats {
 enum HardwareInfo {
     static let chipName: String = sysctlString("machdep.cpu.brand_string") ?? "Apple Silicon"
     static let coreCount = ProcessInfo.processInfo.processorCount
+    static let modelIdentifier: String = sysctlString("hw.model") ?? "Mac"
 
     static var osVersion: String {
         let v = ProcessInfo.processInfo.operatingSystemVersion

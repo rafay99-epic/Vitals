@@ -18,7 +18,7 @@ struct DiskHealthView: View {
                 tint: .blue,
                 title: "SSD health unavailable",
                 message: "This Mac doesn't expose detailed SSD health. Some hardware, virtual machines, and external drives don't. When it's available, wear, endurance, TRIM and power-on history appear here."
-            ) { EmptyView() }
+            )
         }
     }
 }

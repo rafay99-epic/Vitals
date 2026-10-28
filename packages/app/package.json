@@ -1,0 +1,123 @@
+{
+  "name": "@vitals/app",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@vitals/client-runtime": "workspace:*",
+    "@vitals/contracts": "workspace:*",
+    "@vitals/discovery": "workspace:*",
+    "@vitals/noise": "workspace:*",
+    "@vitals/shared": "workspace:*",
+    "@vitals/tailnet": "workspace:*",
+    "@vitals/ui": "workspace:*",
+    "@xterm/headless": "6.0.0",
+    "effect": "catalog:",
+    "expo-crypto": "~58.0.7"
+  },
+  "peerDependencies": {
+    "@react-navigation/bottom-tabs": "*",
+    "@react-navigation/native": "*",
+    "@react-navigation/native-stack": "*",
+    "@shopify/react-native-skia": "*",
+    "expo-background-task": "*",
+    "expo-camera": "*",
+    "expo-clipboard": "*",
+    "expo-constants": "*",
+    "expo-device": "*",
+    "expo-font": "*",
+    "expo-haptics": "*",
+    "expo-in-app-updates": "*",
+    "expo-network": "*",
+    "expo-notifications": "*",
+    "expo-secure-store": "*",
+    "expo-splash-screen": "*",
+    "expo-sqlite": "*",
+    "expo-status-bar": "*",
+    "expo-task-manager": "*",
+    "expo-updates": "*",
+    "react": "*",
+    "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-reanimated": "*",
+    "react-native-safe-area-context": "*",
+    "react-native-screens": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo-background-task": {
+      "optional": true
+    },
+    "expo-camera": {
+      "optional": true
+    },
+    "expo-clipboard": {
+      "optional": true
+    },
+    "expo-constants": {
+      "optional": true
+    },
+    "expo-haptics": {
+      "optional": true
+    },
+    "expo-in-app-updates": {
+      "optional": true
+    },
+    "expo-notifications": {
+      "optional": true
+    },
+    "expo-secure-store": {
+      "optional": true
+    },
+    "expo-splash-screen": {
+      "optional": true
+    },
+    "expo-sqlite": {
+      "optional": true
+    },
+    "expo-task-manager": {
+      "optional": true
+    },
+    "expo-updates": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@react-navigation/bottom-tabs": "7.21.0",
+    "@react-navigation/native": "7.5.1",
+    "@react-navigation/native-stack": "7.21.0",
+    "@shopify/react-native-skia": "catalog:",
+    "@types/react": "catalog:",
+    "expo": "catalog:",
+    "expo-background-task": "~58.0.11",
+    "expo-camera": "~58.0.11",
+    "expo-clipboard": "~58.0.3",
+    "expo-constants": "58.0.12",
+    "expo-device": "~58.0.5",
+    "expo-font": "58.0.9",
+    "expo-haptics": "~58.0.7",
+    "expo-in-app-updates": "~0.13.0",
+    "expo-network": "~58.0.3",
+    "expo-notifications": "~58.1.5",
+    "expo-secure-store": "~58.0.2",
+    "expo-splash-screen": "~58.0.7",
+    "expo-sqlite": "~58.0.13",
+    "expo-status-bar": "~58.0.3",
+    "expo-task-manager": "~58.0.12",
+    "expo-updates": "58.0.15",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-css": "catalog:",
+    "react-native-gesture-handler": "catalog:",
+    "react-native-reanimated": "catalog:",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-worklets": "catalog:"
+  }
+}

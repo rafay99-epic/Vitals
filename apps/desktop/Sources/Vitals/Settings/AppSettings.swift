@@ -97,6 +97,31 @@ final class AppSettings {
     var warnThreshold: Double { didSet { defaults.set(warnThreshold, forKey: "warnThreshold") } }
     var notifyOverheat: Bool { didSet { defaults.set(notifyOverheat, forKey: "notifyOverheat") } }
     var notifyThermal: Bool { didSet { defaults.set(notifyThermal, forKey: "notifyThermal") } }
+    var remoteEnabled: Bool { didSet { defaults.set(remoteEnabled, forKey: "remoteEnabled") } }
+    /// The keep-awake a phone or this Mac asked for, restored at launch so a
+    /// relaunch or update doesn't quietly drop it. `until` 0 means until stopped.
+    var keepAwakeActive: Bool { didSet { defaults.set(keepAwakeActive, forKey: "keepAwakeActive") } }
+    var keepAwakeUntil: Double { didSet { defaults.set(keepAwakeUntil, forKey: "keepAwakeUntil") } }
+    var keepAwakeDisplay: Bool { didSet { defaults.set(keepAwakeDisplay, forKey: "keepAwakeDisplay") } }
+    /// Records Mac copies for phones with the Read clipboard scope. Off by default.
+    var clipHistoryEnabled: Bool { didSet { defaults.set(clipHistoryEnabled, forKey: "clipHistoryEnabled") } }
+    var browseEverything: Bool { didSet { defaults.set(browseEverything, forKey: "browseEverything") } }
+    /// Days the gateway keeps unpinned clips: 1, 7 or 30.
+    var clipKeepDays: Int { didSet { defaults.set(clipKeepDays, forKey: "clipKeepDays") } }
+    var shareFolder: String { didSet { defaults.set(shareFolder, forKey: "shareFolder") } }
+    var shareAutoAccept: Bool { didSet { defaults.set(shareAutoAccept, forKey: "shareAutoAccept") } }
+    var shareAskWeb: Bool { didSet { defaults.set(shareAskWeb, forKey: "shareAskWeb") } }
+    var shareMaxGB: Int { didSet { defaults.set(shareMaxGB, forKey: "shareMaxGB") } }
+    var shareLastPhone: String { didSet { defaults.set(shareLastPhone, forKey: "shareLastPhone") } }
+    var clipShortcut: Shortcut? {
+        didSet {
+            defaults.set(clipShortcut?.keyCode ?? -1, forKey: "clipShortcutKey")
+            defaults.set(clipShortcut?.modifiers ?? 0, forKey: "clipShortcutModifiers")
+        }
+    }
+    var guardSettings: GuardSettings {
+        didSet { defaults.set(try? JSONEncoder().encode(guardSettings), forKey: "guardSettings") }
+    }
     var loggingEnabled: Bool { didSet { defaults.set(loggingEnabled, forKey: "loggingEnabled") } }
     /// Diagnostic log floor (see `Log`), separate from `loggingEnabled`, which is
     /// the readings history.
@@ -104,6 +129,12 @@ final class AppSettings {
         didSet {
             defaults.set(diagnosticLogLevel.rawValue, forKey: "diagnosticLogLevel")
             Log.configure(minimumLevel: diagnosticLogLevel)
+        }
+    }
+    var errorReportsEnabled: Bool {
+        didSet {
+            defaults.set(errorReportsEnabled, forKey: ErrorReporting.enabledKey)
+            ErrorReporting.setEnabled(errorReportsEnabled)
         }
     }
     var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
@@ -169,10 +200,21 @@ final class AppSettings {
             "loggingEnabled": true,
             "diagnosticLogLevel": LogLevel.notice.rawValue,
             "autoUpdateCheck": true,
+            ErrorReporting.enabledKey: true,
             "autoDownloadUpdates": false,
             "theme": AppTheme.system.rawValue,
             "hideDockIcon": false,
             "autoScanCleanup": false,
+            "clipHistoryEnabled": false,
+            "browseEverything": false,
+            "clipKeepDays": 7,
+            "shareFolder": "",
+            "shareAutoAccept": true,
+            "shareAskWeb": true,
+            "shareMaxGB": 50,
+            "shareLastPhone": "",
+            "clipShortcutKey": Shortcut.sendClipboard.keyCode,
+            "clipShortcutModifiers": Shortcut.sendClipboard.modifiers
     ]
 
     init(defaults: UserDefaults = .standard) {
@@ -192,10 +234,27 @@ final class AppSettings {
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         diagnosticLogLevel = LogLevel(rawValue: defaults.integer(forKey: "diagnosticLogLevel")) ?? .notice
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
+        errorReportsEnabled = defaults.bool(forKey: ErrorReporting.enabledKey)
         autoDownloadUpdates = defaults.bool(forKey: "autoDownloadUpdates")
         theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")
         autoScanCleanup = defaults.bool(forKey: "autoScanCleanup")
+        remoteEnabled = defaults.bool(forKey: "remoteEnabled")
+        keepAwakeActive = defaults.bool(forKey: "keepAwakeActive")
+        keepAwakeUntil = defaults.double(forKey: "keepAwakeUntil")
+        keepAwakeDisplay = defaults.bool(forKey: "keepAwakeDisplay")
+        clipHistoryEnabled = defaults.bool(forKey: "clipHistoryEnabled")
+        browseEverything = defaults.bool(forKey: "browseEverything")
+        clipKeepDays = defaults.integer(forKey: "clipKeepDays")
+        shareFolder = defaults.string(forKey: "shareFolder") ?? ""
+        shareAutoAccept = defaults.bool(forKey: "shareAutoAccept")
+        shareAskWeb = defaults.bool(forKey: "shareAskWeb")
+        shareMaxGB = defaults.integer(forKey: "shareMaxGB")
+        shareLastPhone = defaults.string(forKey: "shareLastPhone") ?? ""
+        let shortcutKey = defaults.integer(forKey: "clipShortcutKey")
+        clipShortcut = shortcutKey < 0 ? nil : Shortcut(keyCode: shortcutKey, modifiers: defaults.integer(forKey: "clipShortcutModifiers"))
+        guardSettings = defaults.data(forKey: "guardSettings")
+            .flatMap { try? JSONDecoder().decode(GuardSettings.self, from: $0) } ?? PressureGuard.defaultSettings
 
         // SMAppService.status is an XPC round-trip; loaded async to keep it off the launch path.
         launchAtLogin = false

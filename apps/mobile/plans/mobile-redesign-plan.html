@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitals Remote · Android rebuild plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --raise:#0a0a0a; --sheet:#0e0e0e; --line:#1a1a1a; --line2:#262626; --line3:#333;
+  --mute:#6a6a6a; --dim:#9a9a9a; --ink2:#d0d0d0; --ink:#fff;
+  --red:#ff4d6d; --orange:#ffb45c; --yellow:#f2ec6b; --green:#5cf2a6; --blue:#74d4ff;
+  --serif:"Instrument Serif",Georgia,serif; --sans:"Geist",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  --pad:22px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+a{color:var(--yellow)}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:40px var(--pad) 80px}
+.grid{display:grid;grid-template-columns:220px 1fr;gap:48px}
+nav.toc{position:sticky;top:24px;align-self:start;font:12px/1.9 var(--mono)}
+nav.toc a{color:var(--dim);text-decoration:none;display:block}
+nav.toc a:hover{color:var(--ink)}
+h1{font:italic 64px/1 var(--serif);margin:0 0 12px;letter-spacing:-.5px}
+h2{font:italic 40px/1.05 var(--serif);margin:64px 0 16px;border-top:1px solid var(--line2);padding-top:20px}
+h3{font:500 15px/1.3 var(--sans);margin:28px 0 8px;color:var(--ink)}
+.tag{font:500 10px/1 var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+.lede{font:22px/1.35 var(--serif);color:var(--ink2);max-width:760px}
+p,li{color:var(--ink2)}
+code{font:12.5px var(--mono);color:var(--ink);background:var(--raise);padding:1px 5px;border:1px solid var(--line2)}
+pre{background:var(--raise);border:1px solid var(--line2);padding:14px 16px;overflow:auto}
+pre code{background:none;border:0;padding:0;font-size:12.5px;line-height:1.6}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0}
+th{font:500 10px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line3)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+td:first-child{color:var(--ink)}
+.sev{font:500 10px var(--mono);letter-spacing:1px;padding:2px 0;white-space:nowrap}
+.sev.hi{color:var(--red)} .sev.md{color:var(--orange)} .sev.lo{color:var(--blue)}
+.sev.hi::before{content:"▲ "} .sev.md::before{content:"■ "} .sev.lo::before{content:"● "}
+.verify{color:var(--orange);font:11px var(--mono)}
+.principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:0;border-top:1px solid var(--line2);border-left:1px solid var(--line2)}
+.principles div{padding:16px 18px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.principles b{display:block;font:italic 22px/1.15 var(--serif);color:var(--ink);margin-bottom:6px}
+.principles span{font-size:13.5px;color:var(--dim)}
+.decision{border-left:3px solid var(--yellow);padding:4px 0 4px 18px;margin:24px 0}
+.decision .pick{font:500 11px var(--mono);color:var(--yellow);letter-spacing:1px;text-transform:uppercase}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:10px}
+.opt{border:1px solid var(--line2);padding:12px 14px;font-size:13px}
+.opt.win{border-color:var(--yellow)}
+.opt h4{margin:0 0 6px;font:500 13px var(--sans);color:var(--ink)}
+.opt .pro{color:var(--green)} .opt .con{color:var(--red)}
+.opt ul{margin:4px 0;padding-left:16px} .opt li{margin:2px 0}
+.phones{display:flex;gap:28px;flex-wrap:wrap;margin:20px 0}
+.phone{width:250px;height:520px;border:1px solid var(--line3);border-radius:30px;background:#000;position:relative;overflow:hidden;font-size:11px}
+.phone .cap{position:absolute;top:-26px;left:0;font:500 10px var(--mono);letter-spacing:1px;color:var(--dim);text-transform:uppercase}
+.phone-wrap{position:relative;padding-top:26px}
+.ph-top{padding:30px 16px 6px;display:flex;justify-content:space-between;font:10px var(--mono);color:var(--ink2)}
+.ph-word{font:italic 34px/1 var(--serif);padding:2px 16px 4px}
+.ph-meta{font:10px var(--mono);color:var(--dim);padding:0 16px 10px}
+.band{padding:8px 16px;color:#000;font:italic 13px/1.2 var(--serif)}
+.band small{display:block;font:9px var(--mono);font-style:normal;margin-top:2px}
+.band.r{background:var(--red)} .band.o{background:var(--orange)}
+.status{margin:0 16px 8px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:9px 0;display:flex;justify-content:space-between;align-items:center;font:11px var(--mono)}
+.status .dot{color:var(--red)}
+.metric{padding:8px 16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline}
+.metric .k{font:500 9px var(--mono);letter-spacing:1px}
+.metric .v{font:20px var(--serif)}
+.metric svg{display:block}
+.tabs{position:absolute;bottom:0;left:0;right:0;border-top:1px solid var(--line2);display:flex;justify-content:space-around;padding:9px 0 14px;font:9px var(--mono);color:var(--mute);background:#000}
+.tabs .on{color:var(--ink)}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.6)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--sheet);border-top:1px solid var(--line3);border-radius:22px 22px 0 0;padding:8px 0 18px}
+.grab{width:34px;height:4px;background:var(--line3);border-radius:2px;margin:0 auto 10px}
+.sh-t{font:italic 24px/1 var(--serif);padding:0 16px}
+.sh-m{font:9.5px var(--mono);color:var(--dim);padding:4px 16px 10px}
+.act{display:flex;justify-content:space-between;padding:11px 16px;border-top:1px solid var(--line2);font:13px var(--sans)}
+.act span:last-child{font:9px var(--mono);color:var(--dim)}
+.act.danger span:first-child{color:var(--red)}
+.chips{display:flex;gap:6px;padding:4px 16px 8px;flex-wrap:wrap}
+.chips span{font:10px var(--mono);border:1px solid var(--line3);padding:3px 7px;color:var(--dim)}
+.chips span.on{border-color:var(--yellow);color:var(--yellow)}
+.search{margin:0 16px 8px;border:1px solid var(--line2);padding:7px 9px;font:10px var(--mono);color:var(--mute)}
+.grp{display:flex;justify-content:space-between;padding:9px 16px 5px;font:500 9px var(--mono);letter-spacing:1px;color:var(--dim);text-transform:uppercase}
+.prow{display:flex;justify-content:space-between;padding:7px 16px;border-top:1px solid var(--line);font-size:12px}
+.prow span:last-child{font:11px var(--mono);color:var(--ink2)}
+.more{padding:7px 16px;font:10px var(--mono);color:var(--yellow);border-top:1px solid var(--line)}
+.phase{display:grid;grid-template-columns:120px 1fr;gap:18px;border-top:1px solid var(--line2);padding:18px 0}
+.phase .n{font:italic 34px/1 var(--serif);color:var(--yellow)}
+.phase .n small{display:block;font:10px var(--mono);font-style:normal;color:var(--dim);margin-top:6px;letter-spacing:.5px}
+.phase h3{margin-top:0}
+.phase ul{margin:6px 0;padding-left:18px}
+.phase li{margin:3px 0;font-size:14px}
+.gate{font:500 11px var(--mono);color:var(--orange);margin-top:8px}
+.files{font:11.5px var(--mono);color:var(--dim)}
+.callout{border:1px solid var(--orange);padding:16px 18px;margin:16px 0}
+.callout ol{margin:6px 0;padding-left:20px}
+.callout li{margin:6px 0}
+.ia{display:grid;grid-template-columns:1fr 40px 1fr;gap:0;align-items:stretch;margin:16px 0}
+.ia .col div{border:1px solid var(--line2);margin-bottom:-1px;padding:9px 12px;font-size:13px}
+.ia .col div b{font:italic 18px var(--serif);font-weight:400;color:var(--ink);margin-right:8px}
+.ia .col div i{font-style:normal;color:var(--dim);font-size:12px}
+.ia .arrow{display:flex;align-items:center;justify-content:center;color:var(--mute);font:18px var(--mono)}
+footer{margin-top:80px;border-top:1px solid var(--line2);padding-top:14px;font:11px var(--mono);color:var(--mute)}
+@media (max-width:860px){
+  .grid{grid-template-columns:1fr} nav.toc{position:static;columns:2}
+  h1{font-size:46px} h2{font-size:32px}
+  .phase{grid-template-columns:1fr;gap:6px}
+  .ia{grid-template-columns:1fr} .ia .arrow{transform:rotate(90deg);height:32px}
+}
+@media print{
+  :root{--bg:#fff;--ink:#000;--ink2:#222;--dim:#555;--raise:#f4f4f4;--line:#ddd;--line2:#ccc;--line3:#bbb}
+  nav.toc{display:none} .grid{grid-template-columns:1fr}
+  .phone{border-color:#999} .band,.sheet{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="tag">Vitals Remote · apps/mobile + packages/app + packages/ui</div>
+  <h1>Android rebuild plan.</h1>
+  <p class="lede">The first screen holds up. Everything past it falls apart: alarm bands eat the home screen, Calm does nothing visible, sheets snap shut, launch blocks on an update check, and the tabs hide what they contain. This plan fixes the causes, not the symptoms, Android first and iOS right after.</p>
+</header>
+
+<div class="grid">
+<nav class="toc" aria-label="Contents">
+  <a href="#diagnosis">01 What is broken</a>
+  <a href="#principles">02 New philosophy</a>
+  <a href="#ia">03 New structure</a>
+  <a href="#decisions">04 Decisions</a>
+  <a href="#sketch">05 Sketches</a>
+  <a href="#system">06 Design system v2</a>
+  <a href="#phases">07 Phases</a>
+  <a href="#verify">08 Verification</a>
+  <a href="#questions">09 Open questions</a>
+  <a href="#out">10 Out of scope</a>
+</nav>
+
+<main>
+<div class="callout" style="border-color:var(--yellow)"><b>Update 2026-10-23, as built:</b> Home follows direction B; every other screen, the floating dock and the flows follow A (see the A + B prototype). Sheets are one custom component on Reanimated + Gesture Handler (one code path for iOS and Android, drag to dismiss, back button, keyboard lift). We did not use react-native-screens formSheet or @gorhom/bottom-sheet: gorhom does not list support for Gesture Handler 3, which this repo uses. The phone app has its own UI kit in <code>apps/mobile/src/ui</code> and reuses only logic from <code>@vitals/app</code>. Tabs are Home, Apps, Control, Alerts, Settings. Updates never block launch.</div>
+<section id="diagnosis">
+<h2>01 What is broken, and why.</h2>
+<p>Read from the code on <code>nightly@fb66086</code>. Items marked <span class="verify">verify</span> are the most likely cause from reading, to be confirmed on a device in Phase 0 before anything is fixed.</p>
+<table>
+<thead><tr><th>Symptom you hit</th><th>Root cause</th><th>Where</th><th>Sev</th></tr></thead>
+<tbody>
+<tr><td>Alarm banners take over the home screen</td><td><code>ChartBanners</code> stacks full-bleed colored bands above the metrics: connection lost, one row per failed route, up to 2 alarms, a "N more" row, up to 2 pending orders. Worst case is 7 bands before the first number. Each band also slides in and re-lays out the list.</td><td class="files">app/features/chart/ChartBanners.tsx<br>ui/feedback/AlarmBanner.tsx</td><td><span class="sev hi">HIGH</span></td></tr>
+<tr><td>"Calm down" does nothing, says it can't</td><td>(a) The <em>Agent crowd</em> rule counts agents. Calm only lowers their priority, so the count never drops and the alarm never clears: it looks like the tap failed. (b) "Nothing to calm right now" comes back as a failure string, so the phone shows a red error. (c) Idle-emulator pause only matches <code>qemu-system*</code> and <code>emulator</code>, never the iOS Simulator. (d) Calming twice appends duplicate entries to <code>calmActions</code>. <span class="verify">verify</span></td><td class="files">desktop/Services/PressureGuard.swift:160<br>desktop/Models/RemoteModel.swift:570</td><td><span class="sev hi">HIGH</span></td></tr>
+<tr><td>Bottom sheets feel janky</td><td>Hand-rolled on RN <code>Modal</code>. No exit animation (Modal unmounts the moment <code>visible</code> flips), no drag to dismiss, no detents, no predictive back, a "Cancel" row where a gesture should be. The title blanks out on close because it reads from state that was just cleared.</td><td class="files">ui/feedback/Sheet.tsx</td><td><span class="sev hi">HIGH</span></td></tr>
+<tr><td>Opening and returning to the app is horrible</td><td>Every cold start blocks behind a "Quiet" screen for up to 4 s while it checks the network and OTA. On every resume, if an update is found, the whole app is swapped for an "Updating." takeover and reloaded mid-use. A failed download is also a blocking phase, so you can get stuck on an error screen.</td><td class="files">app/features/updates/updateFlow.ts:24,95<br>UpdateGate.tsx</td><td><span class="sev hi">HIGH</span></td></tr>
+<tr><td>Hard to find anything</td><td>Tabs are medical metaphors (Chart, Orders, Ward, Alarms, Record) that say nothing about what is inside. Running apps, launch by bundle id and emulators live in Record, which is otherwise settings. Alarm rules sit between readouts and logs.</td><td class="files">app/App.tsx<br>features/record/RecordScreen.tsx</td><td><span class="sev md">MED</span></td></tr>
+<tr><td>Agents and processes flood the list</td><td>Ward renders up to 80 rows grouped by ward with no search, no filter, no collapse. An agents ward of 25 rows pushes everything else off screen. Bed numbers and column headers add noise without adding information.</td><td class="files">features/ward/WardScreen.tsx<br>ui/ward/BedRow.tsx</td><td><span class="sev md">MED</span></td></tr>
+<tr><td>Everything needs a long hold</td><td><code>HoldRow</code> is used for Lock, Display off and Sleep, which are all reversible. Holds should be reserved for actions that lose work.</td><td class="files">features/orders/OrdersSections.tsx</td><td><span class="sev md">MED</span></td></tr>
+<tr><td>No motion between places</td><td>Tab switches have no transition, stack pushes use defaults, rows don't respond to touch beyond a background flash.</td><td class="files">App.tsx, ui/rows/Row.tsx</td><td><span class="sev lo">LOW</span></td></tr>
+<tr><td>Home could be heavy on mid-range Android</td><td>Up to 8 Skia canvases re-derive their paths on every sample. Not a per-frame loop, but it hasn't been measured on a real Android device. <span class="verify">verify</span></td><td class="files">ui/channel/Trace.tsx</td><td><span class="sev lo">LOW</span></td></tr>
+</tbody>
+</table>
+</section>
+
+<section id="principles">
+<h2>02 The new philosophy.</h2>
+<p>Same black, same yellow, orange and red, same Instrument Serif shouting the state. What changes is how the app behaves.</p>
+<div class="principles">
+  <div><b>One glance, one line.</b><span>Home answers "is my Mac OK?" in a single status line. Problems collapse into that line. They never stack.</span></div>
+  <div><b>Plain names, punk skin.</b><span>Navigation uses words people search for: Processes, Control, Settings. The character lives in type, color, motion and copy, not in riddles.</span></div>
+  <div><b>Tap a thing, get a sheet.</b><span>Every object (process, alarm, app, emulator, action) opens one native sheet with its actions. One pattern everywhere, so you learn it once.</span></div>
+  <div><b>Tap to undo, hold to destroy.</b><span>Reversible actions are a tap followed by an Undo toast. Holds are only for Quit, Kill, Restart, Shut down and Unpair.</span></div>
+  <div><b>Never block.</b><span>No launch gate, no takeover screens. Updates download quietly and apply on the next cold start.</span></div>
+  <div><b>Every action answers.</b><span>A tap always ends in a visible result: the row changes, the status line changes, or a toast says why it didn't. Silence counts as a bug.</span></div>
+</div>
+<p style="margin-top:14px">Existing rules still hold: honest readings only, and one shared component per surface (<code>CLAUDE.md</code> rule 5).</p>
+</section>
+
+<section id="ia">
+<h2>03 New structure.</h2>
+<div class="ia">
+  <div class="col">
+    <div><b>Chart</b><i>8 channels + stacked alarm bands</i></div>
+    <div><b>Orders</b><i>holds, chips, slider, scenes, discharge, log</i></div>
+    <div><b>Ward</b><i>80 processes in wards</i></div>
+    <div><b>Alarms</b><i>banners, readouts, calm, rules, wards, log</i></div>
+    <div><b>Record</b><i>Mac, device, updates, perms, apps, launch, emulators, diag, unpair</i></div>
+  </div>
+  <div class="arrow" aria-hidden="true">→</div>
+  <div class="col">
+    <div><b>Home</b><i>status line · metrics · 4 quick actions</i></div>
+    <div><b>Processes</b><i>search · filter chips (All, Apps, Agents, Emulators, Dev, System) · top 5 per group, "Show all 25"</i></div>
+    <div><b>Control</b><i>Power · Stay awake · Sound · Hand over. Each tile opens a sheet</i></div>
+    <div><b>Alarms</b><i>open alarms with Calm + Undo · rules move into a sub-screen · log</i></div>
+    <div><b>Settings</b><i>Mac · This device · Connection · Notifications · Updates · Diagnostics · Unpair</i></div>
+  </div>
+</div>
+<p>Running apps and emulators move from Record into Processes, where you would look for them. "Launch by bundle id" is dropped unless you use it (see open questions). Channel tags (PULSE, PRESS, TEMP) stay on Home as flavor; they label metrics, not navigation.</p>
+
+<h3>Sheets become routes</h3>
+<p>Sheets move out of component state into the root native stack. Android back and predictive back close them, deep links can open them, and the close animation always plays.</p>
+<pre><code>RootStack (native-stack)
+├─ Tabs            Home · Processes · Control · Alarms · Settings
+├─ Process         presentation: "formSheet", detents [0.5, 0.92]
+├─ App             presentation: "formSheet"
+├─ Emulator        presentation: "formSheet"
+├─ Alarm           presentation: "formSheet"   (status line tap lands here)
+├─ StayAwake | Sound | Clipboard | OpenLink     presentation: "formSheet"
+├─ Confirm         presentation: "formSheet"   (Restart / Log out / Shut down / Unpair)
+└─ Settings/*      push, slide_from_right
+</code></pre>
+</section>
+
+<section id="decisions">
+<h2>04 Decisions, with a pick.</h2>
+
+<div class="decision">
+  <div class="pick">Pick: A, native formSheet</div>
+  <h3>Which bottom sheet?</h3>
+  <div class="opts">
+    <div class="opt win"><h4>A · react-native-screens formSheet</h4>
+      <ul><li class="pro">Already installed (4.30). Zero new deps.</li><li class="pro">Real platform sheet: Material bottom sheet on Android, UISheetPresentationController on iOS. Native open, close and drag.</li><li class="pro">Back and predictive back come free; sheets are routes.</li><li class="con">Android has had rough edges with keyboard and nested ScrollView.</li></ul></div>
+    <div class="opt"><h4>B · @gorhom/bottom-sheet v5</h4>
+      <ul><li class="pro">Most control, identical on both platforms.</li><li class="pro">Mature, supports Reanimated 4.</li><li class="con">JS-driven, one more dependency, and back handling is wired by hand.</li></ul></div>
+    <div class="opt"><h4>C · @expo/ui ModalBottomSheet</h4>
+      <ul><li class="pro">True Compose sheet.</li><li class="con">Different API per platform, young, and mixing RN content into it is awkward.</li></ul></div>
+  </div>
+  <p>Phase 0 spends one day building the Process sheet with A on a claimed Android emulator: scrolling content, a text field with the keyboard open, two detents, predictive back. If any of those fail, we use B and keep the same <code>Sheet</code> API so screens don't care which one is underneath.</p>
+</div>
+
+<div class="decision">
+  <div class="pick">Pick: one status line</div>
+  <h3>How alarms show on Home</h3>
+  <p>One line under the header, ordered by priority: connection lost, then critical, then warning, then a pending order. It reads <code>▲ Agent crowd · 25 agents · +1 more</code>. Tapping it opens the Alarm sheet with the details, the Calm action and Undo. Nothing else on Home moves when an alarm arrives. Shape and label carry the severity, not just color.</p>
+</div>
+
+<div class="decision">
+  <div class="pick">Pick: in-app catalog</div>
+  <h3>Where the design system lives</h3>
+  <p>A <code>Catalog</code> screen, reachable from Diagnostics in the dev variant only, renders every primitive in every state on the real device with real fonts and motion. That is the "design application" you can hold. Storybook for React Native would add a second app and a build pipeline to answer the same question. Before any code, the look gets picked from HTML mocks (Phase 1).</p>
+</div>
+
+<div class="decision">
+  <div class="pick">Pick: fix Calm on both ends</div>
+  <h3>What Calm means</h3>
+  <ul>
+    <li>Mac: once calm is applied, mark the alarm <em>calmed</em> and stop re-raising that rule until calm is undone or the reading changes for real. Dedupe <code>calmActions</code>. Return "nothing to calm" as a neutral outcome, not a failure. Match iOS Simulator processes as emulators. Swift tests cover each case.</li>
+    <li>Phone: a calmed alarm turns from red to dim with "Calmed · 25 agents at low priority · Undo". The tap always ends in a visible change.</li>
+  </ul>
+</div>
+</section>
+
+<section id="sketch">
+<h2>05 Sketches.</h2>
+<p>These are wireframes for the structure only, not the visual pick. Phase 1 produces the real mocks.</p>
+<div class="phones">
+  <div class="phone-wrap"><div class="phone" role="img" aria-label="Current home with stacked alarm bands">
+    <span class="cap">Now · Chart</span>
+    <div class="ph-top"><span>Rafay's MacBook</span><span style="color:var(--green)">● Wi-Fi</span></div>
+    <div class="band o">Connection lost.<small>Retrying in 4 s · attempt 3</small></div>
+    <div class="band r">Agent crowd.<small>Lower priority of 25 agent processes</small></div>
+    <div class="band o">Emulators fighting.<small>Pause 2 idle emulators · since 10:42</small></div>
+    <div class="band o">Sleep in 28 s.<small>Cancel stops it on the Mac.</small></div>
+    <div class="ph-word">Strained.</div>
+    <div class="metric"><span class="k" style="color:var(--green)">PULSE</span><span class="v">71%</span></div>
+    <div class="metric"><span class="k" style="color:var(--red)">PRESS</span><span class="v">29.4</span></div>
+    <div class="tabs"><span class="on">Chart</span><span>Orders</span><span>Ward</span><span>Alarms</span><span>Record</span></div>
+  </div></div>
+
+  <div class="phone-wrap"><div class="phone" role="img" aria-label="New home with one status line">
+    <span class="cap">New · Home</span>
+    <div class="ph-top"><span>Rafay's MacBook</span><span style="color:var(--green)">● Wi-Fi</span></div>
+    <div class="ph-word">Strained.</div>
+    <div class="ph-meta">M3 Max · macOS 26.1</div>
+    <div class="status"><span><span class="dot">▲</span> Agent crowd · 25 agents · +1</span><span>›</span></div>
+    <div class="metric"><span class="k" style="color:var(--green)">PULSE · CPU</span><span class="v">71%</span></div>
+    <div class="metric"><span class="k" style="color:var(--red)">PRESS · MEMORY</span><span class="v">29.4<small style="font:10px var(--mono);color:var(--dim)">/36 GB</small></span></div>
+    <div class="metric"><span class="k" style="color:var(--orange)">TEMP</span><span class="v">68°</span></div>
+    <div class="metric"><span class="k" style="color:var(--blue)">RESP · FANS</span><span class="v">2,410</span></div>
+    <div class="chips" style="padding-top:10px"><span>Sleep</span><span>Lock</span><span>Awake</span><span>Locate</span></div>
+    <div class="tabs"><span class="on">Home</span><span>Processes</span><span>Control</span><span>Alarms</span><span>Settings</span></div>
+  </div></div>
+
+  <div class="phone-wrap"><div class="phone" role="img" aria-label="New processes tab with filters and collapsed groups">
+    <span class="cap">New · Processes</span>
+    <div class="ph-word" style="padding-top:34px">Processes.</div>
+    <div class="search">Search 214 processes</div>
+    <div class="chips"><span class="on">All</span><span>Apps</span><span>Agents 25</span><span>Emulators 2</span><span>Dev</span></div>
+    <div class="grp"><span>Agents</span><span>25 · 140% · 6.1 GB</span></div>
+    <div class="prow"><span>claude</span><span>38%</span></div>
+    <div class="prow"><span>codex</span><span>22%</span></div>
+    <div class="prow"><span>claude</span><span>17%</span></div>
+    <div class="more">Show all 25</div>
+    <div class="grp"><span>Emulators</span><span>2 · 64% · 4.2 GB</span></div>
+    <div class="prow"><span>qemu-system-aarch64</span><span>61%</span></div>
+    <div class="prow"><span>Simulator</span><span>3%</span></div>
+    <div class="tabs"><span>Home</span><span class="on">Processes</span><span>Control</span><span>Alarms</span><span>Settings</span></div>
+  </div></div>
+
+  <div class="phone-wrap"><div class="phone" role="img" aria-label="Process action sheet">
+    <span class="cap">New · Process sheet</span>
+    <div class="ph-word" style="padding-top:34px;opacity:.3">Processes.</div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="sh-t">claude</div>
+      <div class="sh-m">pid 81723 · agents · 38% · 1.2 GB</div>
+      <div class="act"><span>Pause</span><span>resume any time</span></div>
+      <div class="act"><span>Lower priority</span><span>runs when idle</span></div>
+      <div class="act"><span>Keep Mac awake while it runs</span><span></span></div>
+      <div class="act danger"><span>Quit</span><span>hold</span></div>
+      <div class="act danger"><span>Kill</span><span>hold · unsaved work lost</span></div>
+    </div>
+    <div class="tabs" style="z-index:-1"><span>Home</span></div>
+  </div></div>
+</div>
+</section>
+
+<section id="system">
+<h2>06 Design system v2.</h2>
+<p>This extends <code>packages/ui</code>; nothing is rebuilt from scratch. Colors stay as they are. The additions are roles, spacing, motion and the components that are missing.</p>
+<table>
+<thead><tr><th>Layer</th><th>Today</th><th>v2</th></tr></thead>
+<tbody>
+<tr><td>Color</td><td>Raw palette in <code>theme.ts</code> + <code>theme.css</code>, duplicated</td><td>Generate <code>theme.css</code> from <code>theme.ts</code> (one source). Add roles: <code>surface/0,1,2</code>, <code>accent</code> (yellow), <code>danger</code>, <code>warn</code>, <code>ok</code>.</td></tr>
+<tr><td>Space</td><td>Literal <code>px-[22px]</code> everywhere</td><td>Scale 4 · 8 · 12 · 16 · 22 · 32 as Tailwind tokens. 22 stays the page gutter.</td></tr>
+<tr><td>Type</td><td>Serif / Sans / Mono + sizes</td><td>Named roles: <code>state</code> (serif italic 46), <code>title</code>, <code>row</code> (Geist 15), <code>meta</code> (Mono 11), <code>number</code> (Mono tabular).</td></tr>
+<tr><td>Motion</td><td>Durations only</td><td>Springs: <code>press</code> (scale 0.97), <code>enter</code> (existing rise + stagger), <code>tab</code> (bottom-tabs <code>animation:"shift"</code>, 180 ms), <code>push</code> (<code>slide_from_right</code>), sheets native. Respect reduced motion. No looping animations: no pulse, shimmer or spinners.</td></tr>
+<tr><td>Haptics</td><td>Ad hoc per screen</td><td>Bound to components: select on chip and tab, light on toggle, success on commit, heavy on destructive commit.</td></tr>
+</tbody>
+</table>
+<h3>Components</h3>
+<table>
+<thead><tr><th>Component</th><th>Replaces</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>StatusLine</td><td>ChartBanners, AlarmBanner on Home</td><td>One line, priority-ordered, opens the Alarm sheet</td></tr>
+<tr><td>Sheet + SheetAction</td><td>Modal Sheet</td><td>Native formSheet route; same props so call sites barely change</td></tr>
+<tr><td>ActionTile</td><td>HoldRow on Control</td><td>Tap for reversible actions, then an Undo toast</td></tr>
+<tr><td>HoldConfirm</td><td>HoldRow kind="consent"</td><td>Destructive only, always inside a sheet</td></tr>
+<tr><td>ProcessRow + GroupHeader</td><td>BedRow + WardHeader</td><td>No bed numbers. Group collapses to its top 5 with "Show all N"</td></tr>
+<tr><td>FilterChips + SearchField</td><td>Segmented sort</td><td>Category filter with counts. Sort moves into a small toggle</td></tr>
+<tr><td>Toast (with Undo)</td><td>Toast</td><td>Adds an action slot, and sits above the tab bar consistently</td></tr>
+<tr><td>Catalog screen</td><td>none</td><td>Dev variant only. Every component in every state</td></tr>
+</tbody>
+</table>
+</section>
+
+<section id="phases">
+<h2>07 Phases.</h2>
+<p>Each phase gets its own branch off <code>nightly</code> and a PR into <code>nightly</code>, tested on a <code>devlease</code>-claimed Android emulator plus your phone through <code>android:dev</code>. Nothing is committed until you say so.</p>
+
+<div class="phase"><div class="n">P0<small>Spike · 1–2 days</small></div><div>
+  <h3>Measure, confirm causes, settle the sheet choice</h3>
+  <ul>
+    <li>Baseline screen recordings of every tab on Android, plus cold start time and FPS from Diagnostics.</li>
+    <li>Reproduce Calm on the Mac with log lines (<code>guard.calm.applied</code>) and confirm causes (a) through (d).</li>
+    <li>Build the Process sheet with formSheet. Pass/fail on scroll, keyboard, detents and predictive back.</li>
+  </ul>
+  <div class="gate">Gate: short findings note + the sheet pick (A or B).</div>
+</div></div>
+
+<div class="phase"><div class="n">P1<small>Mocks · 1 day</small></div><div>
+  <h3>Pick the look</h3>
+  <ul>
+    <li>3 or 4 distinct static directions in an <code>html-brainstorm-grid</code>: Home with the status line, Processes, Control, a sheet. All on true black with the yellow, orange and red set.</li>
+    <li>Each direction shows open and close motion, not just still frames.</li>
+  </ul>
+  <div class="gate">Gate: you pick a direction. No component code before this.</div>
+</div></div>
+
+<div class="phase"><div class="n">P2<small>Foundation · 3 days</small></div><div>
+  <h3>Tokens, motion, sheets as routes, non-blocking launch</h3>
+  <ul>
+    <li>Tokens v2 in <code>ui/theme.ts</code>, with <code>theme.css</code> generated from it.</li>
+    <li>New <code>Sheet</code> on the chosen engine. Root native stack with the sheet routes. Tabs renamed and given transitions.</li>
+    <li>Updates: drop the blocking cold-start check and the resume takeover. Download in the background, apply on the next cold start, and show "Update ready" in Settings.</li>
+    <li>Catalog screen.</li>
+  </ul>
+  <div class="files">ui/theme.ts · ui/motion.ts · ui/feedback/Sheet.tsx · app/App.tsx · app/navigation/types.ts · features/updates/*</div>
+</div></div>
+
+<div class="phase"><div class="n">P3<small>Home + Alarms · 3 days</small></div><div>
+  <h3>Status line, Alarm sheet, Calm that works</h3>
+  <ul>
+    <li><code>StatusLine</code> replaces <code>ChartBanners</code>. Pending orders show in the same line with a Cancel in the sheet.</li>
+    <li>Alarms tab: open alarms on top, Calm and Undo next to them, rules moved into a sub-screen.</li>
+    <li>Mac side: calmed state, dedupe, neutral "nothing to calm", Simulator matching, with tests in <code>apps/desktop/Tests</code>.</li>
+  </ul>
+  <div class="files">features/chart/* · features/alarms/* · desktop PressureGuard.swift · RemoteModel.swift · contracts/guard.ts</div>
+</div></div>
+
+<div class="phase"><div class="n">P4<small>Processes · 3 days</small></div><div>
+  <h3>One searchable list with categories</h3>
+  <ul>
+    <li>Merge Ward, Running apps and Emulators. Filter chips with counts, search, top 5 per group with "Show all".</li>
+    <li>Process, App and Emulator sheets. Pause and Lower priority are taps with Undo; Quit and Kill are holds.</li>
+    <li>FlashList is only worth adding if FPS drops with 200+ rows; SectionList stays otherwise.</li>
+  </ul>
+  <div class="files">features/ward → features/processes · ui/ward/* · RecordScreen (apps + emulators out)</div>
+</div></div>
+
+<div class="phase"><div class="n">P5<small>Control · 2 days</small></div><div>
+  <h3>Tiles that open sheets</h3>
+  <ul>
+    <li>Power (Sleep, Display off, Lock as taps; Restart, Log out, Shut down through a Confirm sheet), Stay awake, Sound, Hand over (Clipboard, Open link, Locate).</li>
+    <li>Scenes become two tiles. The orders log moves to the bottom.</li>
+  </ul>
+  <div class="files">features/orders/* → features/control/*</div>
+</div></div>
+
+<div class="phase"><div class="n">P6<small>Settings · 1–2 days</small></div><div>
+  <h3>Short grouped list, depth through pushes</h3>
+  <ul><li>Mac, This device, Connection, Notifications, Updates, Diagnostics, Unpair. Each row pushes a screen or opens a sheet. No mixed content.</li></ul>
+  <div class="files">features/record → features/settings</div>
+</div></div>
+
+<div class="phase"><div class="n">P7<small>Polish + iOS · 2–3 days</small></div><div>
+  <h3>Edges, accessibility, iOS parity</h3>
+  <ul>
+    <li>Android: edge-to-edge insets, predictive back on every sheet and push, TalkBack labels, font scale up to 1.3.</li>
+    <li>iOS: run the same flows on a claimed simulator. Sheets are native there already, so this is mostly spacing and haptics.</li>
+    <li>OTA through <code>update:dev</code> to your phone for a 2-day real-use check before the PR.</li>
+  </ul>
+</div></div>
+<p>Total is roughly 16–20 working days. P3 and P4 can run in parallel once P2 lands (P3 owns <code>features/chart</code> and <code>features/alarms</code>, P4 owns <code>features/processes</code>).</p>
+</section>
+
+<section id="verify">
+<h2>08 How we know it's fixed.</h2>
+<table>
+<thead><tr><th>Check</th><th>Pass when</th></tr></thead>
+<tbody>
+<tr><td>Cold start</td><td>Home shows live numbers in under 1.5 s on the claimed emulator. No update screen, ever.</td></tr>
+<tr><td>Alarm flow (Maestro)</td><td>Alarm raised, status line shows it, tap opens the sheet, Calm turns it into "Calmed", Undo restores it. Nothing else on Home moves.</td></tr>
+<tr><td>Sheet flow (Maestro)</td><td>Open a process, drag to dismiss, reopen, back gesture closes it. The close animation plays every time.</td></tr>
+<tr><td>Findability</td><td>Each of these takes 2 taps or fewer from launch: pause an agent, stop an emulator, lock the Mac, change an alarm rule, unpair.</td></tr>
+<tr><td>Smoothness</td><td>Diagnostics FPS at or above 55 while scrolling Processes with 200 rows, and on Home with every channel live.</td></tr>
+<tr><td>Code</td><td><code>pnpm typecheck</code>, <code>bun test</code> in packages/app, <code>swift test</code> for the Calm changes. React Doctor score does not regress.</td></tr>
+</tbody>
+</table>
+</section>
+
+<section id="questions">
+<h2>09 Open questions.</h2>
+<div class="callout">
+<ol>
+  <li><b>Tab names.</b> Plain names (Home, Processes, Control, Alarms, Settings), or keep one or two of the medical names for character?</li>
+  <li><b>Holds.</b> Are you fine with Lock, Sleep and Display off becoming plain taps with an Undo toast?</li>
+  <li><b>"Claim notification".</b> I read this as the in-app alarm bands on Home. If you also meant the Android system notification in the shade, that's a separate fix (channel, style, actions) and gets added to P3.</li>
+  <li><b>Launch by bundle id.</b> Do you use it? If not, it gets dropped. If you do, it becomes "Open an app" with a picker of installed apps.</li>
+  <li><b>Tablet layout.</b> The wide rail layout is kept but gets less attention. Do you use Vitals Remote on an Android tablet?</li>
+</ol>
+</div>
+</section>
+
+<section id="out">
+<h2>10 Out of scope.</h2>
+<ul>
+  <li>The macOS app's own UI. The only desktop work is the Calm fix in PressureGuard and RemoteModel.</li>
+  <li>Gateway, pairing protocol and transport (Wi-Fi and Tailscale), beyond what the Calm contract needs.</li>
+  <li>New remote features. This is a rebuild of what exists.</li>
+  <li>The website and marketing app.</li>
+</ul>
+</section>
+</main>
+</div>
+
+<footer>Last updated 2026-10-23 · nightly@fb66086 · Opus 5.5 via Claude Code in T3 Code</footer>
+</div>
+</body>
+</html>

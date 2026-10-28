@@ -1,0 +1,45 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "rules": {
+    "types": "off",
+    "nsTypes": "off"
+  },
+  "ignoreBinaries": [
+    "swift",
+    "swiftlint",
+    "sips"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "convex/*.ts"
+      ],
+      "project": [
+        "convex/**/*.ts"
+      ]
+    },
+    "apps/gateway": {
+      "entry": [
+        "src/main.ts",
+        "scripts/*.ts",
+        "test/**/*.ts"
+      ]
+    },
+    "apps/mobile": {
+      "entry": [
+        "fingerprint.config.js"
+      ],
+      "ignoreDependencies": [
+        "babel-plugin-react-compiler",
+        "expo-crypto"
+      ]
+    },
+    "apps/web": {
+      "ignoreDependencies": [
+        "babel-plugin-react-compiler",
+        // metro.config.js resolves it from packages/app, so both targets share one copy.
+        "@xterm/headless"
+      ]
+    }
+  }
+}

@@ -1,0 +1,436 @@
+import SwiftUI
+
+struct RemoteView: View {
+    enum Tab: String, CaseIterable, Identifiable {
+        case devices, sharing, activity, pressure
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .devices: return "Devices"
+            case .sharing: return "Sharing"
+            case .activity: return "Activity"
+            case .pressure: return "Pressure Guard"
+            }
+        }
+    }
+
+    @Environment(Navigator.self) private var navigator
+
+    var body: some View {
+        @Bindable var navigator = navigator
+        VStack(spacing: 0) {
+            Picker("Remote", selection: $navigator.remoteTab) {
+                ForEach(Tab.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 420)
+            .padding(.top, 16)
+            switch navigator.remoteTab {
+            case .devices: RemoteDevicesTab()
+            case .sharing: SharingTab()
+            case .activity: ActivityView()
+            case .pressure: GuardView()
+            }
+        }
+    }
+}
+
+private struct RemoteDevicesTab: View {
+    @Environment(RemoteModel.self) private var remote
+    @State private var showingPairing = false
+    @State private var showingAwayAccess = false
+
+    var body: some View {
+        MetricScroll {
+            StatusCard()
+            if !remote.pairPrompts.isEmpty { PairPromptsCard() }
+            if remote.isEnabled { RoutesCard(showingAwayAccess: $showingAwayAccess) }
+            if !remote.pendingCommands.isEmpty { PendingCommandsCard() }
+            if !remote.terminals.isEmpty { TerminalsCard() }
+            KeepAwakeCard()
+            SectionCard(title: "Devices", symbol: "iphone.gen3") {
+                if remote.devices.isEmpty {
+                    Text(remote.isEnabled ? "No paired devices yet." : "Turn on remote access to pair a phone.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(remote.devices) { device in
+                            DeviceRow(device: device)
+                            if device.id != remote.devices.last?.id { Divider() }
+                        }
+                    }
+                }
+                Button("Pair new device") {
+                    showingPairing = true
+                    Task { await remote.createPairing() }
+                }
+                .disabled(remote.state != .running)
+            }
+            if remote.isEnabled { AttemptsCard() }
+        }
+        .sheet(isPresented: $showingPairing, onDismiss: { remote.clearPairing() }, content: {
+            PairingSheet(isPresented: $showingPairing)
+        })
+        .sheet(isPresented: $showingAwayAccess) { AwayAccessSheet(isPresented: $showingAwayAccess) }
+        .task(id: remote.state) { await remote.refreshDevices() }
+    }
+}
+
+private struct TerminalsCard: View {
+    @Environment(RemoteModel.self) private var remote
+
+    var body: some View {
+        SectionCard(title: "Terminals", symbol: "apple.terminal") {
+            ForEach(remote.terminals) { session in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(session.deviceName) · \(session.title)").font(.body.weight(.medium))
+                        Text(caption(session)).font(.callout).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("End", role: .destructive) { remote.endTerminal(session.id) }
+                        .controlSize(.small)
+                }
+            }
+            if remote.terminals.count > 1 {
+                Button("End all", role: .destructive) { remote.endAllTerminals() }
+                    .controlSize(.small)
+            }
+            Text("Commands run on this Mac as you. Turn Terminal off for a device to end its sessions.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func caption(_ session: MacTerminal) -> String {
+        let started = Date(timeIntervalSince1970: TimeInterval(session.startedAt) / 1000).formatted(.relative(presentation: .named))
+        return session.attached > 0 ? "open now · started \(started)" : "running in the background · started \(started)"
+    }
+}
+
+private struct StatusCard: View {
+    @Environment(RemoteModel.self) private var remote
+
+    var body: some View {
+        SectionCard(title: "Remote access", symbol: "dot.radiowaves.left.and.right") {
+            Toggle(isOn: Binding(get: { remote.isEnabled }, set: { remote.setEnabled($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(headline).font(.body.weight(.medium))
+                    if let detail { Text(detail).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
+                }
+            }
+            .toggleStyle(.switch)
+            if let status = remote.status, remote.isEnabled {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    check("Tailscale serve", ok: status.serve == .serving, value: status.serve.rawValue)
+                    check("Owner", ok: status.ownerLogin != nil, value: status.ownerLogin ?? "unknown")
+                    check("Connected", ok: true, value: "\(status.clients) socket\(status.clients == 1 ? "" : "s")")
+                }
+                .font(.callout)
+            }
+        }
+    }
+
+    private var headline: String {
+        switch remote.state {
+        case .off: return "Off"
+        case .starting: return "Starting"
+        case .running: return remote.status?.serve == .serving ? "Serving on your tailnet" : "Running"
+        case let .restarting(attempt): return "Restarting (attempt \(attempt))"
+        case .failed: return "Unavailable"
+        }
+    }
+
+    private var detail: String? {
+        if case let .failed(message) = remote.state { return message }
+        guard remote.isEnabled else {
+            return "Phones on your Wi-Fi or tailnet can monitor and control this Mac. macOS asks twice when this turns on: choose Allow both times."
+        }
+        return remote.status?.url ?? remote.status?.detail
+    }
+
+    private func check(_ title: String, ok: Bool, value: String) -> some View {
+        GridRow {
+            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(ok ? .green : .orange)
+            Text(title).foregroundStyle(.secondary)
+            Text(value).textSelection(.enabled)
+        }
+    }
+}
+
+/// Wi-Fi pair requests. The notification is the main surface; this row covers notifications being off.
+private struct PairPromptsCard: View {
+    @Environment(RemoteModel.self) private var remote
+
+    var body: some View {
+        SectionCard(title: "Wants to connect", symbol: "iphone.radiowaves.left.and.right") {
+            VStack(spacing: 0) {
+                ForEach(remote.pairPrompts) { prompt in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(prompt.device.name).font(.body.weight(.medium))
+                            Text("over Wi-Fi · \(prompt.address)").font(.callout).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(prompt.code)
+                            .font(.system(.title3, design: .monospaced).weight(.semibold))
+                            .accessibilityLabel("Code \(prompt.code)")
+                        Button("Deny", role: .destructive) { Task { await remote.resolvePairPrompt(prompt.id, allow: false) } }
+                        Button("Allow") { Task { await remote.resolvePairPrompt(prompt.id, allow: true) } }
+                    }
+                    .padding(.vertical, 8)
+                    if prompt.id != remote.pairPrompts.last?.id { Divider() }
+                }
+            }
+        }
+    }
+}
+
+/// How a phone reaches this Mac: Bonjour on the local network, Tailscale from anywhere else.
+private struct RoutesCard: View {
+    @Environment(RemoteModel.self) private var remote
+    @Binding var showingAwayAccess: Bool
+
+    var body: some View {
+        SectionCard(title: "Routes", symbol: "point.3.connected.trianglepath.dotted") {
+            VStack(spacing: 0) {
+                route("Wi-Fi", detail: wifiDetail) {
+                    Text(wifiState.label).foregroundStyle(wifiState.color)
+                }
+                if wifiState == .blocked {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("macOS is holding the Wi-Fi route. Allow both prompts: incoming connections for vitals-gateway, and \(Channel.current.displayName) on your local network.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Button("Open Local Network settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.link)
+                    }
+                    .padding(.bottom, 8)
+                }
+                Divider()
+                route("Tailscale", detail: "away access") {
+                    if remote.status?.setup?.step == .ready {
+                        Text("ready").foregroundStyle(.green)
+                    } else {
+                        Button("set up ›") { showingAwayAccess = true }
+                            .buttonStyle(.link)
+                            .disabled(remote.status?.setup == nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private var advertising: Bool { remote.lanAdvertiser.advertised != nil }
+
+    private enum WifiState {
+        case off, blocked, ready
+
+        var label: String {
+            switch self {
+            case .off: return "off"
+            case .blocked: return "waiting for macOS"
+            case .ready: return "ready"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .off: return .secondary
+            case .blocked: return .orange
+            case .ready: return .green
+            }
+        }
+    }
+
+    /// Ready only once the gateway has reached its own Wi-Fi address; until then a
+    /// phone on the same network would connect and hear nothing back.
+    private var wifiState: WifiState {
+        guard let lan = remote.status?.lan, advertising else { return .off }
+        return lan.reachable == false ? .blocked : .ready
+    }
+
+    private var wifiDetail: String {
+        let parts = LanAdvertiser.lanAddresses() + (advertising ? ["Bonjour on"] : [])
+        return parts.isEmpty ? "not on a network" : parts.joined(separator: " · ")
+    }
+
+    private func route(_ title: String, detail: String, @ViewBuilder value: () -> some View) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body.weight(.medium))
+                Text(detail).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            Spacer()
+            value()
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+private struct PendingCommandsCard: View {
+    @Environment(RemoteModel.self) private var remote
+
+    var body: some View {
+        SectionCard(title: "Pending", symbol: "timer") {
+            ForEach(remote.pendingCommands.keys.sorted(), id: \.self) { id in
+                if let entry = remote.pendingCommands[id] {
+                    HStack {
+                        Text("\(entry.kind) from \(entry.deviceName)")
+                        Spacer()
+                        Text(entry.deadline, style: .timer).monospacedDigit().foregroundStyle(.secondary)
+                        Button("Cancel", role: .destructive) { remote.cancelPending(id) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct KeepAwakeCard: View {
+    @Environment(RemoteModel.self) private var remote
+
+    var body: some View {
+        SectionCard(title: "Keep awake", symbol: "cup.and.saucer") {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(remote.keepAwake.active ? "This Mac stays awake" : "Normal sleep")
+                    if let until = remote.keepAwake.until {
+                        Text("Until \(until.formatted(date: .omitted, time: .shortened))").font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Button(remote.keepAwake.active ? "Allow sleep" : "Keep awake") { remote.toggleKeepAwake() }
+            }
+        }
+    }
+}
+
+private struct DeviceRow: View {
+    @Environment(RemoteModel.self) private var remote
+    let device: RemoteDevice
+
+    private struct Permission {
+        let scope: String
+        let title: String
+        var risky = false
+    }
+
+    private enum Access: CaseIterable {
+        case watch, control, everything, custom
+
+        var title: String {
+            switch self {
+            case .watch: return "Watch only"
+            case .control: return "Control"
+            case .everything: return "Everything"
+            case .custom: return "Custom"
+            }
+        }
+
+        var scopes: Set<String>? {
+            switch self {
+            case .watch: return []
+            case .control: return ["operate", "clipboard", "files"]
+            case .everything: return DeviceRow.managed
+            case .custom: return nil
+            }
+        }
+    }
+
+    private static let rows: [[Permission]] = [
+        [
+            Permission(scope: "operate", title: "Control"),
+            Permission(scope: "destructive", title: "Shut down & quit", risky: true),
+            Permission(scope: "clipboard", title: "Read clipboard"),
+            Permission(scope: "files", title: "Send & get files"),
+        ],
+        [
+            Permission(scope: "fsRead", title: "Browse files"),
+            Permission(scope: "fsWrite", title: "Change files", risky: true),
+            Permission(scope: "terminal", title: "Terminal", risky: true),
+        ],
+    ]
+
+    /// The scopes this row manages. Others, like `read`, pass through untouched.
+    private static let managed = Set(rows.joined().map(\.scope))
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: device.platform == "web" ? "globe" : "iphone.gen3")
+                .font(.title3)
+                .foregroundStyle(device.connected ? .green : .secondary)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(device.name).font(.body.weight(.medium))
+                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+                CapsuleSegments(options: Access.allCases, selection: access, title: \.title) { apply($0) }
+                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Self.rows.indices, id: \.self) { row in
+                        HStack(spacing: 6) {
+                            ForEach(Self.rows[row], id: \.scope) { chip($0) }
+                        }
+                    }
+                }
+                .padding(.top, 2)
+                if !riskyTitles.isEmpty {
+                    Text("Includes \(riskyTitles.joined(separator: ", ").lowercased())")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+            }
+            Spacer()
+            Button("Revoke", role: .destructive) { Task { await remote.revoke(device) } }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var granted: Set<String> { Set(device.scopes).intersection(Self.managed) }
+
+    private var access: Access {
+        Access.allCases.first { $0.scopes == granted } ?? .custom
+    }
+
+    private var riskyTitles: [String] {
+        Self.rows.joined().filter { $0.risky && granted.contains($0.scope) }.map(\.title)
+    }
+
+    private var subtitle: String {
+        let seen = device.lastSeenAt.map { Date(timeIntervalSince1970: TimeInterval($0) / 1000).formatted(.relative(presentation: .named)) } ?? "never"
+        return "\(device.model) · app \(device.appVersion) · \(device.connected ? "connected" : "last seen \(seen)")"
+    }
+
+    private var current: RemoteDevice { remote.devices.first { $0.id == device.id } ?? device }
+
+    private func apply(_ access: Access) {
+        guard let scopes = access.scopes else { return }
+        let device = current
+        Task { await remote.setScopes(Set(device.scopes).subtracting(Self.managed).union(scopes), for: device) }
+    }
+
+    private func chip(_ permission: Permission) -> some View {
+        let on = granted.contains(permission.scope)
+        return Button {
+            let device = current
+            Task { await remote.setScope(permission.scope, enabled: !on, for: device) }
+        } label: {
+            Text(permission.title)
+                .font(.callout)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
+                .foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .background(Capsule().fill(on ? AnyShapeStyle(Color.accentColor.opacity(0.10)) : AnyShapeStyle(.clear)))
+                .overlay(Capsule().strokeBorder(on ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.separator)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}

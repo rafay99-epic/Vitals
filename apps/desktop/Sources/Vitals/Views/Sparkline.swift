@@ -7,20 +7,37 @@ struct Sparkline: View {
     let tint: Color
 
     var body: some View {
-        GeometryReader { geo in
-            let points = points(in: geo.size)
-            ZStack {
-                if points.count >= 2 {
-                    fillPath(points, in: geo.size)
-                        .fill(LinearGradient(
-                            colors: [tint.opacity(0.22), tint.opacity(0.02)],
-                            startPoint: .top, endPoint: .bottom
-                        ))
-                    linePath(points)
-                        .stroke(tint.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
-                }
-            }
+        ZStack {
+            SparklinePath(values: values, closed: true)
+                .fill(LinearGradient(
+                    colors: [tint.opacity(0.22), tint.opacity(0.02)],
+                    startPoint: .top, endPoint: .bottom
+                ))
+            SparklinePath(values: values, closed: false)
+                .stroke(tint.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
         }
+    }
+}
+
+private struct SparklinePath: Shape {
+    let values: [Double]
+    let closed: Bool
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let points = points(in: rect.size)
+        guard let first = points.first, let last = points.last else { return path }
+        if closed {
+            path.move(to: CGPoint(x: first.x, y: rect.height))
+            for point in points {
+                path.addLine(to: point)
+            }
+            path.addLine(to: CGPoint(x: last.x, y: rect.height))
+            path.closeSubpath()
+        } else {
+            path.addLines(points)
+        }
+        return path
     }
 
     private func points(in size: CGSize) -> [CGPoint] {
@@ -35,22 +52,5 @@ struct Sparkline: View {
             let y = size.height - CGFloat(t) * size.height
             return CGPoint(x: CGFloat(index) * stepX, y: y)
         }
-    }
-
-    private func linePath(_ points: [CGPoint]) -> Path {
-        var path = Path()
-        path.addLines(points)
-        return path
-    }
-
-    private func fillPath(_ points: [CGPoint], in size: CGSize) -> Path {
-        var path = Path()
-        guard let first = points.first, let last = points.last else { return path }
-        path.move(to: CGPoint(x: first.x, y: size.height))
-        path.addLine(to: first)
-        path.addLines(points)
-        path.addLine(to: CGPoint(x: last.x, y: size.height))
-        path.closeSubpath()
-        return path
     }
 }

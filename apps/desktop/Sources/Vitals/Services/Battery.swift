@@ -2,7 +2,7 @@ import Foundation
 import IOKit
 import IOKit.ps
 
-struct BatterySnapshot {
+struct BatterySnapshot: Equatable {
     let percent: Double
     let isCharging: Bool
     let externalPower: Bool
@@ -17,6 +17,10 @@ struct BatterySnapshot {
     let designCapacity: Int?
     /// Charge it can hold today (full-charge capacity), in mAh.
     let maxCapacity: Int?
+    /// Charge left right now, in mAh.
+    let remainingCapacity: Int?
+    /// Cycles the battery is rated for.
+    let designCycleCount: Int?
     /// Pack temperature in °C.
     let temperature: Double?
     /// Pack voltage in volts.
@@ -36,7 +40,7 @@ struct BatterySnapshot {
 }
 
 /// The attached power adapter, from `AppleSmartBattery`'s `AdapterDetails`.
-struct AdapterInfo {
+struct AdapterInfo: Equatable {
     /// Rated wattage (`AdapterDetails["Watts"]`).
     let watts: Int?
     /// Negotiated voltage in volts.
@@ -78,10 +82,14 @@ enum Battery {
     /// Looked up once and kept for the process lifetime (0 on a desktop).
     private static let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
 
+    /// True on any Mac with a battery, without waiting for the first sample.
+    static var isPresent: Bool { service != 0 }
+
     /// `officialHealth` is macOS's "Maximum Capacity" (see `BatteryHealth`),
     /// preferred so the app matches System Settings. The raw full-charge/design
-    /// ratio is the fallback until it's read.
-    static func read(officialHealth: Double? = nil) -> BatterySnapshot? {
+    /// ratio is the fallback until it's read. `fallbackTemperature` covers macOS
+    /// versions whose registry no longer carries the pack temperature.
+    static func read(officialHealth: Double? = nil, fallbackTemperature: Double? = nil) -> BatterySnapshot? {
         guard service != 0 else { return nil }
 
         var propsRef: Unmanaged<CFMutableDictionary>?
@@ -89,7 +97,9 @@ enum Battery {
               let props = propsRef?.takeRetainedValue() as? [String: Any]
         else { return nil }
 
-        func int(_ key: String) -> Int? { props[key] as? Int }
+        // macOS 27 moved the capacity registers into `BatteryData`.
+        let batteryData = props["BatteryData"] as? [String: Any]
+        func int(_ key: String) -> Int? { props[key] as? Int ?? batteryData?[key] as? Int }
         func bool(_ key: String) -> Bool { props[key] as? Bool ?? false }
 
         // CurrentCapacity is a percentage on Apple Silicon, raw mAh on Intel.
@@ -115,7 +125,7 @@ enum Battery {
         }
 
         // Hundredths of a degree Celsius.
-        let temperature = int("Temperature").map { Double($0) / 100 }
+        let temperature = int("Temperature").map { Double($0) / 100 } ?? fallbackTemperature
 
         // Same estimate the menu bar shows. Negative sentinels: -1 "still
         // calculating", -2 "unlimited / on AC". Both mean no estimate.
@@ -133,6 +143,8 @@ enum Battery {
             timeRemainingMinutes: timeRemaining,
             designCapacity: design,
             maxCapacity: maxCapacity,
+            remainingCapacity: int("RemainingCapacity") ?? int("AppleRawCurrentCapacity"),
+            designCycleCount: int("DesignCycleCount9C"),
             temperature: temperature,
             voltage: voltage.map { Double($0) / 1000 },
             amperage: amperage.map { Double($0) / 1000 },

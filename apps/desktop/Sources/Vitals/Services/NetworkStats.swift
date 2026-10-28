@@ -30,7 +30,7 @@ struct WiFiInfo: Equatable, Sendable {
 }
 
 /// One tick's network reading across all counted physical interfaces.
-struct NetworkSnapshot: Sendable {
+struct NetworkSnapshot: Equatable, Sendable {
     var links: [NetworkLink]          // physical interfaces, active ones first
     var totalInPerSec: Double         // sum over counted interfaces
     var totalOutPerSec: Double
@@ -67,11 +67,18 @@ final class NetworkStats {
     private var primaryInterface: String?
     private lazy var store = SCDynamicStoreCreate(nil, "Vitals.NetworkStats" as CFString, nil, nil)
 
+    /// `if_indextoname` walks the interface list on every call. Names are cached
+    /// by index and dropped every minute, since a detached interface's index
+    /// can be handed to a new one.
+    private var interfaceNames: [UInt16: String] = [:]
+    private var interfaceNamesAt = Date.distantPast
+    private static let interfaceNamesLifetime: TimeInterval = 60
+
     /// One reading. Returns empty links on total failure, never nil.
     /// `includeDetails` gates the CoreWLAN and default-route reads; when false the
     /// previous details are held. Byte counters are read every call.
     func sample(includeDetails: Bool) -> NetworkSnapshot {
-        let counters = Self.readInterfaceCounters().filter { Self.isCountedInterface($0.name) }
+        let counters = readInterfaceCounters().filter { Self.isCountedInterface($0.name) }
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         // 0 on the first call, which makes every rate 0.
         let elapsed: TimeInterval = previousTimestamp.map { Double(now - $0) / 1_000_000_000 } ?? 0
@@ -161,7 +168,20 @@ final class NetworkStats {
 
     /// The buffer is a packed sequence of variable-length messages: advance by
     /// each record's `ifm_msglen` and decode only `RTM_IFINFO2` records.
-    private static func readInterfaceCounters() -> [InterfaceCounter] {
+    private func interfaceName(_ index: UInt16) -> String? {
+        if let cached = interfaceNames[index] { return cached }
+        var nameBuffer = [CChar](repeating: 0, count: Int(IFNAMSIZ))
+        guard if_indextoname(UInt32(index), &nameBuffer) != nil else { return nil }
+        let name = String(cString: nameBuffer)
+        interfaceNames[index] = name
+        return name
+    }
+
+    private func readInterfaceCounters() -> [InterfaceCounter] {
+        if Date().timeIntervalSince(interfaceNamesAt) >= Self.interfaceNamesLifetime {
+            interfaceNames.removeAll(keepingCapacity: true)
+            interfaceNamesAt = Date()
+        }
         var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
         var length = 0
         guard sysctl(&mib, u_int(mib.count), nil, &length, nil, 0) == 0, length > 0 else {
@@ -186,10 +206,9 @@ final class NetworkStats {
                 let type = record.load(fromByteOffset: 3, as: UInt8.self)
                 if Int32(type) == RTM_IFINFO2 {
                     let header = record.loadUnaligned(as: if_msghdr2.self)
-                    var nameBuffer = [CChar](repeating: 0, count: Int(IFNAMSIZ))
-                    if if_indextoname(UInt32(header.ifm_index), &nameBuffer) != nil {
+                    if let name = interfaceName(header.ifm_index) {
                         result.append(InterfaceCounter(
-                            name: String(cString: nameBuffer),
+                            name: name,
                             ifType: header.ifm_data.ifi_type,
                             flags: header.ifm_flags,
                             bytesIn: header.ifm_data.ifi_ibytes,

@@ -79,11 +79,11 @@ final class AppsModel {
         var outcome: Outcome
     }
 
-    private(set) var apps: [InstalledApp] = []
+    private(set) var apps: [InstalledApp] = [] { didSet { refilter() } }
     private(set) var isScanning = false
     var selection: Set<URL> = []
-    var searchText = ""
-    var sortOrder: SortOrder = .name
+    var searchText = "" { didSet { if searchText != oldValue { refilter() } } }
+    var sortOrder: SortOrder = .name { didSet { if sortOrder != oldValue { refilter() } } }
     var staged: StagedUninstall?
     private(set) var isPreparingUninstall = false
     /// Non-nil while an uninstall runs; the sheet (bound to `staged`) shows it.
@@ -95,7 +95,9 @@ final class AppsModel {
     private let inventory = AppInventory()
     @ObservationIgnored private var sizeTask: Task<Void, Never>?
 
-    var filteredApps: [InstalledApp] {
+    private(set) var filteredApps: [InstalledApp] = []
+
+    private func refilter() {
         var result = apps
         if !searchText.isEmpty {
             result = result.filter {
@@ -106,7 +108,7 @@ final class AppsModel {
         if sortOrder == .size {
             result = result.sorted { ($0.sizeBytes ?? 0) > ($1.sizeBytes ?? 0) }
         }
-        return result
+        filteredApps = result
     }
 
     var selectedApps: [InstalledApp] {
@@ -264,8 +266,9 @@ final class AppsModel {
                 var bundleHandledByBrew = false
                 if let cask = staged.casks[app.id] {
                     uninstallProgress?.phase = .homebrew(app.name)
+                    let zap = (staged.leftovers[app.id] ?? []).allSatisfy { !keep.contains($0.id) }
                     let removed = await Task.detached(priority: .userInitiated) {
-                        AppUninstaller.homebrewUninstall(cask: cask)
+                        AppUninstaller.homebrewUninstall(cask: cask, zap: zap)
                     }.value
                     if removed { bundleHandledByBrew = true; combined.caskUninstalled += 1 }
                 }
@@ -277,12 +280,14 @@ final class AppsModel {
                 }
 
                 uninstallProgress?.phase = .removingFiles(app.name)
+                let remaining = bundleHandledByBrew ? leftovers.filter { FileManager.default.fileExists(atPath: $0.id.path) } : leftovers
                 let outcome = await Task.detached(priority: .userInitiated) {
-                    AppUninstaller.uninstall(app: app, leftovers: leftovers, skipBundle: bundleHandledByBrew || bundleViaAdmin)
+                    AppUninstaller.uninstall(app: app, leftovers: remaining, skipBundle: bundleHandledByBrew || bundleViaAdmin)
                 }.value
                 combined.trashed += outcome.trashed
                 combined.failures += outcome.failures
                 combined.freedBytes += outcome.freedBytes
+                combined.trashedBytes += outcome.freedBytes
 
                 // Trash blocked by App Management falls back to admin.
                 for bundle in outcome.failedBundles {
@@ -294,7 +299,7 @@ final class AppsModel {
                     AppUninstaller.clearDefaults(bundleID: bundleID)
                 }.value
 
-                for leftover in leftovers where leftover.requiresAdmin {
+                for leftover in remaining where leftover.requiresAdmin {
                     systemPaths.append((leftover.id, leftover.sizeBytes))
                 }
 
@@ -322,6 +327,7 @@ final class AppsModel {
                     let removed = uniqueSystemPaths.filter { !fm.fileExists(atPath: $0.url.path) }
                     combined.usedAdmin = true
                     combined.systemRemoved = removed.count
+                    combined.systemRemaining = uniqueSystemPaths.count - removed.count
                     combined.freedBytes += removed.reduce(0) { $0 + $1.bytes }
                 } catch let error as PrivilegedShell.AdminError {
                     if error.cancelled {
