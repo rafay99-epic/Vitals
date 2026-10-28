@@ -21,7 +21,8 @@ import { startAlertWatch, stopAlertWatch, syncAlerts } from "../notifications/ba
 import { clearCredentials, loadCredentials, saveCredentials } from "../persistence/credentials";
 import { loadDeviceKey } from "../persistence/deviceKey";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
-import { Remote } from "../state/remote.ts";
+import { note } from "../state/journal.ts";
+import { CLIENT_VERSION, Remote } from "../state/remote.ts";
 import { localNetwork, macKeyOf, startNearby, stopNearby } from "./nearby.ts";
 import { runTunnelOnDemand, signOutTunnel } from "./tunnel.ts";
 
@@ -64,7 +65,11 @@ const openSocket: ConnectionOptions["webSocket"] = (url, options) => {
 
 const OFF_LOCAL: ReadonlySet<Network.NetworkStateType> = new Set([Network.NetworkStateType.CELLULAR, Network.NetworkStateType.NONE]);
 
-const trackLocalNetwork = (state: Network.NetworkState) => localNetwork.set(state.type === undefined || !OFF_LOCAL.has(state.type));
+const trackLocalNetwork = (state: Network.NetworkState) => {
+  localNetwork.set(state.type === undefined || !OFF_LOCAL.has(state.type));
+  const type = state.type === undefined ? "unknown" : state.type.toLowerCase();
+  note("net", state.isConnected === false ? `${type}, not connected` : state.isInternetReachable === false ? `${type}, no internet` : type);
+};
 
 const launchPairingLink = async (): Promise<PairingLink | null> => {
   if (Platform.OS === "web") return typeof globalThis.location === "undefined" ? null : parsePairingUrl(globalThis.location.href);
@@ -119,8 +124,10 @@ class SessionManager {
   start(): void {
     if (this.started) return;
     this.started = true;
+    note("app", `opened ${CLIENT_VERSION} on ${Platform.OS} ${String(Platform.Version)}`);
     void (async () => {
       const credentials = await loadCredentials();
+      note("app", credentials === null ? "not paired" : `paired with ${credentials.lan?.map((lan) => `${lan.host}:${String(lan.port)}`).join(", ") || "no Wi-Fi address"}${credentials.baseUrl === null ? "" : `, ${credentials.baseUrl}`}`);
       const launched = await launchPairingLink();
       if (Platform.OS === "web") {
         // The browser opened this page on the pairing link the user followed. If that stale link
@@ -134,6 +141,7 @@ class SessionManager {
       if (credentials === null) this.session.set({ status: "unpaired" });
       else this.open(credentials, await this.deviceKey());
     })().catch((error: unknown) => {
+      note("app", `could not read the saved pairing: ${error instanceof Error ? error.message : String(error)}`);
       this.pairing.set({ busy: false, error: error instanceof Error ? error.message : "Could not read this device's pairing. Pair again." });
       this.session.set({ status: "unpaired" });
     });
@@ -158,8 +166,10 @@ class SessionManager {
   private async completePairing(link: PairingLink, quiet: boolean): Promise<boolean> {
     const device = await this.deviceKey();
     const lanKey = device === null ? null : deviceKeyText(device);
+    note("pair", `QR pairing with ${link.baseUrl}`);
     const outcome = await pair(link, deviceInfo(), undefined, lanKey);
     if (!outcome.ok) {
+      note("pair", `QR pairing failed: ${outcome.message}`);
       this.failPairing(outcome.message, quiet);
       return false;
     }
@@ -184,6 +194,7 @@ class SessionManager {
       throw error;
     }
     if (previous !== null && previous.deviceId !== credentials.deviceId && previous.baseUrl !== null) void unpair(previous.baseUrl, previous.token);
+    note("pair", `paired as ${credentials.deviceId}`);
     this.pairing.set({ busy: false, error: null, nearby: null });
     this.welcome.set(true);
     this.open(credentials, await this.deviceKey());
@@ -198,6 +209,7 @@ class SessionManager {
       return false;
     }
     const name = mac.txt["n"] ?? mac.name;
+    note("pair", `Wi-Fi pairing with ${name} at ${mac.host}:${String(mac.port)}`);
     this.pairing.set({ busy: true, error: null, nearby: { name, code: null, expiresAt: null } });
     const attempt = pairOverLan({
       host: mac.host,
@@ -212,6 +224,7 @@ class SessionManager {
     const outcome = await attempt.outcome;
     this.cancelNearby = null;
     if (!outcome.ok) {
+      note("pair", `Wi-Fi pairing ${outcome.reason}: ${outcome.detail}`);
       this.pairing.set({ busy: false, error: NEARBY_FAILURES[outcome.reason], nearby: null });
       return false;
     }
@@ -266,6 +279,7 @@ class SessionManager {
     await stopAlertWatch();
     await forgetCalmAction();
     const revoked = (await clearCredentials(forgotten)) || forgotten;
+    note("pair", revoked ? "unpaired" : "unpaired here; the Mac could not be told");
     this.pairing.set({
       busy: false,
       error: revoked ? null : "Unpaired here, but the Mac could not be reached. Revoke this device in Vitals on the Mac.",
@@ -327,8 +341,7 @@ class SessionManager {
       if (stayConnected.get()) cancelSuspend();
       else if (AppState.currentState !== "active") suspendLater();
     });
-    const network = Network.addNetworkStateListener((next) => {
-      trackLocalNetwork(next);
+    const network = Network.addNetworkStateListener(() => {
       // With the link held in the background (Android), a Wi-Fi to cellular switch reconnects now, not after the backoff.
       if (AppState.currentState === "active" || stayConnected.get()) remote.connection.wake("network");
     });
@@ -358,6 +371,8 @@ export const sessions = new SessionManager();
 
 if (Platform.OS !== "web") {
   void Network.getNetworkStateAsync().then(trackLocalNetwork, () => undefined);
+  // Registered before any paired listener, so `localNetwork` is current by the time that one wakes the link.
+  Network.addNetworkStateListener(trackLocalNetwork);
   Linking.addEventListener("url", ({ url }) => sessions.receive(parsePairingDeepLink(url)));
   if (AppState.currentState === "active") startNearby();
   AppState.addEventListener("change", (state) => {

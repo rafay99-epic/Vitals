@@ -7,6 +7,7 @@ import { AppState } from "react-native";
 import { deviceInfo } from "../lib/device.ts";
 import { channel } from "../lib/variant";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
+import { note } from "../state/journal.ts";
 import { localNetwork } from "./nearby.ts";
 
 export type Tunnel =
@@ -17,6 +18,23 @@ export type Tunnel =
   | { readonly _tag: "Failed"; readonly reason: string };
 
 export const tunnel = new Store<Tunnel>({ _tag: "Off" });
+
+const tunnelLine = (state: Tunnel): string => {
+  switch (state._tag) {
+    case "Ready":
+      return `built-in Tailscale up, local port ${String(state.port)}`;
+    case "NeedsLogin":
+      return "built-in Tailscale needs a sign-in";
+    case "Failed":
+      return `built-in Tailscale failed: ${state.reason}`;
+    case "Starting":
+      return "built-in Tailscale starting";
+    case "Off":
+      return "built-in Tailscale off";
+  }
+};
+
+tunnel.subscribe(() => note("tunnel", tunnelLine(tunnel.get())));
 
 export { tailnetSupported };
 
