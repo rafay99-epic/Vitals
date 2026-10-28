@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Runs a command with SENTRY_AUTH_TOKEN from the repo root's gitignored .env.local, unless the shell
-# already has one. In a git worktree it falls back to the main checkout's .env.local, where the token lives.
-#   scripts/with-sentry.sh <command> [args…]
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -z "${SENTRY_AUTH_TOKEN:-}" ]; then

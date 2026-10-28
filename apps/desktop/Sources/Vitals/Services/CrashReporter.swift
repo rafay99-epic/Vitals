@@ -49,7 +49,6 @@ enum CrashReporter {
             .flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 0
         if total > acked {
             let name = lastSignalName(in: combined) ?? "fatal signal"
-            // Sentry reports the crash itself, so this line stays local.
             Log.fault(.app, "Previous run crashed (\(name)). The full backtrace is in vitals.log — please send it via Report a Problem.", report: false)
             try? "\(total)".write(to: ackFile, atomically: true, encoding: .utf8)
             return  // the crash already explains the unclean exit

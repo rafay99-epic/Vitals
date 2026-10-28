@@ -59,8 +59,6 @@ if [[ "$ARCH_INFO" != *"arm64"* || "$ARCH_INFO" == *"x86_64"* ]]; then
   exit 1
 fi
 
-# Debug symbols next to the app (not inside it), so CI can upload them to Sentry and Mac crash
-# stack traces read as code. Best-effort: a missing dSYM never fails a build.
 rm -rf "build/$APP_NAME.dSYM"
 mkdir -p build
 dsymutil "$BINARY" -o "build/$APP_NAME.dSYM" 2>/dev/null || echo "warning: dsymutil failed; no dSYM for Sentry" >&2

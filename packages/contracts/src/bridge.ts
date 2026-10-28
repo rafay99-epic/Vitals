@@ -65,7 +65,6 @@ export const AdminOp = Schema.Union([
   Schema.TaggedStruct("ClipsFrom", { device: DeviceId }),
   /** Copies a phone's file into the gateway's preview cache for Quick Look. */
   Schema.TaggedStruct("FsPreview", { device: DeviceId, path: FsPath }),
-  /** Deletes every log line phones sent (errors, connection changes), for all phones. */
   Schema.TaggedStruct("ClearPhoneLogs", {}),
 ]);
 export type AdminOp = typeof AdminOp.Type;

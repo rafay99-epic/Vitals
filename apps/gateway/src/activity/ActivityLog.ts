@@ -177,7 +177,6 @@ class ActivityWriter {
     return events.length + frames.length;
   }
 
-  /** Deletes the log lines phones sent: one phone's, or every phone's when `deviceId` is null. Returns how many. */
   clearClient(deviceId: string | null): number {
     this.flush();
     return this.db.run("DELETE FROM events WHERE source = 'client' AND (?1 IS NULL OR device_id = ?1)", [deviceId]).changes;
@@ -231,7 +230,6 @@ export class ActivityLog extends Context.Service<
     readonly tally: (frame: FrameRecord) => void;
     readonly connectionOpened: (open: ConnectionOpen) => void;
     readonly connectionClosed: (id: string, at: number, reason: string) => void;
-    /** Deletes one phone's log lines, or every phone's with null. Returns how many went. */
     readonly clearClient: (deviceId: string | null) => number;
     readonly flush: Effect.Effect<void>;
   }

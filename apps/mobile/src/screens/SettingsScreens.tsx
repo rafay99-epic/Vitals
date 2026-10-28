@@ -270,7 +270,6 @@ export function HelpScreen({ navigation }: Props<"Help">) {
   );
 }
 
-/** Where crashes and errors go: always the paired Mac's Activity log, and Sentry unless turned off. */
 function ErrorReports() {
   const remote = useRemote();
   const reports = useStore(errorReports);

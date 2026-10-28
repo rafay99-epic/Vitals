@@ -29,6 +29,5 @@ export type ActivityIngestInput = typeof ActivityIngestInput.Type;
 export const ActivityIngestResult = Schema.Struct({ accepted: Schema.Int });
 export type ActivityIngestResult = typeof ActivityIngestResult.Type;
 
-/** How many of this phone's log lines the Mac deleted. */
 export const ActivityClearResult = Schema.Struct({ removed: NonNegativeInt });
 export type ActivityClearResult = typeof ActivityClearResult.Type;

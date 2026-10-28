@@ -441,7 +441,6 @@ enum AdminOp: Equatable, Sendable {
     /// Copies a phone's file into the gateway's preview cache for Quick Look.
     case fsPreview(device: String, path: String)
     case clipsFrom(device: String)
-    /// Deletes every log line phones sent, for all phones.
     case clearPhoneLogs
 }
 

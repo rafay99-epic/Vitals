@@ -4,7 +4,6 @@ import PackageDescription
 let package = Package(
     name: "Vitals",
     platforms: [.macOS(.v15)],
-    // Sentry is the one third-party dependency: crash and error reports (see `ErrorReporting`).
     dependencies: [.package(url: "https://github.com/getsentry/sentry-cocoa", exact: "9.31.0")],
     targets: [
         .target(name: "PrivateSensors"),

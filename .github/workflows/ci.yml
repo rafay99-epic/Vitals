@@ -149,8 +149,6 @@ jobs:
           ./build.sh
           ./make-dmg.sh
 
-      # Mac crash stack traces in Sentry need this build's debug symbols (build.sh writes the
-      # dSYM). No secret, or Sentry down → a warning, never a failed release.
       - name: Upload debug symbols to Sentry
         continue-on-error: true
         env:

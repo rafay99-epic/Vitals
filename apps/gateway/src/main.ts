@@ -8,7 +8,6 @@ import { reportExit, reportingLoggerLayer, startReporting } from "./reporting/Re
 
 const config = configFromEnv(process.env);
 
-// The Mac app passes its Crash reports switch and version; anything else (tests, fake-mac) reports nothing.
 startReporting({ enabled: process.env["VITALS_ERROR_REPORTS"] === "1", channel: config.channel, version: process.env["VITALS_VERSION"] ?? "0" });
 
 Layer.launch(

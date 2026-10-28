@@ -9,7 +9,6 @@ import * as SecureStore from "expo-secure-store";
 
 import { scrubLog } from "./scrub.ts";
 
-/** Public by design: a DSN only lets an app send events to the Vitals Remote project. */
 const DSN = "https://5be678c5d702791317b48ef1ba197a04@o4512219615920128.ingest.us.sentry.io/4512333352861696";
 const KEY = "vitals.remote.errorReports";
 
@@ -20,7 +19,6 @@ const LOG: Record<ActivityLevel, (message: string, attributes: Record<string, un
   error: (message, attributes) => Sentry.logger.error(message, attributes),
 };
 
-/** Read synchronously, so a crash during launch already honors an opt-out. */
 const saved = (): boolean => {
   try {
     return SecureStore.getItem(KEY, KEYCHAIN_OPTIONS) !== "0";
@@ -29,7 +27,6 @@ const saved = (): boolean => {
   }
 };
 
-/** "Send error reports": on unless turned off in Settings → Help. */
 export const errorReports = new Store<boolean>(saved());
 
 let started = false;
@@ -52,14 +49,7 @@ const start = (): void => {
   });
 };
 
-/**
- * Sentry gets crashes, uncaught errors and the phone's log lines (connection changes, failures).
- * Uncaught errors are Sentry's own; `client.app.fault` would only repeat them. Off in `expo start`
- * dev mode, and entirely when the owner turned reports off. Starts on import: index.ts loads this
- * first, so errors while the app's modules load are caught too.
- */
 if (errorReports.get()) start();
-/** Failure toasts often name a file or a phone ("Passport Scan arrived damaged"): Sentry gets that one happened, the Mac gets the text. */
 const PRIVATE_TEXT = new Set(["client.ui.failure"]);
 
 clientLog.listen((event) => {

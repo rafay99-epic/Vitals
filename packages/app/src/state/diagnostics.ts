@@ -181,12 +181,10 @@ class Diagnostics {
 
 export const diagnostics = new Diagnostics();
 
-/** Every build logs uncaught errors for the Mac; only Nightly and Dev also list them on the Diagnostics screen. */
 const captureFaults = (): void => {
   if (typeof ErrorUtils === "undefined") return;
   const previous = ErrorUtils.getGlobalHandler();
   ErrorUtils.setGlobalHandler((error: unknown, fatal?: boolean) => {
-    // A failing write (disk full, a locked database) must not stop Sentry and React Native's handlers.
     try {
       diagnostics.fault(error, fatal === true);
       clientLog.fault(error, fatal === true);
@@ -198,10 +196,6 @@ const captureFaults = (): void => {
 
 captureFaults();
 
-/**
- * Diagnostics → "Throw a test error": a non-fatal error through the same global handler a real one
- * takes, so it lands in Faults, the Mac's Activity log and (when reports are on) Sentry.
- */
 export const throwTestError = (): void => {
   const error = new Error(`Test error from Diagnostics, ${new Date().toISOString()}`);
   if (typeof ErrorUtils === "undefined") {
