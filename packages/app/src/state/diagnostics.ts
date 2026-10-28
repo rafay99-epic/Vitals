@@ -198,6 +198,21 @@ const captureFaults = (): void => {
 
 captureFaults();
 
+/**
+ * Diagnostics → "Throw a test error": a non-fatal error through the same global handler a real one
+ * takes, so it lands in Faults, the Mac's Activity log and (when reports are on) Sentry.
+ */
+export const throwTestError = (): void => {
+  const error = new Error(`Test error from Diagnostics, ${new Date().toISOString()}`);
+  if (typeof ErrorUtils === "undefined") {
+    setTimeout(() => {
+      throw error;
+    });
+    return;
+  }
+  ErrorUtils.getGlobalHandler()(error, false);
+};
+
 export const instrumentConnection = (connection: Connection): Connection => {
   if (!diagnostics.enabled) return connection;
   const call: Connection["call"] = async (run) => {
