@@ -5,7 +5,7 @@ import { useTitle } from '../lib/useTitle'
 export default function Privacy() {
   useTitle('Privacy Policy — Vitals')
   return (
-    <LegalLayout title="Privacy Policy" updated="October 24, 2026">
+    <LegalLayout title="Privacy Policy" updated="October 28, 2026">
       <Section title="The short version">
         <P>
           <Strong>The Vitals app does not collect, store, transmit, or sell any of your personal data. It has no analytics, no
@@ -14,9 +14,11 @@ export default function Privacy() {
           hit a bug, the App can open your email program with those logs so you can choose to send them to the developer yourself —
           nothing is transmitted unless you press Send. Its only automatic network requests go to GitHub, to check for and download
           releases. Remote access, which is off until you turn it on, sends readings only to devices you pair, over your own
-          Wi-Fi or your own Tailscale network (section 7). The Vitals Remote phone app talks to your Mac the same way; its only
-          other network requests check for app updates, send Google basic diagnostics from the Android QR scanner, and, if you
-          turn on built-in Tailscale, go to Tailscale (section 8). This website is almost as quiet: it sets no cookies and does no cross-site tracking — its one measurement tool is
+          Wi-Fi or your own Tailscale network (section 7). The Vitals Remote phone app talks to your Mac the same way. Unlike
+          the Mac app, it does report its own crashes and errors: to your Mac, and to Sentry so we can fix them, with file names,
+          folders and addresses removed first. You can turn the Sentry reports off in the phone app (section 8). Its only other
+          network requests check for app updates, send Google basic diagnostics from the Android QR scanner, and, if you turn on
+          built-in Tailscale, go to Tailscale (section 8). This website is almost as quiet: it sets no cookies and does no cross-site tracking — its one measurement tool is
           Vercel Web Analytics, an anonymized, cookieless page counter described in section 9.
         </P>
         <P>
@@ -145,8 +147,11 @@ export default function Privacy() {
           </Item>
           <Item>
             <Strong>What the phone app stores:</Strong> the Mac's address and key, the Tailscale login that owns the Mac (if it
-            uses Tailscale), a session token and its own device key, all in the phone's secure storage. It also keeps a queue of
-            up to 5,000 of its own connection events in a local database, uploads them to your Mac, and then deletes them. When you
+            uses Tailscale), a session token and its own device key, all in the phone's secure storage. It also keeps a log of
+            up to 5,000 of its own events in a local database: connection changes, crashes and errors (the error message and the
+            code it happened in), and failures it showed you. It uploads them to your Mac's activity log, and then deletes them
+            from the phone. "Clear error logs" in the phone app (Settings, Help) deletes this log on the phone and that phone's
+            entries on your Mac; "Clear Phone Logs" in Vitals (Remote, Activity) deletes every phone's entries. When you
             pair, it tells your Mac the phone's name, model, platform and app version so you can recognise it in Vitals. A paired browser keeps
             only a session cookie that page scripts cannot read, and nothing in browser storage.
           </Item>
@@ -174,7 +179,7 @@ export default function Privacy() {
       <Section title="8. The phone app: permissions and other services">
         <P>
           The Vitals Remote phone app has no account, no analytics and no advertising. Everything above about Remote applies to
-          it. It asks for these permissions, each only for the reason given:
+          it, and it reports its own errors to Sentry as described below. It asks for these permissions, each only for the reason given:
         </P>
         <List>
           <Item>
@@ -203,6 +208,18 @@ export default function Privacy() {
             random identifier created when the app was installed; it is not linked to you or your Mac. Expo processes it under the{' '}
             <ExtLink href="https://expo.dev/privacy">Expo Privacy Policy</ExtLink>, and we can see only aggregate counts of
             update downloads.
+          </Item>
+          <Item>
+            <Strong>Error reports (Sentry, on unless you turn it off):</Strong> when the phone app crashes or hits an error, it
+            sends a report to Sentry, the error tracking service we use to find and fix bugs. A report holds the error message and
+            the code it happened in, the app version and update channel, the phone's model and operating system version, and the
+            app's recent events from the log described in section 7 (connection changes and failures). Before anything is sent,
+            the app removes file names, folder paths, links, your Mac's and Tailscale addresses, IP addresses, email addresses and
+            your phone's name. Reports carry no account, no name and no identifier linked to you, Sentry is set not to store IP
+            addresses, and there are no screenshots or screen recordings. Sentry, Inc. processes reports in the United States
+            under the <ExtLink href="https://sentry.io/privacy/">Sentry Privacy Policy</ExtLink> and deletes them after 30 days.
+            Turn reports off in the phone app under Settings, Help, Send error reports; nothing more is sent from then on. Your Mac
+            still receives the app's log either way, because it stays on your own devices.
           </Item>
           <Item>
             <Strong>Google Play:</Strong> on Android, the app asks Google Play at launch whether a store update is available.
@@ -253,9 +270,9 @@ export default function Privacy() {
           <Item>We do not profile you, advertise to you, or track you across apps or websites — the website's analytics are
           aggregate page counts, not profiles of people.</Item>
           <Item>We do not use your hardware readings for any purpose; they never reach us.</Item>
-          <Item>We receive nothing from the App or the phone app automatically — a diagnostic log reaches us only if you choose
-          to email it as a problem report. The one thing we can see is the aggregate count of phone app update downloads in
-          Expo's dashboard (section 8), which identifies no one.</Item>
+          <Item>We receive nothing from the Mac App automatically — its diagnostic log reaches us only if you choose to email it
+          as a problem report. From the phone app we receive its scrubbed error reports through Sentry, unless you turn them off,
+          and the aggregate count of update downloads in Expo's dashboard (section 8). Neither identifies you.</Item>
           <Item>We hold no user database, so there is nothing to breach, subpoena, or leak on our side.</Item>
         </List>
       </Section>
@@ -266,6 +283,8 @@ export default function Privacy() {
           — the readings history (on by default, kept for 365 days), the diagnostic log, and your settings — lives on your Mac and
           is yours to delete. With Remote on, the gateway's activity log and command history are pruned as described in section 7. A problem
           report you choose to email is ordinary correspondence: it is kept only as long as needed to investigate the issue.
+          Phone app error reports are deleted by Sentry after 30 days; the copies on your Mac follow the activity log's 30 days
+          unless you clear them sooner.
           Uninstalling the App and removing the helper deletes the App's presence from your system; your logs remain until you
           delete them, since they are your data.
           The website's aggregated, anonymous visit counts are retained in our Vercel dashboard and contain no personal
@@ -276,8 +295,10 @@ export default function Privacy() {
       <Section title="12. Your rights (GDPR, CCPA, and similar laws)">
         <P>
           Privacy laws such as the EU/UK GDPR and the California CCPA/CPRA grant rights to access, correct, delete, and port
-          personal data, and to object to or restrict its processing. Because we process no personal data, there is nothing for us
-          to access, correct, delete, or port — these rights are satisfied by design. If you believe we hold any personal data about
+          personal data, and to object to or restrict its processing. The only data we receive automatically is the phone app's
+          error reports, sent on the basis of our legitimate interest in fixing the app. They are scrubbed and carry no identifier,
+          so we cannot pick out yours; you can object at any time by turning Send error reports off, and they expire after 30
+          days. Beyond that we process no personal data, so there is nothing for us to access, correct, delete, or port. If you believe we hold any personal data about
           you, contact us via the channels below and we will respond; you also retain the right to lodge a complaint with your
           local supervisory authority.
         </P>
@@ -285,7 +306,7 @@ export default function Privacy() {
 
       <Section title="13. Children's privacy">
         <P>
-          The Services are not directed at children and collect no data from anyone, children included. We are not aware of any way
+          The Services are not directed at children and collect no personal data from anyone, children included. We are not aware of any way
           the Services could accumulate children's personal information.
         </P>
       </Section>
