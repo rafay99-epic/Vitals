@@ -7,6 +7,8 @@ import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 
+import { reportActivity } from "../reporting/Reporting.ts";
+
 export interface ActivityEvent {
   readonly eventId?: string;
   readonly at: number;
@@ -253,7 +255,10 @@ export const layer = (db: Database) =>
       yield* Effect.sync(() => writer.prune()).pipe(Effect.repeat(Schedule.spaced("1 hour")), Effect.forkScoped);
       yield* Effect.addFinalizer(() => flush);
       return ActivityLog.of({
-        record: (event) => writer.record(event),
+        record: (event) => {
+          reportActivity(event);
+          writer.record(event);
+        },
         frame: (frame) => writer.frame(frame),
         tally: (frame) => writer.tally(frame),
         connectionOpened: (open) => writer.connectionOpened(open),

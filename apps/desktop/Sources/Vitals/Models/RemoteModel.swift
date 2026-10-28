@@ -111,6 +111,13 @@ final class RemoteModel {
         share.remote = self
         phonePages.remote = self
         if settings.remoteEnabled { startGateway() }
+        // The gateway reads the Crash reports switch when it starts, so flipping it restarts a running one.
+        observeChanges(of: { [weak settings] in settings?.errorReportsEnabled ?? true }) { [weak self] _ in
+            guard let self, self.gateway != nil else { return }
+            self.stopGateway()
+            self.restartAttempt = 0
+            self.startGateway()
+        }
     }
 
     deinit {
@@ -167,6 +174,9 @@ final class RemoteModel {
         var environment = ProcessInfo.processInfo.environment
         environment["VITALS_CHANNEL"] = Channel.current.rawValue
         environment["VITALS_REMOTE_DATA_DIR"] = Self.dataDirectory.path
+        // The gateway reports to Sentry under the same Crash reports switch as the app.
+        environment["VITALS_ERROR_REPORTS"] = settings.errorReportsEnabled ? "1" : "0"
+        environment["VITALS_VERSION"] = Updater.currentVersion
         if let web = Self.webDirectory { environment["VITALS_REMOTE_WEB_DIR"] = web.path }
         gatewayGeneration += 1
         let generation = gatewayGeneration
@@ -177,7 +187,8 @@ final class RemoteModel {
                 Task { @MainActor in self?.handle(message) }
             },
             onInvalid: { line in
-                Log.notice(.remote, "gateway sent an unreadable line: \(line)")
+                // The line can hold clipboard text or device names, so it stays in vitals.log.
+                Log.notice(.remote, "gateway sent an unreadable line: \(line)", report: false)
             },
             onExit: { [weak self] code in
                 Task { @MainActor in self?.gatewayExited(code, generation: generation) }
