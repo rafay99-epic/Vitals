@@ -199,6 +199,16 @@ pnpm dmg                  # desktop app + DMG (macOS only)
   auto-deletes those backups after a **2-day grace**. `HistoryReader` / `HistoryExport` /
   `AlertLog` are the view-facing API and delegate here (one storage seam); CSV export **streams**
   from the DB in the legacy column format so it round-trips through `HistoryReader.parse`.
+- **Crash and error reports** (`ErrorReporting`, Sentry project `vitals-macos`, the app's one SPM
+  package): crashes, hangs, uncaught NSExceptions, and every `Log` line at notice or above (notice
+  as a Sentry log, error/fault also as an event, once per source line per launch). It ignores the
+  local log level, runs only in the GUI process, starts right after `CrashReporter.install()` (which
+  keeps writing `vitals.log`), and is on unless Settings → Developer → Crash reports is off.
+  Everything passes `Scrub` (user name, home, Mac name, paths, files, links, addresses); Uninstall
+  and Cleanup lines never send their text, and raw gateway output is `report: false`. Keep the
+  privacy policy's section 3 in step. The same switch reaches the gateway as `VITALS_ERROR_REPORTS`
+  (flipping it restarts a running gateway). `build.sh` writes `build/<App>.dSYM`; the publishing jobs
+  upload it with the `SENTRY_AUTH_TOKEN` secret (skipped with a warning when absent).
 - `Sources/PrivateSensors/` — C shim for private APIs. CF-returning functions must be
   annotated `CF_RETURNS_RETAINED` so ARC manages them.
 - `Models/` — `VitalsModel` (tick → snapshot → publish; `chartHistory` downsampled to
@@ -322,6 +332,9 @@ Rules:
   - Code reads the channel from `packages/app/src/lib/variant.ts` (`channel`, `isStoreBuild`), never ad hoc. Diagnostics show on Nightly and Dev.
 - **OTA, never blocking.** `expo-updates` uses the fingerprint runtime policy, so an update only reaches binaries with matching native code; native changes need a new build. The phone checks on launch and on foreground in the background, says so in a toast, and restarts into it from Settings → Updates (`apps/mobile/src/lib/updates.ts`). A channel nobody has published to yet reads as up to date. Publish with `pnpm update:stable` / `update:nightly` / `update:dev`. Switching variants locally needs `expo prebuild --clean` because the package name changes.
 - **Activity log is desktop-only.** `~/.vitals*/remote/activity.db` is written by the gateway and read read-only by Vitals; no RPC exposes it to phones.
+- **Phone errors go two places.** `clientLog` (`packages/app/src/state/clientLog.ts`) writes crashes, uncaught errors and "bad" toasts to the on-disk outbox, which `Remote.flush` sends to the Mac's activity log (`activity.ingest`). `apps/mobile/src/lib/reporting.ts` also sends them to Sentry (org `syntax-lab-tecnology`, project `vitals-remote`), on unless turned off in Settings, Help, and loaded first from `index.ts`. Everything bound for Sentry passes `scrub.ts` (no paths, links, file names, addresses, device name); keep it that way and keep the privacy policy's section 8 in step. "Clear error logs" (`activity.clear`) deletes one phone's lines on the Mac, plus the phone's own outbox and connection journal; Activity's "Clear Phone Logs" (`ClearPhoneLogs`) deletes all. Source maps and dSYMs upload only with `SENTRY_AUTH_TOKEN`; `app.config.ts` sets `SENTRY_DISABLE_AUTO_UPLOAD` otherwise, never a plugin option (it would change the runtime fingerprint).
+- **Gateway reports** (`apps/gateway/src/reporting/Reporting.ts`, Sentry project `vitals-gateway`, `@sentry/bun`): on only when the Mac passes `VITALS_ERROR_REPORTS=1`, so tests and fake-mac send nothing. Effect logs at Info+ go to Sentry Logs through a `Logger` layer (an Error/Fatal log with a Cause also raises it); `reportExit` raises whatever ends `main`; the RPC middleware sends defects as issues and typed failures (`_tag`) as log lines; `ActivityLog.record` forwards gateway-source lines (info without data). Request headers, cookies and bodies are never collected (`dataCollection`). Text goes through `scrubText` from `@vitals/shared`, the one TS scrubber the phone uses too.
+- **Sentry tokens** live in the main checkout's gitignored root `.env.local` (`SENTRY_AUTH_TOKEN` for uploads, `SENTRY_USER_TOKEN` for project settings via the API). `scripts/with-sentry.sh <cmd>` loads the token (from a worktree too); the phone's `android:*`, `update:*` and `release-nightly.sh` use it. CI has `SENTRY_AUTH_TOKEN` as a repo secret and EAS as a secret env var. Sentry also scrubs server-side (project `relayPiiConfig`), which is the only cleaning native phone crashes get.
 - **Tests never fire real power commands.** Router tests use a fake executor; end-to-end runs only cancel inside the grace window.
 - **TypeScript strictness** follows T3 Code: `tsconfig.base.json` flags, oxlint with the React Compiler rules, knip clean, no `any`, no casts.
 

@@ -91,6 +91,11 @@ export const layer = Layer.effectDiscard(
           case "ClipsFrom": {
             return { _tag: "ClipsFrom", clips: yield* clips.fromDevice(op.device) } satisfies AdminResult;
           }
+          case "ClearPhoneLogs": {
+            const removed = activity.clearClient(null);
+            activity.record({ at: Date.now(), source: "desktop", level: "info", kind: "desktop.logs.cleared", data: { removed } });
+            return { _tag: "ClearPhoneLogs", removed } satisfies AdminResult;
+          }
         }
       });
 

@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState, Linking, Platform, StyleSheet, View } from "react-native";
 
 import { LINK_COLOR, useMac } from "../lib/remote.ts";
+import { errorReports, setErrorReports } from "../lib/reporting.ts";
 import { holdsInBackground } from "../../modules/vitals-share/index.ts";
 import { askFullStorage, hasFullStorage, phoneRoots, pickSharedFolder, removeSharedFolder, setSharePhotos, shareThisPhone, sharedFolders, shareFiles, sharePhotos } from "../lib/share.ts";
 import { openCheck } from "../ConnectionCheck.tsx";
@@ -264,7 +265,26 @@ export function HelpScreen({ navigation }: Props<"Help">) {
         {isStoreBuild ? null : <Row label="Diagnostics" detail="Frame rate, calls, memory" onPress={() => navigation.navigate("Diagnostics")} />}
       </Group>
       <Note>Vitals Remote shows what Vitals on your Mac reads. Keep Vitals running on the Mac, with Remote turned on.</Note>
+      <ErrorReports />
     </Page>
+  );
+}
+
+/** Where crashes and errors go: always the paired Mac's Activity log, and Sentry unless turned off. */
+function ErrorReports() {
+  const remote = useRemote();
+  const reports = useStore(errorReports);
+  const clear = () =>
+    void remote.clearLogs().then((removed) => toast.show(removed === null ? "Cleared on this phone. Connect to clear your Mac's copy." : "Cleared here and on your Mac"));
+  return (
+    <>
+      <Label>Errors</Label>
+      <Group>
+        <Row first label="Send error reports" control={<Toggle value={reports} label="Send error reports" onChange={setErrorReports} />} />
+        <Row danger label="Clear error logs" detail="On this phone and your Mac" onPress={clear} />
+      </Group>
+      <Note>Crashes and errors go to your Mac's Activity log for 30 days. With reports on, they also go to Sentry so we can fix them, with file names, folders and addresses removed.</Note>
+    </>
   );
 }
 

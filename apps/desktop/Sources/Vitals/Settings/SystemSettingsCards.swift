@@ -204,6 +204,23 @@ struct DiagnosticLoggingCard: View {
     }
 }
 
+struct ErrorReportsCard: View {
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        @Bindable var settings = settings
+        SettingsCard(title: "Crash reports", symbol: "exclamationmark.bubble", tint: .orange) {
+            settingsRow("Send crash reports") {
+                Toggle("", isOn: $settings.errorReportsEnabled)
+                    .toggleStyle(.switch).controlSize(.small).labelsHidden()
+            }
+            Text("Crashes, freezes and errors go to Sentry so they can be fixed, with your name, folders, file names and addresses removed first. Nothing about your readings is sent.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct ReportProblemCard: View {
     @State private var reporting = false
 

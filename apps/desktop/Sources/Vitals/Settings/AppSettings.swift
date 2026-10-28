@@ -131,6 +131,13 @@ final class AppSettings {
             Log.configure(minimumLevel: diagnosticLogLevel)
         }
     }
+    /// Crashes, hangs and logged errors go to Sentry, scrubbed (see `ErrorReporting`). On by default.
+    var errorReportsEnabled: Bool {
+        didSet {
+            defaults.set(errorReportsEnabled, forKey: ErrorReporting.enabledKey)
+            ErrorReporting.setEnabled(errorReportsEnabled)
+        }
+    }
     var autoUpdateCheck: Bool { didSet { defaults.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
     /// Pre-download a found update; installing still needs one tap.
     var autoDownloadUpdates: Bool { didSet { defaults.set(autoDownloadUpdates, forKey: "autoDownloadUpdates") } }
@@ -194,6 +201,7 @@ final class AppSettings {
             "loggingEnabled": true,
             "diagnosticLogLevel": LogLevel.notice.rawValue,
             "autoUpdateCheck": true,
+            ErrorReporting.enabledKey: true,
             "autoDownloadUpdates": false,
             "theme": AppTheme.system.rawValue,
             "hideDockIcon": false,
@@ -227,6 +235,7 @@ final class AppSettings {
         loggingEnabled = defaults.bool(forKey: "loggingEnabled")
         diagnosticLogLevel = LogLevel(rawValue: defaults.integer(forKey: "diagnosticLogLevel")) ?? .notice
         autoUpdateCheck = defaults.bool(forKey: "autoUpdateCheck")
+        errorReportsEnabled = defaults.bool(forKey: ErrorReporting.enabledKey)
         autoDownloadUpdates = defaults.bool(forKey: "autoDownloadUpdates")
         theme = AppTheme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hideDockIcon = defaults.bool(forKey: "hideDockIcon")

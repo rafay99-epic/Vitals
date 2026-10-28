@@ -7,7 +7,7 @@ import { Share, View } from "react-native";
 import { TabHeader } from "../../components/TabHeader.tsx";
 import { isStoreBuild } from "../../lib/variant";
 import type { RecordStackParams } from "../../navigation/types.ts";
-import { diagnostics, type MethodStats } from "../../state/diagnostics.ts";
+import { diagnostics, type MethodStats, throwTestError } from "../../state/diagnostics.ts";
 import { useLink, useNow } from "../../state/useVitals.ts";
 import { bytes, fixed } from "../../state/vitals.ts";
 import { updateInfo } from "../updates/updateInfo";
@@ -123,6 +123,7 @@ export function Diagnostics({ onBack, parent = "Record" }: { readonly onBack: ()
       </Section>
 
       <Section title="Faults">
+        <Row label="Throw a test error" detail="Checks errors reach your Mac and Sentry" onPress={throwTestError} />
         {diagnostics.faults.length === 0 ? (
           <EmptyState title="No faults." detail="Uncaught errors land here with the time they happened." />
         ) : (

@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct ActivityView: View {
+    @Environment(RemoteModel.self) private var remote
     @State private var model = ActivityModel()
     @State private var selection: ActivityStore.Event.ID?
+    @State private var confirmingClear = false
 
     var body: some View {
         @Bindable var model = model
@@ -27,6 +29,8 @@ struct ActivityView: View {
                 .frame(width: 150)
                 TextField("Filter kind, rpc, data", text: $model.filter.text)
                     .textFieldStyle(.roundedBorder)
+                Button("Clear Phone Logs…") { confirmingClear = true }
+                    .disabled(!remote.isEnabled)
             }
             HSplitView {
                 Table(model.events, selection: $selection) {
@@ -44,6 +48,16 @@ struct ActivityView: View {
             }
         }
         .padding(20)
+        .confirmationDialog("Clear every phone's logs?", isPresented: $confirmingClear) {
+            Button("Clear Phone Logs", role: .destructive) {
+                Task {
+                    _ = await remote.clearPhoneLogs()
+                    model.reload()
+                }
+            }
+        } message: {
+            Text("Deletes the errors and connection history your phones sent to this Mac. Copies already sent to Sentry stay there until they expire.")
+        }
         .onAppear { model.setVisible(true) }
         .onDisappear { model.setVisible(false) }
     }

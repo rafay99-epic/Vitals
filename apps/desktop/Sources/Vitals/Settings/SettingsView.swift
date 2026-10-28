@@ -117,6 +117,7 @@ struct SettingsView: View {
         ]),
         SettingsSectionModel(title: "Developer", cards: [
             .init(.diagnosticLogging, title: "Diagnostic logging", keywords: "level errors normal verbose log file"),
+            .init(.errorReports, title: "Crash reports", keywords: "sentry crash error report send privacy"),
             .init(.reportProblem, title: "Report a problem", keywords: "bug report email developer crash"),
         ]),
         SettingsSectionModel(title: "About", showsAboutHero: true, cards: [
@@ -131,7 +132,7 @@ struct SettingsView: View {
 
 enum SettingsCardKind: Hashable {
     case readings, power, appearance, applications, menuBar, shortcuts, overheating, notifications
-    case softwareUpdates, logging, cleanup, diagnosticLogging, reportProblem
+    case softwareUpdates, logging, cleanup, diagnosticLogging, errorReports, reportProblem
     case company, license, acknowledgements
 
     @MainActor @ViewBuilder
@@ -149,6 +150,7 @@ enum SettingsCardKind: Hashable {
         case .logging: LoggingCard()
         case .cleanup: CleanupCard()
         case .diagnosticLogging: DiagnosticLoggingCard()
+        case .errorReports: ErrorReportsCard()
         case .reportProblem: ReportProblemCard()
         case .company: CompanyCard()
         case .license: LicenseCard()

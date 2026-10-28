@@ -12,6 +12,7 @@ import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as RpcServer from "effect/rpc/RpcServer";
 
 import { ActivityLog, type FrameRecord } from "../activity/ActivityLog.ts";
+import { reportRpcFailure } from "../reporting/Reporting.ts";
 import { Auth, type Session } from "../auth/Auth.ts";
 import { Connections } from "./Connections.ts";
 import { handlersLayer } from "./handlers.ts";
@@ -52,6 +53,7 @@ const scopeLayer = (session: Session, connectionId: string, record: ActivityLog[
     return effect.pipe(
       Effect.onExit((exit) =>
         Effect.sync(() => {
+          if (exit._tag === "Failure") reportRpcFailure(method, exit.cause);
           if (exit._tag === "Success" && BULK_METHODS.has(method)) return;
           record({
             at: Date.now(),

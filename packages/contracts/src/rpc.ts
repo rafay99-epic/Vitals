@@ -3,7 +3,7 @@ import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 
-import { ActivityIngestInput, ActivityIngestResult } from "./activity.ts";
+import { ActivityClearResult, ActivityIngestInput, ActivityIngestResult } from "./activity.ts";
 import { AuthError, CommandRejected, Unavailable } from "./auth.ts";
 import {
   Clip,
@@ -188,6 +188,9 @@ export const ActivityIngest = Rpc.make("activity.ingest", {
   error: AuthError,
 });
 
+/** Deletes every log line this phone sent, errors included. The phone's "Clear error logs". */
+export const ActivityClear = Rpc.make("activity.clear", { payload: Empty, success: ActivityClearResult, error: AuthError });
+
 export const DeviceLanKey = Rpc.make("device.lanKey", {
   payload: Schema.Struct({ key: LanKey }),
   success: Empty,
@@ -250,6 +253,7 @@ export const VitalsRpc = RpcGroup.make(
   TerminalResize,
   TerminalClose,
   ActivityIngest,
+  ActivityClear,
   DeviceLanKey,
   DeviceForget,
 ).middleware(ScopeAuthorization);

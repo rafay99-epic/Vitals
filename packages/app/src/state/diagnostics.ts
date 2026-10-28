@@ -2,6 +2,7 @@ import type { Connection, ConnectionState } from "@vitals/client-runtime";
 import { RingBuffer } from "@vitals/shared";
 
 import { isStoreBuild } from "../lib/variant";
+import { clientLog } from "./clientLog.ts";
 
 export interface Transition {
   readonly at: number;
@@ -141,6 +142,10 @@ class Diagnostics {
     this.faults.length = Math.min(this.faults.length, KEPT_FAULTS);
   }
 
+  clearFaults(): void {
+    this.faults.length = 0;
+  }
+
   methodStats(): ReadonlyArray<MethodStats> {
     return [...this.methods.entries()].map(([method, entry]) => entry.stats(method)).sort((a, b) => b.calls - a.calls);
   }
@@ -176,16 +181,37 @@ class Diagnostics {
 
 export const diagnostics = new Diagnostics();
 
+/** Every build logs uncaught errors for the Mac; only Nightly and Dev also list them on the Diagnostics screen. */
 const captureFaults = (): void => {
-  if (!diagnostics.enabled || typeof ErrorUtils === "undefined") return;
+  if (typeof ErrorUtils === "undefined") return;
   const previous = ErrorUtils.getGlobalHandler();
   ErrorUtils.setGlobalHandler((error: unknown, fatal?: boolean) => {
-    diagnostics.fault(error, fatal === true);
-    previous(error, fatal);
+    // A failing write (disk full, a locked database) must not stop Sentry and React Native's handlers.
+    try {
+      diagnostics.fault(error, fatal === true);
+      clientLog.fault(error, fatal === true);
+    } finally {
+      previous(error, fatal);
+    }
   });
 };
 
 captureFaults();
+
+/**
+ * Diagnostics → "Throw a test error": a non-fatal error through the same global handler a real one
+ * takes, so it lands in Faults, the Mac's Activity log and (when reports are on) Sentry.
+ */
+export const throwTestError = (): void => {
+  const error = new Error(`Test error from Diagnostics, ${new Date().toISOString()}`);
+  if (typeof ErrorUtils === "undefined") {
+    setTimeout(() => {
+      throw error;
+    });
+    return;
+  }
+  ErrorUtils.getGlobalHandler()(error, false);
+};
 
 export const instrumentConnection = (connection: Connection): Connection => {
   if (!diagnostics.enabled) return connection;

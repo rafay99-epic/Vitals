@@ -5,18 +5,18 @@ import { useTitle } from '../lib/useTitle'
 export default function Privacy() {
   useTitle('Privacy Policy — Vitals')
   return (
-    <LegalLayout title="Privacy Policy" updated="October 24, 2026">
+    <LegalLayout title="Privacy Policy" updated="October 28, 2026">
       <Section title="The short version">
         <P>
-          <Strong>The Vitals app does not collect, store, transmit, or sell any of your personal data. It has no analytics, no
-          telemetry, no background or automatic crash reporting, and no accounts.</Strong> Everything the App measures, and the
-          diagnostic logs it keeps to help you troubleshoot, stay on your Mac. The one exception is entirely in your hands: if you
-          hit a bug, the App can open your email program with those logs so you can choose to send them to the developer yourself —
-          nothing is transmitted unless you press Send. Its only automatic network requests go to GitHub, to check for and download
-          releases. Remote access, which is off until you turn it on, sends readings only to devices you pair, over your own
-          Wi-Fi or your own Tailscale network (section 7). The Vitals Remote phone app talks to your Mac the same way; its only
-          other network requests check for app updates, send Google basic diagnostics from the Android QR scanner, and, if you
-          turn on built-in Tailscale, go to Tailscale (section 8). This website is almost as quiet: it sets no cookies and does no cross-site tracking — its one measurement tool is
+          <Strong>Vitals does not sell or share your personal data. It has no analytics, no advertising and no
+          accounts.</Strong> Everything the App measures stays on your Mac. What does leave it automatically: crash and error
+          reports and a log of what the App was doing, sent to Sentry so we can fix bugs, with your name, folders, file names and
+          addresses removed first, and never any of your readings. You can turn them off in Settings → Developer → Crash reports (section 3). The
+          App also asks GitHub for updates. Remote access, which is off until you turn it on, sends readings only to devices you
+          pair, over your own Wi-Fi or your own Tailscale network (section 7). The Vitals Remote phone app talks to your Mac the
+          same way, and reports its own crashes and errors to your Mac and to Sentry, scrubbed the same way, unless you turn that
+          off (section 8). Its only other network requests check for app updates, send Google basic diagnostics from the Android QR scanner, and, if you turn on
+          built-in Tailscale, go to Tailscale (section 8). This website is almost as quiet: it sets no cookies and does no cross-site tracking — its one measurement tool is
           Vercel Web Analytics, an anonymized, cookieless page counter described in section 9.
         </P>
         <P>
@@ -52,18 +52,52 @@ export default function Privacy() {
           can be understood. It can therefore contain <Strong>file paths from your Mac, which include your macOS username</Strong>.
         </P>
         <P>
-          This log is <Strong>local and capped in size</Strong> (older entries roll off). It is never uploaded or transmitted
-          automatically — it exists only on your machine and is yours to read or delete. It leaves your Mac only if you choose to
-          send a problem report, described next.
+          This log is <Strong>local and capped in size</Strong> (older entries roll off). The file itself is never uploaded; it
+          leaves your Mac only if you choose to send a problem report. Its crashes, errors and Normal-level lines are also sent to
+          Sentry, scrubbed, as described next, whatever level you pick here.
         </P>
       </Section>
 
-      <Section title="3. Problem reports — the one time data can leave your Mac">
+      <Section title="3. Crash reports and problem reports">
+        <P>
+          <Strong>Crash reports (Sentry, on unless you turn it off).</Strong> The App sends Sentry, the error tracking service
+          we use to find and fix bugs:
+        </P>
+        <List>
+          <Item>
+            <Strong>Crashes and freezes,</Strong> uncaught exceptions, and the hang, CPU and disk-write diagnostics macOS itself
+            collects, each with the code it happened in.
+          </Item>
+          <Item>
+            <Strong>Errors and the App's log,</Strong> as it runs: the same lines the diagnostic log records at its Normal level,
+            such as the App starting, the Mac sleeping and waking, update checks, Remote starting and stopping, and failures.
+            Lines about your apps and files (uninstalling and cleaning) are never sent; for those, only the fact that a step
+            failed and its error code are.
+          </Item>
+          <Item>
+            <Strong>Sessions:</Strong> that the App started and whether that run ended in a crash, so we can see how often it
+            crashes.
+          </Item>
+          <Item>
+            <Strong>With Remote on, the gateway's reports:</Strong> its crashes and errors, which kind of request from a paired
+            device failed and why, and connections opening and closing, without device names or request contents.
+          </Item>
+        </List>
+        <P>
+          Each report also carries the App's version and channel and your Mac's model and macOS version. Before anything is sent,
+          the App removes your user name and home folder, your Mac's name, folder paths, file names, links, IP addresses, email
+          addresses and Tailscale names, and Sentry applies the same kind of rules again on arrival. This is automatic and can
+          miss an unusual name, which is why lines about your apps and files are kept off entirely. Your readings, your clipboard
+          and the contents of your files are never sent. Reports carry no account and no name; they do carry a random ID created
+          on first launch, so we can tell how many Macs hit the same bug, which is not linked to you. Sentry is set not to store IP addresses or the location it could tell
+          from them. Sentry, Inc. processes reports in the United States under the{' '}
+          <ExtLink href="https://sentry.io/privacy/">Sentry Privacy Policy</ExtLink> and deletes them after 30 days. Turn reports
+          off in Settings → Developer → Crash reports; nothing more is sent from then on.
+        </P>
         <P>
           The App includes a <Strong>"Report a Problem"</Strong> feature (Settings → Developer). When you use it, the App opens a
           pre-addressed message in your own email program and reveals your diagnostic log so you can attach it. You see exactly what
-          is included, and <Strong>nothing is sent until you review it and press Send yourself</Strong> in your email program. The
-          App has no server and sends nothing on its own.
+          is included, and <Strong>nothing is sent until you review it and press Send yourself</Strong> in your email program.
         </P>
         <P>
           A report you choose to send goes by email to the developer, {DEVELOPER} (<Strong>{SUPPORT_EMAIL}</Strong>), and is used
@@ -85,8 +119,8 @@ export default function Privacy() {
 
       <Section title="5. Network requests the App makes">
         <P>
-          The App contacts the internet in one scenario: software updates. Remote access, if you turn it on, stays on your own
-          Wi-Fi and your own Tailscale network and is covered separately in section 7.
+          The App contacts the internet for software updates and, unless you turn them off, crash reports (section 3). Remote
+          access, if you turn it on, stays on your own Wi-Fi and your own Tailscale network and is covered separately in section 7.
         </P>
         <List>
           <Item>
@@ -99,14 +133,14 @@ export default function Privacy() {
           </Item>
         </List>
         <P>
-          Like any web request, these expose your IP address and basic request metadata to the receiving server — in this case
-          GitHub, not us. We never see these requests, and they contain no identifier tied to you: no device ID, no account, no
-          fingerprint. GitHub's handling of such requests is described in the{' '}
+          Like any web request, update checks expose your IP address and basic request metadata to the receiving server, in this
+          case GitHub, not us. We never see these requests, and they contain no identifier tied to you: no device ID, no account,
+          no fingerprint. GitHub's handling of such requests is described in the{' '}
           <ExtLink href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
             GitHub Privacy Statement
           </ExtLink>
-          . There is no other network activity in the App — no telemetry, no usage analytics, no crash reporters, no advertising
-          SDKs, and no third-party frameworks that phone home.
+          . Apart from the crash reports in section 3, there is no other network activity in the App: no telemetry, no usage
+          analytics, no advertising SDKs. Sentry's library is the App's only third-party framework.
         </P>
       </Section>
 
@@ -145,8 +179,11 @@ export default function Privacy() {
           </Item>
           <Item>
             <Strong>What the phone app stores:</Strong> the Mac's address and key, the Tailscale login that owns the Mac (if it
-            uses Tailscale), a session token and its own device key, all in the phone's secure storage. It also keeps a queue of
-            up to 5,000 of its own connection events in a local database, uploads them to your Mac, and then deletes them. When you
+            uses Tailscale), a session token and its own device key, all in the phone's secure storage. It also keeps a log of
+            up to 5,000 of its own events in a local database: connection changes, crashes and errors (the error message and the
+            code it happened in), and failures it showed you. It uploads them to your Mac's activity log, and then deletes them
+            from the phone. "Clear error logs" in the phone app (Settings, Help) deletes this log on the phone and that phone's
+            entries on your Mac; "Clear Phone Logs" in Vitals (Remote, Activity) deletes every phone's entries. When you
             pair, it tells your Mac the phone's name, model, platform and app version so you can recognise it in Vitals. A paired browser keeps
             only a session cookie that page scripts cannot read, and nothing in browser storage.
           </Item>
@@ -174,7 +211,7 @@ export default function Privacy() {
       <Section title="8. The phone app: permissions and other services">
         <P>
           The Vitals Remote phone app has no account, no analytics and no advertising. Everything above about Remote applies to
-          it. It asks for these permissions, each only for the reason given:
+          it, and it reports its own errors to Sentry as described below. It asks for these permissions, each only for the reason given:
         </P>
         <List>
           <Item>
@@ -203,6 +240,22 @@ export default function Privacy() {
             random identifier created when the app was installed; it is not linked to you or your Mac. Expo processes it under the{' '}
             <ExtLink href="https://expo.dev/privacy">Expo Privacy Policy</ExtLink>, and we can see only aggregate counts of
             update downloads.
+          </Item>
+          <Item>
+            <Strong>Error reports (Sentry, on unless you turn it off):</Strong> the phone app sends Sentry, the error tracking
+            service we use to find and fix bugs, its crashes and errors with the code they happened in, and, as it runs, the log
+            described in section 7: the app opening and going to the background, connection changes, which kind of command you
+            sent (for example "restart", never its details), and that a failure was shown (not its text, which can name a file).
+            It also sends sessions: that the app started and whether that run crashed. Each report carries the app version and
+            update channel and the phone's model and operating system version. Before anything is sent, the app removes file
+            names, folder paths, links, your Mac's and Tailscale addresses, IP addresses, email addresses and your phone's name;
+            crashes inside the app's native code skip that step and are cleaned by Sentry's own rules on arrival instead. Reports carry no account and no name. They do carry a random ID created when the app was installed,
+            so we can tell how many installs hit the same bug; it is not linked to you, your phone number or your accounts, and a
+            reinstall makes a new one. Sentry is set not to store IP addresses or the location it could tell from them, and there
+            are no screenshots or screen recordings. Sentry, Inc. processes reports in the United States
+            under the <ExtLink href="https://sentry.io/privacy/">Sentry Privacy Policy</ExtLink> and deletes them after 30 days.
+            Turn reports off in the phone app under Settings, Help, Send error reports; nothing more is sent from then on. Your Mac
+            still receives the app's log either way, because it stays on your own devices.
           </Item>
           <Item>
             <Strong>Google Play:</Strong> on Android, the app asks Google Play at launch whether a store update is available.
@@ -253,19 +306,21 @@ export default function Privacy() {
           <Item>We do not profile you, advertise to you, or track you across apps or websites — the website's analytics are
           aggregate page counts, not profiles of people.</Item>
           <Item>We do not use your hardware readings for any purpose; they never reach us.</Item>
-          <Item>We receive nothing from the App or the phone app automatically — a diagnostic log reaches us only if you choose
-          to email it as a problem report. The one thing we can see is the aggregate count of phone app update downloads in
-          Expo's dashboard (section 8), which identifies no one.</Item>
+          <Item>The only things we receive automatically are scrubbed crash and error reports from the App and the phone app,
+          through Sentry, unless you turn them off (sections 3 and 8), and the aggregate count of phone app update downloads in
+          Expo's dashboard. None of it identifies you. The App's diagnostic log file reaches us only if you choose to email it.</Item>
           <Item>We hold no user database, so there is nothing to breach, subpoena, or leak on our side.</Item>
         </List>
       </Section>
 
       <Section title="11. Data retention">
         <P>
-          The App transmits nothing to us, so there is nothing of yours for us to retain. The only persistent data the App creates
+          Crash and error reports from the App are deleted by Sentry after 30 days. Otherwise the only persistent data the App creates
           — the readings history (on by default, kept for 365 days), the diagnostic log, and your settings — lives on your Mac and
           is yours to delete. With Remote on, the gateway's activity log and command history are pruned as described in section 7. A problem
           report you choose to email is ordinary correspondence: it is kept only as long as needed to investigate the issue.
+          Phone app error reports are also deleted by Sentry after 30 days; the copies on your Mac follow the activity log's 30 days
+          unless you clear them sooner.
           Uninstalling the App and removing the helper deletes the App's presence from your system; your logs remain until you
           delete them, since they are your data.
           The website's aggregated, anonymous visit counts are retained in our Vercel dashboard and contain no personal
@@ -276,8 +331,10 @@ export default function Privacy() {
       <Section title="12. Your rights (GDPR, CCPA, and similar laws)">
         <P>
           Privacy laws such as the EU/UK GDPR and the California CCPA/CPRA grant rights to access, correct, delete, and port
-          personal data, and to object to or restrict its processing. Because we process no personal data, there is nothing for us
-          to access, correct, delete, or port — these rights are satisfied by design. If you believe we hold any personal data about
+          personal data, and to object to or restrict its processing. The only data we receive automatically is crash and error
+          reports from the App and the phone app, sent on the basis of our legitimate interest in fixing them. They are scrubbed
+          and carry nothing that names you, so we cannot pick out yours; you can object at any time by turning reports off (Crash
+          reports on the Mac, Send error reports on the phone), and they expire after 30 days. Beyond that we process no personal data, so there is nothing for us to access, correct, delete, or port. If you believe we hold any personal data about
           you, contact us via the channels below and we will respond; you also retain the right to lodge a complaint with your
           local supervisory authority.
         </P>
@@ -285,14 +342,14 @@ export default function Privacy() {
 
       <Section title="13. Children's privacy">
         <P>
-          The Services are not directed at children and collect no data from anyone, children included. We are not aware of any way
+          The Services are not directed at children and collect no personal data from anyone, children included. We are not aware of any way
           the Services could accumulate children's personal information.
         </P>
       </Section>
 
       <Section title="14. Security">
         <P>
-          Unless you turn on Remote, your data never leaves your Mac, so its security is governed by your machine's own protections (FileVault, macOS
+          Unless you turn on Remote, your data never leaves your Mac (crash reports carry no readings or files), so its security is governed by your machine's own protections (FileVault, macOS
           permissions, your user account). The fan-control helper is installed with root ownership and accepts state only from a
           file in a protected location. Update downloads come exclusively from GitHub Releases over HTTPS. Remote connections are
           encrypted end to end and accepted only from devices you paired.
@@ -301,8 +358,8 @@ export default function Privacy() {
 
       <Section title="15. Changes to this policy">
         <P>
-          If the App's behavior ever changes in a way that affects privacy — for example, if a future version began transmitting
-          anything to a server automatically — this policy will be updated before that change ships, the "Last updated" date will
+          If the App's behavior ever changes in a way that affects privacy (the crash reports added in October 2026 are one
+          example), this policy is updated before that change ships, the "Last updated" date will
           change, and the change will be noted in the release notes. The current policy is always available at this address.
         </P>
       </Section>

@@ -145,7 +145,7 @@ enum ClipDrop {
                 case let .file(url, _, _): try fileManager.copyItem(at: url, to: target)
                 }
             } catch {
-                Log.notice(.remote, "couldn't save a clip to \(target.path)", error: error)
+                Log.notice(.remote, "couldn't save a clip to \(target.path)", error: error, report: false)
                 throw Failure("Couldn't save to \(destination.lastPathComponent)")
             }
             quarantine(target)

@@ -135,6 +135,7 @@ export const handlersLayer = (session: Session, connectionId: string) =>
             }
             return { accepted: batch.length };
           }),
+        "activity.clear": () => Effect.sync(() => ({ removed: activity.clearClient(session.device.id) })),
         "device.forget": () =>
           Effect.gen(function* () {
             activity.record({ at: Date.now(), source: "client", level: "info", kind: "device.unpaired", deviceId: session.device.id, data: {} });
