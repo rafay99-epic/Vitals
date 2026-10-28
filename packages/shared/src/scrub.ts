@@ -2,7 +2,7 @@ const FILE_TYPES = "png|jpe?g|heic|heif|gif|webp|svg|mp4|mov|m4v|mkv|mp3|m4a|wav
 
 const RULES: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>)]+/gi, "<url>"],
-  [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "<email>"],
+  [/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b/g, "<email>"],
   [/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, "<ip>"],
   [/\b[\w-]+(?:\.[\w-]+)*\.ts\.net\b/gi, "<host>"],
   [/\b[\w-]+\.local\b/gi, "<host>"],
@@ -20,6 +20,9 @@ const scrubValue = (value: unknown): unknown => {
   if (typeof value === "object" && value !== null) return scrubRecord(Object.fromEntries(Object.entries(value)));
   return value;
 };
+
+export const scrubAttributes = (attributes: Readonly<Record<string, unknown>>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, key.startsWith("sentry.") ? value : scrubValue(value)]));
 
 export const scrubRecord = (record: Readonly<Record<string, unknown>>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(record).map(([key, value]) => [key, scrubValue(value)]));

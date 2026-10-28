@@ -6,7 +6,7 @@ enum Scrub {
 
     private static let rules: [(NSRegularExpression, String)] = [
         (#"\b[a-z][a-z0-9+.-]*://[^\s"'<>)]+"#, "<url>"),
-        (#"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"#, "<email>"),
+        (#"[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b"#, "<email>"),
         (#"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b"#, "<ip>"),
         (#"\b[\w-]+(?:\.[\w-]+)*\.ts\.net\b"#, "<host>"),
         (#"\b[\w-]+\.local\b"#, "<host>"),

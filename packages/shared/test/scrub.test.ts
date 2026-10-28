@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { scrubRecord, scrubText } from "../src/scrub.ts";
+import { scrubAttributes, scrubRecord, scrubText } from "../src/scrub.ts";
 
 describe("scrubText", () => {
   test("drops links, Mac addresses, emails, paths and file names", () => {
@@ -19,6 +19,8 @@ describe("scrubText", () => {
     const message = "TypeError: Cannot read property 'route' of undefined at 11:10:46";
     expect(scrubText(message)).toBe(message);
     expect(scrubText("client.app.fg")).toBe("client.app.fg");
+    expect(scrubText("vitals-gateway@0.149-dev")).toBe("vitals-gateway@0.149-dev");
+    expect(scrubText("com.syntaxlabtechnology.vitals.remote.dev@0.191+191")).toBe("com.syntaxlabtechnology.vitals.remote.dev@0.191+191");
   });
 });
 
@@ -26,5 +28,15 @@ describe("scrubRecord", () => {
   test("scrubs strings nested in arrays and objects", () => {
     const data = { attempt: 2, failures: [{ kind: "lan", reason: "connect to 192.168.1.44:47810 failed" }] };
     expect(scrubRecord(data)).toEqual({ attempt: 2, failures: [{ kind: "lan", reason: "connect to <ip> failed" }] });
+  });
+});
+
+describe("scrubAttributes", () => {
+  test("keeps Sentry's own attributes and scrubs ours", () => {
+    expect(scrubAttributes({ "sentry.release": "vitals-gateway@0.149-dev", "sentry.environment": "dev", reason: "no route to 192.168.1.44" })).toEqual({
+      "sentry.release": "vitals-gateway@0.149-dev",
+      "sentry.environment": "dev",
+      reason: "no route to <ip>",
+    });
   });
 });

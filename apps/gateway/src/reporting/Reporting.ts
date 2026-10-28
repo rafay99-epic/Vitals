@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/bun";
 import type { ActivityLevel } from "@vitals/contracts";
-import { scrubBreadcrumb, scrubEvent, scrubRecord, scrubText, sentryDsn } from "@vitals/shared";
+import { scrubAttributes, scrubBreadcrumb, scrubEvent, scrubRecord, scrubText, sentryDsn } from "@vitals/shared";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Logger from "effect/Logger";
@@ -41,7 +41,7 @@ export const startReporting = (options: ReportingOptions): void => {
       return scrubEvent(event);
     },
     beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb),
-    beforeSendLog: (log) => ({ ...log, message: scrubText(String(log.message)), ...(log.attributes === undefined ? {} : { attributes: scrubRecord(log.attributes) }) }),
+    beforeSendLog: (log) => ({ ...log, message: scrubText(String(log.message)), ...(log.attributes === undefined ? {} : { attributes: scrubAttributes(log.attributes) }) }),
   });
 };
 

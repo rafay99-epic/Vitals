@@ -25,5 +25,6 @@ struct ScrubTests {
         let message = "SMC key FNum read failed (kIOReturnNotPrivileged) at 11:10:46 in std::exception"
         #expect(Scrub.text(message, identities: owner) == message)
         #expect(Scrub.text("client.app.fg", identities: []) == "client.app.fg")
+        #expect(Scrub.text("vitals-macos@0.145-dev", identities: []) == "vitals-macos@0.145-dev")
     }
 }
