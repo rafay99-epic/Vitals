@@ -5,8 +5,8 @@ import Sentry
 enum ErrorReporting {
     static let enabledKey = "errorReportsEnabled"
 
-    private static var dsn: String {
-        Channel.current == .stable
+    static func dsn(for channel: Channel) -> String {
+        channel == .stable
             ? "https://8366e6b56aff057459b81f26180108ac@o4512219615920128.ingest.us.sentry.io/4512333592526848"
             : "https://ad2098bcc6654fb435e6681fa29adc55@o4512219615920128.ingest.us.sentry.io/4512333983252480"
     }
@@ -37,7 +37,7 @@ enum ErrorReporting {
     private static func start() {
         guard running.withLock({ was in defer { was = true }; return !was }) else { return }
         SentrySDK.start { options in
-            options.dsn = dsn
+            options.dsn = dsn(for: Channel.current)
             options.environment = Channel.current.rawValue
             options.releaseName = "vitals-macos@\(Updater.currentVersion)"
             if let build = Bundle.main.object(forInfoDictionaryKey: "VitalsBuildNumber") as? String { options.dist = build }
