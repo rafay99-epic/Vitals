@@ -160,6 +160,43 @@ export const openLanSocket = (url: string, options: LanSocketOptions): Socket.We
   };
 };
 
+export interface LanKnockOptions {
+  readonly host: string;
+  readonly port: number;
+  readonly macKey: Uint8Array;
+  readonly device: KeyPair;
+  readonly client: string;
+  readonly raw: RawSocket;
+  readonly timeoutMs?: number;
+}
+
+export type LanKnock = { readonly ok: true } | { readonly ok: false; readonly unknown: boolean; readonly why: string };
+
+/** Opens a Wi-Fi session and closes it at once: ok when the Mac knows this phone, else why not. */
+export const knockOverLan = (options: LanKnockOptions): Promise<LanKnock> =>
+  new Promise((resolve) => {
+    let done = false;
+    const finish = (knock: LanKnock) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      socket.close(1000, "checked");
+      resolve(knock);
+    };
+    const socket = openLanSocket(lanSocketUrl(options.host, options.port), {
+      macKey: options.macKey,
+      device: options.device,
+      client: options.client,
+      raw: options.raw,
+      onRejected: (reason) => finish({ ok: false, unknown: reason === "unknown", why: `the Mac answered ${reason}` }),
+      onEndedEarly: (detail) => finish({ ok: false, unknown: false, why: detail }),
+    });
+    const timeoutMs = options.timeoutMs ?? 5_000;
+    const timer = setTimeout(() => finish({ ok: false, unknown: false, why: `no handshake in ${String(timeoutMs / 1000)} s` }), timeoutMs);
+    socket.addEventListener("open", () => finish({ ok: true }));
+    socket.addEventListener("close", () => finish({ ok: false, unknown: false, why: "closed" }));
+  });
+
 export type LanPairOutcome =
   | { readonly ok: true; readonly result: Extract<LanPairResult, { readonly t: "paired" }> }
   | {

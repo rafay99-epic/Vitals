@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 
-import { type ConnectionState, type Route, createConnection, pair, pairOverLan, parsePairingUrl, probeLan } from "@vitals/client-runtime";
+import { type ConnectionState, type Route, createConnection, knockOverLan, pair, pairOverLan, parsePairingUrl, probeLan } from "@vitals/client-runtime";
 import { fromBase64Url, generateKeyPair } from "@vitals/noise";
 
 import { OWNER, adminOp, pairDevice, sample, startGateway } from "./harness.ts";
@@ -245,6 +245,15 @@ describe("client runtime against the gateway", () => {
     await until(() => refused().length > 0);
     expect(JSON.parse(refused()[0]?.data_json ?? "{}")).toMatchObject({ why: "handshake for another Mac key" });
     db.close();
+  });
+
+  test("a knock over Wi-Fi tells a known phone from a stranger", async () => {
+    gateway = await startGateway();
+    const { outcome, device, key, port } = await pairByWifi(gateway, true);
+    if (!outcome.ok) throw new Error(outcome.reason);
+    const knock = (as: typeof device) => knockOverLan({ host: "127.0.0.1", port, macKey: fromBase64Url(key), device: as, client: "test", raw: rawSocket });
+    expect(await knock(device)).toEqual({ ok: true });
+    expect(await knock(generateKeyPair())).toEqual({ ok: false, unknown: true, why: "the Mac answered unknown" });
   });
 
   test("a Wi-Fi probe that misses says why", async () => {
