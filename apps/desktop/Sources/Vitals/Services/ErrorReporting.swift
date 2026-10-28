@@ -5,7 +5,11 @@ import Sentry
 enum ErrorReporting {
     static let enabledKey = "errorReportsEnabled"
 
-    private static let dsn = "https://8366e6b56aff057459b81f26180108ac@o4512219615920128.ingest.us.sentry.io/4512333592526848"
+    private static var dsn: String {
+        Channel.current == .stable
+            ? "https://8366e6b56aff057459b81f26180108ac@o4512219615920128.ingest.us.sentry.io/4512333592526848"
+            : "https://ad2098bcc6654fb435e6681fa29adc55@o4512219615920128.ingest.us.sentry.io/4512333983252480"
+    }
 
     private static let running = OSAllocatedUnfairLock(initialState: false)
     private static let reported = OSAllocatedUnfairLock(initialState: Set<String>())

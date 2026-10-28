@@ -9,7 +9,11 @@ import type * as LogLevel from "effect/LogLevel";
 import type { ActivityEvent } from "../activity/ActivityLog.ts";
 import type { Channel } from "../config.ts";
 
-const DSN = "https://6d258fdca2210b1a67d0f102a7c5a0cc@o4512219615920128.ingest.us.sentry.io/4512333741359104";
+const DSN: Record<Channel, string> = {
+  stable: "https://6d258fdca2210b1a67d0f102a7c5a0cc@o4512219615920128.ingest.us.sentry.io/4512333741359104",
+  nightly: "https://21b5c2457a8d58b6745a80642e50506f@o4512219615920128.ingest.us.sentry.io/4512333983383552",
+  dev: "https://21b5c2457a8d58b6745a80642e50506f@o4512219615920128.ingest.us.sentry.io/4512333983383552",
+};
 
 const SENTRY_LEVEL: Partial<Record<LogLevel.LogLevel, "info" | "warn" | "error" | "fatal">> = {
   Info: "info",
@@ -33,7 +37,7 @@ export const startReporting = (options: ReportingOptions): void => {
   if (!options.enabled || running) return;
   running = true;
   Sentry.init({
-    dsn: DSN,
+    dsn: DSN[options.channel],
     environment: options.channel,
     release: `vitals-gateway@${options.version}`,
     serverName: "vitals-gateway",

@@ -194,7 +194,7 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     "expo-sqlite",
     "expo-updates",
     "@vitals/tailnet/app.plugin.js",
-    ["@sentry/react-native/expo", { organization: "syntax-lab-tecnology", project: "vitals-remote", url: "https://sentry.io/" }],
+    ["@sentry/react-native/expo", { organization: "syntax-lab-tecnology", project: variant === "stable" ? "vitals-remote-prod" : "vitals-remote-nightly", url: "https://sentry.io/" }],
   ],
   owner: "prometheus99",
   extra: {
