@@ -49,7 +49,7 @@ export const LABELS: Record<StepId, string> = {
   found: "Found the Mac",
   answers: "The Mac answers",
   knows: "The Mac knows this phone",
-  tailscale: "Built-in Tailscale",
+  tailscale: "Tailscale",
 };
 
 export const freshRun = (now: number): CheckRun => ({
