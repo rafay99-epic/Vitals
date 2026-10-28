@@ -91,7 +91,8 @@ function Looking({ permission }: { readonly permission: LocalNetworkPermission |
   );
 }
 
-export function FindMacScreen({ onScan }: { readonly onScan: () => void }) {
+/** `onWhy` opens the app's connection check from under a pairing error, when the app has one. */
+export function FindMacScreen({ onScan, onWhy }: { readonly onScan: () => void; readonly onWhy?: () => void }) {
   const insets = useSafeAreaInsets();
   const macs = pairable(useStore(nearby));
   const pairing = useStore(sessions.pairing);
@@ -117,9 +118,16 @@ export function FindMacScreen({ onScan }: { readonly onScan: () => void }) {
     <View className="flex-1 bg-bg" style={{ paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) }}>
       {body()}
       {wait === null && pairing.error !== null ? (
-        <Mono tone="alarmHigh" className="px-[22px] pt-4" accessibilityLiveRegion="assertive">
-          {pairing.error}
-        </Mono>
+        <>
+          <Mono tone="alarmHigh" className="px-[22px] pt-4" accessibilityLiveRegion="assertive">
+            {pairing.error}
+          </Mono>
+          {onWhy === undefined ? null : (
+            <View className="px-[22px]">
+              <Button label="Why?" variant="text" onPress={onWhy} />
+            </View>
+          )}
+        </>
       ) : null}
       {wait === null ? (
         <View className="px-[22px] pt-2">

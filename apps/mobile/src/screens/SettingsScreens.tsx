@@ -24,6 +24,7 @@ import { AppState, Linking, Platform, StyleSheet, View } from "react-native";
 import { LINK_COLOR, useMac } from "../lib/remote.ts";
 import { holdsInBackground } from "../../modules/vitals-share/index.ts";
 import { askFullStorage, hasFullStorage, phoneRoots, pickSharedFolder, removeSharedFolder, setSharePhotos, shareThisPhone, sharedFolders, shareFiles, sharePhotos } from "../lib/share.ts";
+import { openCheck } from "../ConnectionCheck.tsx";
 import type { SettingsStackParams } from "../navigation.ts";
 import { UnpairSheet } from "../sheets/SendSheets.tsx";
 import { useUpdateStatus } from "../UpdateSync.tsx";
@@ -118,7 +119,6 @@ const useRoutes = (): { readonly wifi: RouteRow; readonly away: RouteRow; readon
 };
 
 export function ConnectionScreen() {
-  const remote = useRemote();
   const { wifi, away, latency, hasAway } = useRoutes();
   return (
     <Page>
@@ -132,7 +132,7 @@ export function ConnectionScreen() {
       </Group>
       <Note>At home Vitals uses Wi-Fi. Away, it switches to Tailscale on its own.</Note>
       {hasAway ? null : <Note>To set up away access, open Vitals on the Mac, then Remote, then Tailscale.</Note>}
-      <BigButton ghost label="Check routes now" onPress={() => remote.connection.wake("manual")} />
+      <BigButton ghost label="Check connection" onPress={openCheck} />
       {hasAway && !tailnetSupported ? <BigButton ghost label="Get Tailscale for this phone" onPress={() => void Linking.openURL(TAILSCALE_STORE_URL)} /> : null}
     </Page>
   );

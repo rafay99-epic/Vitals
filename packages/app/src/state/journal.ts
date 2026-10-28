@@ -3,7 +3,7 @@ import { Store } from "@vitals/client-runtime";
 import { openJournal } from "../persistence/journal";
 
 /** What a journal line is about. */
-export type JournalKind = "app" | "net" | "nearby" | "pair" | "link" | "tunnel";
+export type JournalKind = "app" | "net" | "nearby" | "pair" | "link" | "tunnel" | "check";
 
 export interface JournalEntry {
   readonly at: number;
