@@ -10,7 +10,7 @@ import {
   type RouteKind,
   Store,
 } from "@vitals/client-runtime";
-import { type ActivityLevel, type Command, type CommandReceipt, type LanEndpoint, type MacRoutes, CommandId, EventId } from "@vitals/contracts";
+import { type ActivityLevel, type Command, type CommandReceipt, type LanEndpoint, type MacRoutes, CommandId } from "@vitals/contracts";
 import type { KeyPair } from "@vitals/noise";
 import { newId } from "@vitals/shared";
 import { motion, type ToastTone } from "@vitals/ui";
@@ -22,8 +22,8 @@ import { localNetwork, nearby, nearbyEndpoints } from "../connection/nearby.ts";
 import { tunnel } from "../connection/tunnel.ts";
 import { openShelf } from "../persistence/dropShelf";
 import { updateInfo } from "../features/updates/updateInfo";
-import { openOutbox } from "../persistence/outbox";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
+import { clientLog } from "./clientLog.ts";
 import { MacClips } from "./clips.ts";
 import { dropEngine } from "./dropEngine";
 import { dropEndpoints, MacDrops } from "./drops.ts";
@@ -35,7 +35,6 @@ import { MacEvents } from "./events.ts";
 import { LiveData } from "./live.ts";
 
 const makeCommandId = Schema.decodeUnknownSync(CommandId);
-const makeEventId = Schema.decodeUnknownSync(EventId);
 const FLUSH_MS = 10_000;
 
 const UPDATE = updateInfo();
@@ -97,7 +96,6 @@ export class Remote {
   readonly toast = new Store<Toast | null>(null);
   readonly link: Store<Credentials>;
   private disposed = false;
-  private readonly outbox = openOutbox();
   private readonly flushTimer: ReturnType<typeof setInterval>;
   private flushing = false;
   private readonly stopSampleClock: (() => void) | null;
@@ -182,7 +180,7 @@ export class Remote {
 
   record(level: ActivityLevel, kind: string, data: Record<string, unknown> = {}): void {
     if (this.disposed) return;
-    this.outbox.push({ eventId: makeEventId(newId()), at: Date.now(), level, kind, data });
+    clientLog.record(level, kind, data);
   }
 
   async run(command: Command): Promise<CommandReceipt | null> {
@@ -208,7 +206,9 @@ export class Remote {
 
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** A "bad" toast is a failure the owner saw, so it's logged for the Mac and Sentry too. */
   show(message: string, tone: Toast["tone"] = "ok"): void {
+    if (tone === "bad") this.record("warn", "client.ui.failure", { message });
     const toast = { message, tone, at: Date.now() };
     this.toast.set(toast);
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
@@ -219,16 +219,27 @@ export class Remote {
 
   async flush(): Promise<void> {
     if (this.flushing || this.connection.state.get()._tag !== "Ready") return;
-    const batch = this.outbox.take(200);
+    const batch = clientLog.take(200);
     if (batch.length === 0) return;
     this.flushing = true;
     const result = await this.connection.call((client) => client["activity.ingest"]({ events: batch }));
-    if (result.ok) this.outbox.remove(batch.map((event) => event.eventId));
+    if (result.ok) clientLog.remove(batch.map((event) => event.eventId));
     this.flushing = false;
   }
 
   discardQueued(): void {
-    this.outbox.clear();
+    clientLog.clear();
+  }
+
+  /**
+   * "Clear error logs": drops what this phone hasn't sent yet and deletes what the Mac already has.
+   * Resolves how many lines the Mac deleted, or null when it couldn't be reached.
+   */
+  async clearLogs(): Promise<number | null> {
+    clientLog.clear();
+    diagnostics.clearFaults();
+    const result = await this.connection.call((client) => client["activity.clear"]({}));
+    return result.ok ? result.value.removed : null;
   }
 
   dispose(): void {

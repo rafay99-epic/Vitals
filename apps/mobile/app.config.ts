@@ -45,6 +45,15 @@ const commitCount = (): number => {
 
 const commits = commitCount();
 
+/**
+ * SENTRY_UPLOAD: release builds send their source maps and debug symbols to Sentry, which needs
+ * SENTRY_AUTH_TOKEN (an EAS env var in the cloud). Without one the upload would fail the build, so
+ * it's skipped. Gradle and Xcode inherit this env from `expo run`. It's not a plugin option on
+ * purpose: those count toward the runtime fingerprint, and a token in one shell but not another
+ * would split builds from their OTA updates.
+ */
+if (process.env["SENTRY_AUTH_TOKEN"] === undefined) process.env["SENTRY_DISABLE_AUTO_UPLOAD"] ??= "true";
+
 const bundleId = `com.syntaxlabtechnology.vitals.remote${current.suffix}`;
 
 /** Everything people share into Vitals from other apps, sent on to the Mac. */
@@ -192,6 +201,8 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     "expo-sqlite",
     "expo-updates",
     "@vitals/tailnet/app.plugin.js",
+    // Release builds upload source maps and iOS debug symbols so Sentry stack traces read as code (see SENTRY_UPLOAD above).
+    ["@sentry/react-native/expo", { organization: "syntax-lab-tecnology", project: "vitals-remote", url: "https://sentry.io/" }],
   ],
   owner: "prometheus99",
   extra: {
