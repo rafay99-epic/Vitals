@@ -19,9 +19,16 @@ const RULES: ReadonlyArray<readonly [RegExp, string]> = [
 
 export const scrubText = (text: string): string => RULES.reduce((out, [pattern, label]) => out.replace(pattern, label), text);
 
-/** Strings get scrubbed; numbers and flags pass. */
+/** Strings get scrubbed at any depth (connection failures nest their reasons); numbers and flags pass. */
+const scrubValue = (value: unknown): unknown => {
+  if (typeof value === "string") return scrubText(value);
+  if (Array.isArray(value)) return value.map(scrubValue);
+  if (typeof value === "object" && value !== null) return scrubRecord(Object.fromEntries(Object.entries(value)));
+  return value;
+};
+
 export const scrubRecord = (record: Readonly<Record<string, unknown>>): Record<string, unknown> =>
-  Object.fromEntries(Object.entries(record).map(([key, value]) => [key, typeof value === "string" ? scrubText(value) : value]));
+  Object.fromEntries(Object.entries(record).map(([key, value]) => [key, scrubValue(value)]));
 
 export const scrubBreadcrumb = (crumb: Breadcrumb): Breadcrumb => ({
   ...crumb,

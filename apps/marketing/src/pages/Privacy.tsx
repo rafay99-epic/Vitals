@@ -215,8 +215,10 @@ export default function Privacy() {
             the code it happened in, the app version and update channel, the phone's model and operating system version, and the
             app's recent events from the log described in section 7 (connection changes and failures). Before anything is sent,
             the app removes file names, folder paths, links, your Mac's and Tailscale addresses, IP addresses, email addresses and
-            your phone's name. Reports carry no account, no name and no identifier linked to you, Sentry is set not to store IP
-            addresses, and there are no screenshots or screen recordings. Sentry, Inc. processes reports in the United States
+            your phone's name. Reports carry no account and no name. They do carry a random ID created when the app was installed,
+            so we can tell how many installs hit the same bug; it is not linked to you, your phone number or your accounts, and a
+            reinstall makes a new one. Sentry is set not to store IP addresses or the location it could tell from them, and there
+            are no screenshots or screen recordings. Sentry, Inc. processes reports in the United States
             under the <ExtLink href="https://sentry.io/privacy/">Sentry Privacy Policy</ExtLink> and deletes them after 30 days.
             Turn reports off in the phone app under Settings, Help, Send error reports; nothing more is sent from then on. Your Mac
             still receives the app's log either way, because it stays on your own devices.
@@ -296,8 +298,8 @@ export default function Privacy() {
         <P>
           Privacy laws such as the EU/UK GDPR and the California CCPA/CPRA grant rights to access, correct, delete, and port
           personal data, and to object to or restrict its processing. The only data we receive automatically is the phone app's
-          error reports, sent on the basis of our legitimate interest in fixing the app. They are scrubbed and carry no identifier,
-          so we cannot pick out yours; you can object at any time by turning Send error reports off, and they expire after 30
+          error reports, sent on the basis of our legitimate interest in fixing the app. They are scrubbed and carry nothing that
+          names you, so we cannot pick out yours; you can object at any time by turning Send error reports off, and they expire after 30
           days. Beyond that we process no personal data, so there is nothing for us to access, correct, delete, or port. If you believe we hold any personal data about
           you, contact us via the channels below and we will respond; you also retain the right to lodge a complaint with your
           local supervisory authority.

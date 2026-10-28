@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { ErrorEvent } from "@sentry/react-native";
 
-import { scrubEvent, scrubText } from "../src/lib/scrub.ts";
+import { scrubEvent, scrubRecord, scrubText } from "../src/lib/scrub.ts";
 
 describe("scrubText", () => {
   test("drops links, Mac addresses, emails, paths and file names", () => {
@@ -17,6 +17,13 @@ describe("scrubText", () => {
   test("keeps what explains the bug", () => {
     const message = "TypeError: Cannot read property 'route' of undefined";
     expect(scrubText(message)).toBe(message);
+  });
+});
+
+describe("scrubRecord", () => {
+  test("scrubs strings nested in arrays and objects", () => {
+    const data = { attempt: 2, failures: [{ kind: "lan", reason: "connect to 192.168.1.44:47810 failed" }] };
+    expect(scrubRecord(data)).toEqual({ attempt: 2, failures: [{ kind: "lan", reason: "connect to <ip> failed" }] });
   });
 });
 
