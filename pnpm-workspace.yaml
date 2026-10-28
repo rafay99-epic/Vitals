@@ -23,7 +23,7 @@ catalog:
   react-dom: 19.3.0
   react-native: 0.88.0
   react-native-css: 3.1.0-rc.0
-  react-native-gesture-handler: ~3.3.0
+  react-native-gesture-handler: ~3.4.0
   react-native-reanimated: 4.7.1
   react-native-worklets: 0.13.0
   tailwindcss: 4.1.12
