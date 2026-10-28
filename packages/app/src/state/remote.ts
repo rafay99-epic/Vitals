@@ -30,7 +30,7 @@ import { dropEndpoints, MacDrops } from "./drops.ts";
 import { MacFiles } from "./files.ts";
 import { MacTerminals } from "./terminal.ts";
 import { diagnostics, instrumentConnection } from "./diagnostics.ts";
-import { note } from "./journal.ts";
+import { clearJournal, note } from "./journal.ts";
 import { MacEvents } from "./events.ts";
 import { LiveData } from "./live.ts";
 
@@ -232,11 +232,12 @@ export class Remote {
   }
 
   /**
-   * "Clear error logs": drops what this phone hasn't sent yet and deletes what the Mac already has.
-   * Resolves how many lines the Mac deleted, or null when it couldn't be reached.
+   * "Clear error logs": drops what this phone hasn't sent yet, its connection journal, and deletes
+   * what the Mac already has. Resolves how many lines the Mac deleted, or null when it couldn't be reached.
    */
   async clearLogs(): Promise<number | null> {
     clientLog.clear();
+    clearJournal();
     diagnostics.clearFaults();
     const result = await this.connection.call((client) => client["activity.clear"]({}));
     return result.ok ? result.value.removed : null;
