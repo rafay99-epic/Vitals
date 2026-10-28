@@ -15,11 +15,13 @@ import type { KeyPair } from "@vitals/noise";
 import { newId } from "@vitals/shared";
 import { motion, type ToastTone } from "@vitals/ui";
 import * as Schema from "effect/Schema";
+import Constants from "expo-constants";
 import { AppState } from "react-native";
 
 import { localNetwork, nearby, nearbyEndpoints } from "../connection/nearby.ts";
 import { tunnel } from "../connection/tunnel.ts";
 import { openShelf } from "../persistence/dropShelf";
+import { updateInfo } from "../features/updates/updateInfo";
 import { openOutbox } from "../persistence/outbox";
 import type { Credentials } from "../persistence/credentialsSchema.ts";
 import { MacClips } from "./clips.ts";
@@ -28,6 +30,7 @@ import { dropEndpoints, MacDrops } from "./drops.ts";
 import { MacFiles } from "./files.ts";
 import { MacTerminals } from "./terminal.ts";
 import { diagnostics, instrumentConnection } from "./diagnostics.ts";
+import { note } from "./journal.ts";
 import { MacEvents } from "./events.ts";
 import { LiveData } from "./live.ts";
 
@@ -35,7 +38,10 @@ const makeCommandId = Schema.decodeUnknownSync(CommandId);
 const makeEventId = Schema.decodeUnknownSync(EventId);
 const FLUSH_MS = 10_000;
 
-export const CLIENT_VERSION = "1.0.0";
+const UPDATE = updateInfo();
+
+/** This build as the Mac sees it: the app version, plus the over-the-air update it runs, if any. */
+export const CLIENT_VERSION = `${Constants.expoConfig?.version ?? "0"}${UPDATE.embedded ? "" : `+${UPDATE.running}`}`;
 
 export interface Toast {
   readonly message: string;
@@ -129,6 +135,7 @@ export class Remote {
         onTransition: (from, to) => {
           if (sameShape(from, to)) return;
           diagnostics.transition(from, to);
+          note("link", lineOf(to));
           this.record(to._tag === "Backoff" ? "warn" : "info", "client.conn.state", transitionData(from, to));
         },
       }),
@@ -241,6 +248,29 @@ export class Remote {
     this.connection.dispose();
   }
 }
+
+/** One journal line for a connection state, with every route's low-level reason when it failed. */
+const lineOf = (state: ConnectionState): string => {
+  switch (state._tag) {
+    case "Ready":
+      return `connected over ${state.route === "lan" ? "Wi-Fi" : "Tailscale"} to ${state.hello.mac?.name ?? "the Mac"}${state.latencyMs === null ? "" : ` in ${String(state.latencyMs)} ms`}`;
+    case "Backoff":
+      return [
+        `failed (try ${String(state.attempt)}, next in ${String(Math.max(0, Math.round((state.retryAt - Date.now()) / 1000)))} s): ${state.reason}`,
+        ...state.failures.map((failure) => `  ${failure.kind}: ${failure.reason}${failure.detail === undefined ? "" : ` (${failure.detail})`}`),
+      ].join("\n");
+    case "Connecting":
+      return state.attempt === 1 ? "connecting" : `connecting, try ${String(state.attempt)}`;
+    case "Revoked":
+      return `removed: ${state.reason}`;
+    case "Incompatible":
+      return `incompatible, the Mac speaks protocol ${String(state.serverProtocol ?? "unknown")}`;
+    case "Suspended":
+      return "paused in the background";
+    case "Idle":
+      return "idle";
+  }
+};
 
 const sameShape = (from: ConnectionState, to: ConnectionState): boolean =>
   from._tag === "Ready" && to._tag === "Ready" && from.route === to.route;

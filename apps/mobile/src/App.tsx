@@ -27,6 +27,7 @@ import { DropStrips } from "./DropTransfers.tsx";
 import { checkPlay } from "./lib/play.ts";
 import { checkForUpdate } from "./lib/updates.ts";
 import { type ControlStackParams, type HomeStackParams, navigationRef, type SettingsStackParams, type TabParams } from "./navigation.ts";
+import { ConnectionCheck, openCheck } from "./ConnectionCheck.tsx";
 import { PairOffer } from "./PairOffer.tsx";
 import { PendingStrip } from "./PendingStrip.tsx";
 import { ClipboardScreen } from "./screens/ClipboardScreen.tsx";
@@ -194,7 +195,7 @@ function Unpaired() {
   const [scan, setScan] = useState(!discoverySupported);
   if (ready === null) return <View style={styles.fill} />;
   if (!ready) return <OnboardingScreen />;
-  return scan ? <PairScreen onFind={discoverySupported ? () => setScan(false) : undefined} /> : <FindMacScreen onScan={() => setScan(true)} />;
+  return scan ? <PairScreen onFind={discoverySupported ? () => setScan(false) : undefined} /> : <FindMacScreen onScan={() => setScan(true)} onWhy={openCheck} />;
 }
 
 function Root() {
@@ -234,6 +235,7 @@ export function App() {
           <Root />
         </NavigationContainer>
         <PairOffer />
+        <ConnectionCheck />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

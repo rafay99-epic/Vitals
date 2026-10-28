@@ -43,9 +43,16 @@ final class GatewayProcess: @unchecked Sendable {
             }
             self.consume(chunk)
         }
+        // The gateway's stderr is where Bun puts a crash or an unhandled error; keep it in the Remote log.
         errors.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
-            if chunk.isEmpty { handle.readabilityHandler = nil }
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                return
+            }
+            for line in String(decoding: chunk, as: UTF8.self).split(whereSeparator: \.isNewline) where !line.isEmpty {
+                Log.notice(.remote, "gateway: \(line.prefix(500))")
+            }
         }
         try process.run()
     }
