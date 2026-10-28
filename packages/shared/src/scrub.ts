@@ -20,7 +20,8 @@ const RULES: ReadonlyArray<readonly [RegExp, string]> = [
   // iOS names a file in “curly quotes”.
   [/“[^”\n]{1,200}”/g, "“<name>”"],
   [/(?:~|\b[A-Za-z]:)?(?:\/[^\s/"'<>:]+){2,}\/?/g, "<path>"],
-  [new RegExp(`[^\\s/\\\\"'<>]+\\.(?:${FILE_TYPES})\\b`, "gi"), "<file>"],
+  // A name.ext not followed by more ".word", so `client.app.fg` (a log kind) stays.
+  [new RegExp(`[^\\s/\\\\"'<>]+\\.(?:${FILE_TYPES})\\b(?!\\.\\w)`, "gi"), "<file>"],
 ];
 
 export const scrubText = (text: string): string => RULES.reduce((out, [pattern, label]) => out.replace(pattern, label), text);

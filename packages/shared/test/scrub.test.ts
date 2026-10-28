@@ -18,6 +18,7 @@ describe("scrubText", () => {
   test("keeps what explains the bug", () => {
     const message = "TypeError: Cannot read property 'route' of undefined at 11:10:46";
     expect(scrubText(message)).toBe(message);
+    expect(scrubText("client.app.fg")).toBe("client.app.fg");
   });
 });
 

@@ -18,7 +18,8 @@ enum Scrub {
         // macOS names a file in “curly quotes” ("The file “Taxes” couldn’t be opened").
         (#"“[^”\n]{1,200}”"#, "“<name>”"),
         (#"(?:~|\b[A-Za-z]:)?(?:/[^\s/"'<>:]+){2,}/?"#, "<path>"),
-        (#"[^\s/\\"'<>]+\.(?:\#(fileTypes))\b"#, "<file>")
+        // A name.ext not followed by more ".word", so `client.app.fg` (a log kind) stays.
+        (#"[^\s/\\"'<>]+\.(?:\#(fileTypes))\b(?!\.\w)"#, "<file>")
     ].compactMap { pattern, label in
         // Fixed literals: a typo drops its rule, and ScrubTests fails.
         (try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])).map { ($0, label) }

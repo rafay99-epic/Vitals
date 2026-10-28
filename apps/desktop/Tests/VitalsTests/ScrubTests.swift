@@ -24,5 +24,6 @@ struct ScrubTests {
     @Test func keepsWhatExplainsTheBug() {
         let message = "SMC key FNum read failed (kIOReturnNotPrivileged) at 11:10:46 in std::exception"
         #expect(Scrub.text(message, identities: owner) == message)
+        #expect(Scrub.text("client.app.fg", identities: []) == "client.app.fg")
     }
 }
