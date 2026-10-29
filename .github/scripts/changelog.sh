@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# changelog.sh — print a clean Markdown changelog for a commit range, grouping
-# squash-merged PRs by their `area:*` label (the same labels labeler.yml applies).
+# changelog.sh — print a clean Markdown changelog for a commit range, listing
+# each squash-merged PR once, under its title scope (`feat(mobile): …`) or else
+# its first `area:*` label (the labels labeler.yml applies).
 #
 # ONE generator, reused everywhere so the changelogs never drift:
 #   - promotion.sh  → the `nightly → main` promotion PR body
@@ -26,19 +27,31 @@ HEAD_REF="${2:?usage: changelog.sh <base-ref> <head-ref>}"
 
 # Fixed buckets mirror .github/labeler.yml. An unknown/absent area drops into
 # uncategorized rather than being silently dropped.
-b_desktop=""; b_website=""; b_backend=""; b_ci=""; b_docs=""; b_uncat=""
-c_desktop=0;  c_website=0;  c_backend=0;  c_ci=0;  c_docs=0;  c_uncat=0
+b_desktop=""; b_mobile=""; b_website=""; b_backend=""; b_ci=""; b_docs=""; b_uncat=""
+c_desktop=0;  c_mobile=0;  c_website=0;  c_backend=0;  c_ci=0;  c_docs=0;  c_uncat=0
 TOTAL=0
 
 add_to_bucket() { # $1=area (may be empty) $2=line
   case "$1" in
     desktop) b_desktop="${b_desktop}$2"$'\n'; c_desktop=$((c_desktop + 1)) ;;
+    mobile)  b_mobile="${b_mobile}$2"$'\n';   c_mobile=$((c_mobile + 1)) ;;
     website) b_website="${b_website}$2"$'\n'; c_website=$((c_website + 1)) ;;
     backend) b_backend="${b_backend}$2"$'\n'; c_backend=$((c_backend + 1)) ;;
     ci)      b_ci="${b_ci}$2"$'\n';           c_ci=$((c_ci + 1)) ;;
     docs)    b_docs="${b_docs}$2"$'\n';        c_docs=$((c_docs + 1)) ;;
     "")      b_uncat="${b_uncat}$2"$'\n';      c_uncat=$((c_uncat + 1)) ;;
     *)       b_uncat="${b_uncat}$2 _(area: $1)_"$'\n'; c_uncat=$((c_uncat + 1)) ;;
+  esac
+}
+
+area_for_scope() {
+  case "$1" in
+    desktop|mac|macos) echo desktop ;;
+    mobile|app|remote|gateway|tailnet|web|android|ios) echo mobile ;;
+    website|marketing|site) echo website ;;
+    backend|convex) echo backend ;;
+    ci|build|release) echo ci ;;
+    docs) echo docs ;;
   esac
 }
 
@@ -49,18 +62,16 @@ while IFS= read -r n; do
   data=$(gh pr view "$n" --json title,author,labels 2>/dev/null) \
     || { echo "skip #$n (gh pr view failed)" >&2; continue; }
   title=$(jq -r '.title' <<< "$data")
-  author=$(jq -r '.author.login // "ghost"' <<< "$data")
-  areas=$(jq -r '.labels[].name' <<< "$data" | grep '^area:' | sed 's/^area://' || true)
-  line="- #${n} ${title} — @${author}"
-
-  if [ -z "$areas" ]; then
-    add_to_bucket "" "$line"
-  else
-    while IFS= read -r area; do
-      [ -z "$area" ] && continue
-      add_to_bucket "$area" "$line"
-    done <<< "$areas"
+  author=$(jq -r '.author.login // "ghost"' <<< "$data" | sed 's#^app/##')
+  labels=$(jq -r '.labels[].name' <<< "$data" | grep '^area:' | sed 's/^area://' || true)
+  scope=$(sed -nE 's/^[a-z]+\(([a-zA-Z-]+)\)!?:.*/\1/p' <<< "$title")
+  area=$(area_for_scope "$scope")
+  if [ -z "$area" ]; then
+    for candidate in desktop mobile website backend ci docs; do
+      if grep -qx "$candidate" <<< "$labels"; then area="$candidate"; break; fi
+    done
   fi
+  add_to_bucket "$area" "- #${n} ${title} — @${author}"
   TOTAL=$((TOTAL + 1))
 done < <(git log --reverse --format='%s' "${BASE}..${HEAD_REF}" \
            | grep -oE '\(#[0-9]+\)$' | tr -d '()#' || true)
@@ -92,6 +103,7 @@ echo "**${TOTAL} pull request$([ "$TOTAL" -eq 1 ] || echo s)** in this release:"
 echo
 
 emit_section "Desktop"       "$c_desktop" "$b_desktop"
+emit_section "Mobile"        "$c_mobile"  "$b_mobile"
 emit_section "Website"       "$c_website" "$b_website"
 emit_section "Backend"       "$c_backend" "$b_backend"
 emit_section "CI"            "$c_ci"      "$b_ci"
