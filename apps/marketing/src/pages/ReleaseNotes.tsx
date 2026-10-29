@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { REPO_URL } from '../lib/links'
+
 interface Line {
   id: string
   text: string
@@ -7,15 +9,16 @@ interface Line {
 
 type Block = { kind: 'heading'; id: string; text: string } | { kind: 'list'; id: string; items: Line[] } | { kind: 'paragraph'; id: string; text: string }
 
-const INLINE = /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))|(https?:\/\/[^\s)]+)/g
+const INLINE = /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))|(https?:\/\/[^\s)]+)|(?<![\w/])#(\d+)\b/g
 
 const linkClass = 'text-pulse underline decoration-pulse/40 underline-offset-4'
 
 function token(match: RegExpExecArray, key: string): ReactNode {
-  const [, , bold, , code, , label, href, bare] = match
+  const [, , bold, , code, , label, href, bare, pr] = match
   if (bold !== undefined) return <strong key={key} className="font-sans-medium text-ink">{bold}</strong>
   if (code !== undefined) return <code key={key} className="font-mono text-[0.86em] text-ink">{code}</code>
   if (label !== undefined) return <a key={key} href={href} target="_blank" rel="noreferrer" className={linkClass}>{label}</a>
+  if (pr !== undefined) return <a key={key} href={`${REPO_URL}/pull/${pr}`} target="_blank" rel="noreferrer" className={linkClass}>#{pr}</a>
   return <a key={key} href={bare} target="_blank" rel="noreferrer" className={linkClass}>{(bare ?? '').replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>
 }
 

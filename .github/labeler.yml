@@ -8,6 +8,14 @@
       - any-glob-to-any-file:
           - "apps/desktop/**"
 
+"area:mobile":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/mobile/**"
+          - "apps/web/**"
+          - "apps/gateway/**"
+          - "packages/**"
+
 "area:website":
   - changed-files:
       - any-glob-to-any-file:
