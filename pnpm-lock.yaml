@@ -296,8 +296,8 @@ importers:
         specifier: ~58.0.20
         version: 58.0.20(expo@58.0.16)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
       expo-splash-screen:
-        specifier: ~58.0.7
-        version: 58.0.7(expo@58.0.16)(typescript@7.0.2)
+        specifier: ~58.0.11
+        version: 58.0.11(expo@58.0.16)(typescript@7.0.2)
       expo-sqlite:
         specifier: ~58.0.14
         version: 58.0.14(expo@58.0.16)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.3.0))(react@19.3.0)
@@ -554,8 +554,8 @@ importers:
         specifier: ~58.0.2
         version: 58.0.2(expo@58.0.16)
       expo-splash-screen:
-        specifier: ~58.0.7
-        version: 58.0.7(expo@58.0.16)(typescript@7.0.2)
+        specifier: ~58.0.11
+        version: 58.0.11(expo@58.0.16)(typescript@7.0.2)
       expo-sqlite:
         specifier: ~58.0.14
         version: 58.0.14(expo@58.0.16)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.3.0))(react@19.3.0)
@@ -4034,8 +4034,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  expo-splash-screen@58.0.7:
-    resolution: {integrity: sha512-0Jp/TutAfQOAWEH59ixgjNttccbekFx2vaxOHwQfzu2QH1F5gyyydp+oQL6yKiPDBWobR0iSVj2TfZEWyuec+w==}
+  expo-splash-screen@58.0.11:
+    resolution: {integrity: sha512-Xg0VnPcFMzfjyFKgqb8nZWdZEX6AqNmr88wcIKgtS1iNtBxwh/Rg6IO+JYcgx8lRxgav6dzoHffSslOgUqpsFA==}
     peerDependencies:
       expo: '*'
 
@@ -6376,7 +6376,7 @@ snapshots:
       2g: 1.0.1(typescript@7.0.2)
       '@expo/code-signing-certificates': 0.0.7
       '@expo/config': 58.0.6(typescript@7.0.2)
-      '@expo/config-plugins': 58.0.9(typescript@7.0.2)
+      '@expo/config-plugins': 58.0.10(typescript@7.0.2)
       '@expo/devcert': 1.2.2
       '@expo/env': 2.5.2
       '@expo/image-utils': 0.12.5(typescript@7.0.2)
@@ -6457,7 +6457,7 @@ snapshots:
       2g: 1.0.1(typescript@7.0.2)
       '@expo/code-signing-certificates': 0.0.7
       '@expo/config': 58.0.6(typescript@7.0.2)
-      '@expo/config-plugins': 58.0.9(typescript@7.0.2)
+      '@expo/config-plugins': 58.0.10(typescript@7.0.2)
       '@expo/devcert': 1.2.2
       '@expo/env': 2.5.2
       '@expo/image-utils': 0.12.5(typescript@7.0.2)
@@ -6538,7 +6538,7 @@ snapshots:
       2g: 1.0.1(typescript@7.0.2)
       '@expo/code-signing-certificates': 0.0.7
       '@expo/config': 58.0.6(typescript@7.0.2)
-      '@expo/config-plugins': 58.0.9(typescript@7.0.2)
+      '@expo/config-plugins': 58.0.10(typescript@7.0.2)
       '@expo/devcert': 1.2.2
       '@expo/env': 2.5.2
       '@expo/image-utils': 0.12.5(typescript@7.0.2)
@@ -6749,7 +6749,7 @@ snapshots:
 
   '@expo/inline-modules@0.2.6(typescript@7.0.2)':
     dependencies:
-      '@expo/config-plugins': 58.0.9(typescript@7.0.2)
+      '@expo/config-plugins': 58.0.10(typescript@7.0.2)
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -6938,7 +6938,7 @@ snapshots:
   '@expo/prebuild-config@58.0.14(typescript@7.0.2)':
     dependencies:
       '@expo/config': 58.0.6(typescript@7.0.2)
-      '@expo/config-plugins': 58.0.9(typescript@7.0.2)
+      '@expo/config-plugins': 58.0.10(typescript@7.0.2)
       '@expo/config-types': 58.0.3
       '@expo/image-utils': 0.12.5(typescript@7.0.2)
       '@expo/json-file': 11.2.1
@@ -9238,9 +9238,9 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-splash-screen@58.0.7(expo@58.0.16)(typescript@7.0.2):
+  expo-splash-screen@58.0.11(expo@58.0.16)(typescript@7.0.2):
     dependencies:
-      '@expo/config-plugins': 58.0.9(typescript@7.0.2)
+      '@expo/config-plugins': 58.0.10(typescript@7.0.2)
       '@expo/image-utils': 0.12.5(typescript@7.0.2)
       expo: 58.0.16(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(react-dom@19.3.1(react@19.3.0))(react-native-web@0.21.4(react-dom@19.3.1(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
       xml2js: 0.6.0
