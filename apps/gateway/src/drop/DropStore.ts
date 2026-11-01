@@ -806,7 +806,10 @@ export const layer = (database: Database) =>
           log("error", "drop.http.failed", { method: request.method, error: String(error).slice(0, 300) });
           return problem(500, "internal", "Something went wrong on the Mac");
         });
-        if (request.method === "PUT" && !response.ok && !(await drained(request))) response.headers.set("connection", "close");
+        if (request.method === "PUT" && !response.ok) {
+          await drained(request);
+          response.headers.set("connection", "close");
+        }
         return response;
       };
 
