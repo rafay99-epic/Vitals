@@ -10,7 +10,7 @@ import { androidShare } from "../modules/vitals-share/index.ts";
 
 import { autoCopy } from "./lib/autoCopy.ts";
 import { batchOf, copyToPhone, isFile, nameFromUri, type Picked, textItem } from "./lib/clips.ts";
-import { macFolder, relayedTo, savedTo } from "./lib/drops.ts";
+import { macFolder, placeArrivals, relayedTo } from "./lib/drops.ts";
 import { checkPhoneCopy, phoneCopy, sendClipboardNow } from "./lib/phoneCopies.ts";
 import { openClipboard, openFiles, openTransfers } from "./navigation.ts";
 import { sendSheet } from "./sheets/ClipSheets.tsx";
@@ -166,10 +166,11 @@ function useDropNews() {
       remote.drops.onFinish((finish) => {
         const label = dropLabel(finish.drop);
         const verb = isPlural(label) ? "are" : "is";
-        if (finish._tag === "Received") toast.show(`${label} ${verb} in ${savedTo}`, { action: "Open", onAction: openTransfers });
+        if (finish._tag === "Received") void placeArrivals(finish.files).then((where) => toast.show(`${label} ${verb} in ${where}`, { action: "Open", onAction: openTransfers }));
         else if (finish._tag === "Sent") {
           const phone = relayedTo(finish.drop.id);
-          toast.show(phone === null ? `${label} ${verb} in ${macFolder} on your Mac` : `${label} ${verb} on the way to ${phone}`);
+          // The Mac holds a relayed drop until the other phone has Vitals open, which can be a while.
+          toast.show(phone === null ? `${label} ${verb} in ${macFolder} on your Mac` : `${label} ${verb} on the way to ${phone}. It arrives when Vitals is open there.`);
         }
         else toast.show(`Your Mac said no to ${label}`, { tone: "bad" });
       }),

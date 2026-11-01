@@ -141,6 +141,25 @@ export const shareSaved = async (file: SavedFile): Promise<void> => {
   await Sharing.shareAsync(file.uri, { mimeType: file.mime ?? "application/octet-stream", dialogTitle: file.name }).catch(() => toast.show("Sharing didn't open", { tone: "bad" }));
 };
 
+/**
+ * iPhone: photos and videos that arrive also go into Photos, where people look for them. The copy in
+ * Files stays so Transfers can still open it. Says where everything ended up.
+ */
+export const placeArrivals = async (files: ReadonlyArray<SavedFile>): Promise<string> => {
+  if (Platform.OS !== "ios") return savedTo;
+  const media = files.filter((file) => {
+    const kind = fileKind(file.name, file.mime);
+    return file.uri !== null && (kind === "image" || kind === "video");
+  });
+  if (media.length === 0) return savedTo;
+  const permission = await MediaLibrary.requestPermissionsAsync(true, ["photo", "video"]);
+  if (!permission.granted) return savedTo;
+  const results = await Promise.all(media.map((file) => (file.uri === null ? Promise.resolve(false) : MediaLibrary.Asset.create(file.uri).then(() => true, () => false))));
+  const saved = results.filter(Boolean).length;
+  if (saved === 0) return savedTo;
+  return saved === files.length ? "Photos" : `Photos and ${savedTo}`;
+};
+
 export const saveSavedToPhotos = async (file: SavedFile): Promise<void> => {
   if (file.uri === null) return toast.show("Vitals can't find that file anymore", { tone: "bad" });
   const permission = await MediaLibrary.requestPermissionsAsync(true, ["photo", "video"]);
