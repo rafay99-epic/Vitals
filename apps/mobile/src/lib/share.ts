@@ -154,16 +154,20 @@ export const askFullStorage = async (): Promise<void> => {
 };
 
 /**
- * Android: asks once, ever, to leave Vitals out of battery limits, which otherwise freeze it with the
- * screen off so other devices can't browse it. Skips when already allowed or on builds without the call.
+ * Android: whether to explain, once ever, that battery limits freeze Vitals with the screen off so other
+ * devices can't browse it. False once allowed or explained, and on builds without the calls.
  */
-export const askUnrestrictedOnce = async (): Promise<void> => {
+export const shouldAskUnrestricted = async (): Promise<boolean> => {
   const share = androidShare;
-  if (share?.unrestricted === undefined || share.askUnrestricted === undefined || share.unrestricted()) return;
-  if ((await SecureStore.getItemAsync(ASKED_UNRESTRICTED_KEY, KEYCHAIN_OPTIONS).catch(() => null)) === "1") return;
-  await SecureStore.setItemAsync(ASKED_UNRESTRICTED_KEY, "1", KEYCHAIN_OPTIONS).catch(() => undefined);
-  await share.askUnrestricted().catch(() => false);
+  if (share?.unrestricted === undefined || share.askUnrestricted === undefined || share.unrestricted()) return false;
+  return (await SecureStore.getItemAsync(ASKED_UNRESTRICTED_KEY, KEYCHAIN_OPTIONS).catch(() => null)) !== "1";
 };
+
+/** Notes the explanation was shown, so it never comes back, whatever the answer. */
+export const askedUnrestricted = (): void => void SecureStore.setItemAsync(ASKED_UNRESTRICTED_KEY, "1", KEYCHAIN_OPTIONS).catch(() => undefined);
+
+/** Opens Android's prompt to lift Vitals' battery limits. False when no settings screen would open. */
+export const askUnrestricted = async (): Promise<boolean> => (await androidShare?.askUnrestricted?.().catch(() => false)) ?? false;
 
 /** Android without All files access, where only Downloads › Vitals is shared. Never on iPhone. */
 const limitedStorage = (): boolean => Platform.OS === "android" && !hasFullStorage();
