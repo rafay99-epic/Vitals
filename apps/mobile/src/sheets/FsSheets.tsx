@@ -53,7 +53,7 @@ const nameOf = (to: Destination): string => (to._tag === "Here" ? "This phone" :
 const detailOf = (to: Destination): string => {
   if (to._tag === "Here") return `${deviceInfo().name} · into ${savedTo}`;
   if (to._tag === "Mac") return `Into ${macFolder}`;
-  const into = to.device.platform === "ios" ? "Files › Vitals" : "Downloads › Vitals";
+  const into = to.device.platform === "ios" ? "Files › Vitals › Received" : "Downloads › Vitals";
   return (to.device.connected ?? to.device.online) ? `Into ${into}` : `Not connected now · into ${into}`;
 };
 

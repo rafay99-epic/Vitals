@@ -196,7 +196,7 @@ final class DropCenter: NSObject, TailnetDropListenerProtocol, @unchecked Sendab
   private func place(_ partial: URL, _ active: Active) throws -> URL {
     let files = FileManager.default
     let parts = (active.path ?? "").split(separator: "/").map(String.init).filter { $0 != "." && $0 != ".." && !$0.isEmpty }
-    let root = try files.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Vitals", isDirectory: true)
+    let root = try files.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Received", isDirectory: true)
     let dir = parts.reduce(root) { $0.appendingPathComponent($1, isDirectory: true) }
     try files.createDirectory(at: dir, withIntermediateDirectories: true)
     let name = active.name.replacingOccurrences(of: "/", with: "_")

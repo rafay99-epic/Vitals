@@ -167,6 +167,25 @@ describe("MacDrops", () => {
     drops.dispose();
   });
 
+  test("a drop from another phone waits for an answer, unless this phone asked that phone for it", async () => {
+    const other = Schema.decodeUnknownSync(DeviceId)("phone-2");
+    const fromPhone: Drop = { ...drop("asking", [file("a", 10)]), from: { _tag: "Device", deviceId: other, name: "Prometheus" } };
+    const { connection, calls } = fake((call) => (call.method === "drop.accept" ? { drop: { ...fromPhone, state: "running" }, ticket } : null));
+    const drops = new MacDrops(connection, engine().value, shelf(), me, () => [], () => {});
+    await drops.ready;
+    drops.apply({ _tag: "Snapshot", drops: [fromPhone] });
+    await settle();
+    expect(calls).toEqual([]);
+    expect(drops.needsAnswer(fromPhone)).toBe(true);
+
+    drops.expect(other);
+    expect(drops.needsAnswer(fromPhone)).toBe(false);
+    drops.apply({ _tag: "Changed", drop: fromPhone });
+    await settle();
+    expect(calls.map((call) => call.method)).toEqual(["drop.accept"]);
+    drops.dispose();
+  });
+
   test("asks first when Start without asking is off", async () => {
     const { connection, calls } = fake(() => null);
     const drops = new MacDrops(connection, engine().value, shelf(), me, () => [], () => {});

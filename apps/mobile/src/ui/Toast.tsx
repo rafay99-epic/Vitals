@@ -54,7 +54,7 @@ export function ToastHost({ pinned }: { readonly pinned?: ReactNode }) {
     current.set(null);
   }, []);
   return (
-    <View pointerEvents="box-none" style={[styles.host, { bottom: insets.bottom + DOCK_BOTTOM + DOCK_HEIGHT + 10 }]}>
+    <View pointerEvents="box-none" style={[styles.host, { bottom: insets.bottom + DOCK_BOTTOM + DOCK_HEIGHT + 18 }]}>
       {message === null ? null : (
         <Animated.View
           key={message.id}

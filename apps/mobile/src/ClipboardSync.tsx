@@ -1,7 +1,8 @@
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { clipTitle } from "@vitals/app/features/clips/format.ts";
-import { dropLabel, isIncoming } from "@vitals/app/state/drops.ts";
-import type { Clip } from "@vitals/contracts";
+import { dismissTransfer, notifyTransfer, onTransferAnswer } from "@vitals/app/notifications/transfers.ts";
+import { dropLabel, type SavedFile } from "@vitals/app/state/drops.ts";
+import type { Clip, Drop } from "@vitals/contracts";
 import { type ResolvedSharePayload, type SharePayload, useIncomingShare } from "expo-sharing";
 import { useEffect, useRef } from "react";
 import { AppState, Linking, Platform, ToastAndroid } from "react-native";
@@ -10,7 +11,7 @@ import { androidShare } from "../modules/vitals-share/index.ts";
 
 import { autoCopy } from "./lib/autoCopy.ts";
 import { batchOf, copyToPhone, isFile, nameFromUri, type Picked, textItem } from "./lib/clips.ts";
-import { macFolder, placeArrivals, relayedTo } from "./lib/drops.ts";
+import { macFolder, openSaved, placeArrivals, relayedTo } from "./lib/drops.ts";
 import { checkPhoneCopy, phoneCopy, sendClipboardNow } from "./lib/phoneCopies.ts";
 import { openClipboard, openFiles, openTransfers } from "./navigation.ts";
 import { sendSheet } from "./sheets/ClipSheets.tsx";
@@ -19,6 +20,7 @@ import { sendToSheet } from "./sheets/FsSheets.tsx";
 import { sheet, toast } from "./ui/index.ts";
 
 const SHORT = 26;
+const ANSWER_WAIT_MS = 30_000;
 
 const short = (text: string): string => (text.length > SHORT ? `${text.slice(0, SHORT)}…` : text);
 
@@ -166,7 +168,7 @@ function useDropNews() {
       remote.drops.onFinish((finish) => {
         const label = dropLabel(finish.drop);
         const verb = isPlural(label) ? "are" : "is";
-        if (finish._tag === "Received") void placeArrivals(finish.files).then((where) => toast.show(`${label} ${verb} in ${where}`, { action: "Open", onAction: openTransfers }));
+        if (finish._tag === "Received") void placeArrivals(finish.files).then((where) => toast.show(`${label} ${verb} in ${where}`, { action: "Open", onAction: openReceived(finish.files) }));
         else if (finish._tag === "Sent") {
           const phone = relayedTo(finish.drop.id);
           // The Mac holds a relayed drop until the other phone has Vitals open, which can be a while.
@@ -178,16 +180,60 @@ function useDropNews() {
   );
   useEffect(() => {
     const asked = new Set<string>();
-    const me = remote.credentials.deviceId;
+    const posted = new Set<string>();
     return remote.drops.drops.subscribe(() => {
-      if (remote.drops.autoAccept.get()) return;
-      const fresh = remote.drops.drops.get().find((drop) => drop.state === "asking" && isIncoming(drop, me) && !asked.has(drop.id));
+      const waiting = remote.drops.drops.get().filter((drop) => remote.drops.needsAnswer(drop));
+      const waitingIds = new Set<string>(waiting.map((drop) => drop.id));
+      for (const drop of waiting) {
+        if (posted.has(drop.id)) continue;
+        posted.add(drop.id);
+        void notifyTransfer(drop, AppState.currentState === "active").catch(() => undefined);
+      }
+      for (const id of posted) {
+        if (waitingIds.has(id)) continue;
+        posted.delete(id);
+        void dismissTransfer(id).catch(() => undefined);
+      }
+      const fresh = waiting.find((drop) => !asked.has(drop.id));
       if (fresh === undefined) return;
       asked.add(fresh.id);
       sheet.open(askSheet(fresh));
     });
   }, [remote]);
+  useEffect(
+    () =>
+      onTransferAnswer((dropId, answer) => {
+        if (answer === "open") return openTransfers();
+        // Opened from the notification, Vitals may not have heard about the drop yet: wait for it a while.
+        const find = () => remote.drops.drops.get().find((item) => item.id === dropId);
+        const answerIt = (drop: Drop) => {
+          sheet.close();
+          void (answer === "accept" ? remote.drops.accept(drop.id) : remote.drops.decline(drop.id));
+        };
+        const known = find();
+        if (known !== undefined) return answerIt(known);
+        const giveUp = setTimeout(() => {
+          stop();
+          openTransfers();
+        }, ANSWER_WAIT_MS);
+        const stop = remote.drops.drops.subscribe(() => {
+          const drop = find();
+          if (drop === undefined) return;
+          clearTimeout(giveUp);
+          stop();
+          answerIt(drop);
+        });
+      }),
+    [remote],
+  );
 }
+
+/** One file opens itself; several open Transfers, where each one is. */
+const openReceived = (files: ReadonlyArray<SavedFile>) => () => {
+  const [only] = files;
+  if (files.length === 1 && only !== undefined) return void openSaved(only);
+  openTransfers();
+};
 
 /** Clipboard and file work that runs whenever the app shell is up. */
 export function ClipboardSync() {

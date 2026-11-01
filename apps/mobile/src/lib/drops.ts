@@ -16,7 +16,7 @@ import { type Batch, batchOf, isFile, type PickedFile } from "./clips.ts";
 
 export { canInstallApps };
 
-export const savedTo = Platform.OS === "ios" ? "Files › On My iPhone › Vitals" : "Downloads › Vitals";
+export const savedTo = Platform.OS === "ios" ? "Files › On My iPhone › Vitals › Received" : "Downloads › Vitals";
 
 export const macFolder = "Downloads › Vitals";
 
@@ -88,6 +88,7 @@ export const transferFiles = async (remote: Remote, from: FsSource, paths: Reado
       if ((await remote.drops.pull(paths)) !== null) toast.show(`Getting ${what} from your Mac`);
       return;
     }
+    remote.drops.expect(from.device);
     const outcome = await remote.files.pull(from.device, paths);
     toast.show(outcome.ok ? `${from.name} is sending ${what} here` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
     return;
