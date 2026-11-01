@@ -152,6 +152,9 @@ describe("drop: phone to Mac", () => {
     const paused = await put(url, ticket.ticket, bytes.subarray(0, PART), 0, bytes.length);
     expect(paused.status).toBe(423);
     expect(paused.headers.get("connection")).toBe("close");
+    const stranger = await put(url, "x".repeat(40), bytes.subarray(0, PART), 0, bytes.length);
+    expect(stranger.status).toBe(401);
+    expect(stranger.headers.get("connection")).toBe("close");
   });
 
   test("an offer bigger than the free space is refused in plain words", async () => {

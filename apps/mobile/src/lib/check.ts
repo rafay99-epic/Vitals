@@ -175,7 +175,8 @@ const checkTailscale = async (baseUrl: string | null, builtIn: string | null | u
     if (state._tag === "Ready") {
       // The built-in tunnel forwards the Wi-Fi protocol from a local port.
       const probe = await probeLan("127.0.0.1", state.port, builtIn, fetch, 5_000);
-      return probe.ok ? set("tailscale", "ok", answeredIn()) : set("tailscale", "failed", probe.why, "tailscale-down");
+      if (probe.ok || (await answers())) return set("tailscale", "ok", answeredIn());
+      return set("tailscale", "failed", probe.why, "tailscale-down");
     }
     // Built-in is not up, but the Tailscale app may carry the route, and the connection uses it too.
     if (await answers()) return set("tailscale", "ok", answeredIn());

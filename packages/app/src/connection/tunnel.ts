@@ -211,6 +211,10 @@ export const runTunnelOnDemand = (connection: Connection, credentials: () => Cre
   };
   const stopState = connection.state.subscribe(() => settle(false));
   const stopNetwork = localNetwork.subscribe(() => settle(true));
+  // A sign-in is left running while parked (see settle). If it then fails, stop the node instead of leaving it up.
+  const stopFailed = tunnel.subscribe(() => {
+    if (tunnel.get()._tag === "Failed" && connection.state.get()._tag === "Suspended") void stopTunnel();
+  });
   const network = Network.addNetworkStateListener(networkMoved);
   const appState = AppState.addEventListener("change", (next) => {
     if (next !== "active" || credentials().builtInTailscale !== true) return;
@@ -221,6 +225,7 @@ export const runTunnelOnDemand = (connection: Connection, credentials: () => Cre
   return () => {
     stopState();
     stopNetwork();
+    stopFailed();
     network.remove();
     appState.remove();
     cancelIdle();
