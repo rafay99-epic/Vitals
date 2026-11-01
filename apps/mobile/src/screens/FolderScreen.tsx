@@ -9,6 +9,7 @@ import { StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FRESH_MS, folderKey, folderSeen, seeFolder } from "../lib/browseCache.ts";
 import { EntryRow, Ghost, isFolder, isPicture, PhotoTile, SeenLine, SelectBar, SelectButton, type Since, useSeenFade, useSelection } from "../FsRows.tsx";
 import { pickFiles } from "../lib/clips.ts";
 import { sendDrop } from "../lib/drops.ts";
@@ -27,13 +28,10 @@ type Listing =
   | { readonly _tag: "failed"; readonly message: string }
   | { readonly _tag: "loaded"; readonly count: number; readonly lines: ReadonlyArray<Line>; readonly total: number; readonly busy: boolean; readonly since: Since | null };
 
-/** The first page each folder showed this session, so a return visit opens on it while the device answers. */
-const seen = new Map<string, { readonly at: number; readonly count: number; readonly lines: ReadonlyArray<Line>; readonly total: number }>();
-
-/** What to show while asking again, or once asking failed: the remembered page when there is one. */
+/** What to show while asking again, or once asking failed: the remembered page when there is one, current if just seen. */
 const remembered = (key: string, failed: string | null = null): Listing => {
-  const last = seen.get(key);
-  if (last !== undefined) return { _tag: "loaded", count: last.count, lines: last.lines, total: last.total, busy: false, since: { at: last.at, failed } };
+  const last = folderSeen.get(key);
+  if (last !== undefined) return { _tag: "loaded", count: last.entries.length, lines: linesOf(last.entries), total: last.total, busy: false, since: failed === null && Date.now() - last.at < FRESH_MS ? null : { at: last.at, failed } };
   if (failed !== null) return { _tag: "failed", message: failed };
   return { _tag: "loading" };
 };
@@ -113,7 +111,7 @@ export function FolderScreen({ navigation, route }: Props) {
   const { path, source, trail } = route.params;
   const device = source.device ?? undefined;
   const title = trail.at(-1) ?? source.name;
-  const key = `${device ?? "mac"}:${path}`;
+  const key = folderKey(path, device);
   const [listing, setListing] = useState<Listing>(() => remembered(key));
   const selection = useSelection();
 
@@ -121,9 +119,8 @@ export function FolderScreen({ navigation, route }: Props) {
     void remote.files.list(path, "name", 0, device).then((outcome) => {
       if (!live()) return;
       if (!outcome.ok) return setListing(remembered(key, outcome.message));
-      const page = { count: outcome.value.entries.length, lines: linesOf(outcome.value.entries), total: outcome.value.total };
-      seen.set(key, { at: Date.now(), ...page });
-      setListing({ _tag: "loaded", ...page, busy: false, since: null });
+      seeFolder(key, outcome.value.entries, outcome.value.total);
+      setListing({ _tag: "loaded", count: outcome.value.entries.length, lines: linesOf(outcome.value.entries), total: outcome.value.total, busy: false, since: null });
       remote.files.want([...outcome.value.entries.filter(isPicture).slice(0, 24), ...outcome.value.entries.filter((entry) => !isPicture(entry)).slice(0, 24)], device);
     });
   }, [remote, path, device, key]);

@@ -4,11 +4,11 @@ import {
   type DeviceId,
   type FsDevice,
   type FsDevicesResult,
-  type FsEntry,
+  FsEntry,
   type FsListResult,
   type FsPulled,
   type FsReadResult,
-  type FsRecentKind,
+  FsRecentKind,
   type FsRecentResult,
   type FsRootsResult,
   type FsSearchResult,
@@ -16,11 +16,16 @@ import {
   FS_LIMITS,
 } from "@vitals/contracts";
 import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 /** Entries per folder page: the most one `fs.list` returns, so a big folder needs few round trips. */
 export const FILES_PAGE = FS_LIMITS.page;
 
 const THUMB_DELAY_MS = 60;
+/** Thumbnails per request: small, so the first tiles on screen come back quickly. */
+const THUMB_BATCH = 12;
+/** Requests in flight at once, so one slow batch doesn't hold the next. */
+const THUMB_PARALLEL = 2;
 const THUMB_KEEP = 600;
 const SEARCH_LIMIT = 100;
 
@@ -54,6 +59,27 @@ export interface RecentPage {
   readonly more: boolean;
 }
 
+const KindPage = Schema.Struct({ kind: FsRecentKind, entries: Schema.Array(FsEntry), more: Schema.Boolean });
+/** One kind's newest-first page, as a Recent screen shows it. */
+export type KindPage = typeof KindPage.Type;
+
+const SeenPages = Schema.Struct({ at: Schema.Number, pages: Schema.Array(KindPage) });
+const SeenFolder = Schema.Struct({ at: Schema.Number, entries: Schema.Array(FsEntry), total: Schema.Number });
+/** Pages a Recent screen showed, and when. */
+export type SeenPages = typeof SeenPages.Type;
+/** A folder's first page as it was shown, and when. */
+export type SeenFolder = typeof SeenFolder.Type;
+
+const BrowseCache = Schema.Struct({
+  recent: Schema.Array(Schema.Tuple([Schema.String, SeenPages])),
+  folders: Schema.Array(Schema.Tuple([Schema.String, SeenFolder])),
+  thumbs: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
+});
+/** What a phone keeps on disk of what it browsed: pages by screen key and thumbnails by `thumbKey`. */
+export type BrowseCache = typeof BrowseCache.Type;
+/** Reads a saved browse cache; none when it's missing pieces or from an older shape. */
+export const decodeBrowseCache = Schema.decodeUnknownOption(Schema.fromJsonString(BrowseCache));
+
 /**
  * Newest-first pages of several kinds as one newest-first list, each file once. It stops where the first
  * unfinished page stops, so loading more only ever adds below. `behind` are the pages to load next.
@@ -76,7 +102,7 @@ export class MacFiles {
   private readonly connection: Connection;
   private readonly wanted = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private fetching = false;
+  private inFlight = 0;
   private device: DeviceId | undefined = undefined;
 
   constructor(connection: Connection) {
@@ -134,11 +160,17 @@ export class MacFiles {
       this.device = undefined;
     }
     const known = this.thumbs.get();
-    for (const entry of entries) if (hasPreview(entry) && !known.has(thumbKey(entry.path, device))) this.wanted.add(entry.path);
+    // Re-adding moves a path to the back, and batches come from the back: what's on screen now goes
+    // first, top of the screen first, so each call's entries go in bottom up.
+    for (const entry of entries.toReversed()) {
+      if (!hasPreview(entry) || known.has(thumbKey(entry.path, device))) continue;
+      this.wanted.delete(entry.path);
+      this.wanted.add(entry.path);
+    }
     if (this.wanted.size === 0 || this.timer !== null) return;
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.fetchThumbs();
+      this.fetchThumbs();
     }, THUMB_DELAY_MS);
   }
 
@@ -147,26 +179,32 @@ export class MacFiles {
     this.wanted.clear();
   }
 
-  private async fetchThumbs(): Promise<void> {
-    if (this.fetching) return;
-    this.fetching = true;
-    while (this.wanted.size > 0) {
-      const batch = [...this.wanted].slice(0, FS_LIMITS.thumbs);
+  /** Keeps up to THUMB_PARALLEL requests going until every wanted thumbnail is asked for, newest wants first. */
+  private fetchThumbs(): void {
+    while (this.inFlight < THUMB_PARALLEL && this.wanted.size > 0) {
+      const batch = [...this.wanted].slice(-THUMB_BATCH);
       for (const path of batch) this.wanted.delete(path);
-      const device = this.device;
-      const result = await this.connection.call((client) => client["fs.thumbs"](device === undefined ? { paths: batch } : { paths: batch, device }));
-      if (!result.ok) break;
-      this.thumbs.update((previous) => {
-        const next = new Map(previous);
-        for (const thumb of result.value.thumbs) next.set(thumbKey(thumb.path, device), thumb.jpeg === null ? null : `data:image/jpeg;base64,${thumb.jpeg}`);
-        for (const key of next.keys()) {
-          if (next.size <= THUMB_KEEP) break;
-          next.delete(key);
-        }
-        return next;
+      this.inFlight += 1;
+      void this.fetchBatch(batch, this.device).finally(() => {
+        this.inFlight -= 1;
+        this.fetchThumbs();
       });
     }
-    this.fetching = false;
+  }
+
+  private async fetchBatch(batch: ReadonlyArray<string>, device: DeviceId | undefined): Promise<void> {
+    const result = await this.connection.call((client) => client["fs.thumbs"](device === undefined ? { paths: batch } : { paths: batch, device }));
+    // Offline or refused: drop the queue rather than fail through it. Tiles ask again when next seen.
+    if (!result.ok) return void this.wanted.clear();
+    this.thumbs.update((previous) => {
+      const next = new Map(previous);
+      for (const thumb of result.value.thumbs) next.set(thumbKey(thumb.path, device), thumb.jpeg === null ? null : `data:image/jpeg;base64,${thumb.jpeg}`);
+      for (const key of next.keys()) {
+        if (next.size <= THUMB_KEEP) break;
+        next.delete(key);
+      }
+      return next;
+    });
   }
 
   private async run<A, E extends { readonly message: string }>(call: (client: VitalsClient) => Effect.Effect<A, E>): Promise<Outcome<A>> {

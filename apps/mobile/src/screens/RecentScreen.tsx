@@ -1,7 +1,7 @@
 import { LegendList } from "@legendapp/list/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { mergeNewest, type RecentPage } from "@vitals/app/state/files.ts";
+import { type KindPage, mergeNewest } from "@vitals/app/state/files.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
 import type { FsEntry, FsRecentKind } from "@vitals/contracts";
 import { useCallback, useEffect, useState } from "react";
@@ -9,6 +9,7 @@ import { StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FRESH_MS, RECENT_PAGE, recentKey, recentSeen, seeRecent } from "../lib/browseCache.ts";
 import { EntryRow, Ghost, isGallery, KIND_TITLE, PhotoTile, SeenLine, SelectBar, SelectButton, type Since, useSeenFade, useSelection, whereOf } from "../FsRows.tsx";
 import type { ControlStackParams } from "../navigation.ts";
 import { fileSheet, transferSheet } from "../sheets/FsSheets.tsx";
@@ -16,27 +17,20 @@ import { ActionRow, BackBar, color, Empty, sheet, T, Title, useDockSpace } from 
 
 type Props = NativeStackScreenProps<ControlStackParams, "Recent">;
 
-interface KindPage extends RecentPage {
-  readonly kind: FsRecentKind;
-}
 
 type Paged =
   | { readonly _tag: "loading" }
   | { readonly _tag: "failed"; readonly message: string }
   | { readonly _tag: "loaded"; readonly pages: ReadonlyArray<KindPage>; readonly busy: boolean; readonly since: Since | null };
 
-/** The first pages each device's view showed this session, so a return visit opens on them while the device answers. */
-const seen = new Map<string, { readonly at: number; readonly pages: ReadonlyArray<KindPage> }>();
-
-/** What to show while asking again, or once asking failed: the remembered pages when there are some. */
+/** What to show while asking again, or once asking failed: the remembered pages when there are some, current if just seen. */
 const remembered = (key: string, failed: string | null = null): Paged => {
-  const last = seen.get(key);
-  if (last !== undefined) return { _tag: "loaded", pages: last.pages, busy: false, since: { at: last.at, failed } };
+  const last = recentSeen.get(key);
+  if (last !== undefined) return { _tag: "loaded", pages: last.pages, busy: false, since: failed === null && Date.now() - last.at < FRESH_MS ? null : { at: last.at, failed } };
   if (failed !== null) return { _tag: "failed", message: failed };
   return { _tag: "loading" };
 };
 
-const PAGE = 60;
 const COLUMNS = 3;
 const GAP = 4;
 const EDGE = 16;
@@ -54,21 +48,21 @@ export function RecentScreen({ navigation, route }: Props) {
   const { kind, source } = route.params;
   const device = source.device ?? undefined;
   const gallery = isGallery(kind);
-  const key = `${device ?? "mac"}:${kind}`;
+  const key = recentKey(kind, device);
   const [paged, setPaged] = useState<Paged>(() => remembered(key));
   const selection = useSelection();
 
   const loadFirst = useCallback((live: () => boolean) => {
     const kinds: ReadonlyArray<FsRecentKind> = kind === "images" ? ["screenshots", "photos"] : [kind];
     void Promise.all(kinds.map(async (item): Promise<KindPage | string> => {
-      const outcome = await remote.files.recent(item, 0, PAGE, device);
+      const outcome = await remote.files.recent(item, 0, RECENT_PAGE, device);
       return outcome.ok ? { kind: item, entries: outcome.value.entries, more: outcome.value.more } : outcome.message;
     })).then((results) => {
       if (!live()) return;
       const pages = results.filter((result) => typeof result !== "string");
       const failure = results.find((result) => typeof result === "string");
       if (pages.length === 0) return setPaged(remembered(key, failure ?? "Nothing to show"));
-      seen.set(key, { at: Date.now(), pages });
+      seeRecent(key, pages);
       setPaged({ _tag: "loaded", pages, busy: false, since: null });
       remote.files.want(mergeNewest(pages).entries.slice(0, 30), device);
     });
@@ -95,7 +89,7 @@ export function RecentScreen({ navigation, route }: Props) {
     void Promise.all(
       paged.pages.map(async (page, index): Promise<KindPage> => {
         if (!behind.has(index)) return page;
-        const outcome = await remote.files.recent(page.kind, page.entries.length, PAGE, device);
+        const outcome = await remote.files.recent(page.kind, page.entries.length, RECENT_PAGE, device);
         return outcome.ok ? { ...page, entries: [...page.entries, ...outcome.value.entries], more: outcome.value.more } : { ...page, more: false };
       }),
     ).then((pages) => setPaged((current) => (current._tag === "loaded" ? { _tag: "loaded", pages, busy: false, since: null } : current)));

@@ -30,20 +30,21 @@ const thumbsConnection = (batches: Array<ReadonlyArray<string>>): Connection => 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
 
 describe("MacFiles thumbnails", () => {
-  test("asks once per path, in batches the Mac accepts, and only for files with a preview", async () => {
+  test("asks once per path, in small batches with the top of the screen first, and only for files with a preview", async () => {
     const batches: Array<ReadonlyArray<string>> = [];
     const files = new MacFiles(thumbsConnection(batches));
     const photos = Array.from({ length: 30 }, (_, index) => entry(`IMG_${String(index)}.jpg`));
     files.want([...photos, entry("notes.bin"), { ...entry("Trip"), kind: "folder" }]);
     files.want(photos.slice(0, 5));
     await settle();
-    expect(batches.map((batch) => batch.length)).toEqual([24, 6]);
+    expect(batches.map((batch) => batch.length)).toEqual([12, 12, 6]);
+    expect([...(batches[0] ?? [])].sort()).toEqual(photos.slice(0, 12).map((photo) => photo.path).sort());
     expect(batches.flat()).not.toContain("/Users/me/Downloads/notes.bin");
     expect(files.thumbs.get().get(photos[0]?.path ?? "")).toBe("data:image/jpeg;base64,AAAA");
 
     files.want(photos);
     await settle();
-    expect(batches).toHaveLength(2);
+    expect(batches).toHaveLength(3);
     files.dispose();
   });
 
