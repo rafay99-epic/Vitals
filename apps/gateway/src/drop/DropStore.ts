@@ -798,8 +798,8 @@ export const layer = (database: Database) =>
        * Any refused upload (bad ticket, no scope, not accepted, paused, ...) is answered without its body read.
        * Left unread, the sender keeps pushing bytes nobody reads, which holds the connection (and a clean
        * shutdown) open; closing at once can reset it before the sender sees the answer. So the rest is read and
-       * dropped, up to one part and a few seconds, and the connection closes only when that doesn't finish or
-       * the body was already partly read.
+       * dropped first, up to one part and a few seconds, and then the connection closes: a refused sender starts
+       * over on a fresh one.
        */
       const handle = async (request: Request, route: DropRoute): Promise<Response> => {
         const response = await serve(request, route).catch((error: unknown) => {
