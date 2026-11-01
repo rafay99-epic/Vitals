@@ -33,8 +33,12 @@ const PREVIEWABLE = /\.(jpe?g|png|gif|heic|heif|webp|tiff?|bmp|svg|pdf|mov|mp4|m
 
 export const hasPreview = (entry: FsEntry): boolean => entry.kind === "file" && PREVIEWABLE.test(entry.name);
 
-/** Where a thumbnail lives in `MacFiles.thumbs`. Phone paths are keyed by device, since two phones can share a path. */
-export const thumbKey = (path: string, device?: DeviceId): string => (device === undefined ? path : `${device}:${path}`);
+/**
+ * Where a thumbnail lives in `MacFiles.thumbs`. Phone paths are keyed by device, since two phones can share a
+ * path, and every key carries the file's modified time, so an edited file gets a new thumbnail.
+ */
+export const thumbKey = (entry: Pick<FsEntry, "path" | "modifiedAt">, device?: DeviceId): string =>
+  `${device === undefined ? "" : `${device}:`}${entry.path}@${String(entry.modifiedAt)}`;
 
 export type Outcome<A> = { readonly ok: true; readonly value: A } | { readonly ok: false; readonly message: string };
 
@@ -71,6 +75,8 @@ export type SeenPages = typeof SeenPages.Type;
 export type SeenFolder = typeof SeenFolder.Type;
 
 const BrowseCache = Schema.Struct({
+  /** This phone's device id in the pairing that saw these pages; a new pairing (maybe another Mac) starts cold. */
+  owner: Schema.String,
   recent: Schema.Array(Schema.Tuple([Schema.String, SeenPages])),
   folders: Schema.Array(Schema.Tuple([Schema.String, SeenFolder])),
   thumbs: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
@@ -100,7 +106,8 @@ export class MacFiles {
   /** The other phones, as `devices()` last listed them. */
   readonly phones = new Store<ReadonlyArray<FsDevice>>([]);
   private readonly connection: Connection;
-  private readonly wanted = new Set<string>();
+  /** Paths still to ask for, each with the modified time its thumbnail is for. */
+  private readonly wanted = new Map<string, number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = 0;
   private device: DeviceId | undefined = undefined;
@@ -163,9 +170,9 @@ export class MacFiles {
     // Re-adding moves a path to the back, and batches come from the back: what's on screen now goes
     // first, top of the screen first, so each call's entries go in bottom up.
     for (const entry of entries.toReversed()) {
-      if (!hasPreview(entry) || known.has(thumbKey(entry.path, device))) continue;
+      if (!hasPreview(entry) || known.has(thumbKey(entry, device))) continue;
       this.wanted.delete(entry.path);
-      this.wanted.add(entry.path);
+      this.wanted.set(entry.path, entry.modifiedAt);
     }
     if (this.wanted.size === 0 || this.timer !== null) return;
     this.timer = setTimeout(() => {
@@ -182,8 +189,8 @@ export class MacFiles {
   /** Keeps up to THUMB_PARALLEL requests going until every wanted thumbnail is asked for, newest wants first. */
   private fetchThumbs(): void {
     while (this.inFlight < THUMB_PARALLEL && this.wanted.size > 0) {
-      const batch = [...this.wanted].slice(-THUMB_BATCH);
-      for (const path of batch) this.wanted.delete(path);
+      const batch = new Map([...this.wanted].slice(-THUMB_BATCH));
+      for (const path of batch.keys()) this.wanted.delete(path);
       this.inFlight += 1;
       void this.fetchBatch(batch, this.device).finally(() => {
         this.inFlight -= 1;
@@ -192,13 +199,21 @@ export class MacFiles {
     }
   }
 
-  private async fetchBatch(batch: ReadonlyArray<string>, device: DeviceId | undefined): Promise<void> {
-    const result = await this.connection.call((client) => client["fs.thumbs"](device === undefined ? { paths: batch } : { paths: batch, device }));
-    // Offline or refused: drop the queue rather than fail through it. Tiles ask again when next seen.
-    if (!result.ok) return void this.wanted.clear();
+  private async fetchBatch(batch: ReadonlyMap<string, number>, device: DeviceId | undefined): Promise<void> {
+    const paths = [...batch.keys()];
+    const result = await this.connection.call((client) => client["fs.thumbs"](device === undefined ? { paths } : { paths, device }));
+    // Offline or refused: drop the queue rather than fail through it. Tiles ask again when next seen. A queue
+    // that has since moved to another device isn't this request's to drop.
+    if (!result.ok) {
+      if (device === this.device) this.wanted.clear();
+      return;
+    }
     this.thumbs.update((previous) => {
       const next = new Map(previous);
-      for (const thumb of result.value.thumbs) next.set(thumbKey(thumb.path, device), thumb.jpeg === null ? null : `data:image/jpeg;base64,${thumb.jpeg}`);
+      for (const thumb of result.value.thumbs) {
+        const modifiedAt = batch.get(thumb.path);
+        if (modifiedAt !== undefined) next.set(thumbKey({ path: thumb.path, modifiedAt }, device), thumb.jpeg === null ? null : `data:image/jpeg;base64,${thumb.jpeg}`);
+      }
       for (const key of next.keys()) {
         if (next.size <= THUMB_KEEP) break;
         next.delete(key);

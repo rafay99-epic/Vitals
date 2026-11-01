@@ -11,7 +11,7 @@ import { androidShare } from "../modules/vitals-share/index.ts";
 
 import { autoCopy } from "./lib/autoCopy.ts";
 import { batchOf, copyToPhone, isFile, nameFromUri, type Picked, textItem } from "./lib/clips.ts";
-import { macFolder, openSaved, placeArrivals, relayedTo } from "./lib/drops.ts";
+import { macFolder, openSaved, placeArrivals, relayedTo, savedTo } from "./lib/drops.ts";
 import { checkPhoneCopy, phoneCopy, sendClipboardNow } from "./lib/phoneCopies.ts";
 import { openClipboard, openFiles, openTransfers } from "./navigation.ts";
 import { sendSheet } from "./sheets/ClipSheets.tsx";
@@ -169,10 +169,12 @@ function useDropNews() {
         const label = dropLabel(finish.drop);
         const verb = isPlural(label) ? "are" : "is";
         if (finish._tag === "Received") {
-          void placeArrivals(finish.files).then((where) => {
-            toast.show(`${label} ${verb} in ${where}`, { action: "Open", onAction: openReceived(finish.files) });
-            void notifyArrival(finish.drop, where, AppState.currentState === "active").catch(() => undefined);
-          });
+          void placeArrivals(finish.files)
+            .catch(() => savedTo)
+            .then((where) => {
+              toast.show(`${label} ${verb} in ${where}`, { action: "Open", onAction: openReceived(finish.files) });
+              void notifyArrival(finish.drop, where, AppState.currentState === "active").catch(() => undefined);
+            });
         }
         else if (finish._tag === "Sent") {
           const phone = relayedTo(finish.drop.id);
@@ -192,7 +194,8 @@ function useDropNews() {
       for (const drop of waiting) {
         if (posted.has(drop.id)) continue;
         posted.add(drop.id);
-        void notifyTransfer(drop, AppState.currentState === "active").catch(() => undefined);
+        // Kept only once posted, so a failed post is tried again on the next change.
+        void notifyTransfer(drop, AppState.currentState === "active").catch(() => posted.delete(drop.id));
       }
       for (const id of posted) {
         if (waitingIds.has(id)) continue;
@@ -220,6 +223,7 @@ function useDropNews() {
         if (known !== undefined) return answerIt(known);
         const giveUp = setTimeout(() => {
           stop();
+          toast.show(`Vitals couldn't find that transfer. Answer it in Transfers.`, { tone: "bad" });
           openTransfers();
         }, ANSWER_WAIT_MS);
         const stop = remote.drops.drops.subscribe(() => {

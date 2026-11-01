@@ -42,15 +42,17 @@ const remember = <V>(map: Map<string, V>, key: string, value: V, keep: number): 
 let dirty = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let thumbsOf: (() => ReadonlyMap<string, string | null>) | null = null;
+/** The pairing the maps above belong to: this phone's device id in it. */
+let owner: string | null = null;
 
 const save = (): void => {
   if (timer !== null) clearTimeout(timer);
   timer = null;
-  if (!dirty || thumbsOf === null) return;
+  if (!dirty || thumbsOf === null || owner === null) return;
   dirty = false;
   const thumbs = [...thumbsOf().entries()].filter((entry): entry is [string, string] => entry[1] !== null).slice(-KEEP_THUMBS);
   try {
-    const cache: BrowseCache = { recent: [...recentSeen], folders: [...folderSeen], thumbs };
+    const cache: BrowseCache = { owner, recent: [...recentSeen], folders: [...folderSeen], thumbs };
     file().write(JSON.stringify(cache));
   } catch {
     dirty = true;
@@ -73,15 +75,22 @@ export const seeFolder = (key: string, entries: ReadonlyArray<FsEntry>, total: n
 };
 
 /**
- * Loads what was kept into the screens' maps and `remote`'s thumbnails, then keeps the file current:
+ * Loads what this pairing kept into the screens' maps and `remote`'s thumbnails (another pairing's is
+ * dropped, so a different Mac never shows the last one's pages), then keeps the file current:
  * soon after a change, and at once when the app leaves the screen. Returns the stop.
  */
 const keepBrowseCache = (remote: Remote): (() => void) => {
+  const me = remote.credentials.deviceId;
+  if (owner !== me) {
+    recentSeen.clear();
+    folderSeen.clear();
+  }
+  owner = me;
   thumbsOf = () => remote.files.thumbs.get();
   try {
     const target = file();
     const saved = target.exists ? decodeBrowseCache(target.textSync()) : null;
-    if (saved?._tag === "Some") {
+    if (saved?._tag === "Some" && saved.value.owner === me) {
       for (const [key, value] of saved.value.recent) if (!recentSeen.has(key)) recentSeen.set(key, value);
       for (const [key, value] of saved.value.folders) if (!folderSeen.has(key)) folderSeen.set(key, value);
       remote.files.thumbs.update((current) => new Map([...saved.value.thumbs, ...current]));

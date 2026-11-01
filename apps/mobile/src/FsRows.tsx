@@ -50,16 +50,16 @@ const metaOf = (entry: FsEntry, now: number): string =>
   entry.kind === "folder" ? clipAge(entry.modifiedAt, now) : [entry.kind === "package" ? "package" : formatBytes(entry.size), clipAge(entry.modifiedAt, now)].join(" · ");
 
 /** The thumbnail for an entry on the Mac or on `device`, once fetched. */
-export const useThumb = (path: string, device: DeviceId | null): string | null => {
+export const useThumb = (entry: FsEntry, device: DeviceId | null): string | null => {
   const thumbs = useRemote().files.thumbs;
-  const key = thumbKey(path, device ?? undefined);
+  const key = thumbKey(entry, device ?? undefined);
   const select = useCallback((map: ReadonlyMap<string, string | null>) => map.get(key) ?? null, [key]);
   return useSelect(thumbs, select);
 };
 
 /** The entry's thumbnail, or its kind icon until there is one. Subscribes to its own thumbnail only, so one arriving re-renders just this. */
 function FsThumb({ entry, device, square = false, dim = false }: { readonly entry: FsEntry; readonly device: DeviceId | null; readonly square?: boolean; readonly dim?: boolean }) {
-  const uri = useThumb(entry.path, device);
+  const uri = useThumb(entry, device);
   const shape = [square ? styles.square : styles.icon, dim ? styles.dim : null];
   if (uri !== null) return <Image source={uri} recyclingKey={entry.path} cachePolicy="memory" transition={THUMB_FADE} style={shape} accessibilityIgnoresInvertColors />;
   const look = lookOf(entry);
@@ -255,7 +255,8 @@ export const useSeenFade = (stale: boolean) => {
 
 const agoOf = (at: number, now: number): string => {
   const age = clipAge(at, now);
-  return age === "now" ? "just now" : /\d/.test(age) ? `${age} ago` : age;
+  if (age === "now") return "just now";
+  return /^\d+ (min|h)$/.test(age) ? `${age} ago` : age;
 };
 
 /** Under the title while a remembered page shows: its age and that it's updating, or why the device didn't answer and Try again. */
@@ -289,7 +290,7 @@ const GHOST_ROWS = 8;
 export function Ghost({ gallery, size, gap }: { readonly gallery: boolean; readonly size: number; readonly gap: number }) {
   if (!gallery) {
     return (
-      <View accessibilityLabel="Loading">
+      <View accessible accessibilityLabel="Loading">
         {Array.from({ length: GHOST_ROWS }, (_, index) => (
           <View key={index} style={styles.row}>
             <View style={[styles.icon, styles.ghost]} />
@@ -300,7 +301,7 @@ export function Ghost({ gallery, size, gap }: { readonly gallery: boolean; reado
     );
   }
   return (
-    <View accessibilityLabel="Loading" style={[styles.ghostGrid, { gap }]}>
+    <View accessible accessibilityLabel="Loading" style={[styles.ghostGrid, { gap }]}>
       {Array.from({ length: GHOST_TILES }, (_, index) => (
         <View key={index} style={[styles.ghost, styles.ghostTile, { width: size, height: size }]} />
       ))}

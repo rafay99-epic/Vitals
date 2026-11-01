@@ -17,7 +17,7 @@ export type TransferAnswer = "accept" | "decline" | "open" | "arrived";
  * relied on to run it in the background, so there both open the app; Android answers in place.
  */
 export const transferActions: ReadonlyArray<Notifications.NotificationAction> = [
-  { identifier: ACCEPT, buttonTitle: "Accept", options: { opensAppToForeground: true } },
+  { identifier: ACCEPT, buttonTitle: "Accept", options: { opensAppToForeground: Platform.OS === "ios" } },
   { identifier: DECLINE, buttonTitle: "Decline", options: { opensAppToForeground: Platform.OS === "ios", isDestructive: true } },
 ];
 

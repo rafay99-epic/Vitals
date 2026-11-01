@@ -88,8 +88,9 @@ export const transferFiles = async (remote: Remote, from: FsSource, paths: Reado
       if ((await remote.drops.pull(paths)) !== null) toast.show(`Getting ${what} from your Mac`);
       return;
     }
-    remote.drops.expect(from.device);
+    const unexpect = remote.drops.expect(from.device);
     const outcome = await remote.files.pull(from.device, paths);
+    if (!outcome.ok) unexpect();
     toast.show(outcome.ok ? `${from.name} is sending ${what} here` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
     return;
   }
@@ -144,7 +145,7 @@ export const shareSaved = async (file: SavedFile): Promise<void> => {
 
 /**
  * iPhone: photos and videos that arrive also go into Photos, where people look for them. The copy in
- * Files stays so Transfers can still open it. Says where everything ended up.
+ * Files stays so Transfers can still open it. Says where to look: Photos when everything is there.
  */
 export const placeArrivals = async (files: ReadonlyArray<SavedFile>): Promise<string> => {
   if (Platform.OS !== "ios") return savedTo;

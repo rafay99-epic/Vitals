@@ -114,10 +114,12 @@ export function FolderScreen({ navigation, route }: Props) {
   const key = folderKey(path, device);
   const [listing, setListing] = useState<Listing>(() => remembered(key));
   const selection = useSelection();
+  const [settled, setSettled] = useState(false);
 
   const loadFirst = useCallback((live: () => boolean) => {
     void remote.files.list(path, "name", 0, device).then((outcome) => {
       if (!live()) return;
+      setSettled(true);
       if (!outcome.ok) return setListing(remembered(key, outcome.message));
       seeFolder(key, outcome.value.entries, outcome.value.total);
       setListing({ _tag: "loaded", count: outcome.value.entries.length, lines: linesOf(outcome.value.entries), total: outcome.value.total, busy: false, since: null });
@@ -134,12 +136,13 @@ export function FolderScreen({ navigation, route }: Props) {
   }, [loadFirst]);
 
   const retry = () => {
+    setSettled(false);
     setListing(remembered(key));
     loadFirst(() => true);
   };
 
   const loadMore = () => {
-    if (listing._tag !== "loaded" || listing.busy || listing.since !== null || listing.count >= listing.total) return;
+    if (!settled || listing._tag !== "loaded" || listing.busy || listing.since !== null || listing.count >= listing.total) return;
     const offset = listing.count;
     setListing({ ...listing, busy: true });
     void remote.files.list(path, "name", offset, device).then((outcome) => {

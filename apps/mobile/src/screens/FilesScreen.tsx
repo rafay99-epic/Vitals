@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { type FsSource, type KindPage, mergeNewest, type RecentPage } from "@vitals/app/state/files.ts";
+import { type FsSource, type KindPage, mergeNewest, type Outcome, type RecentPage } from "@vitals/app/state/files.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
 import type { DeviceId, FsDevice, FsEntry, FsRecentKind, FsRoot } from "@vitals/contracts";
@@ -141,9 +141,9 @@ function DeviceTab({ source, limited }: { readonly source: FsSource; readonly li
         for (const kind of LOAD_ORDER) {
           const outcome = await remote.files.recent(kind, 0, RECENT_PAGE, device);
           if (cancelled) return;
-          setRecents((current) => ({ ...current, [kind]: outcome.ok ? { _tag: "loaded", value: outcome.value } : { _tag: "failed", message: outcome.message } }));
+          setRecents((current) => ({ ...current, [kind]: refreshed(current[kind], outcome) }));
           if (!outcome.ok) continue;
-          remote.files.want(outcome.value.entries.slice(0, STRIP), device);
+          remote.files.want(outcome.value.entries.slice(0, kind === "screenshots" || kind === "photos" ? STRIP : 1), device);
           const page = { kind, entries: outcome.value.entries, more: outcome.value.more };
           seeRecent(recentKey(kind, device), [page]);
           if (kind === "screenshots" || kind === "photos") pages.push(page);
@@ -166,6 +166,12 @@ function DeviceTab({ source, limited }: { readonly source: FsSource; readonly li
     </View>
   );
 }
+
+/** A kind after asking again: the new page, or the one already shown when asking failed, or the failure. */
+const refreshed = (current: Loaded<RecentPage>, outcome: Outcome<RecentPage>): Loaded<RecentPage> => {
+  if (outcome.ok) return { _tag: "loaded", value: outcome.value };
+  return current._tag === "loaded" ? current : { _tag: "failed", message: outcome.message };
+};
 
 /** Each kind's last page from the browse cache, so the tiles show at once while the device is asked again. */
 const rememberedRecents = (device: DeviceId | undefined): Readonly<Record<FsRecentKind, Loaded<RecentPage>>> => {

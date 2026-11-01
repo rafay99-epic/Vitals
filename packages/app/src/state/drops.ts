@@ -288,9 +288,16 @@ export class MacDrops {
     return drop;
   }
 
-  /** This phone just asked `from` for files: its next drop here was wanted, so it starts without asking. */
-  expect(from: DeviceId): void {
-    this.expected.set(from, Date.now() + EXPECT_MS);
+  /**
+   * This phone just asked `from` for files: its next drop here was wanted, so it starts without asking.
+   * Returns the undo, for when asking failed and no drop is coming.
+   */
+  expect(from: DeviceId): () => void {
+    const until = Date.now() + EXPECT_MS;
+    this.expected.set(from, until);
+    return () => {
+      if (this.expected.get(from) === until) this.expected.delete(from);
+    };
   }
 
   /** Whether this phone takes `drop` on its own: the Mac's with Start without asking on, or one it asked another device for. */

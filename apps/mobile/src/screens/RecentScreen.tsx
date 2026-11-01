@@ -51,6 +51,7 @@ export function RecentScreen({ navigation, route }: Props) {
   const key = recentKey(kind, device);
   const [paged, setPaged] = useState<Paged>(() => remembered(key));
   const selection = useSelection();
+  const [settled, setSettled] = useState(false);
 
   const loadFirst = useCallback((live: () => boolean) => {
     const kinds: ReadonlyArray<FsRecentKind> = kind === "images" ? ["screenshots", "photos"] : [kind];
@@ -59,10 +60,11 @@ export function RecentScreen({ navigation, route }: Props) {
       return outcome.ok ? { kind: item, entries: outcome.value.entries, more: outcome.value.more } : outcome.message;
     })).then((results) => {
       if (!live()) return;
+      setSettled(true);
       const pages = results.filter((result) => typeof result !== "string");
       const failure = results.find((result) => typeof result === "string");
       if (pages.length === 0) return setPaged(remembered(key, failure ?? "Nothing to show"));
-      seeRecent(key, pages);
+      if (failure === undefined) seeRecent(key, pages);
       setPaged({ _tag: "loaded", pages, busy: false, since: null });
       remote.files.want(mergeNewest(pages).entries.slice(0, 30), device);
     });
@@ -77,12 +79,13 @@ export function RecentScreen({ navigation, route }: Props) {
   }, [loadFirst]);
 
   const retry = () => {
+    setSettled(false);
     setPaged(remembered(key));
     loadFirst(() => true);
   };
 
   const loadMore = () => {
-    if (paged._tag !== "loaded" || paged.busy || paged.since !== null) return;
+    if (!settled || paged._tag !== "loaded" || paged.busy || paged.since !== null) return;
     const { behind } = mergeNewest(paged.pages);
     if (behind.size === 0) return;
     setPaged({ ...paged, busy: true });
