@@ -23,6 +23,8 @@ const WALK_LIMIT = 5_000;
 const WALK_DEPTH = 6;
 const IMAGE = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
 const MEDIA = /\.(jpe?g|png|gif|webp|heic|heif|bmp|dng|mp4|m4v|mov|mkv|webm|3gp)$/i;
+const AWAKE_MS = 2 * 60_000;
+const ASKED_UNRESTRICTED_KEY = "vitals.remote.askedUnrestricted";
 
 export const shareFiles = new Store<boolean>(false);
 let changed = false;
@@ -149,6 +151,18 @@ const readable = async <A>(read: () => A | Promise<A>): Promise<A> => {
 export const askFullStorage = async (): Promise<void> => {
   if (await (androidShare?.openFullStorage?.() ?? Promise.resolve(false)).catch(() => false)) return;
   await Linking.sendIntent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION").catch(() => Linking.openSettings());
+};
+
+/**
+ * Android: asks once, ever, to leave Vitals out of battery limits, which otherwise freeze it with the
+ * screen off so other devices can't browse it. Skips when already allowed or on builds without the call.
+ */
+export const askUnrestrictedOnce = async (): Promise<void> => {
+  const share = androidShare;
+  if (share?.unrestricted === undefined || share.askUnrestricted === undefined || share.unrestricted()) return;
+  if ((await SecureStore.getItemAsync(ASKED_UNRESTRICTED_KEY, KEYCHAIN_OPTIONS).catch(() => null)) === "1") return;
+  await SecureStore.setItemAsync(ASKED_UNRESTRICTED_KEY, "1", KEYCHAIN_OPTIONS).catch(() => undefined);
+  await share.askUnrestricted().catch(() => false);
 };
 
 /** Android without All files access, where only Downloads › Vitals is shared. Never on iPhone. */
@@ -315,6 +329,8 @@ export class PhoneShare {
   }
 
   private async answer(request: FsServeRequest): Promise<void> {
+    // One request usually means more are coming (pages, thumbnails, a send): stay awake for them.
+    androidShare?.stayAwake?.(AWAKE_MS);
     let result: FsServeResult | null = null;
     let error: string | null = null;
     try {

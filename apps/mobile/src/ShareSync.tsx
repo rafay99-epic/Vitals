@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 
 import { linkHeld } from "../modules/vitals-share/index.ts";
-import { allFilesWanted, askFullStorage, PhoneShare, phoneRoots, sharedFolders, shareFiles, sharePhotos, useLimitedStorage } from "./lib/share.ts";
+import { allFilesWanted, askFullStorage, askUnrestrictedOnce, PhoneShare, phoneRoots, sharedFolders, shareFiles, sharePhotos, useLimitedStorage } from "./lib/share.ts";
 import { BigButton, sheet, SheetCancel, SheetHeader } from "./ui/index.ts";
 
 /** Asked again at most this often when other devices keep running into the missing access. */
@@ -52,6 +52,11 @@ export function ShareSync() {
     share.start(phoneRoots(photos, folders, !limited), limited);
     return () => share.stopServing();
   }, [remote, serving, photos, folders, limited]);
+
+  // Sharing with All files access settled: ask Android, once, to stop freezing Vitals with the screen off.
+  useEffect(() => {
+    if (on && active && !limited && !sheet.showing()) void askUnrestrictedOnce();
+  }, [on, active, limited]);
 
   // Shared without All files access: asks once a launch, and again when another device was kept out.
   useEffect(() => {
