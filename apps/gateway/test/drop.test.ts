@@ -149,7 +149,9 @@ describe("drop: phone to Mac", () => {
 
     target.app.emit({ t: "dropPause", id: drop.id, paused: true });
     await macDrop(target.app, drop.id, "paused");
-    expect((await put(url, ticket.ticket, bytes.subarray(0, PART), 0, bytes.length)).status).toBe(423);
+    const paused = await put(url, ticket.ticket, bytes.subarray(0, PART), 0, bytes.length);
+    expect(paused.status).toBe(423);
+    expect(paused.headers.get("connection")).toBe("close");
   });
 
   test("an offer bigger than the free space is refused in plain words", async () => {

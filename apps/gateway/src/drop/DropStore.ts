@@ -648,7 +648,17 @@ export const layer = (database: Database) =>
 
       const damaged = (file: DropFileRecord) => problem(422, "checksum", `${file.name} arrived damaged. Send it again.`);
 
+      /**
+       * A refused part is answered without reading the rest of its body. Closing the connection stops the
+       * sender pushing bytes nobody reads, which would otherwise hold the socket, and a clean shutdown, open.
+       */
       const upload = async (request: Request, drop: DropRecord, file: DropFileRecord, route: DropRoute): Promise<Response> => {
+        const response = await receive(request, drop, file, route);
+        if (!response.ok) response.headers.set("connection", "close");
+        return response;
+      };
+
+      const receive = async (request: Request, drop: DropRecord, file: DropFileRecord, route: DropRoute): Promise<Response> => {
         if (!drop.incoming) return problem(405, "direction", "This drop goes to this device", { allow: "GET, HEAD" });
         if (file.complete) return problem(409, "done", "That file is already on the Mac");
         if (file.verifying) return problem(409, "verifying", "That file is being checked");
