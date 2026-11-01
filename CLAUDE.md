@@ -115,8 +115,9 @@ Apple native design language below.
   `VitalsBuildNumber`. The release DMG must contain `<CFBundleName>.app`
   (`Updater.bundleInImage`).
 - **App icons** are Icon Composer files at `apps/desktop/Resources/Icons/<channel>/AppIcon.icon`; `build.sh`
-  compiles them with `actool` into `Assets.car` (default, dark and tinted) plus `AppIcon.icns`. The phone apps' icons
-  and splash come from `apps/mobile/scripts/brand.swift` (`swift scripts/brand.swift assets` from `apps/mobile`).
+  compiles them with `actool` into `Assets.car` (default, dark and tinted) plus `AppIcon.icns`. They are marked
+  `shared`, and the iPhone app uses the same file per channel (`ios.icon` in `apps/mobile/app.config.ts`). The Android
+  icons and the splash come from `apps/mobile/scripts/brand.swift` (`swift scripts/brand.swift assets` from `apps/mobile`).
 - **`./dev.sh`** builds the current branch as Dev (local, no updater). **`./nightly.sh`**
   builds it as Nightly locally next to Stable (build number 0, so it'll offer to pull the
   published Nightly).

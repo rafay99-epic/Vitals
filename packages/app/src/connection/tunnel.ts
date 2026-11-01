@@ -173,7 +173,7 @@ const STOP_AFTER_DIRECT_MS = 3 * 60_000;
  * Runs built-in Tailscale only while it is needed. It starts when the Mac cannot be reached
  * directly (the connection is backing off, or the phone is off the local network) and stops
  * after three minutes of a direct Wi-Fi connection, or at once when the connection is parked
- * or refused, so it costs nothing at home or in the background. A failed start is retried on
+ * (unless it is mid sign-in) or refused, so it costs nothing at home or in the background. A failed start is retried on
  * the next network change, not on every heartbeat. While it runs, network switches are passed
  * to the node (Android tells it nothing on its own) and its sign-in is re-checked on
  * foreground and backoff.
@@ -197,6 +197,9 @@ export const runTunnelOnDemand = (connection: Connection, credentials: () => Cre
     }
     cancelIdle();
     // Parked or refused: stop now. A timer would not fire, since Android pauses JS timers in the background.
+    // A sign-in keeps going: the browser it opens parks the app, and stopping would throw that login away.
+    const signingIn = tunnel.get()._tag === "Starting" || tunnel.get()._tag === "NeedsLogin";
+    if (state._tag === "Suspended" && signingIn) return;
     if (state._tag === "Suspended" || state._tag === "Revoked" || state._tag === "Incompatible") return void stopTunnel();
     if (state._tag !== "Ready" && state._tag !== "Connecting" && state._tag !== "Backoff") return;
     if (state._tag === "Backoff") void recheckTunnel(credentials());
@@ -208,6 +211,10 @@ export const runTunnelOnDemand = (connection: Connection, credentials: () => Cre
   };
   const stopState = connection.state.subscribe(() => settle(false));
   const stopNetwork = localNetwork.subscribe(() => settle(true));
+  // A sign-in is left running while parked (see settle). If it then fails, stop the node instead of leaving it up.
+  const stopFailed = tunnel.subscribe(() => {
+    if (tunnel.get()._tag === "Failed" && connection.state.get()._tag === "Suspended") void stopTunnel();
+  });
   const network = Network.addNetworkStateListener(networkMoved);
   const appState = AppState.addEventListener("change", (next) => {
     if (next !== "active" || credentials().builtInTailscale !== true) return;
@@ -218,6 +225,7 @@ export const runTunnelOnDemand = (connection: Connection, credentials: () => Cre
   return () => {
     stopState();
     stopNetwork();
+    stopFailed();
     network.remove();
     appState.remove();
     cancelIdle();
