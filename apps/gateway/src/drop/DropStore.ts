@@ -648,17 +648,7 @@ export const layer = (database: Database) =>
 
       const damaged = (file: DropFileRecord) => problem(422, "checksum", `${file.name} arrived damaged. Send it again.`);
 
-      /**
-       * A refused part is answered without reading the rest of its body. Closing the connection stops the
-       * sender pushing bytes nobody reads, which would otherwise hold the socket, and a clean shutdown, open.
-       */
       const upload = async (request: Request, drop: DropRecord, file: DropFileRecord, route: DropRoute): Promise<Response> => {
-        const response = await receive(request, drop, file, route);
-        if (!response.ok) response.headers.set("connection", "close");
-        return response;
-      };
-
-      const receive = async (request: Request, drop: DropRecord, file: DropFileRecord, route: DropRoute): Promise<Response> => {
         if (!drop.incoming) return problem(405, "direction", "This drop goes to this device", { allow: "GET, HEAD" });
         if (file.complete) return problem(409, "done", "That file is already on the Mac");
         if (file.verifying) return problem(409, "verifying", "That file is being checked");
@@ -774,11 +764,19 @@ export const layer = (database: Database) =>
         }
       };
 
-      const handle = (request: Request, route: DropRoute): Promise<Response> =>
-        serve(request, route).catch((error: unknown) => {
+      /**
+       * A refused upload (bad ticket, no scope, not accepted, paused, ...) is answered without reading the rest
+       * of its body. Closing the connection stops the sender pushing bytes nobody reads, which would otherwise
+       * hold the socket, and a clean shutdown, open.
+       */
+      const handle = async (request: Request, route: DropRoute): Promise<Response> => {
+        const response = await serve(request, route).catch((error: unknown) => {
           log("error", "drop.http.failed", { method: request.method, error: String(error).slice(0, 300) });
           return problem(500, "internal", "Something went wrong on the Mac");
         });
+        if (request.method === "PUT" && !response.ok) response.headers.set("connection", "close");
+        return response;
+      };
 
       const watch = (caller: DropCaller) =>
         Stream.unwrap(
