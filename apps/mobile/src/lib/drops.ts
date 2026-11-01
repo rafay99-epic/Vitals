@@ -16,7 +16,7 @@ import { type Batch, batchOf, isFile, type PickedFile } from "./clips.ts";
 
 export { canInstallApps };
 
-export const savedTo = Platform.OS === "ios" ? "Files › On My iPhone › Vitals" : "Downloads › Vitals";
+export const savedTo = Platform.OS === "ios" ? "Files › On My iPhone › Vitals › Received" : "Downloads › Vitals";
 
 export const macFolder = "Downloads › Vitals";
 
@@ -88,7 +88,9 @@ export const transferFiles = async (remote: Remote, from: FsSource, paths: Reado
       if ((await remote.drops.pull(paths)) !== null) toast.show(`Getting ${what} from your Mac`);
       return;
     }
+    const unexpect = remote.drops.expect(from.device);
     const outcome = await remote.files.pull(from.device, paths);
+    if (!outcome.ok) unexpect();
     toast.show(outcome.ok ? `${from.name} is sending ${what} here` : outcome.message, { tone: outcome.ok ? "ok" : "bad" });
     return;
   }
@@ -139,6 +141,25 @@ export const installSaved = async (file: SavedFile): Promise<void> => {
 export const shareSaved = async (file: SavedFile): Promise<void> => {
   if (file.uri === null) return toast.show("Vitals can't find that file anymore", { tone: "bad" });
   await Sharing.shareAsync(file.uri, { mimeType: file.mime ?? "application/octet-stream", dialogTitle: file.name }).catch(() => toast.show("Sharing didn't open", { tone: "bad" }));
+};
+
+/**
+ * iPhone: photos and videos that arrive also go into Photos, where people look for them. The copy in
+ * Files stays so Transfers can still open it. Says where to look: Photos when everything is there.
+ */
+export const placeArrivals = async (files: ReadonlyArray<SavedFile>): Promise<string> => {
+  if (Platform.OS !== "ios") return savedTo;
+  const media = files.filter((file) => {
+    const kind = fileKind(file.name, file.mime);
+    return file.uri !== null && (kind === "image" || kind === "video");
+  });
+  if (media.length === 0) return savedTo;
+  const permission = await MediaLibrary.requestPermissionsAsync(true, ["photo", "video"]);
+  if (!permission.granted) return savedTo;
+  const results = await Promise.all(media.map((file) => (file.uri === null ? Promise.resolve(false) : MediaLibrary.Asset.create(file.uri).then(() => true, () => false))));
+  const saved = results.filter(Boolean).length;
+  if (saved === 0) return savedTo;
+  return saved === files.length ? "Photos" : `Photos and ${savedTo}`;
 };
 
 export const saveSavedToPhotos = async (file: SavedFile): Promise<void> => {

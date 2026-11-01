@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import type { PermissionState } from "./permission.ts";
+import { TRANSFER_CATEGORY, TRANSFER_CHANNEL, transferActions } from "./transfers.ts";
 
 const CATEGORY = "pressure";
 const CHANNEL = "pressure";
@@ -23,10 +24,15 @@ export const prepareNotifications = async (): Promise<boolean> => {
       name: "Mac pressure",
       importance: Notifications.AndroidImportance.HIGH,
     });
+    await Notifications.setNotificationChannelAsync(TRANSFER_CHANNEL, {
+      name: "Transfers",
+      importance: Notifications.AndroidImportance.HIGH,
+    });
   }
   await Notifications.setNotificationCategoryAsync(CATEGORY, [
     { identifier: CALM_ACTION, buttonTitle: "Calm down", options: { opensAppToForeground: true } },
   ]);
+  await Notifications.setNotificationCategoryAsync(TRANSFER_CATEGORY, [...transferActions]);
   return (await Notifications.getPermissionsAsync()).granted;
 };
 

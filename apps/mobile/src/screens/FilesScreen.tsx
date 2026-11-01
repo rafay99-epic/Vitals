@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
-import { type FsSource, mergeNewest, type RecentPage } from "@vitals/app/state/files.ts";
+import { type FsSource, type KindPage, mergeNewest, type Outcome, type RecentPage } from "@vitals/app/state/files.ts";
 import { useStore } from "@vitals/app/state/useStore.ts";
 import { useNow } from "@vitals/app/state/useVitals.ts";
 import type { DeviceId, FsDevice, FsEntry, FsRecentKind, FsRoot } from "@vitals/contracts";
@@ -10,6 +10,7 @@ import { FlatList, StyleSheet, View } from "react-native";
 
 import { DropCards } from "../DropTransfers.tsx";
 import { EntryRow, isFolder, KindTile, PhotoTile, RootRow } from "../FsRows.tsx";
+import { RECENT_PAGE, recentKey, recentSeen, seeRecent } from "../lib/browseCache.ts";
 import { BLOCK_NOTE, useFilesBlock } from "../lib/drops.ts";
 import { useAccess } from "../lib/remote.ts";
 import { askFullStorage, shareFiles, shareThisPhone, useLimitedStorage } from "../lib/share.ts";
@@ -25,8 +26,6 @@ const LOADING = { _tag: "loading" } as const;
 
 const KINDS: ReadonlyArray<FsRecentKind> = ["screenshots", "photos", "downloads", "documents"];
 const STRIP = 12;
-/** Pictures fill the strip, so they load a strip's worth; files only need their newest one for the tile. */
-const LIMIT: Readonly<Record<FsRecentKind, number>> = { screenshots: STRIP, photos: STRIP, downloads: 1, documents: 1 };
 /** One at a time, cheapest first, so the device isn't asked five things at once. Downloads walks a folder tree, so it goes last. */
 const LOAD_ORDER: ReadonlyArray<FsRecentKind> = ["screenshots", "photos", "documents", "downloads"];
 const THUMB = 100;
@@ -126,23 +125,29 @@ function Roots({ roots, onRoot }: { readonly roots: Loaded<ReadonlyArray<FsRoot>
 function DeviceTab({ source, limited }: { readonly source: FsSource; readonly limited: boolean }) {
   const remote = useRemote();
   const navigation = useNavigation<Nav>();
-  const [recents, setRecents] = useState<Readonly<Record<FsRecentKind, Loaded<RecentPage>>>>({ screenshots: LOADING, photos: LOADING, downloads: LOADING, documents: LOADING });
-  const [roots, setRoots] = useState<Loaded<ReadonlyArray<FsRoot>>>(LOADING);
   const device = source.device ?? undefined;
+  const [recents, setRecents] = useState<Readonly<Record<FsRecentKind, Loaded<RecentPage>>>>(() => rememberedRecents(device));
+  const [roots, setRoots] = useState<Loaded<ReadonlyArray<FsRoot>>>(LOADING);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      void remote.files.roots(device).then((listed) => {
+        if (!cancelled) setRoots(listed.ok ? { _tag: "loaded", value: listed.value.roots } : { _tag: "failed", message: listed.message });
+      });
       void (async () => {
-        const listed = await remote.files.roots(device);
-        if (cancelled) return;
-        setRoots(listed.ok ? { _tag: "loaded", value: listed.value.roots } : { _tag: "failed", message: listed.message });
         if (limited) return;
+        const pages: Array<KindPage> = [];
         for (const kind of LOAD_ORDER) {
-          const outcome = await remote.files.recent(kind, 0, LIMIT[kind], device);
+          const outcome = await remote.files.recent(kind, 0, RECENT_PAGE, device);
           if (cancelled) return;
-          setRecents((current) => ({ ...current, [kind]: outcome.ok ? { _tag: "loaded", value: outcome.value } : { _tag: "failed", message: outcome.message } }));
-          if (outcome.ok) remote.files.want(outcome.value.entries, device);
+          setRecents((current) => ({ ...current, [kind]: refreshed(current[kind], outcome) }));
+          if (!outcome.ok) continue;
+          remote.files.want(outcome.value.entries.slice(0, kind === "screenshots" || kind === "photos" ? STRIP : 1), device);
+          const page = { kind, entries: outcome.value.entries, more: outcome.value.more };
+          seeRecent(recentKey(kind, device), [page]);
+          if (kind === "screenshots" || kind === "photos") pages.push(page);
+          if (pages.length === 2) seeRecent(recentKey("images", device), pages);
         }
       })();
       return () => {
@@ -161,6 +166,21 @@ function DeviceTab({ source, limited }: { readonly source: FsSource; readonly li
     </View>
   );
 }
+
+/** A kind after asking again: the new page, or the one already shown when asking failed, or the failure. */
+const refreshed = (current: Loaded<RecentPage>, outcome: Outcome<RecentPage>): Loaded<RecentPage> => {
+  if (outcome.ok) return { _tag: "loaded", value: outcome.value };
+  return current._tag === "loaded" ? current : { _tag: "failed", message: outcome.message };
+};
+
+/** Each kind's last page from the browse cache, so the tiles show at once while the device is asked again. */
+const rememberedRecents = (device: DeviceId | undefined): Readonly<Record<FsRecentKind, Loaded<RecentPage>>> => {
+  const one = (kind: FsRecentKind): Loaded<RecentPage> => {
+    const page = recentSeen.get(recentKey(kind, device))?.pages[0];
+    return page === undefined ? LOADING : { _tag: "loaded", value: { entries: page.entries, more: page.more } };
+  };
+  return { screenshots: one("screenshots"), photos: one("photos"), downloads: one("downloads"), documents: one("documents") };
+};
 
 const lineOf = (recent: Loaded<RecentPage>): string | null => (recent._tag === "loading" ? "Loading" : recent._tag === "failed" ? "Can't see them" : null);
 

@@ -89,8 +89,6 @@ let assets: [Asset] = [false, true].flatMap { dev -> [Asset] in
     let suffix = dev ? "-dev" : ""
     return [
         Asset(name: "icon\(suffix)", background: .black, ink: pulse, beatWidth: 0.62, badge: dev),
-        Asset(name: "icon-dark\(suffix)", background: nil, ink: pulse, beatWidth: 0.62, badge: dev),
-        Asset(name: "icon-tinted\(suffix)", background: nil, ink: white, beatWidth: 0.62, badge: dev),
         Asset(name: "adaptive-foreground\(suffix)", background: nil, ink: pulse, beatWidth: 0.42, badge: dev),
         Asset(name: "adaptive-monochrome\(suffix)", background: nil, ink: white, beatWidth: 0.42, badge: dev, mono: true),
     ]

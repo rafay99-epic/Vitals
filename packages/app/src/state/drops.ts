@@ -100,6 +100,8 @@ export const PARALLEL_FILES = 2;
 export const PUBLISH_MS = 250;
 export const REFRESH_EARLY_MS = 5 * 60_000;
 const KEEP = 200;
+/** How long after asking a device for files (Transfer › This phone) its drop here starts without asking. */
+const EXPECT_MS = 10 * 60_000;
 const RETRIES = 2;
 const ENDED: ReadonlySet<Drop["state"]> = new Set(["done", "failed", "cancelled", "declined"]);
 
@@ -108,6 +110,9 @@ export const jobIdOf = (dropId: string, fileId: string): string => `${dropId}/${
 export const isEnded = (drop: Drop): boolean => ENDED.has(drop.state);
 
 export const isIncoming = (drop: Drop, me: DeviceId): boolean => drop.to._tag === "Device" && drop.to.deviceId === me;
+
+/** Who a drop comes from, in a sentence: "Your Mac" or the phone's name. */
+export const senderOf = (drop: Drop): string => (drop.from._tag === "Mac" ? "Your Mac" : drop.from.name);
 
 export const isOutgoing = (drop: Drop, me: DeviceId): boolean => drop.from._tag === "Device" && drop.from.deviceId === me;
 
@@ -167,7 +172,8 @@ export class MacDrops {
   readonly live = new Store<ReadonlyMap<DropId, DropLive>>(new Map());
   readonly received = new Store<ReadonlyArray<SavedFile>>([]);
   readonly sent = new Store<ReadonlyArray<SentDrop>>([]);
-  readonly autoAccept = new Store<boolean>(true);
+  /** Start without asking. Off unless turned on: every transfer asks first, except ones this phone asked for. */
+  readonly autoAccept = new Store<boolean>(false);
   readonly ready: Promise<void>;
   private uploads: Uploads = {};
   private readonly jobs = new Map<string, Job>();
@@ -182,6 +188,7 @@ export class MacDrops {
   private publishTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPublish = 0;
   private autoAcceptChanged = false;
+  private readonly expected = new Map<DeviceId, number>();
   private disposed = false;
 
   constructor(
@@ -279,6 +286,29 @@ export class MacDrops {
     this.reconcile(drop);
     this.publish(true);
     return drop;
+  }
+
+  /**
+   * This phone just asked `from` for files: its next drop here was wanted, so it starts without asking.
+   * Returns the undo, for when asking failed and no drop is coming.
+   */
+  expect(from: DeviceId): () => void {
+    const until = Date.now() + EXPECT_MS;
+    this.expected.set(from, until);
+    return () => {
+      if (this.expected.get(from) === until) this.expected.delete(from);
+    };
+  }
+
+  /** Whether this phone takes `drop` on its own: the Mac's with Start without asking on, or one it asked another device for. */
+  private takesOnItsOwn(drop: Drop): boolean {
+    if (shouldAccept(drop, this.me, this.autoAccept.get())) return true;
+    return drop.from._tag === "Device" && (this.expected.get(drop.from.deviceId) ?? 0) > Date.now();
+  }
+
+  /** An incoming drop waiting on this person: asking, and not one this phone takes on its own. */
+  needsAnswer(drop: Drop): boolean {
+    return drop.state === "asking" && isIncoming(drop, this.me) && !(this.engine.supported && this.takesOnItsOwn(drop));
   }
 
   async accept(id: DropId): Promise<boolean> {
@@ -395,7 +425,8 @@ export class MacDrops {
     const outgoing = isOutgoing(drop, this.me);
     if (!incoming && !outgoing) return;
     if (isEnded(drop)) return this.end(drop, incoming);
-    if (incoming && this.engine.supported && shouldAccept(drop, this.me, this.autoAccept.get())) {
+    if (incoming && drop.state === "asking" && this.engine.supported && this.takesOnItsOwn(drop)) {
+      if (drop.from._tag === "Device") this.expected.delete(drop.from.deviceId);
       void this.accept(drop.id);
       return;
     }

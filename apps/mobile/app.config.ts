@@ -114,11 +114,8 @@ const app = ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: bundleId,
     buildNumber: String(commits),
     supportsTablet: false,
-    icon: {
-      light: `./assets/icon${current.art}.png`,
-      dark: `./assets/icon-dark${current.art}.png`,
-      tinted: `./assets/icon-tinted${current.art}.png`,
-    },
+    // The Mac's Icon Composer icon, so iOS 26+ draws it full-bleed instead of framing a flat PNG.
+    icon: `../desktop/Resources/Icons/${variant}/AppIcon.icon`,
     infoPlist: {
       NSCameraUsageDescription: "Scan the pairing code shown in Vitals on your Mac.",
       NSLocalNetworkUsageDescription: "Find and connect to Vitals on your Mac over Wi-Fi.",

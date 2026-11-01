@@ -16,6 +16,8 @@ export interface GatewayConfigShape {
   readonly ownerLogin: string | null;
   readonly lanPort: number | null;
   readonly homeDir?: string;
+  /** How long a phone can stay silent before the Mac treats it as asleep. Tests shorten it. */
+  readonly phoneQuietMs?: number;
 }
 
 export class GatewayConfig extends Context.Service<GatewayConfig, GatewayConfigShape>()("@vitals/gateway/GatewayConfig") {}

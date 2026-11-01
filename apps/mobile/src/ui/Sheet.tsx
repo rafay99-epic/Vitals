@@ -29,6 +29,8 @@ export const sheet = {
   },
   close: (): void => wanted.set(null),
   showing: (): boolean => wanted.get() !== null,
+  /** Calls `listener` whenever a sheet opens or closes. Returns the stop. */
+  onChange: (listener: () => void): (() => void) => wanted.subscribe(listener),
 };
 
 const DISMISS_DISTANCE = 90;

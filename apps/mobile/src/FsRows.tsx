@@ -5,11 +5,12 @@ import { useSelect } from "@vitals/app/state/useStore.ts";
 import type { DeviceId, FsEntry, FsRecentKind, FsRoot } from "@vitals/contracts";
 import { formatBytes } from "@vitals/shared";
 import { Image } from "expo-image";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { fileKind } from "./lib/drops.ts";
-import { color, Icon, type IconName, StaticIcon, T, Tap } from "./ui/index.ts";
+import { color, curve, Icon, type IconName, StaticIcon, T, Tap } from "./ui/index.ts";
 
 export type ShownKind = FsRecentKind | "images";
 
@@ -49,18 +50,18 @@ const metaOf = (entry: FsEntry, now: number): string =>
   entry.kind === "folder" ? clipAge(entry.modifiedAt, now) : [entry.kind === "package" ? "package" : formatBytes(entry.size), clipAge(entry.modifiedAt, now)].join(" · ");
 
 /** The thumbnail for an entry on the Mac or on `device`, once fetched. */
-export const useThumb = (path: string, device: DeviceId | null): string | null => {
+export const useThumb = (entry: FsEntry, device: DeviceId | null): string | null => {
   const thumbs = useRemote().files.thumbs;
-  const key = thumbKey(path, device ?? undefined);
+  const key = thumbKey(entry, device ?? undefined);
   const select = useCallback((map: ReadonlyMap<string, string | null>) => map.get(key) ?? null, [key]);
   return useSelect(thumbs, select);
 };
 
 /** The entry's thumbnail, or its kind icon until there is one. Subscribes to its own thumbnail only, so one arriving re-renders just this. */
 function FsThumb({ entry, device, square = false, dim = false }: { readonly entry: FsEntry; readonly device: DeviceId | null; readonly square?: boolean; readonly dim?: boolean }) {
-  const uri = useThumb(entry.path, device);
+  const uri = useThumb(entry, device);
   const shape = [square ? styles.square : styles.icon, dim ? styles.dim : null];
-  if (uri !== null) return <Image source={uri} recyclingKey={entry.path} cachePolicy="memory" transition={null} style={shape} accessibilityIgnoresInvertColors />;
+  if (uri !== null) return <Image source={uri} recyclingKey={entry.path} cachePolicy="memory" transition={THUMB_FADE} style={shape} accessibilityIgnoresInvertColors />;
   const look = lookOf(entry);
   return (
     <View style={[shape, styles.iconTile]}>
@@ -232,6 +233,82 @@ export function SelectButton({ selecting, onPress }: { readonly selecting: boole
   );
 }
 
+/** A page shown from the last visit while the device is asked again: when it was seen, and why asking failed, if it did. */
+export interface Since {
+  readonly at: number;
+  readonly failed: string | null;
+}
+
+const STALE_OPACITY = 0.45;
+const SEEN_FADE_MS = 320;
+const THUMB_FADE = { duration: 200 } as const;
+
+/** Dims a remembered page and brings it to full strength once, when the fresh one lands. */
+export const useSeenFade = (stale: boolean) => {
+  const reduced = useReducedMotion();
+  const opacity = useSharedValue(stale ? STALE_OPACITY : 1);
+  useEffect(() => {
+    opacity.set(withTiming(stale ? STALE_OPACITY : 1, { duration: reduced ? 0 : SEEN_FADE_MS, easing: curve.out }));
+  }, [opacity, stale, reduced]);
+  return useAnimatedStyle(() => ({ opacity: opacity.get() }));
+};
+
+const agoOf = (at: number, now: number): string => {
+  const age = clipAge(at, now);
+  if (age === "now") return "just now";
+  return /^\d+ (min|h)$/.test(age) ? `${age} ago` : age;
+};
+
+/** Under the title while a remembered page shows: its age and that it's updating, or why the device didn't answer and Try again. */
+export function SeenLine({ since, now, onRetry }: { readonly since: Since | null; readonly now: number; readonly onRetry: () => void }) {
+  if (since === null) return null;
+  return (
+    <View style={styles.seen}>
+      <T v="mono" color={color.orange}>
+        {since.failed === null ? `From ${agoOf(since.at, now)} · updating` : `From ${agoOf(since.at, now)}`}
+      </T>
+      {since.failed === null ? null : (
+        <>
+          <T v="small" style={styles.rowText}>
+            {since.failed}
+          </T>
+          <Tap onPress={onRetry} accessibilityRole="button" hitSlop={8}>
+            <T v="strong" color={color.yellow}>
+              Try again
+            </T>
+          </Tap>
+        </>
+      )}
+    </View>
+  );
+}
+
+const GHOST_TILES = 12;
+const GHOST_ROWS = 8;
+
+/** Where the first page will land, before it has: grey squares for pictures, grey rows for files. Never animates. */
+export function Ghost({ gallery, size, gap }: { readonly gallery: boolean; readonly size: number; readonly gap: number }) {
+  if (!gallery) {
+    return (
+      <View accessible accessibilityLabel="Loading">
+        {Array.from({ length: GHOST_ROWS }, (_, index) => (
+          <View key={index} style={styles.row}>
+            <View style={[styles.icon, styles.ghost]} />
+            <View style={[styles.ghostLine, styles.ghost]} />
+          </View>
+        ))}
+      </View>
+    );
+  }
+  return (
+    <View accessible accessibilityLabel="Loading" style={[styles.ghostGrid, { gap }]}>
+      {Array.from({ length: GHOST_TILES }, (_, index) => (
+        <View key={index} style={[styles.ghost, styles.ghostTile, { width: size, height: size }]} />
+      ))}
+    </View>
+  );
+}
+
 /** The bar above the dock while selecting: how many, and Transfer. */
 export function SelectBar({ count, bottom, onTransfer }: { readonly count: number; readonly bottom: number; readonly onTransfer: () => void }) {
   return (
@@ -264,5 +341,10 @@ const styles = StyleSheet.create({
   peek: { position: "absolute", right: -6, bottom: -12, width: 50, height: 66, borderRadius: 9, overflow: "hidden", transform: [{ rotate: "-8deg" }] },
   select: { paddingHorizontal: 20, paddingVertical: 8 },
   bar: { position: "absolute", left: 14, right: 14, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: color.ink, borderRadius: 18, paddingVertical: 10, paddingLeft: 16, paddingRight: 10 },
+  seen: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, paddingHorizontal: 20, paddingBottom: 12 },
+  ghost: { backgroundColor: color.s2 },
+  ghostLine: { flex: 1, height: 12, borderRadius: 6, maxWidth: "60%" },
+  ghostGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16 },
+  ghostTile: { borderRadius: 10 },
   barButton: { backgroundColor: color.bg, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14 },
 });

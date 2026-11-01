@@ -165,19 +165,26 @@ const checkTailscale = async (baseUrl: string | null, builtIn: string | null | u
   set("tailscale", "running");
   const started = Date.now();
   const answeredIn = () => `The Mac answered in ${String(Date.now() - started)} ms`;
+  const answers = () =>
+    fetch(`${baseUrl.replace(/\/$/, "")}/api/health`, { signal: AbortSignal.timeout(5_000) }).then(
+      (response) => response.ok,
+      () => false,
+    );
   if (builtIn !== undefined) {
     const state = tunnel.get();
+    if (state._tag === "Ready") {
+      // The built-in tunnel forwards the Wi-Fi protocol from a local port.
+      const probe = await probeLan("127.0.0.1", state.port, builtIn, fetch, 5_000);
+      if (probe.ok || (await answers())) return set("tailscale", "ok", answeredIn());
+      return set("tailscale", "failed", probe.why, "tailscale-down");
+    }
+    // Built-in is not up, but the Tailscale app may carry the route, and the connection uses it too.
+    if (await answers()) return set("tailscale", "ok", answeredIn());
     if (state._tag === "NeedsLogin") return set("tailscale", "failed", "Needs a sign-in", "tailscale-login");
     if (state._tag === "Failed") return set("tailscale", "failed", state.reason, "tailscale-down");
-    if (state._tag !== "Ready") return set("tailscale", "failed", "Not running", "tailscale-down");
-    // The built-in tunnel forwards the Wi-Fi protocol from a local port.
-    const probe = await probeLan("127.0.0.1", state.port, builtIn, fetch, 5_000);
-    return probe.ok ? set("tailscale", "ok", answeredIn()) : set("tailscale", "failed", probe.why, "tailscale-down");
+    return set("tailscale", "failed", "Not running", "tailscale-down");
   }
-  const answered = await fetch(`${baseUrl.replace(/\/$/, "")}/api/health`, { signal: AbortSignal.timeout(5_000) }).then(
-    (response) => response.ok,
-    () => false,
-  );
+  const answered = await answers();
   if (answered) set("tailscale", "ok", answeredIn());
   else set("tailscale", "failed", "No answer in 5 s", "tailscale-down");
 };

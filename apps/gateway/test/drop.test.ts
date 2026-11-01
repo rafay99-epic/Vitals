@@ -149,7 +149,9 @@ describe("drop: phone to Mac", () => {
 
     target.app.emit({ t: "dropPause", id: drop.id, paused: true });
     await macDrop(target.app, drop.id, "paused");
+    // Refused parts are read and dropped, so each answer arrives and the gateway still shuts down cleanly after.
     expect((await put(url, ticket.ticket, bytes.subarray(0, PART), 0, bytes.length)).status).toBe(423);
+    expect((await put(url, "x".repeat(40), bytes.subarray(0, PART), 0, bytes.length)).status).toBe(401);
   });
 
   test("an offer bigger than the free space is refused in plain words", async () => {

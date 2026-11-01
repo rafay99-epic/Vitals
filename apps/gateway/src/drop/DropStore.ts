@@ -143,6 +143,36 @@ const fileRecord = (
   verifying: false,
 });
 
+const DRAIN_MS = 5_000;
+
+/** Reads and drops a refused request's body: true once it all arrived, within one part and DRAIN_MS. */
+const drained = async (request: Request): Promise<boolean> => {
+  if (request.body === null) return true;
+  if (request.bodyUsed) return false;
+  const reader = request.body.getReader();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    void reader.cancel().catch(() => undefined);
+  }, DRAIN_MS);
+  try {
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return !timedOut;
+      total += value.byteLength;
+      if (total > PART) {
+        void reader.cancel().catch(() => undefined);
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const blocked = (drop: DropRecord): Response | null => {
   switch (drop.state) {
     case "running":
@@ -764,11 +794,24 @@ export const layer = (database: Database) =>
         }
       };
 
-      const handle = (request: Request, route: DropRoute): Promise<Response> =>
-        serve(request, route).catch((error: unknown) => {
+      /**
+       * Any refused upload (bad ticket, no scope, not accepted, paused, ...) is answered without its body read.
+       * Left unread, the sender keeps pushing bytes nobody reads, which holds the connection (and a clean
+       * shutdown) open; closing at once can reset it before the sender sees the answer. So the rest is read and
+       * dropped first, up to one part and a few seconds, and then the connection closes: a refused sender starts
+       * over on a fresh one.
+       */
+      const handle = async (request: Request, route: DropRoute): Promise<Response> => {
+        const response = await serve(request, route).catch((error: unknown) => {
           log("error", "drop.http.failed", { method: request.method, error: String(error).slice(0, 300) });
           return problem(500, "internal", "Something went wrong on the Mac");
         });
+        if (request.method === "PUT" && !response.ok) {
+          await drained(request);
+          response.headers.set("connection", "close");
+        }
+        return response;
+      };
 
       const watch = (caller: DropCaller) =>
         Stream.unwrap(

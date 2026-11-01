@@ -1,6 +1,6 @@
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { clipAge } from "@vitals/app/features/clips/format.ts";
-import { dropLabel, type SavedFile, type SentDrop } from "@vitals/app/state/drops.ts";
+import { dropLabel, type SavedFile, senderOf, type SentDrop } from "@vitals/app/state/drops.ts";
 import type { Drop } from "@vitals/contracts";
 import { formatBytes } from "@vitals/shared";
 import type { ComponentType } from "react";
@@ -24,7 +24,7 @@ export const askSheet = (drop: Drop): ComponentType =>
     const more = drop.files.length > 3 ? ` and ${String(drop.files.length - 3)} more` : "";
     return (
       <>
-        <SheetHeader title={`Your Mac wants to send ${dropLabel(drop)}`} detail={`${formatBytes(drop.bytes)} · ${names}${more}`} />
+        <SheetHeader title={`${senderOf(drop)} wants to send ${dropLabel(drop)}`} detail={`${formatBytes(drop.bytes)} · ${names}${more}`} />
         <BigButton
           label="Accept"
           onPress={() => {

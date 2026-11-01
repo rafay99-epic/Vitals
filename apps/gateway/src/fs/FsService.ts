@@ -94,6 +94,8 @@ const THUMB_CACHE = 512;
 const STAT_BATCH = 128;
 const SEARCH_MS = 4_000;
 const PHONE_TIMEOUT = "15 seconds";
+/** Phones say hello every 15 s while awake, so this allows one missed hello. */
+const PHONE_QUIET_MS = 35_000;
 const RECENT_MS = 10_000;
 const RECENT_SCAN = 5_000;
 const RECENT_WINDOW = "kMDItemFSContentChangeDate >= $time.today(-365)";
@@ -236,6 +238,7 @@ export const layer = Layer.effect(
     const servers = new Map<string, Server>();
     const waiting = new Map<string, { readonly deviceId: string; readonly done: Deferred.Deferred<FsServeResult, FsError> }>();
     const homeDir = config.homeDir ?? homedir();
+    const phoneQuietMs = config.phoneQuietMs ?? PHONE_QUIET_MS;
     const home = yield* Effect.promise(() => realpath(homeDir).catch(() => homeDir));
     const denied = yield* Effect.promise(() =>
       Promise.all(
@@ -315,6 +318,8 @@ export const layer = Layer.effect(
         const server = servers.get(device);
         const name = store.device(device)?.name ?? "That device";
         if (server === undefined) return yield* Effect.fail(unavailable(`${name} isn't open. Open Vitals on it to browse.`));
+        // A frozen phone keeps its socket but stops sending; answer now instead of after the timeout.
+        if (connections.quietFor(device) > phoneQuietMs) return yield* Effect.fail(unavailable(`${name} is asleep. Open Vitals on it, then try again.`));
         const sent = request(newId());
         if (sent._tag === "Recent" && !server.recent) return yield* Effect.fail(rejected(`Update Vitals on ${name} to see its recent files`));
         if (sent._tag === "Read" && !server.read) return yield* Effect.fail(rejected(`Update Vitals on ${name} to preview its files`));
