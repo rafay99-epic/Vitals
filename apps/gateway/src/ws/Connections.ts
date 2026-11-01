@@ -50,7 +50,10 @@ export const layer = Layer.effect(
       remove: (id) => Effect.suspend(() => {
         const connection = live.get(id);
         live.delete(id);
-        if (connection !== undefined && !online(connection.deviceId)) PubSub.publishUnsafe(presence, { deviceId: connection.deviceId, online: false });
+        if (connection !== undefined && !online(connection.deviceId)) {
+          lastHeard.delete(connection.deviceId);
+          PubSub.publishUnsafe(presence, { deviceId: connection.deviceId, online: false });
+        }
         return Effect.asVoid(notify);
       }),
       count: Effect.sync(() => live.size),

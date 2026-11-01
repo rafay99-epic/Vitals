@@ -143,6 +143,36 @@ const fileRecord = (
   verifying: false,
 });
 
+const DRAIN_MS = 5_000;
+
+/** Reads and drops a refused request's body: true once it all arrived, within one part and DRAIN_MS. */
+const drained = async (request: Request): Promise<boolean> => {
+  if (request.body === null) return true;
+  if (request.bodyUsed) return false;
+  const reader = request.body.getReader();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    void reader.cancel().catch(() => undefined);
+  }, DRAIN_MS);
+  try {
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return !timedOut;
+      total += value.byteLength;
+      if (total > PART) {
+        void reader.cancel().catch(() => undefined);
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const blocked = (drop: DropRecord): Response | null => {
   switch (drop.state) {
     case "running":
@@ -765,16 +795,18 @@ export const layer = (database: Database) =>
       };
 
       /**
-       * A refused upload (bad ticket, no scope, not accepted, paused, ...) is answered without reading the rest
-       * of its body. Closing the connection stops the sender pushing bytes nobody reads, which would otherwise
-       * hold the socket, and a clean shutdown, open.
+       * Any refused upload (bad ticket, no scope, not accepted, paused, ...) is answered without its body read.
+       * Left unread, the sender keeps pushing bytes nobody reads, which holds the connection (and a clean
+       * shutdown) open; closing at once can reset it before the sender sees the answer. So the rest is read and
+       * dropped, up to one part and a few seconds, and the connection closes only when that doesn't finish or
+       * the body was already partly read.
        */
       const handle = async (request: Request, route: DropRoute): Promise<Response> => {
         const response = await serve(request, route).catch((error: unknown) => {
           log("error", "drop.http.failed", { method: request.method, error: String(error).slice(0, 300) });
           return problem(500, "internal", "Something went wrong on the Mac");
         });
-        if (request.method === "PUT" && !response.ok) response.headers.set("connection", "close");
+        if (request.method === "PUT" && !response.ok && !(await drained(request))) response.headers.set("connection", "close");
         return response;
       };
 
