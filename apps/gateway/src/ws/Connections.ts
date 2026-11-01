@@ -24,6 +24,10 @@ export class Connections extends Context.Service<
     readonly connectedDevices: Effect.Effect<ReadonlySet<string>>;
     readonly changes: Effect.Effect<void>;
     readonly presence: Effect.Effect<PubSub.Subscription<Presence>, never, Scope.Scope>;
+    /** Marks that a frame just arrived from this device. Called for every inbound frame. */
+    readonly heard: (deviceId: string) => void;
+    /** Milliseconds since this device last sent anything; Infinity if never. */
+    readonly quietFor: (deviceId: string) => number;
   }
 >()("@vitals/gateway/Connections") {}
 
@@ -31,6 +35,7 @@ export const layer = Layer.effect(
   Connections,
   Effect.gen(function* () {
     const live = new Map<string, LiveConnection>();
+    const lastHeard = new Map<string, number>();
     const changed = yield* Queue.sliding<void>(1);
     const presence = yield* PubSub.unbounded<Presence>();
     const notify = Queue.offer(changed, undefined);
@@ -52,6 +57,8 @@ export const layer = Layer.effect(
       connectedDevices: Effect.sync(() => new Set([...live.values()].map((connection) => connection.deviceId))),
       changes: Queue.take(changed),
       presence: PubSub.subscribe(presence),
+      heard: (deviceId) => void lastHeard.set(deviceId, Date.now()),
+      quietFor: (deviceId) => Date.now() - (lastHeard.get(deviceId) ?? Number.NEGATIVE_INFINITY),
     });
   }),
 );

@@ -186,6 +186,25 @@ describe("fs: browse a phone", () => {
     expect(gone).toMatchObject({ _tag: "Unavailable" });
     expect(gone.message).toContain("isn't open");
   });
+
+  test("a phone that went quiet is reported asleep at once, not after the timeout", async () => {
+    gateway = await startGateway(join(mkdtempSync(join(tmpdir(), "vitals-data-")), "remote"), home, { phoneQuietMs: 300 });
+    const target = gateway;
+    const phone = await pairDevice(target);
+    const other = await pairDevice(target);
+    const phoneId = deviceIdOf(phone.deviceId);
+    const roots = [{ label: "Downloads", path: "/storage/emulated/0/Download", place: "downloads" as const }];
+    // Serves, then says nothing more: the socket stays open like a phone Android froze.
+    const serving = withClient(target, phone.token, (client) => client["fs.serve"]({ roots }).pipe(Stream.runDrain, Effect.timeout("2 seconds"), Effect.ignore));
+    await Bun.sleep(600);
+    const started = Date.now();
+    const asleep = await withClient(target, other.token, (client) => Effect.flip(client["fs.list"]({ device: phoneId, path: "/storage/emulated/0/Download", sort: "name", hidden: false, offset: 0, limit: 10 })));
+    const waited = Date.now() - started;
+    await serving;
+    expect(asleep).toMatchObject({ _tag: "Unavailable" });
+    expect(asleep.message).toContain("is asleep");
+    expect(waited).toBeLessThan(1_000);
+  });
 });
 
 describe("fs: recent on a phone", () => {
