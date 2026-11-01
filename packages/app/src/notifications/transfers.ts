@@ -10,7 +10,7 @@ export const TRANSFER_CHANNEL = "transfers";
 const ACCEPT = "accept";
 const DECLINE = "decline";
 
-export type TransferAnswer = "accept" | "decline" | "open";
+export type TransferAnswer = "accept" | "decline" | "open" | "arrived";
 
 /**
  * Accept and Decline on a transfer notification. iOS only receives with Vitals open and can't be
@@ -22,6 +22,7 @@ export const transferActions: ReadonlyArray<Notifications.NotificationAction> = 
 ];
 
 const idOf = (dropId: string): string => `transfer:${dropId}`;
+const ARRIVED = "arrived";
 
 /** Puts a transfer that is waiting for an answer in the notification shade. `quiet` while the app is on screen, where it asks too. */
 export const notifyTransfer = async (drop: Drop, quiet: boolean): Promise<void> => {
@@ -44,15 +45,29 @@ export const notifyTransfer = async (drop: Drop, quiet: boolean): Promise<void> 
 
 export const dismissTransfer = (dropId: string): Promise<void> => Notifications.dismissNotificationAsync(idOf(dropId));
 
+/** Says a drop finished arriving and where it went. Tapping it opens what came. `quiet` while the app is on screen. */
+export const notifyArrival = async (drop: Drop, where: string, quiet: boolean): Promise<void> => {
+  await Notifications.scheduleNotificationAsync({
+    identifier: `${ARRIVED}:${drop.id}`,
+    content: {
+      title: `${dropLabel(drop)} arrived from ${drop.from._tag === "Mac" ? "your Mac" : drop.from.name}`,
+      body: `In ${where}`,
+      data: { dropId: drop.id, kind: ARRIVED, quiet },
+    },
+    trigger: Platform.OS === "android" ? { channelId: TRANSFER_CHANNEL } : null,
+  });
+};
+
 const ANSWERS: Readonly<Record<string, TransferAnswer>> = { [ACCEPT]: "accept", [DECLINE]: "decline", [Notifications.DEFAULT_ACTION_IDENTIFIER]: "open" };
 
-/** Calls `handler` for each answer given on a transfer notification, including the one that opened the app. */
+/** Calls `handler` for each answer given on a transfer notification, or a tap on an arrival, including the one that opened the app. */
 export const onTransferAnswer = (handler: (dropId: string, answer: TransferAnswer) => void): (() => void) => {
   const handle = (response: Notifications.NotificationResponse) => {
     const content = response.notification.request.content;
     const dropId = content.data?.["dropId"];
-    const answer = ANSWERS[response.actionIdentifier];
-    if (content.categoryIdentifier !== TRANSFER_CATEGORY || typeof dropId !== "string" || answer === undefined) return;
+    const arrived = content.data?.["kind"] === ARRIVED;
+    const answer = arrived ? "arrived" : ANSWERS[response.actionIdentifier];
+    if ((!arrived && content.categoryIdentifier !== TRANSFER_CATEGORY) || typeof dropId !== "string" || answer === undefined) return;
     void Notifications.clearLastNotificationResponseAsync();
     handler(dropId, answer);
   };

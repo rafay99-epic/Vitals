@@ -172,7 +172,8 @@ export class MacDrops {
   readonly live = new Store<ReadonlyMap<DropId, DropLive>>(new Map());
   readonly received = new Store<ReadonlyArray<SavedFile>>([]);
   readonly sent = new Store<ReadonlyArray<SentDrop>>([]);
-  readonly autoAccept = new Store<boolean>(true);
+  /** Start without asking. Off unless turned on: every transfer asks first, except ones this phone asked for. */
+  readonly autoAccept = new Store<boolean>(false);
   readonly ready: Promise<void>;
   private uploads: Uploads = {};
   private readonly jobs = new Map<string, Job>();

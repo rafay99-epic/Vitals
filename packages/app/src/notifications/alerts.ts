@@ -25,7 +25,7 @@ export const prepareNotifications = async (): Promise<boolean> => {
       importance: Notifications.AndroidImportance.HIGH,
     });
     await Notifications.setNotificationChannelAsync(TRANSFER_CHANNEL, {
-      name: "Files to accept",
+      name: "Transfers",
       importance: Notifications.AndroidImportance.HIGH,
     });
   }

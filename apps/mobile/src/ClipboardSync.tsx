@@ -1,6 +1,6 @@
 import { useRemote } from "@vitals/app/connection/useRemote.ts";
 import { clipTitle } from "@vitals/app/features/clips/format.ts";
-import { dismissTransfer, notifyTransfer, onTransferAnswer } from "@vitals/app/notifications/transfers.ts";
+import { dismissTransfer, notifyArrival, notifyTransfer, onTransferAnswer } from "@vitals/app/notifications/transfers.ts";
 import { dropLabel, type SavedFile } from "@vitals/app/state/drops.ts";
 import type { Clip, Drop } from "@vitals/contracts";
 import { type ResolvedSharePayload, type SharePayload, useIncomingShare } from "expo-sharing";
@@ -168,7 +168,12 @@ function useDropNews() {
       remote.drops.onFinish((finish) => {
         const label = dropLabel(finish.drop);
         const verb = isPlural(label) ? "are" : "is";
-        if (finish._tag === "Received") void placeArrivals(finish.files).then((where) => toast.show(`${label} ${verb} in ${where}`, { action: "Open", onAction: openReceived(finish.files) }));
+        if (finish._tag === "Received") {
+          void placeArrivals(finish.files).then((where) => {
+            toast.show(`${label} ${verb} in ${where}`, { action: "Open", onAction: openReceived(finish.files) });
+            void notifyArrival(finish.drop, where, AppState.currentState === "active").catch(() => undefined);
+          });
+        }
         else if (finish._tag === "Sent") {
           const phone = relayedTo(finish.drop.id);
           // The Mac holds a relayed drop until the other phone has Vitals open, which can be a while.
@@ -204,6 +209,7 @@ function useDropNews() {
     () =>
       onTransferAnswer((dropId, answer) => {
         if (answer === "open") return openTransfers();
+        if (answer === "arrived") return openReceived(remote.drops.received.get().filter((file) => file.id.startsWith(`${dropId}/`)))();
         // Opened from the notification, Vitals may not have heard about the drop yet: wait for it a while.
         const find = () => remote.drops.drops.get().find((item) => item.id === dropId);
         const answerIt = (drop: Drop) => {
