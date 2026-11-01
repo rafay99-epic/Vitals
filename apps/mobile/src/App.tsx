@@ -24,6 +24,7 @@ import { LinkSync } from "./LinkSync.tsx";
 import { ShareSync } from "./ShareSync.tsx";
 import { CopyStrip } from "./CopyStrip.tsx";
 import { DropStrips } from "./DropTransfers.tsx";
+import { useBrowseCache } from "./lib/browseCache.ts";
 import { checkPlay } from "./lib/play.ts";
 import { checkForUpdate } from "./lib/updates.ts";
 import { type ControlStackParams, type HomeStackParams, navigationRef, type SettingsStackParams, type TabParams } from "./navigation.ts";
@@ -159,6 +160,7 @@ const renderDock = (props: BottomTabBarProps) => <DockBar {...props} />;
 
 function Shell() {
   useRemoteToasts();
+  useBrowseCache();
   return (
     <View style={styles.fill}>
       <Tabs.Navigator

@@ -23,6 +23,8 @@ const WALK_LIMIT = 5_000;
 const WALK_DEPTH = 6;
 const IMAGE = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
 const MEDIA = /\.(jpe?g|png|gif|webp|heic|heif|bmp|dng|mp4|m4v|mov|mkv|webm|3gp)$/i;
+const AWAKE_MS = 2 * 60_000;
+const ASKED_UNRESTRICTED_KEY = "vitals.remote.askedUnrestricted";
 
 export const shareFiles = new Store<boolean>(false);
 let changed = false;
@@ -150,6 +152,22 @@ export const askFullStorage = async (): Promise<void> => {
   if (await (androidShare?.openFullStorage?.() ?? Promise.resolve(false)).catch(() => false)) return;
   await Linking.sendIntent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION").catch(() => Linking.openSettings());
 };
+
+/**
+ * Android: whether to explain, once ever, that battery limits freeze Vitals with the screen off so other
+ * devices can't browse it. False once allowed or explained, and on builds without the calls.
+ */
+export const shouldAskUnrestricted = async (): Promise<boolean> => {
+  const share = androidShare;
+  if (share?.unrestricted === undefined || share.askUnrestricted === undefined || share.unrestricted()) return false;
+  return (await SecureStore.getItemAsync(ASKED_UNRESTRICTED_KEY, KEYCHAIN_OPTIONS).catch(() => null)) !== "1";
+};
+
+/** Notes the explanation was shown, so it never comes back, whatever the answer. */
+export const askedUnrestricted = (): void => void SecureStore.setItemAsync(ASKED_UNRESTRICTED_KEY, "1", KEYCHAIN_OPTIONS).catch(() => undefined);
+
+/** Opens Android's prompt to lift Vitals' battery limits. False when no settings screen would open. */
+export const askUnrestricted = async (): Promise<boolean> => (await androidShare?.askUnrestricted?.().catch(() => false)) ?? false;
 
 /** Android without All files access, where only Downloads › Vitals is shared. Never on iPhone. */
 const limitedStorage = (): boolean => Platform.OS === "android" && !hasFullStorage();
@@ -315,6 +333,8 @@ export class PhoneShare {
   }
 
   private async answer(request: FsServeRequest): Promise<void> {
+    // One request usually means more are coming (pages, thumbnails, a send): stay awake for them.
+    androidShare?.stayAwake?.(AWAKE_MS);
     let result: FsServeResult | null = null;
     let error: string | null = null;
     try {

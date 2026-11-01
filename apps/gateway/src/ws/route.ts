@@ -75,6 +75,7 @@ const instrument = (
   protocol: RpcServer.Protocol["Service"],
   connectionId: string,
   activity: Pick<ActivityLog["Service"], "frame" | "tally">,
+  heard: () => void,
 ): RpcServer.Protocol["Service"] => {
   const methods = new Map<string, string>();
   const methodFor = (id: string | number) => methods.get(String(id)) ?? null;
@@ -84,6 +85,7 @@ const instrument = (
     ...protocol,
     run: (handle) =>
       protocol.run((clientId, data: RpcMessage.FromClientEncoded) => {
+        heard();
         const rpcId = data._tag === "Request" ? String(data.id) : "requestId" in data ? String(data.requestId) : null;
         if (data._tag === "Request") methods.set(String(data.id), data.tag);
         frame({
@@ -151,7 +153,7 @@ export const wsRoute = HttpRouter.add(
     const served = Effect.gen(function* () {
       const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
       yield* RpcServer.make(VitalsRpc, { disableTracing: true, disableFatalDefects: true }).pipe(
-        Effect.provideService(RpcServer.Protocol, instrument(protocol, connectionId, activity)),
+        Effect.provideService(RpcServer.Protocol, instrument(protocol, connectionId, activity, () => connections.heard(deviceId))),
         Effect.provide(Layer.merge(handlersLayer(session, connectionId), scopeLayer(session, connectionId, activity.record))),
         Effect.forkScoped,
       );

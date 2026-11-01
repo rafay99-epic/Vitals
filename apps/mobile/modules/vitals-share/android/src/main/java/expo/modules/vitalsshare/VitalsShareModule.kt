@@ -90,6 +90,22 @@ class VitalsShareModule : Module() {
 
     AsyncFunction("pdfClose") { Pdf.close() }
 
+    /** True once Android leaves Vitals out of its battery limits. */
+    Function("unrestricted") {
+      val context = appContext.reactContext ?: return@Function false
+      Power.unrestricted(context)
+    }
+
+    AsyncFunction("askUnrestricted") {
+      val context = appContext.currentActivity ?: appContext.reactContext ?: return@AsyncFunction false
+      Power.ask(context)
+    }.runOnQueue(Queues.MAIN)
+
+    Function("stayAwake") { ms: Double ->
+      val context = appContext.reactContext ?: return@Function Unit
+      Power.stayAwake(context, ms.toLong())
+    }
+
     AsyncFunction("toBack") { appContext.currentActivity?.moveTaskToBack(true) ?: false }.runOnQueue(Queues.MAIN)
   }
 

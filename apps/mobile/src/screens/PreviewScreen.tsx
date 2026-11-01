@@ -76,7 +76,7 @@ function Fetching({ entry, device, done, total }: { readonly entry: FsEntry; rea
 }
 
 function FetchingThumb({ entry, device }: { readonly entry: FsEntry; readonly device: DeviceId | null }) {
-  const thumb = useThumb(entry.path, device);
+  const thumb = useThumb(entry, device);
   if (thumb !== null) return <Image source={thumb} contentFit="contain" transition={null} style={styles.thumb} accessibilityIgnoresInvertColors />;
   const look = lookOf(entry);
   return (

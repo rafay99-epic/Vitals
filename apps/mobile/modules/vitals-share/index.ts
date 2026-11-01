@@ -67,6 +67,12 @@ interface Android extends Native {
   readonly fullStorage?: () => boolean | null;
   /** Opens Vitals' own All files access switch. False when it couldn't. Missing on builds from before it was added. */
   readonly openFullStorage?: () => Promise<boolean>;
+  /** Whether Android leaves Vitals out of its battery limits. Missing on builds from before it was added. */
+  readonly unrestricted?: () => boolean;
+  /** Shows Android's prompt to lift those limits. False when it couldn't. Missing on builds from before it was added. */
+  readonly askUnrestricted?: () => Promise<boolean>;
+  /** Holds the CPU awake for `ms`, restarting the clock each call. Missing on builds from before it was added. */
+  readonly stayAwake?: (ms: number) => void;
 }
 
 interface Ios extends Native {

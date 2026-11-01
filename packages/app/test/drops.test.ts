@@ -142,13 +142,14 @@ describe("drop queue rules", () => {
 });
 
 describe("MacDrops", () => {
-  test("accepts on its own, downloads two at a time, and confirms each file with its hash", async () => {
+  test("with Start without asking on, accepts on its own, downloads two at a time, and confirms each file with its hash", async () => {
     const asking = drop("asking", [file("a", 10), file("b", 20), file("c", 30)]);
     const running = { ...asking, state: "running" as const };
     const { connection, calls } = fake((call) => (call.method === "drop.accept" ? { drop: running, ticket } : running));
     const transfers = engine();
     const drops = new MacDrops(connection, transfers.value, shelf(), me, () => [], () => {});
     await drops.ready;
+    drops.setAutoAccept(true);
     const finished: Array<string> = [];
     drops.onFinish((finish) => finished.push(finish._tag));
     drops.apply({ _tag: "Snapshot", drops: [asking] });
@@ -167,11 +168,30 @@ describe("MacDrops", () => {
     drops.dispose();
   });
 
-  test("asks first when Start without asking is off", async () => {
+  test("a drop from another phone waits for an answer, unless this phone asked that phone for it", async () => {
+    const other = Schema.decodeUnknownSync(DeviceId)("phone-2");
+    const fromPhone: Drop = { ...drop("asking", [file("a", 10)]), from: { _tag: "Device", deviceId: other, name: "Prometheus" } };
+    const { connection, calls } = fake((call) => (call.method === "drop.accept" ? { drop: { ...fromPhone, state: "running" }, ticket } : null));
+    const drops = new MacDrops(connection, engine().value, shelf(), me, () => [], () => {});
+    await drops.ready;
+    drops.apply({ _tag: "Snapshot", drops: [fromPhone] });
+    await settle();
+    expect(calls).toEqual([]);
+    expect(drops.needsAnswer(fromPhone)).toBe(true);
+
+    drops.expect(other);
+    expect(drops.needsAnswer(fromPhone)).toBe(false);
+    drops.apply({ _tag: "Changed", drop: fromPhone });
+    await settle();
+    expect(calls.map((call) => call.method)).toEqual(["drop.accept"]);
+    drops.dispose();
+  });
+
+  test("asks first by default, with Start without asking off", async () => {
     const { connection, calls } = fake(() => null);
     const drops = new MacDrops(connection, engine().value, shelf(), me, () => [], () => {});
     await drops.ready;
-    drops.setAutoAccept(false);
+    expect(drops.autoAccept.get()).toBe(false);
     drops.apply({ _tag: "Snapshot", drops: [drop("asking", [file("a", 10)])] });
     await settle();
     expect(calls).toEqual([]);

@@ -6,9 +6,11 @@ import { useNow } from "@vitals/app/state/useVitals.ts";
 import type { FsEntry } from "@vitals/contracts";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EntryRow, isFolder, isPicture, PhotoTile, SelectBar, SelectButton, useSelection } from "../FsRows.tsx";
+import { FRESH_MS, folderKey, folderSeen, seeFolder } from "../lib/browseCache.ts";
+import { EntryRow, Ghost, isFolder, isPicture, PhotoTile, SeenLine, SelectBar, SelectButton, type Since, useSeenFade, useSelection } from "../FsRows.tsx";
 import { pickFiles } from "../lib/clips.ts";
 import { sendDrop } from "../lib/drops.ts";
 import { useAccess } from "../lib/remote.ts";
@@ -24,7 +26,15 @@ type Line = { readonly _tag: "entry"; readonly entry: FsEntry } | { readonly _ta
 type Listing =
   | { readonly _tag: "loading" }
   | { readonly _tag: "failed"; readonly message: string }
-  | { readonly _tag: "loaded"; readonly count: number; readonly lines: ReadonlyArray<Line>; readonly total: number; readonly busy: boolean };
+  | { readonly _tag: "loaded"; readonly count: number; readonly lines: ReadonlyArray<Line>; readonly total: number; readonly busy: boolean; readonly since: Since | null };
+
+/** What to show while asking again, or once asking failed: the remembered page when there is one, current if just seen. */
+const remembered = (key: string, failed: string | null = null): Listing => {
+  const last = folderSeen.get(key);
+  if (last !== undefined) return { _tag: "loaded", count: last.entries.length, lines: linesOf(last.entries), total: last.total, busy: false, since: failed === null && Date.now() - last.at < FRESH_MS ? null : { at: last.at, failed } };
+  if (failed !== null) return { _tag: "failed", message: failed };
+  return { _tag: "loading" };
+};
 
 const COLUMNS = 3;
 const GAP = 4;
@@ -77,9 +87,16 @@ function Crumbs({ parts, onPick }: { readonly parts: ReadonlyArray<string>; read
   );
 }
 
-function EmptyFolder({ listing }: { readonly listing: Listing }) {
-  if (listing._tag === "loading") return <Empty title="Loading" />;
-  if (listing._tag === "failed") return <Empty title="Can't open this folder" detail={listing.message} />;
+function EmptyFolder({ listing, size, onRetry }: { readonly listing: Listing; readonly size: number; readonly onRetry: () => void }) {
+  if (listing._tag === "loading") return <Ghost gallery={false} size={size} gap={GAP} />;
+  if (listing._tag === "failed") {
+    return (
+      <>
+        <Empty title="Can't open this folder" detail={listing.message} />
+        <ActionRow icon="restart" label="Try again" onPress={onRetry} />
+      </>
+    );
+  }
   return <Empty title="Empty" />;
 }
 
@@ -94,35 +111,52 @@ export function FolderScreen({ navigation, route }: Props) {
   const { path, source, trail } = route.params;
   const device = source.device ?? undefined;
   const title = trail.at(-1) ?? source.name;
-  const [listing, setListing] = useState<Listing>({ _tag: "loading" });
+  const key = folderKey(path, device);
+  const [listing, setListing] = useState<Listing>(() => remembered(key));
   const selection = useSelection();
+  const [settled, setSettled] = useState(false);
+
+  const loadFirst = useCallback((live: () => boolean) => {
+    void remote.files.list(path, "name", 0, device).then((outcome) => {
+      if (!live()) return;
+      setSettled(true);
+      if (!outcome.ok) return setListing(remembered(key, outcome.message));
+      seeFolder(key, outcome.value.entries, outcome.value.total);
+      setListing({ _tag: "loaded", count: outcome.value.entries.length, lines: linesOf(outcome.value.entries), total: outcome.value.total, busy: false, since: null });
+      remote.files.want([...outcome.value.entries.filter(isPicture).slice(0, 24), ...outcome.value.entries.filter((entry) => !isPicture(entry)).slice(0, 24)], device);
+    });
+  }, [remote, path, device, key]);
 
   useEffect(() => {
-    let cancelled = false;
-    void remote.files.list(path, "name", 0, device).then((outcome) => {
-      if (cancelled) return;
-      setListing(outcome.ok ? { _tag: "loaded", count: outcome.value.entries.length, lines: linesOf(outcome.value.entries), total: outcome.value.total, busy: false } : { _tag: "failed", message: outcome.message });
-      if (outcome.ok) remote.files.want([...outcome.value.entries.filter(isPicture).slice(0, 24), ...outcome.value.entries.filter((entry) => !isPicture(entry)).slice(0, 24)], device);
-    });
+    let live = true;
+    loadFirst(() => live);
     return () => {
-      cancelled = true;
+      live = false;
     };
-  }, [remote, path, device]);
+  }, [loadFirst]);
+
+  const retry = () => {
+    setSettled(false);
+    setListing(remembered(key));
+    loadFirst(() => true);
+  };
 
   const loadMore = () => {
-    if (listing._tag !== "loaded" || listing.busy || listing.count >= listing.total) return;
+    if (!settled || listing._tag !== "loaded" || listing.busy || listing.since !== null || listing.count >= listing.total) return;
     const offset = listing.count;
     setListing({ ...listing, busy: true });
     void remote.files.list(path, "name", offset, device).then((outcome) => {
       setListing((current) => {
         if (current._tag !== "loaded" || current.count !== offset) return current;
         if (!outcome.ok || outcome.value.entries.length === 0) return { ...current, busy: false, total: offset };
-        return { _tag: "loaded", count: offset + outcome.value.entries.length, lines: [...current.lines, ...linesOf(outcome.value.entries)], total: outcome.value.total, busy: false };
+        return { _tag: "loaded", count: offset + outcome.value.entries.length, lines: [...current.lines, ...linesOf(outcome.value.entries)], total: outcome.value.total, busy: false, since: null };
       });
     });
   };
 
   const lines = listing._tag === "loaded" ? listing.lines : [];
+  const since = listing._tag === "loaded" ? listing.since : null;
+  const fade = useSeenFade(since !== null);
   const open = (entry: FsEntry) => {
     if (isFolder(entry)) navigation.push("Folder", { path: entry.path, source, trail: [...trail, entry.name] });
     else if (selection.selecting) selection.toggle(entry);
@@ -158,6 +192,7 @@ export function FolderScreen({ navigation, route }: Props) {
       </View>
       <Title>{`${title}.`}</Title>
       <Crumbs parts={crumbs} onPick={(index) => navigation.pop(crumbs.length - 1 - index)} />
+      <SeenLine since={since} now={now} onRetry={retry} />
     </View>
   );
 
@@ -177,13 +212,15 @@ export function FolderScreen({ navigation, route }: Props) {
         getFixedItemSize={(line) => (line._tag === "pictures" ? size + GAP : undefined)}
         renderItem={({ item }) =>
           item._tag === "entry" ? (
-            <EntryRow entry={item.entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(item.entry.path)} onPress={open} onLongPress={showSheet} />
+            <Animated.View style={fade}>
+              <EntryRow entry={item.entry} device={source.device} now={now} selecting={selection.selecting} selected={selection.picked.has(item.entry.path)} onPress={open} onLongPress={showSheet} />
+            </Animated.View>
           ) : (
-            <View style={[styles.gridRow, { height: size }]}>
+            <Animated.View style={[styles.gridRow, { height: size }, fade]}>
               {item.entries.map((entry) => (
                 <PhotoTile key={entry.path} entry={entry} device={source.device} size={size} selecting={selection.selecting} selected={selection.picked.has(entry.path)} onPress={open} onLongPress={showSheet} />
               ))}
-            </View>
+            </Animated.View>
           )
         }
         extraData={selection}
@@ -194,7 +231,7 @@ export function FolderScreen({ navigation, route }: Props) {
         onEndReachedThreshold={0.6}
         onViewableItemsChanged={onViewable}
         ListHeaderComponent={header}
-        ListEmptyComponent={<EmptyFolder listing={listing} />}
+        ListEmptyComponent={<EmptyFolder listing={listing} size={size} onRetry={retry} />}
         ListFooterComponent={footer}
         style={styles.screen}
       />
