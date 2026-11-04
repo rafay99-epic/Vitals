@@ -16,13 +16,16 @@ export NOTARY_KEY_ID="${${NOTARY_KEY_PATH:t:r}#AuthKey_}"
 export NOTARY_ISSUER="$(<"$DIR/issuer.txt")"
 
 if [ "${1:-}" = status ]; then
-  xcrun notarytool history --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" | head -20
+  xcrun notarytool history --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" | sed -n '1,20p'
   exit 0
 fi
 
 CHANNEL="${1:-nightly}"
-export CODESIGN_IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)".*/\1/p' | head -1)"
-[ -n "$CODESIGN_IDENTITY" ] || { echo "No Developer ID Application identity in the keychain." >&2; exit 1; }
+# The identity release-signing.sh imported, so another team's certificate in the
+# keychain is never picked by accident.
+export CODESIGN_IDENTITY="$(<"$DIR/identity.txt")"
+security find-identity -v -p codesigning | grep -qF "\"$CODESIGN_IDENTITY\"" \
+  || { echo "\"$CODESIGN_IDENTITY\" is not a valid identity in the keychain." >&2; exit 1; }
 case "$CHANNEL" in
   stable)  APP="build/Vitals.app" ;;
   nightly) APP="build/Vitals Nightly.app" ;;

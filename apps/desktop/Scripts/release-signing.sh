@@ -52,17 +52,26 @@ case "${1:-}" in
     PW="$("$OPENSSL" rand -base64 24)"
     "$OPENSSL" pkcs12 -export -inkey "$KEY" -in "$WORK/cert.pem" -out "$WORK/signing.p12" \
       -name "$NAME" -passout "pass:$PW" -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
-    if ! security import "$WORK/signing.p12" -k "$HOME/Library/Keychains/login.keychain-db" \
-      -P "$PW" -T /usr/bin/codesign; then
-      security find-identity -v -p codesigning | grep -qF "\"$NAME\"" \
-        || { echo "error: could not import $NAME into the login keychain" >&2; exit 1; }
-      echo "note: already in the login keychain"
-    fi
+    # Apple's Developer ID G2 intermediate completes the chain on a fresh Mac
+    # (importing it again where it already exists is a harmless error).
+    LOGIN="$HOME/Library/Keychains/login.keychain-db"
+    curl --fail --silent --show-error --max-time 60 -o "$WORK/DeveloperIDG2CA.cer" \
+      https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+    security import "$WORK/DeveloperIDG2CA.cer" -k "$LOGIN" >/dev/null 2>&1 || true
+    security import "$WORK/signing.p12" -k "$LOGIN" -P "$PW" -T /usr/bin/codesign \
+      || echo "note: already in the login keychain"
+    security find-identity -v -p codesigning | grep -qF "\"$NAME\"" \
+      || { echo "error: $NAME is not a valid signing identity in the login keychain" >&2; exit 1; }
     # Keep a copy of everything ./sign.sh and CI use, in one place.
     (umask 077
       cp "$WORK/signing.p12" "$DIR/developer-id.p12"
       printf '%s' "$PW" > "$DIR/p12-password.txt"
       printf '%s' "$ISSUER" > "$DIR/issuer.txt"
+      printf '%s' "$NAME" > "$DIR/identity.txt"
+      # One key at a time: a rotated key replaces the old one (./sign.sh needs exactly one).
+      for old in "$DIR"/AuthKey_*.p8; do
+        if [ -e "$old" ] && ! [ "$old" -ef "$P8" ]; then rm -f "$old"; fi
+      done
       [ "$P8" -ef "$DIR/$(basename "$P8")" ] || cp "$P8" "$DIR/")
     base64 < "$WORK/signing.p12" | gh secret set MACOS_SIGN_CERT_P12 -R "$REPO"
     printf '%s' "$PW" | gh secret set MACOS_SIGN_CERT_PASSWORD -R "$REPO"
