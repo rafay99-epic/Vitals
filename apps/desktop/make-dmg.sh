@@ -116,7 +116,7 @@ fi
 if [ -n "${NOTARY_KEY_PATH:-}" ]; then
   echo "Notarizing $OUT_DMG…"
   NOTARY=(--key "$NOTARY_KEY_PATH" --key-id "${NOTARY_KEY_ID:?}" --issuer "${NOTARY_ISSUER:?}")
-  RESULT="$(xcrun notarytool submit "$OUT_DMG" "${NOTARY[@]}" --wait --timeout 30m --output-format json)"
+  RESULT="$(xcrun notarytool submit "$OUT_DMG" "${NOTARY[@]}" --wait --timeout 2h --output-format json)"
   echo "$RESULT"
   if [ "$(plutil -extract status raw -o - - <<< "$RESULT")" != "Accepted" ]; then
     xcrun notarytool log "$(plutil -extract id raw -o - - <<< "$RESULT")" "${NOTARY[@]}" || true
