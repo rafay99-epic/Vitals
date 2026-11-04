@@ -121,10 +121,13 @@ if [ -n "${NOTARY_KEY_PATH:-}" ]; then
   echo "Submission $ID"
   # Apple can take over 30 minutes, and a single status request can time out,
   # which ends `notarytool wait`. Retry the wait so a dropped request isn't a
-  # failed release.
+  # failed release. All attempts share one 2-hour deadline.
   STATUS=""
+  DEADLINE=$((SECONDS + 7200))
   for attempt in 1 2 3 4 5; do
-    RESULT="$(xcrun notarytool wait "$ID" "${NOTARY[@]}" --timeout 2h --output-format json || true)"
+    LEFT=$((DEADLINE - SECONDS))
+    [ "$LEFT" -gt 0 ] || break
+    RESULT="$(xcrun notarytool wait "$ID" "${NOTARY[@]}" --timeout "${LEFT}s" --output-format json || true)"
     STATUS="$(plutil -extract status raw -o - - <<< "$RESULT" 2>/dev/null || true)"
     [ -n "$STATUS" ] && break
     echo "Notary status check failed (attempt $attempt/5), retrying"

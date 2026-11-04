@@ -14,11 +14,18 @@
 #
 # MUST run only in a trusted context (push to `main` / `nightly`), NEVER in a
 # pull_request job: a PR from a fork could read the secrets. With no signing
-# secrets at all it warns and the build is ad-hoc (a fork or a fresh clone).
+# secrets it fails when REQUIRE_SIGNING=true (the canonical repo) and otherwise
+# warns and builds ad-hoc (a fork's own run).
 # A certificate without the notary key fails: a Developer ID build that isn't
 # notarized is blocked by Gatekeeper, so it must never ship.
 set -euo pipefail
 if [ -z "${MACOS_SIGN_CERT_P12:-}" ] || [ -z "${MACOS_SIGN_CERT_PASSWORD:-}" ]; then
+  # The canonical repo's releases are always signed (the README and website say
+  # so); only a fork's own run may fall back to ad-hoc.
+  if [ "${REQUIRE_SIGNING:-false}" = "true" ]; then
+    echo "::error::MACOS_SIGN_CERT_P12/PASSWORD not set; this repo's releases must be signed and notarized."
+    exit 1
+  fi
   echo "::warning::MACOS_SIGN_CERT_P12/PASSWORD not set; building ad-hoc and skipping notarization."
   exit 0
 fi
@@ -44,7 +51,7 @@ rm -f "$CERT_P12"
 # to build the chain it embeds.
 curl --fail --silent --show-error --max-time 60 -o "$INTERMEDIATE" \
   https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-security import "$INTERMEDIATE" -k "$KEYCHAIN" >/dev/null 2>&1 || true
+security import "$INTERMEDIATE" -k "$KEYCHAIN" >/dev/null
 security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
 existing_keychains=()
 while IFS= read -r kc; do

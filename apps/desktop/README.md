@@ -97,7 +97,7 @@ Two prompts to expect on first launch: macOS asks to allow notifications
 (needed for the overheat alerts), and if you enable "Launch at login" in
 Settings, Vitals appears under System Settings → General → Login Items.
 
-A local build is ad-hoc signed, so it runs on the machine that built it.
+A local build is ad-hoc signed by default, so it runs on the machine that built it.
 
 ### Signing
 
@@ -113,7 +113,9 @@ Unset, or a name not in the keychain, falls back to ad-hoc. A real identity keep
 macOS permissions across rebuilds; ad-hoc signatures change every build.
 
 The maintainer sets up release signing once with `./Scripts/release-signing.sh`
-(`csr`, then `upload`), which also sets the CI secrets.
+(`csr`, then `upload`), which also sets the CI secrets. After that, `./sign.sh`
+builds a signed, notarized Nightly DMG locally (`./sign.sh stable` for Stable,
+`./sign.sh status` for Apple's recent notarizations).
 
 ## Rebuild after changes
 

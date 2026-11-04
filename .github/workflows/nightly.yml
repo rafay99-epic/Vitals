@@ -83,9 +83,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
-    # Only the canonical repo publishes — a fork building its own `nightly`
-    # branch must not push to (or fail against) these releases.
-    if: github.repository == 'rafay99-epic/Vitals'
+    # Only the canonical repo's `nightly` branch publishes: a fork building its
+    # own `nightly` must not push to these releases, and a manual run on another
+    # ref must not sign, notarize and replace the rolling Nightly.
+    if: github.repository == 'rafay99-epic/Vitals' && github.ref == 'refs/heads/nightly'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -101,7 +102,7 @@ jobs:
 
       # Same Developer ID certificate and notary key as Stable. Safe here: this
       # job only runs on push to `nightly` and is fork-guarded above, so no fork
-      # PR can read the secrets. No signing secrets → ad-hoc build with a warning.
+      # PR can read the secrets. Missing secrets fail this repo's run.
       - name: Set up Developer ID signing and notarization
         env:
           MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
@@ -109,6 +110,7 @@ jobs:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          REQUIRE_SIGNING: ${{ github.repository == 'rafay99-epic/Vitals' }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
 
       - uses: pnpm/action-setup@v6

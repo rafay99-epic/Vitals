@@ -146,14 +146,19 @@ Ad-hoc signatures change every build and drop those grants.
   intermediate) into a throwaway keychain, exports `CODESIGN_IDENTITY`, and writes the App
   Store Connect API key for `NOTARY_*`. Wired into the **publishing jobs only**: `ci.yml`'s
   `release` (push to `main`) and `nightly.yml`'s `nightly` (push to `nightly`, fork-guarded).
-  **Never** add it to a `pull_request` job: a fork PR could exfiltrate the secrets. No cert
-  secrets → warning and an ad-hoc build. A cert without the notary key **fails** the job: a
-  Developer ID build that isn't notarized is blocked by Gatekeeper, so it must never ship.
+  **Never** add it to a `pull_request` job: a fork PR could exfiltrate the secrets. Both jobs
+  pass `REQUIRE_SIGNING` (true only in `rafay99-epic/Vitals`), so missing cert secrets fail
+  this repo's release and only a fork's own run builds ad-hoc. A cert without the notary key
+  **fails** the job: a Developer ID build that isn't notarized is blocked by Gatekeeper.
+  Nightly publishes only from `refs/heads/nightly`, so a manual run on another ref can't
+  replace the rolling release. `make-dmg.sh` retries a dropped `notarytool wait` under one
+  2-hour deadline (a new team's first submissions can take hours).
 - **Five repo secrets**: `MACOS_SIGN_CERT_P12` (base64 `.p12`), `MACOS_SIGN_CERT_PASSWORD`,
   `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`. Set them all with
   **`apps/desktop/Scripts/release-signing.sh`** (`csr` makes the key + CSR in
   `~/.vitals-signing`; `upload <cer> <AuthKey_ID.p8> <issuer>` builds the `.p12`, imports it
-  locally and sets the secrets).
+  locally and sets the secrets). **`apps/desktop/sign.sh [nightly|stable|status]`** reuses
+  those keys to build a signed, notarized DMG locally, or list Apple's recent notarizations.
 - **Homebrew**: `bump-cask.sh` drops a cask's old quarantine-stripping `postflight_steps`
   once the DMG it pins validates as stapled. Homebrew itself disables casks that fail
   Gatekeeper, which is why notarization is required for the tap too.
