@@ -140,14 +140,18 @@ cp "$ICON_OUT/Assets.car" "$ICON_OUT/AppIcon.icns" "$APP/Contents/Resources/"
   || "$PB" -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist"
 rm -rf "$ICON_OUT"
 
-# Code signing. Default is ad-hoc (`-`), which is fine for a local build but
-# produces a *different* signature every time — and macOS keys TCC grants
-# (Accessibility / Microphone / Screen Recording) and Gatekeeper identity to the
-# signature, so an ad-hoc update looks like a brand-new app and silently drops
-# every permission. Set CODESIGN_IDENTITY to a stable self-signed cert (see
-# Scripts/make-signing-cert.sh) and every build shares one designated requirement,
-# so the grant persists across updates. CI exports it from a secret on releases
-# only (.github/scripts/setup-signing.sh). No Apple account / notarization.
+# Code signing. Published builds (CI's Stable and Nightly jobs) sign with the
+# team's Developer ID Application certificate: hardened runtime + secure
+# timestamp, which notarization requires (make-dmg.sh notarizes the DMG). The
+# Developer ID identity also keeps TCC grants across updates, since the
+# designated requirement is the Team ID, not a per-build hash.
+#
+# Locally, CODESIGN_IDENTITY picks any identity in the keychain (an "Apple
+# Development" one keeps Dev's permissions across rebuilds). Unset, or a name
+# that isn't there, falls back to ad-hoc, so a build never fails over signing.
+# Nested code is signed first, never with --deep (it would drop the gateway's
+# entitlements). The Bun gateway needs JIT under the hardened runtime.
+GATEWAY="$APP/Contents/Helpers/vitals-gateway"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 if [ "$SIGN_IDENTITY" != "-" ]; then
   SIGN_IDENTITIES="$(security find-identity -p codesigning 2>/dev/null || true)"
@@ -159,7 +163,10 @@ fi
 if [ "$SIGN_IDENTITY" = "-" ]; then
   codesign --force --sign - "$APP"
 else
-  echo "Signing with stable identity: $SIGN_IDENTITY (TCC grant persists across builds)"
-  codesign --force --deep --sign "$SIGN_IDENTITY" "$APP"
+  echo "Signing with $SIGN_IDENTITY (hardened runtime)"
+  [ -f "$GATEWAY" ] && codesign --force --options runtime --timestamp \
+    --entitlements Resources/Gateway.entitlements --sign "$SIGN_IDENTITY" "$GATEWAY"
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
 fi
+codesign --verify --strict --deep "$APP"
 echo "Done → $PWD/$APP"

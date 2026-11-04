@@ -44,6 +44,22 @@ sed -i '' -E \
   -e "s|^  sha256 \"[0-9a-f]*\"|  sha256 \"${SHA}\"|" \
   "$CASK_FILE"
 
+# A notarized DMG passes Gatekeeper on its own, so the old quarantine-stripping
+# `postflight_steps` block (and the comment above it) goes. It only goes once the
+# shipped DMG carries a stapled notarization ticket, so an ad-hoc release keeps it.
+# One-time migration: a no-op once both casks are clean.
+if xcrun stapler validate "$DMG" >/dev/null 2>&1; then
+  awk '
+    /^  #/ && !skip { buf = buf $0 "\n"; next }
+    /^  postflight_steps do/ { buf = ""; skip = 1; next }
+    skip && /^  end$/ { skip = 0; drop_blank = 1; next }
+    skip { next }
+    drop_blank && /^$/ { drop_blank = 0; next }
+    { drop_blank = 0; printf "%s", buf; buf = ""; print }
+    END { printf "%s", buf }
+  ' "$CASK_FILE" > "$CASK_FILE.tmp" && mv "$CASK_FILE.tmp" "$CASK_FILE"
+fi
+
 if git diff --quiet -- "$CASK_FILE"; then
   echo "::notice::${CASK} cask already at ${VERSION} (${SHA}) — nothing to push."
   exit 0

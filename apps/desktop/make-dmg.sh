@@ -99,14 +99,36 @@ echo "Compressing…"
 hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$OUT_DMG" >/dev/null
 rm -f "$RW_DMG" build/dmg-background.png
 rm -rf "$STAGE"
-# Ad-hoc sign the *disk image wrapper* only — this does NOT recurse into or
-# re-sign the .app inside it (that bundle keeps whatever signature build.sh gave
-# it, ad-hoc or the stable CODESIGN_IDENTITY). Keep it ad-hoc: re-signing the app
-# here with `--deep` would strip the stable identity and reset users' TCC grants.
-codesign --force --sign - "$OUT_DMG"
+# Sign the disk image wrapper with the identity build.sh used. This does not
+# re-sign the .app inside (it keeps build.sh's hardened-runtime signature);
+# never --deep here, it would strip the gateway's entitlements.
+SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+if [ "$SIGN_IDENTITY" != "-" ] && security find-identity -p codesigning | grep -qF "\"$SIGN_IDENTITY\""; then
+  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$OUT_DMG"
+else
+  codesign --force --sign - "$OUT_DMG"
+fi
+
+# Notarize when CI hands over an App Store Connect API key (setup-signing.sh
+# exports these on the publishing jobs). Apple checks the DMG and the app inside
+# it; stapling the ticket lets Gatekeeper pass it offline. A rejection fails the
+# build, so an un-notarized Developer ID build never ships.
+if [ -n "${NOTARY_KEY_PATH:-}" ]; then
+  echo "Notarizing $OUT_DMG…"
+  NOTARY=(--key "$NOTARY_KEY_PATH" --key-id "${NOTARY_KEY_ID:?}" --issuer "${NOTARY_ISSUER:?}")
+  RESULT="$(xcrun notarytool submit "$OUT_DMG" "${NOTARY[@]}" --wait --timeout 30m --output-format json)"
+  echo "$RESULT"
+  if [ "$(plutil -extract status raw -o - - <<< "$RESULT")" != "Accepted" ]; then
+    xcrun notarytool log "$(plutil -extract id raw -o - - <<< "$RESULT")" "${NOTARY[@]}" || true
+    echo "error: notarization was not accepted" >&2
+    exit 1
+  fi
+  xcrun stapler staple "$OUT_DMG"
+  xcrun stapler validate "$OUT_DMG"
+fi
 
 # Stamp the app icon onto the .dmg file itself so it shows in Finder/Downloads
-# instead of the generic disk-image icon. Done after codesign — the icon is a
+# instead of the generic disk-image icon. Done after signing and stapling: the icon is a
 # resource-fork xattr, not part of the signed image data. Non-fatal: if a
 # headless runner can't set it, the DMG still installs fine.
 echo "Setting DMG file icon…"
