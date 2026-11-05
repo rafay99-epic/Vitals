@@ -120,16 +120,18 @@ jobs:
       - name: Compute version
         run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
 
-      # Import the stable self-signed cert so this release shares one signature
-      # with every prior release — users keep their TCC grants (Accessibility /
-      # Microphone / Screen Recording) + Gatekeeper identity across the
-      # auto-update instead of re-granting each time. Push-to-main only (this job
-      # is gated to `refs/heads/main`); a fork PR never reaches here, so the
-      # secret can't leak. No secret → the script warns and the build is ad-hoc.
-      - name: Set up stable code-signing certificate
+      # Developer ID signing + notarization (setup-signing.sh). Push-to-main only
+      # (this job is gated to `refs/heads/main`); a fork PR never reaches here, so
+      # the secrets can't leak. Missing secrets fail this repo's release; a fork's
+      # own run builds ad-hoc with a warning.
+      - name: Set up Developer ID signing and notarization
         env:
           MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
           MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          REQUIRE_SIGNING: ${{ github.repository == 'rafay99-epic/Vitals' }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
 
       - uses: pnpm/action-setup@v6

@@ -7,7 +7,7 @@ export const DOWNLOAD_URL = `${RELEASES_URL}/latest/download/Vitals.dmg`
 // the same asset the desktop updater and the vitals-nightly cask track.
 export const DOWNLOAD_URL_NIGHTLY = `${RELEASES_URL}/download/nightly/Vitals-Nightly.dmg`
 
-// The Homebrew tap — the recommended install path (no Gatekeeper prompt).
+// The Homebrew tap: the recommended install path.
 export const BREW_TAP = 'rafay99-epic/apps'
 export const BREW_INSTALL = `brew install --cask ${BREW_TAP}/vitals`
 export const BREW_INSTALL_NIGHTLY = `brew install --cask ${BREW_TAP}/vitals-nightly`
