@@ -20,6 +20,8 @@ concurrency:
 
 jobs:
   review:
+    # issue_comment also fires on plain issues; only PR comments reach the reviewer.
+    if: github.event_name == 'pull_request' || github.event.issue.pull_request
     uses: rafay99-epic/pr-review/.github/workflows/pr-agent.yml@main
     secrets:
       CMD_API_KEY: ${{ secrets.CMD_API_KEY }}
