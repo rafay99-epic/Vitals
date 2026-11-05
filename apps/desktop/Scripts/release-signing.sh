@@ -60,7 +60,7 @@ case "${1:-}" in
     security import "$WORK/DeveloperIDG2CA.cer" -k "$LOGIN" >/dev/null 2>&1 || true
     security import "$WORK/signing.p12" -k "$LOGIN" -P "$PW" -T /usr/bin/codesign \
       || echo "note: already in the login keychain"
-    security find-identity -v -p codesigning | grep -qF "\"$NAME\"" \
+    security find-identity -v -p codesigning | grep -F "\"$NAME\"" >/dev/null \
       || { echo "error: $NAME is not a valid signing identity in the login keychain" >&2; exit 1; }
     # Keep a copy of everything ./sign.sh and CI use, in one place.
     (umask 077

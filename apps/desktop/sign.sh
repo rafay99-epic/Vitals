@@ -24,7 +24,7 @@ CHANNEL="${1:-nightly}"
 # The identity release-signing.sh imported, so another team's certificate in the
 # keychain is never picked by accident.
 export CODESIGN_IDENTITY="$(<"$DIR/identity.txt")"
-security find-identity -v -p codesigning | grep -qF "\"$CODESIGN_IDENTITY\"" \
+security find-identity -v -p codesigning | grep -F "\"$CODESIGN_IDENTITY\"" >/dev/null \
   || { echo "\"$CODESIGN_IDENTITY\" is not a valid identity in the keychain." >&2; exit 1; }
 case "$CHANNEL" in
   stable)  APP="build/Vitals.app" ;;

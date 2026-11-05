@@ -103,7 +103,7 @@ rm -rf "$STAGE"
 # re-sign the .app inside (it keeps build.sh's hardened-runtime signature);
 # never --deep here, it would strip the gateway's entitlements.
 SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
-if [ "$SIGN_IDENTITY" != "-" ] && security find-identity -p codesigning | grep -qF "\"$SIGN_IDENTITY\""; then
+if [ "$SIGN_IDENTITY" != "-" ] && security find-identity -p codesigning | grep -F "\"$SIGN_IDENTITY\"" >/dev/null; then
   codesign --force --timestamp --sign "$SIGN_IDENTITY" "$OUT_DMG"
 else
   codesign --force --sign - "$OUT_DMG"
