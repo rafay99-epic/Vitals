@@ -64,10 +64,10 @@ importers:
     dependencies:
       '@convex-dev/rate-limiter':
         specifier: ^0.4.2
-        version: 0.4.2(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
+        version: 0.4.2(convex@1.49.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
       convex:
-        specifier: ^1.42.3
-        version: 1.47.0(react@19.3.1)
+        specifier: ^1.49.0
+        version: 1.49.0(react@19.3.1)
     devDependencies:
       concurrently:
         specifier: ^10.0.3
@@ -130,8 +130,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1(react@19.3.1)
       convex:
-        specifier: ^1.42.3
-        version: 1.47.0(react@19.3.1)
+        specifier: ^1.49.0
+        version: 1.49.0(react@19.3.1)
       react:
         specifier: ^19.2.6
         version: 19.3.1
@@ -3608,9 +3608,9 @@ packages:
       zod:
         optional: true
 
-  convex@1.47.0:
-    resolution: {integrity: sha512-B1z/lOmex7i09NASq8+2WG9rZLzGXXOSkpwGOpaNIvOs4awyW4RMgpVBjt8r2wvvHwhEBEsOr2pGYpulnmAxYQ==}
-    engines: {node: '>=20.0.0', npm: '>=7.0.0'}
+  convex@1.49.0:
+    resolution: {integrity: sha512-mkr9oXF8/arkCI1kvYyGytWd62oVXNABh4uwLeI4UQVN6Zuudm4DlmSzNUJKF63djk6f/uUXC+6ffuVSkPLvzA==}
+    engines: {node: '>=22.0.0', npm: '>=7.0.0'}
     hasBin: true
     peerDependencies:
       '@auth0/auth0-react': ^2.0.1
@@ -6200,10 +6200,10 @@ snapshots:
       hashery: 1.5.1
       keyv: 5.6.0
 
-  '@convex-dev/batch-worker@0.3.5(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)':
+  '@convex-dev/batch-worker@0.3.5(convex@1.49.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)':
     dependencies:
-      convex: 1.47.0(react@19.3.1)
-      convex-helpers: 0.1.129(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
+      convex: 1.49.0(react@19.3.1)
+      convex-helpers: 0.1.129(convex@1.49.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
     transitivePeerDependencies:
       - '@standard-schema/spec'
       - hono
@@ -6211,10 +6211,10 @@ snapshots:
       - typescript
       - zod
 
-  '@convex-dev/rate-limiter@0.4.2(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)':
+  '@convex-dev/rate-limiter@0.4.2(convex@1.49.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)':
     dependencies:
-      '@convex-dev/batch-worker': 0.3.5(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
-      convex: 1.47.0(react@19.3.1)
+      '@convex-dev/batch-worker': 0.3.5(convex@1.49.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
+      convex: 1.49.0(react@19.3.1)
     optionalDependencies:
       react: 19.3.1
     transitivePeerDependencies:
@@ -8737,15 +8737,15 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  convex-helpers@0.1.129(convex@1.47.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7):
+  convex-helpers@0.1.129(convex@1.49.0(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7):
     dependencies:
-      convex: 1.47.0(react@19.3.1)
+      convex: 1.49.0(react@19.3.1)
     optionalDependencies:
       react: 19.3.1
       typescript: 7.0.2
       zod: 4.6.7
 
-  convex@1.47.0(react@19.3.1):
+  convex@1.49.0(react@19.3.1):
     dependencies:
       esbuild: 0.27.0
       prettier: 3.9.10
