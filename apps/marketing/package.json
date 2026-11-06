@@ -13,7 +13,7 @@
     "brand": "node brand/render.mjs"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.1",
+    "@tailwindcss/vite": "^4.3.4",
     "@tanstack/react-router": "^1.170.46",
     "@vercel/analytics": "^2.0.1",
     "convex": "^1.42.3",
