@@ -18,7 +18,7 @@ Living on the edge? The **Nightly channel** installs alongside Stable as a separ
 brew install --cask rafay99-epic/apps/vitals-nightly
 ```
 
-Prefer a direct download? Grab the **[.dmg](https://github.com/rafay99-epic/Vitals/releases/latest/download/Vitals.dmg)** — it isn't notarized (no paid Apple Developer account), so **right-click → Open** the first time to get past Gatekeeper. Homebrew is the smoother path.
+Prefer a direct download? Grab the **[.dmg](https://github.com/rafay99-epic/Vitals/releases/latest/download/Vitals.dmg)**. It's signed with a Developer ID and notarized by Apple, so it opens like any other app.
 
 ## Monorepo layout
 

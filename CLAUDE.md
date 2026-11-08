@@ -122,35 +122,49 @@ Apple native design language below.
   builds it as Nightly locally next to Stable (build number 0, so it'll offer to pull the
   published Nightly).
 
-### Code signing (stable, self-signed — keeps permissions across updates)
+### Code signing (Developer ID + notarization)
 
-macOS keys TCC grants (Accessibility / Microphone / Screen Recording) **and** Gatekeeper
-identity to the code signature. Ad-hoc signing (`codesign --sign -`) produces a *different*
-signature every build, so each auto-update looks like a brand-new app and **silently drops
-every permission**. The fix: sign every published build with one **stable self-signed
-certificate** (no Apple account, no notarization, no Developer ID), giving all builds the
-same designated requirement so the grant persists.
+Published builds (Stable and Nightly) are signed with the team's **Developer ID Application**
+certificate (Syntax Labs (Private) Limited, team `MGH5K382YN`) and the DMG is **notarized and
+stapled**, so Gatekeeper opens them with no prompt and the Homebrew casks need no quarantine
+workaround. macOS keys TCC grants (Local Network, Accessibility, …) to the designated
+requirement, which for Developer ID is the Team ID, so grants survive every update.
+Ad-hoc signatures change every build and drop those grants.
 
-- **`build.sh` reads `CODESIGN_IDENTITY`** (one env var, like sibling apps). Unset — or a
-  name not present in the keychain — falls back to ad-hoc (the local default; a missing
-  cert never breaks a build). The app has **no `*.entitlements` file** (SwiftPM target), so
-  the stable-sign path does not pass `--entitlements`; if one is ever added, the
-  `codesign --deep --sign` line must pass it or re-signing strips it.
-- **`make-dmg.sh` ad-hoc-signs only the DMG *wrapper*** — it does not recurse into the
-  `.app` inside, so the bundle keeps build.sh's signature. Don't change it to `--deep`
-  re-sign the app: that strips the stable identity and resets users' TCC grants.
-- **`Scripts/make-signing-cert.sh`** generates the cert once (default CN `Vitals Local
-  Signing`), imports it into the login keychain, and prints the two CI-secret values. The
-  **same cert / `.p12` is reusable across every app in this family** — generate once, paste
-  the same secrets into each repo.
-- **CI: `.github/scripts/setup-signing.sh`** imports the cert from secrets into a throwaway
-  keychain and exports `CODESIGN_IDENTITY`. It is wired into the **publishing jobs only**:
-  `ci.yml`'s `release` job (push to `main`) and `nightly.yml`'s `nightly` job (push to
-  `nightly`, fork-guarded). **Never** add it to a `pull_request` job — a fork PR could
-  exfiltrate the secret. Both jobs are trusted branch-push contexts, never PRs. Missing
-  secrets → the script warns and the build is ad-hoc (a release never fails over it).
-- **Two repo secrets the maintainer must add** (from `make-signing-cert.sh` output):
-  `MACOS_SIGN_CERT_P12` (base64 of the `.p12`) and `MACOS_SIGN_CERT_PASSWORD`.
+- **`build.sh` reads `CODESIGN_IDENTITY`.** Set, it signs the nested gateway first (with
+  `Resources/Gateway.entitlements`: Bun's JIT needs `allow-jit` and
+  `allow-unsigned-executable-memory` under the hardened runtime), then the app, both with
+  `--options runtime --timestamp`. **Never `--deep`**: it re-signs nested code without its
+  entitlements. Unset, or a name not in the keychain, falls back to ad-hoc, so a local build
+  never fails over signing. An `Apple Development` identity works locally too and keeps Dev's
+  permissions across rebuilds.
+- **`make-dmg.sh`** signs the DMG wrapper with the same identity (never re-signing the app
+  inside), then, when `NOTARY_KEY_PATH` / `NOTARY_KEY_ID` / `NOTARY_ISSUER` are set, runs
+  `notarytool submit --wait`, prints Apple's log and fails on anything but Accepted, and
+  staples the ticket. The file icon is stamped after stapling (it's a resource-fork xattr).
+- **CI: `.github/scripts/setup-signing.sh`** imports the `.p12` (plus Apple's Developer ID G2
+  intermediate) into a throwaway keychain, exports `CODESIGN_IDENTITY`, and writes the App
+  Store Connect API key for `NOTARY_*`. Wired into the **publishing jobs only**: `ci.yml`'s
+  `release` (push to `main`) and `nightly.yml`'s `nightly` (push to `nightly`, fork-guarded).
+  **Never** add it to a `pull_request` job: a fork PR could exfiltrate the secrets. Both jobs
+  pass `REQUIRE_SIGNING` (true only in `rafay99-epic/Vitals`), so missing cert secrets fail
+  this repo's release and only a fork's own run builds ad-hoc. A cert without the notary key
+  **fails** the job: a Developer ID build that isn't notarized is blocked by Gatekeeper.
+  Nightly publishes only from `refs/heads/nightly`, so a manual run on another ref can't
+  replace the rolling release. `make-dmg.sh` retries a dropped `notarytool wait` under one
+  2-hour deadline (a new team's first submissions can take hours).
+- **Five repo secrets**: `MACOS_SIGN_CERT_P12` (base64 `.p12`), `MACOS_SIGN_CERT_PASSWORD`,
+  `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`. Set them all with
+  **`apps/desktop/Scripts/release-signing.sh`** (`csr` makes the key + CSR in
+  `~/.vitals-signing`; `upload <cer> <AuthKey_ID.p8> <issuer>` builds the `.p12`, imports it
+  locally and sets the secrets). **`apps/desktop/sign.sh [nightly|stable|status]`** reuses
+  those keys to build a signed, notarized DMG locally, or list Apple's recent notarizations.
+- **Homebrew**: `bump-cask.sh` drops a cask's old quarantine-stripping `postflight_steps`
+  once the DMG it pins validates as stapled. Homebrew itself disables casks that fail
+  Gatekeeper, which is why notarization is required for the tap too.
+- **No Mac App Store build.** The store requires the App Sandbox, no private APIs and no root
+  escalation, which rules out sensors via private IOKit HID / SMC, `PrivilegedShell`,
+  uninstall, deep clean, the self-updater and the bundled gateway. Developer ID is the channel.
 
 ## Commands
 

@@ -83,9 +83,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
-    # Only the canonical repo publishes — a fork building its own `nightly`
-    # branch must not push to (or fail against) these releases.
-    if: github.repository == 'rafay99-epic/Vitals'
+    # Only the canonical repo's `nightly` branch publishes: a fork building its
+    # own `nightly` must not push to these releases, and a manual run on another
+    # ref must not sign, notarize and replace the rolling Nightly.
+    if: github.repository == 'rafay99-epic/Vitals' && github.ref == 'refs/heads/nightly'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -99,15 +100,17 @@ jobs:
           # Monotonic CI run number — the updater orders Nightly builds by this.
           echo "BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
-      # Same stable cert as the Stable release (the .p12 is shared) so the
-      # Nightly channel — a separate, auto-updating app — also keeps its TCC
-      # grants + Gatekeeper identity across updates. Safe here: this job only
-      # runs on push to the `nightly` branch and is fork-guarded above, so it's
-      # never a fork PR that could read the secret. No secret → ad-hoc fallback.
-      - name: Set up stable code-signing certificate
+      # Same Developer ID certificate and notary key as Stable. Safe here: this
+      # job only runs on push to `nightly` and is fork-guarded above, so no fork
+      # PR can read the secrets. Missing secrets fail this repo's run.
+      - name: Set up Developer ID signing and notarization
         env:
           MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
           MACOS_SIGN_CERT_PASSWORD: ${{ secrets.MACOS_SIGN_CERT_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          REQUIRE_SIGNING: ${{ github.repository == 'rafay99-epic/Vitals' }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
 
       - uses: pnpm/action-setup@v6
@@ -157,8 +160,6 @@ jobs:
             echo "**Install:** \`brew install --cask rafay99-epic/apps/vitals-nightly\`, or download \`Vitals-Nightly.dmg\` below and drag to Applications."
             echo
             echo "Installs as **Vitals Nightly** — separate app, settings, and icon — so it sits next to a Stable install without touching it. Nightly auto-updates from this feed."
-            echo
-            echo "⚠️ Self-signed (not notarized) pre-release build for testing. Right-click → Open the first time to get past Gatekeeper."
             echo
             echo "---"
             echo

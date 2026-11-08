@@ -46,7 +46,6 @@ export function Admit() {
               Chart notes
             </Link>
           </div>
-          <Meta>The .dmg is not notarized. Right click, then Open, the first time. Homebrew skips that prompt.</Meta>
         </div>
         <div id="nightly" className="grid content-start gap-4 bg-bg py-8 md:pl-10">
           <h3 className="m-0 flex items-center gap-3.5 font-serif text-[44px] leading-none md:text-[52px]">

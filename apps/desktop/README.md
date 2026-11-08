@@ -71,8 +71,8 @@ cd Vitals
 
 The script compiles with SwiftPM, assembles `build/Vitals.app`, compiles the
 channel's Icon Composer file (`Resources/Icons/<channel>/AppIcon.icon`) with
-`actool`, and signs the bundle ad-hoc by default (`CODESIGN_IDENTITY` switches
-to a stable certificate, see below).
+`actool`, and signs the bundle ad-hoc by default (`CODESIGN_IDENTITY` picks a
+real identity, see below).
 
 ### Option A — DMG installer (recommended)
 
@@ -97,27 +97,25 @@ Two prompts to expect on first launch: macOS asks to allow notifications
 (needed for the overheat alerts), and if you enable "Launch at login" in
 Settings, Vitals appears under System Settings → General → Login Items.
 
-The app is ad-hoc signed by default, so it runs on the machine that built it. To
-use it on another Mac, build it there (or sign with your own Developer ID).
+A local build is ad-hoc signed by default, so it runs on the machine that built it.
 
-### Stable signing (so permissions survive updates)
+### Signing
 
-Ad-hoc signatures change every build, and macOS keys TCC grants (Accessibility /
-Microphone / Screen Recording) and Gatekeeper identity to the signature — so each
-ad-hoc update looks like a brand-new app and silently drops every permission. To
-keep grants across updates, sign every build with one **stable self-signed
-certificate** (no Apple account, no notarization). Generate it once:
+Released builds are signed with a Developer ID and notarized in CI (see the repo
+CLAUDE.md "Code signing" section). Locally, `build.sh` signs with whatever
+`CODESIGN_IDENTITY` names, with the hardened runtime:
 
 ```sh
-./Scripts/make-signing-cert.sh        # creates "Vitals Local Signing", imports it,
-                                       # prints the two CI-secret values
-CODESIGN_IDENTITY="Vitals Local Signing" ./build.sh   # signs locally with it
+CODESIGN_IDENTITY="Apple Development: Your Name (ABCDE12345)" ./build.sh
 ```
 
-`build.sh` reads `CODESIGN_IDENTITY`; unset (or a name not in the keychain) falls
-back to ad-hoc. In CI the cert is imported from secrets on the release/nightly
-jobs only — see the repo CLAUDE.md "Code signing" section. The **same** cert /
-`.p12` can be reused across every app in this family.
+Unset, or a name not in the keychain, falls back to ad-hoc. A real identity keeps
+macOS permissions across rebuilds; ad-hoc signatures change every build.
+
+The maintainer sets up release signing once with `./Scripts/release-signing.sh`
+(`csr`, then `upload`), which also sets the CI secrets. After that, `./sign.sh`
+builds a signed, notarized Nightly DMG locally (`./sign.sh stable` for Stable,
+`./sign.sh status` for Apple's recent notarizations).
 
 ## Rebuild after changes
 
