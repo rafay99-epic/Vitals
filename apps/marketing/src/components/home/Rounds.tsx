@@ -1,3 +1,5 @@
+import { PLAY_STORE_URL } from '../../lib/links'
+import { ButtonLink } from '../ui/Button'
 import { Reveal } from '../ui/Reveal'
 import { DemoNote, Em, Lede, SectionTitle } from '../ui/text'
 import { ChartPhone, OrdersPhone, WardPhone } from './Phones'
@@ -21,6 +23,11 @@ export function Rounds() {
               </li>
             ))}
           </ol>
+          <div className="flex flex-wrap gap-2.5">
+            <ButtonLink href={PLAY_STORE_URL} external>
+              Get it on Google Play
+            </ButtonLink>
+          </div>
         </div>
         <div className="rise flex justify-center gap-[22px] xl:justify-end">
           <div className="hidden lg:block">
