@@ -110,7 +110,6 @@ jobs:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          REQUIRE_SIGNING: ${{ github.repository == 'rafay99-epic/Vitals' }}
         run: bash "$GITHUB_WORKSPACE/.github/scripts/setup-signing.sh"
 
       - uses: pnpm/action-setup@v6

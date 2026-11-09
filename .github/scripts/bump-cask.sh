@@ -46,7 +46,7 @@ sed -i '' -E \
 
 # A notarized DMG passes Gatekeeper on its own, so the old quarantine-stripping
 # `postflight_steps` block (and the comment above it) goes. It only goes once the
-# shipped DMG carries a stapled notarization ticket, so an ad-hoc release keeps it.
+# shipped DMG carries a stapled notarization ticket.
 # One-time migration: a no-op once both casks are clean.
 if xcrun stapler validate "$DMG" >/dev/null 2>&1; then
   awk '

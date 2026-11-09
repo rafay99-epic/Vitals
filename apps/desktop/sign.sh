@@ -24,13 +24,32 @@ CHANNEL="${1:-nightly}"
 # The identity release-signing.sh imported, so another team's certificate in the
 # keychain is never picked by accident.
 export CODESIGN_IDENTITY="$(<"$DIR/identity.txt")"
-security find-identity -v -p codesigning | grep -F "\"$CODESIGN_IDENTITY\"" >/dev/null \
-  || { echo "\"$CODESIGN_IDENTITY\" is not a valid identity in the keychain." >&2; exit 1; }
 case "$CHANNEL" in
   stable)  APP="build/Vitals.app" ;;
   nightly) APP="build/Vitals Nightly.app" ;;
   *) echo "usage: ./sign.sh [nightly|stable|status]" >&2; exit 1 ;;
 esac
+
+# Sign from a throwaway keychain holding the same .p12 CI uses, unlocked and
+# open to codesign, so no "codesign wants to use your key" dialog blocks a
+# headless run. Removed on exit; the login keychain is untouched.
+export CODESIGN_KEYCHAIN="$(mktemp -d)/sign.keychain-db"
+KC_PW="$(openssl rand -base64 24)"
+trap 'security delete-keychain "$CODESIGN_KEYCHAIN" 2>/dev/null; rm -rf "${CODESIGN_KEYCHAIN:h}"' EXIT
+security create-keychain -p "$KC_PW" "$CODESIGN_KEYCHAIN"
+security set-keychain-settings -lut 21600 "$CODESIGN_KEYCHAIN"  # no 5-minute idle lock mid-build
+security unlock-keychain -p "$KC_PW" "$CODESIGN_KEYCHAIN"
+security import "$DIR/developer-id.p12" -k "$CODESIGN_KEYCHAIN" -P "$(<"$DIR/p12-password.txt")" -T /usr/bin/codesign >/dev/null
+security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PW" "$CODESIGN_KEYCHAIN" >/dev/null
+# Apple's Developer ID G2 intermediate completes the chain, as in CI, so a clean
+# Mac needs nothing else installed. The identity is checked in this keychain,
+# the one codesign actually signs from.
+curl --fail --silent --show-error --max-time 60 -o "${CODESIGN_KEYCHAIN:h}/DeveloperIDG2CA.cer" \
+  https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+security import "${CODESIGN_KEYCHAIN:h}/DeveloperIDG2CA.cer" -k "$CODESIGN_KEYCHAIN" >/dev/null
+IDENTITIES="$(security find-identity -v -p codesigning "$CODESIGN_KEYCHAIN")"
+grep -qF "\"$CODESIGN_IDENTITY\"" <<< "$IDENTITIES" \
+  || { echo "\"$CODESIGN_IDENTITY\" is not a valid identity in $DIR/developer-id.p12." >&2; exit 1; }
 
 # make-dmg.sh only builds when the app is missing; rebuild so it's this checkout, signed.
 rm -rf "$APP"

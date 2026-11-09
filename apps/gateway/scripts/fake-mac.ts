@@ -396,7 +396,7 @@ const seedClips = () => {
   emitClip(textClip("Meet at 6 at the usual place", "Messages", minutesAgo(90)));
   emitClip(
     textClip(
-      "xcodebuild -scheme Vitals -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData CODE_SIGN_IDENTITY='Vitals Local Signing' clean build | xcbeautify",
+      "xcodebuild -scheme Vitals -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData clean build | xcbeautify",
       "Terminal",
       minutesAgo(60),
     ),

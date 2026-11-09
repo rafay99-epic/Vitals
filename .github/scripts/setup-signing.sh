@@ -13,21 +13,13 @@
 #   APPLE_API_ISSUER_ID        its Issuer ID
 #
 # MUST run only in a trusted context (push to `main` / `nightly`), NEVER in a
-# pull_request job: a PR from a fork could read the secrets. With no signing
-# secrets it fails when REQUIRE_SIGNING=true (the canonical repo) and otherwise
-# warns and builds ad-hoc (a fork's own run).
-# A certificate without the notary key fails: a Developer ID build that isn't
-# notarized is blocked by Gatekeeper, so it must never ship.
+# pull_request job: a PR from a fork could read the secrets. Any missing secret
+# fails the job: releases are only ever Developer ID signed and notarized, never
+# ad-hoc, and a signed build that isn't notarized is blocked by Gatekeeper.
 set -euo pipefail
 if [ -z "${MACOS_SIGN_CERT_P12:-}" ] || [ -z "${MACOS_SIGN_CERT_PASSWORD:-}" ]; then
-  # The canonical repo's releases are always signed (the README and website say
-  # so); only a fork's own run may fall back to ad-hoc.
-  if [ "${REQUIRE_SIGNING:-false}" = "true" ]; then
-    echo "::error::MACOS_SIGN_CERT_P12/PASSWORD not set; this repo's releases must be signed and notarized."
-    exit 1
-  fi
-  echo "::warning::MACOS_SIGN_CERT_P12/PASSWORD not set; building ad-hoc and skipping notarization."
-  exit 0
+  echo "::error::MACOS_SIGN_CERT_P12/PASSWORD not set; releases must be signed and notarized."
+  exit 1
 fi
 if [ -z "${APPLE_API_KEY_P8:-}" ] || [ -z "${APPLE_API_KEY_ID:-}" ] || [ -z "${APPLE_API_ISSUER_ID:-}" ]; then
   echo "::error::APPLE_API_KEY_P8 / APPLE_API_KEY_ID / APPLE_API_ISSUER_ID not set; a signed build must be notarized."
