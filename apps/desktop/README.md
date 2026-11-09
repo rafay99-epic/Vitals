@@ -71,8 +71,7 @@ cd Vitals
 
 The script compiles with SwiftPM, assembles `build/Vitals.app`, compiles the
 channel's Icon Composer file (`Resources/Icons/<channel>/AppIcon.icon`) with
-`actool`, and signs the bundle ad-hoc by default (`CODESIGN_IDENTITY` picks a
-real identity, see below).
+`actool`, and signs the bundle with the Syntax Labs Developer ID (see Signing below).
 
 ### Option A — DMG installer (recommended)
 
@@ -97,20 +96,16 @@ Two prompts to expect on first launch: macOS asks to allow notifications
 (needed for the overheat alerts), and if you enable "Launch at login" in
 Settings, Vitals appears under System Settings → General → Login Items.
 
-A local build is ad-hoc signed by default, so it runs on the machine that built it.
+A local build is signed with the same Developer ID as releases, so it needs that
+certificate in your keychain.
 
 ### Signing
 
-Released builds are signed with a Developer ID and notarized in CI (see the repo
-CLAUDE.md "Code signing" section). Locally, `build.sh` signs with whatever
-`CODESIGN_IDENTITY` names, with the hardened runtime:
-
-```sh
-CODESIGN_IDENTITY="Apple Development: Your Name (ABCDE12345)" ./build.sh
-```
-
-Unset, or a name not in the keychain, falls back to ad-hoc. A real identity keeps
-macOS permissions across rebuilds; ad-hoc signatures change every build.
+Local and published builds are signed with the Syntax Labs Developer ID, hardened
+runtime on (only CI's PR packaging check runs with `UNSIGNED=1`);
+releases are also notarized in CI (see the repo CLAUDE.md "Code signing" section).
+There is no ad-hoc fallback: if the identity is not in your keychain, `build.sh`
+stops. `CODESIGN_IDENTITY` overrides the identity name.
 
 The maintainer sets up release signing once with `./Scripts/release-signing.sh`
 (`csr`, then `upload`), which also sets the CI secrets. After that, `./sign.sh`

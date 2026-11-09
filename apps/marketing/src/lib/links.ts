@@ -12,7 +12,10 @@ export const BREW_TAP = 'rafay99-epic/apps'
 export const BREW_INSTALL = `brew install --cask ${BREW_TAP}/vitals`
 export const BREW_INSTALL_NIGHTLY = `brew install --cask ${BREW_TAP}/vitals-nightly`
 
-export const COMPANY = 'Syntax Lab Technology'
+// Vitals Remote, the phone app, on Google Play (Stable channel only).
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.syntaxlabtechnology.vitals.remote'
+
+export const COMPANY ='Syntax Lab Technology'
 export const DEVELOPER = 'Abdul Rafay'
 export const DEVELOPER_URL = 'https://rafay99.com'
 // Where the in-app "Report a Problem" flow sends diagnostic logs (user-initiated).
