@@ -129,15 +129,15 @@ certificate (Syntax Labs (Private) Limited, team `MGH5K382YN`) and the DMG is **
 stapled**, so Gatekeeper opens them with no prompt and the Homebrew casks need no quarantine
 workaround. macOS keys TCC grants (Local Network, Accessibility, …) to the designated
 requirement, which for Developer ID is the Team ID, so grants survive every update.
-Ad-hoc signatures change every build and drop those grants.
+Nothing is ever signed ad-hoc.
 
 - **`build.sh` reads `CODESIGN_IDENTITY`.** Set, it signs the nested gateway first (with
   `Resources/Gateway.entitlements`: Bun's JIT needs `allow-jit` and
   `allow-unsigned-executable-memory` under the hardened runtime), then the app, both with
   `--options runtime --timestamp`. **Never `--deep`**: it re-signs nested code without its
-  entitlements. Unset, or a name not in the keychain, falls back to ad-hoc, so a local build
-  never fails over signing. An `Apple Development` identity works locally too and keeps Dev's
-  permissions across rebuilds.
+  entitlements. Unset, it defaults to the Syntax Labs Developer ID; a name not in the keychain
+  **fails** the build (no ad-hoc fallback). PR CI packages with `UNSIGNED=1` because PR jobs
+  have no secrets; that DMG never ships. `./sign.sh` signs from a throwaway keychain.
 - **`make-dmg.sh`** signs the DMG wrapper with the same identity (never re-signing the app
   inside), then, when `NOTARY_KEY_PATH` / `NOTARY_KEY_ID` / `NOTARY_ISSUER` are set, runs
   `notarytool submit --wait`, prints Apple's log and fails on anything but Accepted, and
@@ -146,10 +146,8 @@ Ad-hoc signatures change every build and drop those grants.
   intermediate) into a throwaway keychain, exports `CODESIGN_IDENTITY`, and writes the App
   Store Connect API key for `NOTARY_*`. Wired into the **publishing jobs only**: `ci.yml`'s
   `release` (push to `main`) and `nightly.yml`'s `nightly` (push to `nightly`, fork-guarded).
-  **Never** add it to a `pull_request` job: a fork PR could exfiltrate the secrets. Both jobs
-  pass `REQUIRE_SIGNING` (true only in `rafay99-epic/Vitals`), so missing cert secrets fail
-  this repo's release and only a fork's own run builds ad-hoc. A cert without the notary key
-  **fails** the job: a Developer ID build that isn't notarized is blocked by Gatekeeper.
+  **Never** add it to a `pull_request` job: a fork PR could exfiltrate the secrets. Any
+  missing secret **fails** the job: a Developer ID build that isn't notarized is blocked by Gatekeeper.
   Nightly publishes only from `refs/heads/nightly`, so a manual run on another ref can't
   replace the rolling release. `make-dmg.sh` retries a dropped `notarytool wait` under one
   2-hour deadline (a new team's first submissions can take hours).

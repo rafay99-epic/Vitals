@@ -140,33 +140,35 @@ cp "$ICON_OUT/Assets.car" "$ICON_OUT/AppIcon.icns" "$APP/Contents/Resources/"
   || "$PB" -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist"
 rm -rf "$ICON_OUT"
 
-# Code signing. Published builds (CI's Stable and Nightly jobs) sign with the
-# team's Developer ID Application certificate: hardened runtime + secure
-# timestamp, which notarization requires (make-dmg.sh notarizes the DMG). The
-# Developer ID identity also keeps TCC grants across updates, since the
-# designated requirement is the Team ID, not a per-build hash.
+# Code signing. Every build signs with the team's Developer ID Application
+# certificate: hardened runtime + secure timestamp, which notarization requires
+# (make-dmg.sh notarizes the DMG in CI). There is no ad-hoc fallback: a missing
+# identity fails the build. The Developer ID identity keeps TCC grants across
+# updates and rebuilds, since the designated requirement is the Team ID.
 #
-# Locally, CODESIGN_IDENTITY picks any identity in the keychain (an "Apple
-# Development" one keeps Dev's permissions across rebuilds). Unset, or a name
-# that isn't there, falls back to ad-hoc, so a build never fails over signing.
+# CODESIGN_IDENTITY overrides the identity. CODESIGN_KEYCHAIN (set by ./sign.sh)
+# signs from an unlocked throwaway keychain, so no keychain dialog blocks a run.
+# UNSIGNED=1 skips signing for CI's PR packaging check, whose DMG never ships.
 # Nested code is signed first, never with --deep (it would drop the gateway's
-# entitlements). The Bun gateway needs JIT under the hardened runtime.
+# entitlements). The Bun gateway needs JIT under the hardened runtime, and Bun's
+# own output signature is invalid with --bytecode, so this is what makes it run.
 GATEWAY="$APP/Contents/Helpers/vitals-gateway"
-SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
-if [ "$SIGN_IDENTITY" != "-" ]; then
-  SIGN_IDENTITIES="$(security find-identity -p codesigning 2>/dev/null || true)"
-  if ! grep -qF "\"$SIGN_IDENTITY\"" <<< "$SIGN_IDENTITIES"; then
-    echo "CODESIGN_IDENTITY=\"$SIGN_IDENTITY\" not found in keychain; falling back to ad-hoc." >&2
-    SIGN_IDENTITY="-"
-  fi
-fi
-if [ "$SIGN_IDENTITY" = "-" ]; then
-  codesign --force --sign - "$APP"
+if [ "${UNSIGNED:-0}" = 1 ]; then
+  echo "UNSIGNED=1: not signing (PR packaging check only, never published)"
 else
+  SIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Syntax Labs (Private) Limited (MGH5K382YN)}"
+  if ! security find-identity -p codesigning | grep -qF "\"$SIGN_IDENTITY\""; then
+    echo "error: \"$SIGN_IDENTITY\" is not in the keychain. Use ./sign.sh, or import ~/.vitals-signing/developer-id.p12." >&2
+    exit 1
+  fi
   echo "Signing with $SIGN_IDENTITY (hardened runtime)"
-  [ -f "$GATEWAY" ] && codesign --force --options runtime --timestamp \
-    --entitlements Resources/Gateway.entitlements --sign "$SIGN_IDENTITY" "$GATEWAY"
-  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+  KEYCHAIN_ARGS=()
+  [ -n "${CODESIGN_KEYCHAIN:-}" ] && KEYCHAIN_ARGS=(--keychain "$CODESIGN_KEYCHAIN")
+  if [ -f "$GATEWAY" ]; then
+    codesign --force --options runtime --timestamp "${KEYCHAIN_ARGS[@]}" \
+      --entitlements Resources/Gateway.entitlements --sign "$SIGN_IDENTITY" "$GATEWAY"
+  fi
+  codesign --force --options runtime --timestamp "${KEYCHAIN_ARGS[@]}" --sign "$SIGN_IDENTITY" "$APP"
+  codesign --verify --strict --deep "$APP"
 fi
-codesign --verify --strict --deep "$APP"
 echo "Done → $PWD/$APP"

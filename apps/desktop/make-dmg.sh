@@ -101,12 +101,13 @@ rm -f "$RW_DMG" build/dmg-background.png
 rm -rf "$STAGE"
 # Sign the disk image wrapper with the identity build.sh used. This does not
 # re-sign the .app inside (it keeps build.sh's hardened-runtime signature);
-# never --deep here, it would strip the gateway's entitlements.
-SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
-if [ "$SIGN_IDENTITY" != "-" ] && security find-identity -p codesigning | grep -F "\"$SIGN_IDENTITY\"" >/dev/null; then
-  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$OUT_DMG"
-else
-  codesign --force --sign - "$OUT_DMG"
+# never --deep here, it would strip the gateway's entitlements. UNSIGNED=1 (CI's
+# PR packaging check) leaves it unsigned; that DMG never ships.
+if [ "${UNSIGNED:-0}" != 1 ]; then
+  SIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Syntax Labs (Private) Limited (MGH5K382YN)}"
+  KEYCHAIN_ARGS=()
+  [ -n "${CODESIGN_KEYCHAIN:-}" ] && KEYCHAIN_ARGS=(--keychain "$CODESIGN_KEYCHAIN")
+  codesign --force --timestamp "${KEYCHAIN_ARGS[@]}" --sign "$SIGN_IDENTITY" "$OUT_DMG"
 fi
 
 # Notarize when CI hands over an App Store Connect API key (setup-signing.sh

@@ -32,6 +32,17 @@ case "$CHANNEL" in
   *) echo "usage: ./sign.sh [nightly|stable|status]" >&2; exit 1 ;;
 esac
 
+# Sign from a throwaway keychain holding the same .p12 CI uses, unlocked and
+# open to codesign, so no "codesign wants to use your key" dialog blocks a
+# headless run. Removed on exit; the login keychain is untouched.
+export CODESIGN_KEYCHAIN="$(mktemp -d)/sign.keychain-db"
+KC_PW="$(openssl rand -base64 24)"
+trap 'security delete-keychain "$CODESIGN_KEYCHAIN" 2>/dev/null; rm -rf "${CODESIGN_KEYCHAIN:h}"' EXIT
+security create-keychain -p "$KC_PW" "$CODESIGN_KEYCHAIN"
+security unlock-keychain -p "$KC_PW" "$CODESIGN_KEYCHAIN"
+security import "$DIR/developer-id.p12" -k "$CODESIGN_KEYCHAIN" -P "$(<"$DIR/p12-password.txt")" -T /usr/bin/codesign >/dev/null
+security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PW" "$CODESIGN_KEYCHAIN" >/dev/null
+
 # make-dmg.sh only builds when the app is missing; rebuild so it's this checkout, signed.
 rm -rf "$APP"
 VITALS_CHANNEL="$CHANNEL" ./make-dmg.sh
