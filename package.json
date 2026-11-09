@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@convex-dev/rate-limiter": "^0.4.2",
-    "convex": "^1.42.3"
+    "convex": "^1.49.0"
   },
   "devDependencies": {
     "concurrently": "^10.0.3",
