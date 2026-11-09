@@ -147,7 +147,7 @@ Nothing is ever signed ad-hoc.
   Store Connect API key for `NOTARY_*`. Wired into the **publishing jobs only**: `ci.yml`'s
   `release` (push to `main`) and `nightly.yml`'s `nightly` (push to `nightly`, fork-guarded).
   **Never** add it to a `pull_request` job: a fork PR could exfiltrate the secrets. Any
-  missing secret **fails** the job: a Developer ID build that isn't notarized is blocked by Gatekeeper.
+  missing signing or notary secret **fails** the job: a Developer ID build that isn't notarized is blocked by Gatekeeper.
   Nightly publishes only from `refs/heads/nightly`, so a manual run on another ref can't
   replace the rolling release. `make-dmg.sh` retries a dropped `notarytool wait` under one
   2-hour deadline (a new team's first submissions can take hours).
@@ -265,7 +265,7 @@ pnpm dmg                  # desktop app + DMG (macOS only)
 Desktop widgets live in `Sources/Vitals/Widgets/` — a `WidgetManager` of floating `NSPanel`s
 hosting SwiftUI bound to the **shared** `VitalsModel`/`AppSettings` (no separate polling).
 They're app-owned floating panels, *not* WidgetKit (a SwiftPM widget extension won't load on
-macOS 26, and App Groups need a Team ID this ad-hoc build lacks). Toggle them in
+macOS 26, and App Groups need a provisioned App Group, which this SwiftPM build doesn't set up). Toggle them in
 Settings → Desktop Widgets.
 
 - **Tabs/segments**: capsule container `.quaternary.opacity(0.45)`, selected segment

@@ -101,7 +101,8 @@ certificate in your keychain.
 
 ### Signing
 
-Every build is signed with the Syntax Labs Developer ID, hardened runtime on;
+Local and published builds are signed with the Syntax Labs Developer ID, hardened
+runtime on (only CI's PR packaging check runs with `UNSIGNED=1`);
 releases are also notarized in CI (see the repo CLAUDE.md "Code signing" section).
 There is no ad-hoc fallback: if the identity is not in your keychain, `build.sh`
 stops. `CODESIGN_IDENTITY` overrides the identity name.
