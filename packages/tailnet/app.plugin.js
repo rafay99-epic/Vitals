@@ -23,9 +23,10 @@ const schemeOf = (config) => {
 const intentSource = (scheme) => `import AppIntents
 import UIKit
 
+// App Store Connect rejects Siri text that names an Apple product (error 90626), so no "Mac" here.
 struct SendClipboardIntent: AppIntent {
-  static let title: LocalizedStringResource = "Send clipboard to Mac"
-  static let description = IntentDescription("Opens Vitals and sends what you copied to your Mac.")
+  static let title: LocalizedStringResource = "Send clipboard"
+  static let description = IntentDescription("Opens Vitals and sends what you copied.")
   static let openAppWhenRun: Bool = true
 
   @MainActor
@@ -41,7 +42,7 @@ struct VitalsShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(
       intent: SendClipboardIntent(),
-      phrases: ["Send clipboard to Mac with \\(.applicationName)", "Send my clipboard with \\(.applicationName)"],
+      phrases: ["Send clipboard with \\(.applicationName)", "Send my clipboard with \\(.applicationName)"],
       shortTitle: "Send clipboard",
       systemImageName: "doc.on.clipboard"
     )
