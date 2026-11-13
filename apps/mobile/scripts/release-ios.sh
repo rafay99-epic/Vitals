@@ -33,18 +33,19 @@ esac
 
 framework=../../packages/tailnet/ios/Tailnet.xcframework
 [ -d "$framework" ] || fail "build the Tailscale libs first: packages/tailnet/scripts/build-native.sh"
-[ "$(stat -f %m "$framework")" -ge "$(git log -1 --format=%ct -- ../../packages/tailnet/go)" ] \
-  || fail "the Tailscale libs predate the last Go change; rebuild them with packages/tailnet/scripts/build-native.sh"
+[ -z "$(find ../../packages/tailnet/go -type f -newer "$framework" -print -quit)" ] \
+  || fail "the Go sources are newer than the Tailscale libs; rebuild them with packages/tailnet/scripts/build-native.sh"
 if $upload; then
   [ "$(git rev-parse --abbrev-ref HEAD)" = "$branch" ] || fail "run this from the $branch branch"
-  # The whole repo, not just the app: the build also reads the desktop icons and the root lockfile.
-  git diff --quiet HEAD || fail "commit or stash your changes first"
+  # The whole repo, untracked files included: the build also reads the desktop icons and the root lockfile.
+  [ -z "$(git status --porcelain)" ] || fail "commit or stash your changes first"
   git fetch -q origin "$branch"
   [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$branch")" ] || fail "local $branch does not match origin/$branch"
 fi
 
 # The same source app.config.ts reads, so the archive check below compares like with like.
-build="${VITALS_COMMIT_COUNT:-$(git rev-list --count HEAD)}"
+build="${VITALS_COMMIT_COUNT-$(git rev-list --count HEAD)}"
+case "$build" in ''|0|*[!0-9]*) fail "VITALS_COMMIT_COUNT must be a whole number above 0, got '$build'" ;; esac
 export APP_VARIANT="$variant"
 SENTRY_AUTH_TOKEN="$(../../scripts/with-sentry.sh sh -c 'printf %s "${SENTRY_AUTH_TOKEN:-}"')"
 if [ -n "$SENTRY_AUTH_TOKEN" ]; then export SENTRY_AUTH_TOKEN; else export SENTRY_DISABLE_AUTO_UPLOAD=true; fi
