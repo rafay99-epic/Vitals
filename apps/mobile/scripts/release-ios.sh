@@ -43,6 +43,16 @@ workspace=$(cd ios && ls -d ./*.xcworkspace | head -1)
 scheme=$(basename "$workspace" .xcworkspace)
 archive="ios/build/$scheme.xcarchive"
 
+# App Store Connect refuses a binary named "Vitals" (error 90129: another app has that name), so the
+# Stable iPhone app is "Vitals Remote" on the home screen. It's set here rather than in app.config.ts
+# because the Expo config feeds the Android fingerprint too: changing it there would cut installed
+# Android apps off quick updates. The iOS fingerprint ignores the generated ios/ folder.
+if [ "$variant" = stable ]; then
+  for key in CFBundleDisplayName CFBundleName; do
+    plutil -replace "$key" -string "Vitals Remote" "ios/$scheme/Info.plist"
+  done
+fi
+
 # The team goes on the command line, not in app.config.ts: a config change would move the runtime
 # fingerprint and cut installed apps off quick updates.
 xcodebuild -workspace "ios/$scheme.xcworkspace" -scheme "$scheme" -configuration Release \
